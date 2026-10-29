@@ -25,6 +25,46 @@ pub fn run() -> Result<(), String> {
     if !display_available(|name| std::env::var_os(name)) {
         return Err("aucun affichage graphique (ni WAYLAND_DISPLAY ni DISPLAY)".to_owned());
     }
+    let can_fall_back = fallback_allowed(|name| std::env::var_os(name));
+    match launch_catching_panics() {
+        Ok(result) => result,
+        Err(message) if can_fall_back => {
+            log::warn!(
+                target: "bonk::gui", reason = message.as_str();
+                "window panicked, restarting with the software renderer"
+            );
+            relaunch_with_software_renderer()
+        }
+        Err(message) => Err(message),
+    }
+}
+
+/// Variable posée sur le processus relancé en rendu logiciel : il ne se relance pas lui-même.
+const FALLBACK_MARKER: &str = "BONK_RENDER_FALLBACK";
+
+/// Le repli ne s'applique que si l'utilisateur n'a pas choisi lui-même le moteur de rendu
+/// (`ICED_BACKEND`) et si on n'est pas déjà dans le processus de repli.
+fn fallback_allowed(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> bool {
+    var("ICED_BACKEND").is_none() && var(FALLBACK_MARKER).is_none()
+}
+
+/// Ouvre la fenêtre en transformant une panique du rendu en erreur. wgpu traite certaines erreurs de
+/// pilote comme fatales (panique sur le fil principal) au lieu de laisser Iced basculer sur le rendu
+/// logiciel : sous un affichage virtuel, sur certaines machines virtuelles ou avec un pilote incomplet,
+/// la surface ne peut pas être configurée (CDC §8 : le repli logiciel est obligatoire).
+fn launch_catching_panics() -> Result<Result<(), String>, String> {
+    let previous = std::panic::take_hook();
+    // Le message est journalisé, pas imprimé : il serait redondant avec le repli, ou repris dans
+    // l'erreur finale si le repli est impossible.
+    std::panic::set_hook(Box::new(|info| {
+        log::debug!(target: "bonk::gui", "panic in the window: {info}");
+    }));
+    let outcome = std::panic::catch_unwind(launch);
+    std::panic::set_hook(previous);
+    outcome.map_err(|payload| panic_message(payload.as_ref()))
+}
+
+fn launch() -> Result<(), String> {
     iced::application(App::new, App::update, App::view)
         .title("Bonk")
         .theme(App::theme)
@@ -33,6 +73,33 @@ pub fn run() -> Result<(), String> {
         .centered()
         .run()
         .map_err(|erreur| erreur.to_string())
+}
+
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
+    payload
+        .downcast_ref::<&str>()
+        .map(|text| (*text).to_owned())
+        .or_else(|| payload.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "panique sans message".to_owned())
+}
+
+/// Relance Bonk avec les mêmes arguments et le moteur de rendu logiciel (`tiny-skia`), et attend sa
+/// fin. Un nouveau processus plutôt qu'une variable posée ici : modifier l'environnement d'un
+/// processus qui a déjà des fils n'est pas sûr, et l'état du rendu qui vient de paniquer n'est pas
+/// réutilisable.
+fn relaunch_with_software_renderer() -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| format!("repli impossible : {e}"))?;
+    let status = std::process::Command::new(exe)
+        .args(std::env::args_os().skip(1))
+        .env("ICED_BACKEND", "tiny-skia")
+        .env(FALLBACK_MARKER, "1")
+        .status()
+        .map_err(|e| format!("repli impossible : {e}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("le rendu logiciel a échoué aussi ({status})"))
+    }
 }
 
 /// Sous Linux et les autres Unix hors macOS, une session graphique se reconnaît à ses variables
@@ -63,6 +130,38 @@ mod tests {
                 .find(|(n, _)| *n == nom)
                 .map(|(_, v)| OsString::from(v))
         }
+    }
+
+    #[test]
+    fn le_repli_logiciel_n_est_permis_qu_une_fois_et_sans_choix_de_l_utilisateur() {
+        let env = |definies: &'static [&'static str]| {
+            move |nom: &str| definies.contains(&nom).then(|| OsString::from("x"))
+        };
+        assert!(super::fallback_allowed(env(&[])));
+        // L'utilisateur a choisi son moteur : on ne le contredit pas.
+        assert!(!super::fallback_allowed(env(&["ICED_BACKEND"])));
+        // Déjà dans le processus de repli : pas de boucle de relance.
+        assert!(!super::fallback_allowed(env(&[super::FALLBACK_MARKER])));
+    }
+
+    #[test]
+    fn message_d_une_panique() {
+        let texte: Box<dyn std::any::Any + Send> = Box::new("wgpu error");
+        let chaine: Box<dyn std::any::Any + Send> = Box::new(String::from("surface invalide"));
+        let autre: Box<dyn std::any::Any + Send> = Box::new(42_u8);
+        assert_eq!(super::panic_message(texte.as_ref()), "wgpu error");
+        assert_eq!(super::panic_message(chaine.as_ref()), "surface invalide");
+        assert_eq!(super::panic_message(autre.as_ref()), "panique sans message");
+    }
+
+    #[test]
+    fn une_panique_du_rendu_devient_une_erreur() {
+        let hook_avant = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let capture = std::panic::catch_unwind(|| panic!("wgpu error: Invalid surface"));
+        std::panic::set_hook(hook_avant);
+        let message = capture.map_err(|p| super::panic_message(p.as_ref()));
+        assert_eq!(message, Err("wgpu error: Invalid surface".to_owned()));
     }
 
     #[test]

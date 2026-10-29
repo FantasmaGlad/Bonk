@@ -155,3 +155,42 @@ fn le_journal_va_sur_stderr_et_la_sortie_reste_du_json() -> Resultat {
     }
     Ok(())
 }
+
+/// Régression : sous un affichage virtuel (Xvfb), wgpu paniquait (« incompatible window kind ») au lieu
+/// de basculer sur le rendu logiciel (CDC §8). Maintenant Bonk se relance en `tiny-skia` et la fenêtre
+/// reste ouverte jusqu'à l'arrêt par `timeout` (code 124), sans panique. Ignoré si `xvfb-run` ou
+/// `timeout` n'est pas installé.
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
+fn sous_affichage_virtuel_le_rendu_bascule_en_logiciel() -> Resultat {
+    let present = |outil: &str| {
+        Command::new("sh")
+            .args(["-c", &format!("command -v {outil}")])
+            .output()
+            .is_ok_and(|s| s.status.success())
+    };
+    if !present("xvfb-run") || !present("timeout") {
+        eprintln!("xvfb-run ou timeout absent : test ignoré");
+        return Ok(());
+    }
+    let sortie = Command::new("xvfb-run")
+        .args(["-a", "-s", "-screen 0 1280x800x24", "timeout", "6"])
+        .arg(env!("CARGO_BIN_EXE_bonk"))
+        .arg("-v")
+        .env_remove("WAYLAND_DISPLAY")
+        .env_remove("WAYLAND_SOCKET")
+        .env_remove("XDG_SESSION_TYPE")
+        .env_remove("ICED_BACKEND")
+        .env_remove("BONK_RENDER_FALLBACK")
+        .output()?;
+    let journal = String::from_utf8_lossy(&sortie.stderr);
+    assert_eq!(sortie.status.code(), Some(124), "{journal}");
+    // Le message par défaut d'une panique (« thread 'main' panicked ») ne doit pas atteindre l'utilisateur ;
+    // le journal verbeux, lui, raconte le repli.
+    assert!(!journal.contains("thread 'main' panicked"), "{journal}");
+    assert!(
+        journal.contains("restarting with the software renderer"),
+        "{journal}"
+    );
+    Ok(())
+}
