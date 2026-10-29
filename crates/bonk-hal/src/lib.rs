@@ -3,3 +3,7 @@
 //!
 //! C'est le seul crate qui contient du code spécifique à un OS, isolé derrière `cfg(target_os)`
 //! et une interface commune.
+
+pub mod image;
+
+pub use image::{Access, FileDevice};
