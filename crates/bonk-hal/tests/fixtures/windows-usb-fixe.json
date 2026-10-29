@@ -1,0 +1,153 @@
+{
+  "description": "Poste Windows : disque système SATA, disque de données, disque dur USB signalé « fixe » (le piège du CDC §3.2), Windows To Go sur USB. Jeu écrit à la main, pas une capture.",
+  "disks": [
+    {
+      "id": "sata-systeme",
+      "path": "\\\\.\\PhysicalDrive0",
+      "model": "Samsung SSD 860 EVO",
+      "serial": "S3Z9NB0K",
+      "size_bytes": 500107862016,
+      "bus": "sata",
+      "kind": "physical",
+      "partitions": [
+        { "path": "\\\\.\\PhysicalDrive0\\Partition1", "label": "ESP", "fs_type": "vfat", "size_bytes": 104857600, "is_active_esp": true },
+        { "path": "\\\\.\\PhysicalDrive0\\Partition2", "fs_type": "ntfs", "size_bytes": 499000000000, "mount_points": ["C:\\"], "is_system_volume": true }
+      ]
+    },
+    {
+      "id": "sata-donnees",
+      "path": "\\\\.\\PhysicalDrive1",
+      "model": "WDC WD40EZRZ",
+      "serial": "WD-WCC4E7",
+      "size_bytes": 4000787030016,
+      "bus": "sata",
+      "kind": "physical",
+      "partitions": [
+        { "path": "\\\\.\\PhysicalDrive1\\Partition1", "fs_type": "ntfs", "size_bytes": 4000787030016, "mount_points": ["D:\\"] }
+      ]
+    },
+    {
+      "id": "sata-sans-lettre",
+      "path": "\\\\.\\PhysicalDrive4",
+      "model": "ST1000DM010",
+      "serial": "ZN1A2B",
+      "size_bytes": 1000204886016,
+      "bus": "sata",
+      "kind": "physical",
+      "partitions": [
+        { "path": "\\\\.\\PhysicalDrive4\\Partition1", "fs_type": "ntfs", "size_bytes": 1000204886016 }
+      ]
+    },
+    {
+      "id": "usb-disque-dur-signale-fixe",
+      "path": "\\\\.\\PhysicalDrive2",
+      "model": "My Passport 25E2",
+      "serial": "575834314145",
+      "size_bytes": 2000398934016,
+      "bus": "usb",
+      "kind": "physical",
+      "removable_flag": false,
+      "partitions": [
+        { "path": "\\\\.\\PhysicalDrive2\\Partition1", "label": "Passport", "fs_type": "ntfs", "size_bytes": 2000398934016, "mount_points": ["E:\\"] }
+      ]
+    },
+    {
+      "id": "usb-windows-to-go",
+      "path": "\\\\.\\PhysicalDrive3",
+      "model": "Samsung Portable SSD T7",
+      "serial": "S5SXNS0R",
+      "size_bytes": 500107862016,
+      "bus": "usb",
+      "kind": "physical",
+      "removable_flag": false,
+      "partitions": [
+        { "path": "\\\\.\\PhysicalDrive3\\Partition1", "fs_type": "vfat", "size_bytes": 104857600, "is_active_esp": true },
+        { "path": "\\\\.\\PhysicalDrive3\\Partition2", "fs_type": "ntfs", "size_bytes": 499000000000, "mount_points": ["C:\\"], "is_system_volume": true }
+      ]
+    },
+    {
+      "id": "usb-dossier-monte",
+      "path": "\\\\.\\PhysicalDrive5",
+      "model": "Ultra USB 3.0",
+      "serial": "4C530002",
+      "size_bytes": 32015679488,
+      "bus": "usb",
+      "kind": "physical",
+      "removable_flag": true,
+      "partitions": [
+        { "path": "\\\\.\\PhysicalDrive5\\Partition1", "fs_type": "ntfs", "size_bytes": 32014630912, "mount_points": ["E:\\Montages\\cle"] }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "defaut",
+      "expected": {
+        "sata-systeme": {
+          "verdict": "excluded",
+          "reasons": [
+            { "reason": "active_esp", "partition": "\\\\.\\PhysicalDrive0\\Partition1" },
+            { "reason": "system_volume", "partition": "\\\\.\\PhysicalDrive0\\Partition2" },
+            { "reason": "mounted_outside_user_paths", "partition": "\\\\.\\PhysicalDrive0\\Partition2", "mount": "C:\\" }
+          ]
+        },
+        "sata-donnees": {
+          "verdict": "excluded",
+          "reasons": [
+            { "reason": "mounted_outside_user_paths", "partition": "\\\\.\\PhysicalDrive1\\Partition1", "mount": "D:\\" }
+          ]
+        },
+        "sata-sans-lettre": { "verdict": "hidden", "reason": "internal_bus" },
+        "usb-disque-dur-signale-fixe": { "verdict": "offered", "warning": "none" },
+        "usb-windows-to-go": {
+          "verdict": "excluded",
+          "reasons": [
+            { "reason": "active_esp", "partition": "\\\\.\\PhysicalDrive3\\Partition1" },
+            { "reason": "system_volume", "partition": "\\\\.\\PhysicalDrive3\\Partition2" }
+          ]
+        },
+        "usb-dossier-monte": {
+          "verdict": "excluded",
+          "reasons": [
+            { "reason": "mounted_outside_user_paths", "partition": "\\\\.\\PhysicalDrive5\\Partition1", "mount": "E:\\Montages\\cle" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "disques-internes-affiches",
+      "options": { "show_internal": true },
+      "expected": {
+        "sata-systeme": {
+          "verdict": "excluded",
+          "reasons": [
+            { "reason": "active_esp", "partition": "\\\\.\\PhysicalDrive0\\Partition1" },
+            { "reason": "system_volume", "partition": "\\\\.\\PhysicalDrive0\\Partition2" },
+            { "reason": "mounted_outside_user_paths", "partition": "\\\\.\\PhysicalDrive0\\Partition2", "mount": "C:\\" }
+          ]
+        },
+        "sata-donnees": {
+          "verdict": "excluded",
+          "reasons": [
+            { "reason": "mounted_outside_user_paths", "partition": "\\\\.\\PhysicalDrive1\\Partition1", "mount": "D:\\" }
+          ]
+        },
+        "sata-sans-lettre": { "verdict": "offered", "warning": "internal_disk" },
+        "usb-disque-dur-signale-fixe": { "verdict": "offered", "warning": "none" },
+        "usb-windows-to-go": {
+          "verdict": "excluded",
+          "reasons": [
+            { "reason": "active_esp", "partition": "\\\\.\\PhysicalDrive3\\Partition1" },
+            { "reason": "system_volume", "partition": "\\\\.\\PhysicalDrive3\\Partition2" }
+          ]
+        },
+        "usb-dossier-monte": {
+          "verdict": "excluded",
+          "reasons": [
+            { "reason": "mounted_outside_user_paths", "partition": "\\\\.\\PhysicalDrive5\\Partition1", "mount": "E:\\Montages\\cle" }
+          ]
+        }
+      }
+    }
+  ]
+}

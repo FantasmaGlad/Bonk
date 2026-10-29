@@ -4,6 +4,10 @@
 //! C'est le seul crate qui contient du code spécifique à un OS, isolé derrière `cfg(target_os)`
 //! et une interface commune.
 
+pub mod disk;
 pub mod image;
+pub mod safety;
 
+pub use disk::{Bus, Disk, DiskKind, Partition};
 pub use image::{Access, FileDevice};
+pub use safety::{Eligibility, Exclusion, FilterOptions, HiddenReason, Warning, evaluate};

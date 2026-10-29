@@ -1,0 +1,59 @@
+{
+  "description": "Disques virtuels de l'hôte : loop adossé à un fichier, loop système (snap), zram, disque de machine virtuelle. Jeu écrit à la main, pas une capture.",
+  "disks": [
+    {
+      "id": "loop-image-de-test",
+      "path": "/dev/loop7", "model": "Loopback", "size_bytes": 8589934592, "bus": "virtual", "kind": "loop"
+    },
+    {
+      "id": "loop-snap",
+      "path": "/dev/loop1", "model": "Loopback", "size_bytes": 67108864, "bus": "virtual", "kind": "loop",
+      "partitions": [{ "path": "/dev/loop1", "fs_type": "squashfs", "size_bytes": 67108864, "mount_points": ["/snap/core22/1380"] }]
+    },
+    {
+      "id": "zram0",
+      "path": "/dev/zram0", "model": "zram", "size_bytes": 8589934592, "bus": "virtual", "kind": "zram",
+      "partitions": [{ "path": "/dev/zram0", "fs_type": "swap", "size_bytes": 8589934592 }]
+    },
+    {
+      "id": "disque-de-vm",
+      "path": "/dev/nbd0", "model": "QEMU NBD", "size_bytes": 21474836480, "bus": "virtual", "kind": "host_virtual"
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "defaut",
+      "expected": {
+        "loop-image-de-test": { "verdict": "excluded", "reasons": [{ "reason": "virtual_disk", "kind": "loop" }] },
+        "loop-snap": {
+          "verdict": "excluded",
+          "reasons": [
+            { "reason": "virtual_disk", "kind": "loop" },
+            { "reason": "mounted_outside_user_paths", "partition": "/dev/loop1", "mount": "/snap/core22/1380" }
+          ]
+        },
+        "zram0": {
+          "verdict": "excluded",
+          "reasons": [
+            { "reason": "virtual_disk", "kind": "zram" },
+            { "reason": "swap", "partition": "/dev/zram0" }
+          ]
+        },
+        "disque-de-vm": { "verdict": "excluded", "reasons": [{ "reason": "virtual_disk", "kind": "host_virtual" }] }
+      }
+    },
+    {
+      "name": "mode-test",
+      "options": { "allow_virtual": true },
+      "expected": {
+        "loop-image-de-test": { "verdict": "offered", "warning": "virtual_disk" },
+        "loop-snap": {
+          "verdict": "excluded",
+          "reasons": [{ "reason": "mounted_outside_user_paths", "partition": "/dev/loop1", "mount": "/snap/core22/1380" }]
+        },
+        "zram0": { "verdict": "excluded", "reasons": [{ "reason": "swap", "partition": "/dev/zram0" }] },
+        "disque-de-vm": { "verdict": "offered", "warning": "virtual_disk" }
+      }
+    }
+  ]
+}
