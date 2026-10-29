@@ -1,0 +1,32 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+# Plancher imposé par l'édition 2024 ; il n'est pas encore testé en CI (à confirmer avec la première dépendance structurante).
+rust-version = "1.85"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/FantasmaGlad/Bonk"
+publish = false
+
+[workspace.dependencies]
+bonk-core = { path = "crates/bonk-core" }
+bonk-hal = { path = "crates/bonk-hal" }
+bonk-customizer = { path = "crates/bonk-customizer" }
+bonk-catalog = { path = "crates/bonk-catalog" }
+bonk-cli = { path = "crates/bonk-cli" }
+bonk-gui = { path = "crates/bonk-gui" }
+clap = { version = "4.6", features = ["derive"] }
+
+# `warn` plutôt que `deny` : la CI passe `-D warnings`, donc ces lints bloquent la fusion
+# tout en restant tolérables pendant l'écriture en local.
+[workspace.lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+dbg_macro = "deny"
+
+[profile.release]
+lto = "thin"
+strip = true
