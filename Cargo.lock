@@ -422,6 +422,7 @@ name = "bonk-hal"
 version = "0.1.0"
 dependencies = [
  "bonk-core",
+ "libc",
  "log",
  "schemars",
  "serde",

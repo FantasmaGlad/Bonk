@@ -38,6 +38,8 @@ clap_complete = "4"
 sha2 = "0.11"
 # Décompression à la volée en Rust pur (CDC §1 : rien à installer, pas de bibliothèque C à lier).
 flate2 = "1"
+# Constantes d'ouverture des périphériques (O_EXCL : refuse un disque déjà utilisé).
+libc = "0.2"
 lzma-rust2 = { version = "0.24", default-features = false, features = ["xz", "std"] }
 ruzstd = "0.9"
 
