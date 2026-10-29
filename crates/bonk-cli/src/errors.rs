@@ -9,6 +9,7 @@ use std::io::{self, Write};
 
 use bonk_hal::EnumerateError;
 use clap::Args;
+use schemars::JsonSchema;
 use serde::Serialize;
 
 /// Code de sortie d'une erreur d'exécution générale.
@@ -350,7 +351,7 @@ pub(crate) struct ExplainArgs {
     json: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, JsonSchema)]
 struct EntryJson {
     code: &'static str,
     exit_code: u8,
@@ -371,7 +372,7 @@ impl From<&Entry> for EntryJson {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, JsonSchema)]
 struct ExplainReport {
     schema_version: u32,
     codes: Vec<EntryJson>,
@@ -381,6 +382,10 @@ impl ExplainArgs {
     pub(crate) fn code(&self) -> Option<&str> {
         self.code.as_deref()
     }
+}
+
+pub(crate) fn schema() -> serde_json::Value {
+    serde_json::to_value(schemars::schema_for!(ExplainReport)).unwrap_or_default()
 }
 
 /// `bonk explain`. Renvoie `false` si le code demandé n'existe pas.

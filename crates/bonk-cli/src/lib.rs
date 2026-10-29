@@ -4,22 +4,29 @@
 //! Ce crate ne connaît pas la fenêtre : le binaire lui passe la fonction qui l'ouvre. Ainsi `bonk` sans
 //! commande ouvre la fenêtre, et `bonk -v` l'ouvre avec le journal verbeux.
 
+mod config;
 mod debug;
 mod diagnose;
 mod errors;
 mod info;
 mod list;
 mod logging;
+mod schema;
+
+pub use config::ViewDefaults;
 
 use std::ffi::OsString;
 use std::io::{self, Write};
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use bonk_hal::{Disk, EnumerateError, enumerate_disks};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 
+use crate::config::ConfigAction;
 use crate::errors::{Code, EXIT_USAGE, ExplainArgs, report};
-use crate::logging::{LogArgs, Settings};
+use crate::logging::{LogArgs, LogFormat, Settings};
+use crate::schema::SchemaArgs;
 
 /// Arguments de la ligne de commande de Bonk.
 ///
@@ -61,6 +68,18 @@ enum Command {
     },
     /// Explique un code d'erreur (`bonk explain E1003`) ou liste tous les codes
     Explain(ExplainArgs),
+    /// Réglages persistants : list, get, set, reset
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
+    },
+    /// JSON Schema de la sortie `--json` d'une commande
+    Schema(SchemaArgs),
+    /// Complétions de shell : bash, zsh, fish, powershell, elvish
+    Completions {
+        /// Shell visé
+        shell: clap_complete::Shell,
+    },
     /// Ouvre la fenêtre (comme `bonk` seul)
     Gui,
 }
@@ -139,14 +158,14 @@ pub fn run<I, T, G>(args: I, gui: G) -> ExitCode
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
-    G: FnOnce() -> Result<(), String>,
+    G: FnOnce(ViewDefaults) -> Result<(), String>,
 {
     // Flux non verrouillés : `execute` ouvre la fenêtre, pendant laquelle d'autres fils journalisent sur
     // la sortie d'erreur. Un verrou tenu pendant toute l'exécution les bloquerait pour toujours
     // (l'énumération des disques de la fenêtre incluse).
     ExitCode::from(execute(
         args,
-        std::env::var("BONK_LOG").ok().as_deref(),
+        &Env::from_process(),
         &mut io::stdout(),
         &mut io::stderr(),
         logging::install,
@@ -155,10 +174,34 @@ where
     ))
 }
 
+/// Ce que Bonk lit de l'environnement du processus : injectable pour les tests.
+#[derive(Debug, Default)]
+struct Env {
+    /// Valeur de `BONK_LOG`.
+    bonk_log: Option<String>,
+    /// Fichier de configuration (`BONK_CONFIG`, sinon le dossier de configuration du système).
+    config_path: Option<PathBuf>,
+    /// Variables `BONK_*` (hors `BONK_LOG` et `BONK_CONFIG`) qui surchargent les réglages.
+    vars: Vec<(String, String)>,
+}
+
+impl Env {
+    fn from_process() -> Self {
+        let var = |name: &str| std::env::var(name).ok();
+        Self {
+            bonk_log: var("BONK_LOG"),
+            config_path: config::default_path(&var),
+            vars: std::env::vars()
+                .filter(|(name, _)| name.starts_with("BONK_"))
+                .collect(),
+        }
+    }
+}
+
 /// Cœur de [`run`], avec les flux, l'environnement et les dépendances injectés pour les tests.
 fn execute<I, T, O, E, L, F, G>(
     args: I,
-    env_log: Option<&str>,
+    env: &Env,
     out: &mut O,
     err: &mut E,
     install_log: L,
@@ -172,7 +215,7 @@ where
     E: Write,
     L: FnOnce(Settings) -> Result<(), String>,
     F: FnOnce() -> Result<Vec<Disk>, EnumerateError>,
-    G: FnOnce() -> Result<(), String>,
+    G: FnOnce(ViewDefaults) -> Result<(), String>,
 {
     let cli = match Cli::try_parse_from(args) {
         Ok(cli) => cli,
@@ -184,12 +227,29 @@ where
         }
     };
 
-    let settings = match Settings::from_args(&cli.log, env_log) {
+    // Réglages enregistrés : un fichier illisible n'empêche pas une commande de lecture (valeurs par
+    // défaut, avertissement au journal) ; `bonk config` le signalera lui-même.
+    let (stored, config_error) = match env.config_path.as_deref().map(config::load) {
+        Some(Ok(stored)) => (stored, None),
+        Some(Err(erreur)) => (config::Stored::default(), Some(erreur)),
+        None => (config::Stored::default(), None),
+    };
+    let effective = config::effective(&stored, &env.vars);
+    let view = config::view_defaults(&effective);
+    let default_format = match config::value_of(&effective, "log.format") {
+        Some("json") => LogFormat::Json,
+        _ => LogFormat::Text,
+    };
+
+    let settings = match Settings::from_args(&cli.log, env.bonk_log.as_deref(), default_format) {
         Ok(settings) => settings,
         Err(erreur) => return report(err, Code::LogSettingInvalid, erreur),
     };
     if let Err(erreur) = install_log(settings) {
         return report(err, Code::LogUnusable, erreur);
+    }
+    if let Some(erreur) = &config_error {
+        log::warn!(target: "bonk::cli", reason = erreur.as_str(); "configuration unreadable, using defaults");
     }
     log::info!(
         target: "bonk::cli",
@@ -202,7 +262,7 @@ where
     match cli.command {
         None | Some(Command::Gui) => {
             log::debug!(target: "bonk::cli", "opening the window");
-            match gui() {
+            match gui(view) {
                 Ok(()) => 0,
                 Err(erreur) => {
                     // Pas d'affichage (SSH, serveur) ou pas de rendu utilisable : la CLI reste là.
@@ -219,11 +279,38 @@ where
             }
         }
         Some(Command::Disk { action }) => match action {
-            DiskAction::List(args) => run_list(&args, out, err, enumerate),
-            DiskAction::Info(args) => run_info(&args, out, err, enumerate),
+            DiskAction::List(args) => run_list(&args, &view, out, err, enumerate),
+            DiskAction::Info(args) => run_info(&args, &view, out, err, enumerate),
         },
-        Some(Command::List(args)) => run_list(&args, out, err, enumerate),
-        Some(Command::Info(args)) => run_info(&args, out, err, enumerate),
+        Some(Command::List(args)) => run_list(&args, &view, out, err, enumerate),
+        Some(Command::Info(args)) => run_info(&args, &view, out, err, enumerate),
+        Some(Command::Config { action }) => {
+            log::debug!(target: "bonk::cli", action = format!("{action:?}").as_str(); "command config");
+            match config::run(&action, env.config_path.as_deref(), &env.vars, out) {
+                Ok(()) => 0,
+                Err(config::ConfigError::Invalid(message)) => {
+                    report(err, Code::ConfigInvalid, message)
+                }
+                Err(config::ConfigError::Output(erreur)) => report(err, Code::OutputFailed, erreur),
+            }
+        }
+        Some(Command::Schema(args)) => match schema::run(&args, out) {
+            Ok(true) => 0,
+            Ok(false) => report(
+                err,
+                Code::InvalidArgument,
+                schema::unknown_message(args.name().unwrap_or_default()),
+            ),
+            Err(erreur) => report(err, Code::OutputFailed, erreur),
+        },
+        Some(Command::Completions { shell }) => {
+            let mut buffer = Vec::new();
+            clap_complete::generate(shell, &mut Cli::command(), "bonk", &mut buffer);
+            match out.write_all(&buffer) {
+                Ok(()) => 0,
+                Err(erreur) => report(err, Code::OutputFailed, erreur),
+            }
+        }
         Some(Command::Debug { action }) => run_debug(action, out, err, enumerate),
         Some(Command::Explain(args)) => match errors::explain(&args, out) {
             Ok(true) => 0,
@@ -296,6 +383,7 @@ where
 
 fn run_list<O: Write, E: Write, F>(
     args: &list::ListArgs,
+    view: &ViewDefaults,
     out: &mut O,
     err: &mut E,
     enumerate: F,
@@ -308,7 +396,7 @@ where
         Ok(disks) => disks,
         Err(code) => return code,
     };
-    match list::run(args, &disks, out) {
+    match list::run(args, view, &disks, out) {
         Ok(()) => 0,
         Err(erreur) => report(err, Code::OutputFailed, erreur),
     }
@@ -316,6 +404,7 @@ where
 
 fn run_info<O: Write, E: Write, F>(
     args: &info::InfoArgs,
+    view: &ViewDefaults,
     out: &mut O,
     err: &mut E,
     enumerate: F,
@@ -328,7 +417,7 @@ where
         Ok(disks) => disks,
         Err(code) => return code,
     };
-    match info::run(args, &disks, out) {
+    match info::run(args, view, &disks, out) {
         Ok(true) => 0,
         Ok(false) => report(
             err,
@@ -414,7 +503,10 @@ mod tests {
         let ouverte = RefCell::new(false);
         let code = execute(
             std::iter::once("bonk").chain(args.iter().copied()),
-            env_log,
+            &Env {
+                bonk_log: env_log.map(str::to_owned),
+                ..Env::default()
+            },
             &mut out,
             &mut err,
             |_| {
@@ -422,7 +514,7 @@ mod tests {
                 Ok(())
             },
             || Ok(disks),
-            || {
+            |_| {
                 *ouverte.borrow_mut() = true;
                 fenetre
             },
@@ -532,12 +624,12 @@ mod tests {
         let (mut out, mut err) = (Vec::new(), Vec::new());
         let code = execute(
             ["bonk", "list"],
-            None,
+            &Env::default(),
             &mut out,
             &mut err,
             |_| Ok(()),
             || Err(EnumerateError::Unsupported { os: "test" }),
-            || Ok(()),
+            |_| Ok(()),
         );
         assert_eq!(code, EXIT_RUNTIME_ERROR);
         assert!(out.is_empty());
@@ -643,12 +735,12 @@ mod tests {
         let (mut out, mut err) = (Vec::new(), Vec::new());
         let code = execute(
             ["bonk", "diagnose"],
-            None,
+            &Env::default(),
             &mut out,
             &mut err,
             |_| Ok(()),
             || Err(EnumerateError::Unsupported { os: "test" }),
-            || Ok(()),
+            |_| Ok(()),
         );
         assert_eq!(code, 0);
         let json: Value = serde_json::from_slice(&out)?;
@@ -743,7 +835,7 @@ mod tests {
     fn un_autre_fil_peut_journaliser_pendant_que_la_fenetre_est_ouverte() {
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            let code = run(["bonk", "-v", "gui"], || {
+            let code = run(["bonk", "-v", "gui"], |_| {
                 std::thread::spawn(|| {
                     log::warn!(target: "bonk::gui", "journal depuis un autre fil");
                 })
@@ -770,12 +862,12 @@ mod tests {
         let (mut out, mut err) = (Vec::new(), Vec::new());
         let code = execute(
             ["bonk", "list"],
-            None,
+            &Env::default(),
             &mut out,
             &mut err,
             |_| Ok(()),
             || Err(EnumerateError::Unsupported { os: "test" }),
-            || Ok(()),
+            |_| Ok(()),
         );
         assert_eq!(code, 1);
         assert!(
@@ -797,6 +889,187 @@ mod tests {
         assert_eq!(code, EXIT_USAGE);
         assert!(out.is_empty() && err.contains("code inconnu"), "{err}");
         assert!(err.trim_end().ends_with("[E0001]"), "{err}");
+    }
+
+    /// Lance une commande avec un fichier de configuration propre au test et des variables injectées.
+    fn lancer_config(
+        args: &[&str],
+        file: &std::path::Path,
+        vars: &[(&str, &str)],
+        disks: Vec<Disk>,
+    ) -> Resultat {
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let vues = RefCell::new(None);
+        let env = Env {
+            bonk_log: None,
+            config_path: Some(file.to_path_buf()),
+            vars: vars
+                .iter()
+                .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+                .collect(),
+        };
+        let code = execute(
+            std::iter::once("bonk").chain(args.iter().copied()),
+            &env,
+            &mut out,
+            &mut err,
+            |_| Ok(()),
+            || Ok(disks),
+            |view| {
+                *vues.borrow_mut() = Some(view);
+                Ok(())
+            },
+        );
+        Resultat {
+            code,
+            out: String::from_utf8_lossy(&out).into_owned(),
+            err: String::from_utf8_lossy(&err).into_owned(),
+            journal_installe: false,
+            fenetre_ouverte: vues.borrow().is_some(),
+        }
+    }
+
+    fn fichier_de_config(label: &str) -> std::path::PathBuf {
+        std::env::temp_dir()
+            .join(format!("bonk-cli-config-{}-{label}", std::process::id()))
+            .join("config.json")
+    }
+
+    #[test]
+    fn config_set_puis_list_puis_effet_sur_list_et_la_fenetre()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let file = fichier_de_config("effet");
+        let _ = std::fs::remove_dir_all(file.parent().ok_or("parent")?);
+        let r = lancer_config(
+            &["config", "set", "view.show_all", "true"],
+            &file,
+            &[],
+            vec![],
+        );
+        assert_eq!((r.code, r.err.as_str()), (0, ""), "{}", r.err);
+        let r = lancer_config(&["config", "list"], &file, &[], vec![]);
+        assert!(
+            r.out.contains("view.show_all") && r.out.contains("(fichier)"),
+            "{}",
+            r.out
+        );
+        // Sans option, `list` montre maintenant aussi les disques écartés.
+        let r = lancer_config(&["list"], &file, &[], sample());
+        assert!(r.out.contains("nvme-systeme"), "{}", r.out);
+        // La variable d'environnement l'emporte sur le fichier.
+        let r = lancer_config(
+            &["list"],
+            &file,
+            &[("BONK_VIEW_SHOW_ALL", "false")],
+            sample(),
+        );
+        assert!(!r.out.contains("nvme-systeme"), "{}", r.out);
+        // La fenêtre démarre avec ces réglages.
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let vue = RefCell::new(ViewDefaults::default());
+        let env = Env {
+            config_path: Some(file.clone()),
+            ..Env::default()
+        };
+        let code = execute(
+            ["bonk"],
+            &env,
+            &mut out,
+            &mut err,
+            |_| Ok(()),
+            || Ok(vec![]),
+            |v| {
+                *vue.borrow_mut() = v;
+                Ok(())
+            },
+        );
+        assert_eq!(code, 0);
+        assert!(vue.borrow().show_all && !vue.borrow().show_internal);
+        let _ = std::fs::remove_dir_all(file.parent().ok_or("parent")?);
+        Ok(())
+    }
+
+    #[test]
+    fn config_refuse_une_valeur_invalide_avec_le_code_d_usage() {
+        let file = fichier_de_config("refus");
+        let r = lancer_config(&["config", "set", "lang", "en"], &file, &[], vec![]);
+        assert_eq!(r.code, EXIT_USAGE);
+        assert!(
+            r.err.contains("valeurs : fr") && r.err.trim_end().ends_with("[E5002]"),
+            "{}",
+            r.err
+        );
+        assert!(!file.exists());
+        let r = lancer_config(&["config", "get", "inconnu"], &file, &[], vec![]);
+        assert_eq!(r.code, EXIT_USAGE);
+    }
+
+    #[test]
+    fn un_fichier_de_config_illisible_n_empeche_pas_list() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let file = fichier_de_config("casse");
+        std::fs::create_dir_all(file.parent().ok_or("parent")?)?;
+        std::fs::write(&file, "{ casse")?;
+        let r = lancer_config(&["list"], &file, &[], sample());
+        assert_eq!(r.code, 0, "{}", r.err);
+        assert!(r.out.contains("usb-cle"));
+        // `config list` en revanche le dit.
+        let r = lancer_config(&["config", "list"], &file, &[], vec![]);
+        assert_eq!(r.code, EXIT_USAGE);
+        assert!(r.err.contains("illisible"), "{}", r.err);
+        let _ = std::fs::remove_dir_all(file.parent().ok_or("parent")?);
+        Ok(())
+    }
+
+    #[test]
+    fn schema_liste_et_decrit() -> Result<(), serde_json::Error> {
+        let (code, out, _) = lancer(&["schema"], vec![]);
+        assert_eq!(code, 0);
+        assert!(out.lines().any(|l| l == "list") && out.lines().any(|l| l == "debug-layout"));
+        let (code, out, _) = lancer(&["schema", "list"], vec![]);
+        assert_eq!(code, 0);
+        let json: Value = serde_json::from_str(&out)?;
+        assert_eq!(json["type"], "object");
+        let (code, _, err) = lancer(&["schema", "inconnu"], vec![]);
+        assert_eq!(code, EXIT_USAGE);
+        assert!(
+            err.contains("schémas :") && err.trim_end().ends_with("[E0001]"),
+            "{err}"
+        );
+        Ok(())
+    }
+
+    /// La sortie réelle de `list --json` respecte son propre schéma : mêmes champs de premier niveau.
+    #[test]
+    fn la_sortie_json_correspond_a_son_schema() -> Result<(), serde_json::Error> {
+        let (_, out, _) = lancer(&["list", "--json", "--all"], sample());
+        let real: Value = serde_json::from_str(&out)?;
+        let (_, schema, _) = lancer(&["schema", "list"], vec![]);
+        let schema: Value = serde_json::from_str(&schema)?;
+        let props = schema["properties"]
+            .as_object()
+            .map(|p| p.keys().cloned().collect::<Vec<_>>())
+            .unwrap_or_default();
+        let mut keys: Vec<String> = real
+            .as_object()
+            .map(|o| o.keys().cloned().collect())
+            .unwrap_or_default();
+        keys.sort();
+        let mut props = props;
+        props.sort();
+        assert_eq!(keys, props);
+        Ok(())
+    }
+
+    #[test]
+    fn completions_pour_chaque_shell() {
+        for shell in ["bash", "zsh", "fish", "powershell", "elvish"] {
+            let (code, out, err) = lancer(&["completions", shell], vec![]);
+            assert_eq!(code, 0, "{shell} : {err}");
+            assert!(out.contains("bonk") && out.contains("diagnose"), "{shell}");
+        }
+        let (code, _, _) = lancer(&["completions", "tcsh"], vec![]);
+        assert_eq!(code, EXIT_USAGE);
     }
 
     #[test]
@@ -862,12 +1135,12 @@ mod tests {
         let (mut out, mut err) = (Vec::new(), Vec::new());
         let code = execute(
             ["bonk", "list"],
-            None,
+            &Env::default(),
             &mut out,
             &mut err,
             |_| Err("journal : ouverture impossible".to_owned()),
             || Ok(vec![]),
-            || Ok(()),
+            |_| Ok(()),
         );
         assert_eq!(code, EXIT_RUNTIME_ERROR);
         assert!(out.is_empty());

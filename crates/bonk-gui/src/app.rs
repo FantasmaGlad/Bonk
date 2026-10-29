@@ -103,10 +103,13 @@ fn load() -> Task<Message> {
 }
 
 impl App {
-    pub(crate) fn new() -> (Self, Task<Message>) {
+    pub(crate) fn new(initial: ViewOptions) -> (Self, Task<Message>) {
         (
             Self {
                 loading: true,
+                show_internal: initial.show_internal,
+                allow_virtual: initial.allow_virtual,
+                show_all: initial.show_all,
                 ..Self::default()
             },
             load(),

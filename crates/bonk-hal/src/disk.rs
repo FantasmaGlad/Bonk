@@ -5,13 +5,14 @@
 //! proposé, caché ou interdit » est prise ailleurs, par la fonction pure de [`crate::safety`], pour
 //! qu'elle soit testable sur des jeux de données sans matériel et identique sur tous les systèmes.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Bus par lequel le disque est relié à l'hôte.
 ///
 /// La sécurité se fonde sur le bus et non sur le drapeau « amovible » : sous Windows, un disque dur
 /// USB est souvent signalé « fixe » (CDC §3.2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Bus {
     Usb,
@@ -38,7 +39,7 @@ impl Bus {
 }
 
 /// Nature du disque du point de vue de l'hôte.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DiskKind {
     Physical,
@@ -50,7 +51,7 @@ pub enum DiskKind {
 }
 
 /// Partition (ou volume) d'un disque.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Partition {
     /// Chemin système, par exemple `/dev/sdb1`.
@@ -78,7 +79,7 @@ pub struct Partition {
 }
 
 /// Disque tel que rapporté par l'énumération d'un OS.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Disk {
     /// Identifiant stable entre deux branchements : numéro de série ou chemin `by-id` (CDC §3.3).

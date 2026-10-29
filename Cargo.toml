@@ -30,6 +30,16 @@ log = { version = "0.4", features = ["kv", "std"] }
 # l'actualisation automatique de la liste des disques ; smol est le plus léger des deux.
 iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia", "crisp", "web-colors", "smol", "x11", "wayland"] }
 iced_test = "0.14"
+# Schémas JSON générés depuis les types sérialisés (`bonk schema`) : ils ne peuvent pas diverger des sorties.
+schemars = "1"
+# Complétions de shell générées depuis la définition clap (`bonk completions`).
+clap_complete = "4"
+# Empreinte SHA-256 de l'image écrite et relue (vérification, CDC §4).
+sha2 = "0.11"
+# Décompression à la volée en Rust pur (CDC §1 : rien à installer, pas de bibliothèque C à lier).
+flate2 = "1"
+lzma-rs = "0.3"
+ruzstd = "0.9"
 
 # `warn` plutôt que `deny` : la validation passe `-D warnings` à clippy, donc ces lints
 # empêchent de terminer un travail tout en restant tolérables pendant l'écriture.

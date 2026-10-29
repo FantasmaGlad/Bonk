@@ -11,6 +11,7 @@ use std::time::SystemTime;
 
 use bonk_hal::{Disk, EnumerateError, FilterOptions, evaluate};
 use clap::Args;
+use schemars::JsonSchema;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -44,7 +45,7 @@ impl DiagnoseArgs {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, JsonSchema)]
 struct Report<'a> {
     schema_version: u32,
     generated_at: String,
@@ -55,12 +56,12 @@ struct Report<'a> {
     enumeration: Enumeration<'a>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, JsonSchema)]
 struct Bonk {
     version: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, JsonSchema)]
 struct System {
     os: &'static str,
     family: &'static str,
@@ -70,24 +71,28 @@ struct System {
 }
 
 /// Session graphique : on dit si les variables existent, jamais leur valeur.
-#[derive(Serialize)]
+#[derive(Serialize, JsonSchema)]
 struct Graphics {
     wayland_display: bool,
     wayland_socket: bool,
     x11_display: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, JsonSchema)]
 struct Redaction {
     serials_and_user_masked: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, JsonSchema)]
 struct Enumeration<'a> {
     ok: bool,
     error: Option<String>,
     /// Tous les disques, avec leur verdict et tous leurs motifs (comme `bonk list --all`).
     disks: Vec<Entry<'a>>,
+}
+
+pub(crate) fn schema() -> Value {
+    serde_json::to_value(schemars::schema_for!(Report)).unwrap_or_default()
 }
 
 /// Informations de l'environnement lues par le rapport, injectables pour les tests.

@@ -7,7 +7,10 @@ use std::io::{self, Write};
 
 use bonk_hal::{Disk, Eligibility, FilterOptions, bus_label, evaluate, format_size, state_label};
 use clap::Args;
+use schemars::JsonSchema;
 use serde::Serialize;
+
+use crate::config::ViewDefaults;
 
 /// Version du format de la sortie `--json`, incrémentée à chaque changement incompatible.
 const JSON_SCHEMA_VERSION: u32 = 1;
@@ -44,13 +47,13 @@ impl ListArgs {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, JsonSchema)]
 struct Report<'a> {
     schema_version: u32,
     disks: Vec<Entry<'a>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, JsonSchema)]
 pub(crate) struct Entry<'a> {
     #[serde(flatten)]
     pub(crate) disk: &'a Disk,
@@ -58,18 +61,29 @@ pub(crate) struct Entry<'a> {
 }
 
 /// Écrit le résultat de `bonk list` sur `out`.
-pub(crate) fn run(args: &ListArgs, disks: &[Disk], out: &mut dyn Write) -> io::Result<()> {
+pub(crate) fn schema() -> serde_json::Value {
+    serde_json::to_value(schemars::schema_for!(Report)).unwrap_or_default()
+}
+
+pub(crate) fn run(
+    args: &ListArgs,
+    defaults: &ViewDefaults,
+    disks: &[Disk],
+    out: &mut dyn Write,
+) -> io::Result<()> {
+    // Les réglages enregistrés (`bonk config`) valent quand l'option n'est pas donnée.
     let options = FilterOptions {
-        show_internal: args.show_internal,
-        allow_virtual: args.allow_virtual,
+        show_internal: args.show_internal || defaults.show_internal,
+        allow_virtual: args.allow_virtual || defaults.allow_virtual,
     };
+    let all = args.all || defaults.show_all;
     let entries: Vec<Entry<'_>> = disks
         .iter()
         .map(|disk| Entry {
             disk,
             eligibility: evaluate(disk, options),
         })
-        .filter(|entry| args.all || entry.eligibility.is_writable())
+        .filter(|entry| all || entry.eligibility.is_writable())
         .collect();
 
     if args.json {
@@ -80,7 +94,7 @@ pub(crate) fn run(args: &ListArgs, disks: &[Disk], out: &mut dyn Write) -> io::R
         serde_json::to_writer_pretty(&mut *out, &report).map_err(io::Error::from)?;
         writeln!(out)
     } else {
-        write_table(&entries, args.all, out)
+        write_table(&entries, all, out)
     }
 }
 

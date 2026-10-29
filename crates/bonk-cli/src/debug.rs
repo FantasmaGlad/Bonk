@@ -12,6 +12,7 @@ use bonk_hal::{
     state_label,
 };
 use clap::{Args, Subcommand};
+use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::errors::Code;
@@ -104,14 +105,14 @@ pub(crate) enum Outcome {
 // sources
 // ---------------------------------------------------------------------------------------------
 
-#[derive(Serialize)]
+#[derive(Serialize, JsonSchema)]
 struct SourcesReport<'a> {
     schema_version: u32,
     enumeration: EnumerationSummary,
     reads: &'a [SourceRead],
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, JsonSchema)]
 struct EnumerationSummary {
     ok: bool,
     error: Option<String>,
@@ -170,7 +171,7 @@ pub(crate) fn sources(
 // filter
 // ---------------------------------------------------------------------------------------------
 
-#[derive(Serialize)]
+#[derive(Serialize, JsonSchema)]
 struct FilterReport<'a> {
     schema_version: u32,
     disk: &'a str,
@@ -273,6 +274,25 @@ fn open_image(path: &Path) -> Result<FileDevice, (Code, String)> {
     })
 }
 
+#[derive(Serialize, JsonSchema)]
+struct LayoutReport<'a> {
+    schema_version: u32,
+    #[serde(flatten)]
+    layout: &'a Layout,
+}
+
+pub(crate) fn schema_filter() -> serde_json::Value {
+    serde_json::to_value(schemars::schema_for!(FilterReport)).unwrap_or_default()
+}
+
+pub(crate) fn schema_sources() -> serde_json::Value {
+    serde_json::to_value(schemars::schema_for!(SourcesReport)).unwrap_or_default()
+}
+
+pub(crate) fn schema_layout() -> serde_json::Value {
+    serde_json::to_value(schemars::schema_for!(LayoutReport)).unwrap_or_default()
+}
+
 pub(crate) fn layout(args: &LayoutArgs, out: &mut dyn Write) -> io::Result<Outcome> {
     let device = match open_image(&args.image) {
         Ok(device) => device,
@@ -288,15 +308,9 @@ pub(crate) fn layout(args: &LayoutArgs, out: &mut dyn Write) -> io::Result<Outco
         }
     };
     if args.json {
-        #[derive(Serialize)]
-        struct Report<'a> {
-            schema_version: u32,
-            #[serde(flatten)]
-            layout: &'a Layout,
-        }
         serde_json::to_writer_pretty(
             &mut *out,
-            &Report {
+            &LayoutReport {
                 schema_version: JSON_SCHEMA_VERSION,
                 layout: &layout,
             },

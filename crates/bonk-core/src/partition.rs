@@ -5,6 +5,7 @@
 //! avec des codes stables, pour qu'un diagnostic puisse dire précisément ce qui ne va pas. La réparation
 //! du GPT (J1) s'appuiera sur ces mêmes constats.
 
+use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::block::{BlockDevice, BlockError};
@@ -35,7 +36,7 @@ pub fn crc32(data: &[u8]) -> u32 {
     !crc
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Severity {
     Info,
@@ -44,14 +45,14 @@ pub enum Severity {
 }
 
 /// Un constat de l'inspection, identifié par un code stable.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct Finding {
     pub severity: Severity,
     pub code: &'static str,
     pub message: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct MbrEntry {
     pub index: u8,
     pub bootable: bool,
@@ -61,7 +62,7 @@ pub struct MbrEntry {
     pub sectors: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct Mbr {
     /// Les octets `55 AA` en fin de premier secteur.
     pub signature_valid: bool,
@@ -69,7 +70,7 @@ pub struct Mbr {
     pub entries: Vec<MbrEntry>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct GptHeader {
     /// Secteur où l'en-tête a été lu.
     pub read_at_lba: u64,
@@ -87,7 +88,7 @@ pub struct GptHeader {
     pub entries_crc_ok: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct GptEntry {
     pub index: u32,
     pub type_guid: String,
@@ -98,7 +99,7 @@ pub struct GptEntry {
     pub name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct Gpt {
     pub primary: Option<GptHeader>,
     pub backup: Option<GptHeader>,
@@ -106,7 +107,7 @@ pub struct Gpt {
     pub entries: Vec<GptEntry>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct Layout {
     pub size_bytes: u64,
     /// Taille de secteur logique retenue (512 ou 4096) d'après la place de l'en-tête GPT.

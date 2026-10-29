@@ -37,8 +37,8 @@ pub(crate) struct LogArgs {
     log_file: Option<PathBuf>,
 
     /// Format du journal : texte, ou un événement JSON par ligne
-    #[arg(long, value_enum, default_value_t = LogFormat::Text, global = true)]
-    log_format: LogFormat,
+    #[arg(long, value_enum, global = true)]
+    log_format: Option<LogFormat>,
 }
 
 /// Niveaux par composant. Sans réglage explicite : `-v` donne `debug` à Bonk et `info` au rendu,
@@ -286,10 +286,15 @@ pub(crate) struct Settings {
 }
 
 impl Settings {
-    pub(crate) fn from_args(args: &LogArgs, env_spec: Option<&str>) -> Result<Self, String> {
+    /// `default_format` vient de `bonk config` (`log.format`) ; `--log-format` l'emporte.
+    pub(crate) fn from_args(
+        args: &LogArgs,
+        env_spec: Option<&str>,
+        default_format: LogFormat,
+    ) -> Result<Self, String> {
         Ok(Self {
             filter: Filter::new(args.verbose, env_spec)?,
-            format: args.log_format,
+            format: args.log_format.unwrap_or(default_format),
             file: args.log_file.clone(),
         })
     }

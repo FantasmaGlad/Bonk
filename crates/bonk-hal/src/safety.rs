@@ -12,6 +12,7 @@
 //! interne, signature RAID/LVM/ZFS refusée même inactive, partition d'échange refusée même inutilisée,
 //! montage hors des chemins utilisateur refusé même s'il est manuel (`/mnt/cle` : démonter d'abord).
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::disk::{Bus, Disk, DiskKind, Partition};
@@ -37,7 +38,7 @@ const AGGREGATE_SIGNATURES: [&str; 7] = [
 const SWAP_SIGNATURES: [&str; 2] = ["swap", "swsuspend"];
 
 /// Réglages explicites de l'utilisateur ; tout est refusé par défaut.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, default)]
 pub struct FilterOptions {
     /// Afficher aussi les disques internes non système, avec un avertissement renforcé (CDC §3.2).
@@ -47,7 +48,7 @@ pub struct FilterOptions {
 }
 
 /// Avertissement attaché à un disque proposé.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Warning {
     None,
@@ -58,7 +59,7 @@ pub enum Warning {
 }
 
 /// Pourquoi un disque non interdit n'est pas affiché.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HiddenReason {
     /// Bus non amovible (ou inconnu) et l'option d'affichage des disques internes est désactivée.
@@ -66,7 +67,7 @@ pub enum HiddenReason {
 }
 
 /// Motif d'exclusion : le disque n'est jamais proposé ni écrivable.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(tag = "reason", rename_all = "snake_case")]
 pub enum Exclusion {
     /// Volume système de l'hôte (racine, `%SystemDrive%`, volume de démarrage).
@@ -89,7 +90,7 @@ pub enum Exclusion {
 }
 
 /// Verdict du filtre pour un disque.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(tag = "verdict", rename_all = "snake_case")]
 pub enum Eligibility {
     /// Proposé à l'utilisateur et écrivable.
@@ -125,7 +126,7 @@ pub fn evaluate_traced(disk: &Disk, options: FilterOptions) -> (Eligibility, Vec
 }
 
 /// Examen d'une règle du filtre sur un disque ou une partition.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct RuleTrace {
     /// Identifiant stable de la règle (le même que le motif d'exclusion qu'elle produit).
     pub rule: &'static str,

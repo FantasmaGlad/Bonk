@@ -13,6 +13,7 @@ use std::error::Error;
 use std::fmt;
 use std::io;
 
+use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::disk::Disk;
@@ -69,7 +70,7 @@ pub fn enumerate_disks() -> Result<Vec<Disk>, EnumerateError> {
 }
 
 /// Une lecture d'une source système, telle qu'elle s'est passée.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct SourceRead {
     pub path: String,
     /// `file` (contenu lu) ou `dir` (liste des entrées).

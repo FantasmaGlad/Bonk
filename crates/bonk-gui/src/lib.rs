@@ -15,18 +15,19 @@ use iced::Size;
 
 use crate::app::App;
 
-/// Ouvre la fenêtre et rend la main à la fermeture.
+/// Ouvre la fenêtre, avec les réglages d'affichage de départ (`bonk config`), et rend la main à la
+/// fermeture.
 ///
 /// # Errors
 /// Texte de l'erreur d'Iced quand la fenêtre ne peut pas s'ouvrir (pas d'affichage, pas de rendu).
-pub fn run() -> Result<(), String> {
+pub fn run(initial: ViewOptions) -> Result<(), String> {
     // Iced ne renvoie pas d'erreur sans affichage : il panique. Détection de la fonctionnalité en
     // amont, pour que Bonk redirige proprement vers la ligne de commande (SSH, serveur).
     if !display_available(|name| std::env::var_os(name)) {
         return Err("aucun affichage graphique (ni WAYLAND_DISPLAY ni DISPLAY)".to_owned());
     }
     let can_fall_back = fallback_allowed(|name| std::env::var_os(name));
-    match launch_catching_panics() {
+    match launch_catching_panics(initial) {
         Ok(result) => result,
         Err(message) if can_fall_back => {
             log::warn!(
@@ -52,20 +53,20 @@ fn fallback_allowed(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> bool {
 /// pilote comme fatales (panique sur le fil principal) au lieu de laisser Iced basculer sur le rendu
 /// logiciel : sous un affichage virtuel, sur certaines machines virtuelles ou avec un pilote incomplet,
 /// la surface ne peut pas être configurée (CDC §8 : le repli logiciel est obligatoire).
-fn launch_catching_panics() -> Result<Result<(), String>, String> {
+fn launch_catching_panics(initial: ViewOptions) -> Result<Result<(), String>, String> {
     let previous = std::panic::take_hook();
     // Le message est journalisé, pas imprimé : il serait redondant avec le repli, ou repris dans
     // l'erreur finale si le repli est impossible.
     std::panic::set_hook(Box::new(|info| {
         log::debug!(target: "bonk::gui", "panic in the window: {info}");
     }));
-    let outcome = std::panic::catch_unwind(launch);
+    let outcome = std::panic::catch_unwind(|| launch(initial));
     std::panic::set_hook(previous);
     outcome.map_err(|payload| panic_message(payload.as_ref()))
 }
 
-fn launch() -> Result<(), String> {
-    iced::application(App::new, App::update, App::view)
+fn launch(initial: ViewOptions) -> Result<(), String> {
+    iced::application(move || App::new(initial), App::update, App::view)
         .title("Bonk")
         .theme(App::theme)
         .subscription(App::subscription)

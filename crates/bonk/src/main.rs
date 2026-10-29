@@ -4,5 +4,11 @@
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-    bonk_cli::run(std::env::args_os(), bonk_gui::run)
+    bonk_cli::run(std::env::args_os(), |view| {
+        bonk_gui::run(bonk_gui::ViewOptions {
+            show_internal: view.show_internal,
+            allow_virtual: view.allow_virtual,
+            show_all: view.show_all,
+        })
+    })
 }

@@ -5,8 +5,10 @@ use std::io::{self, Write};
 
 use bonk_hal::{Disk, FilterOptions, bus_label, evaluate, format_size, kind_label, state_label};
 use clap::Args;
+use schemars::JsonSchema;
 use serde::Serialize;
 
+use crate::config::ViewDefaults;
 use crate::list::Entry;
 
 /// Version du format de la sortie `--json`, incrémentée à chaque changement incompatible.
@@ -39,7 +41,7 @@ impl InfoArgs {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, JsonSchema)]
 struct Report<'a> {
     schema_version: u32,
     disk: Entry<'a>,
@@ -55,15 +57,24 @@ pub(crate) fn find<'a>(disks: &'a [Disk], target: &str) -> Option<&'a Disk> {
 }
 
 /// Écrit le détail du disque sur `out`. Renvoie `false` si le disque n'existe pas (rien n'est écrit).
-pub(crate) fn run(args: &InfoArgs, disks: &[Disk], out: &mut dyn Write) -> io::Result<bool> {
+pub(crate) fn schema() -> serde_json::Value {
+    serde_json::to_value(schemars::schema_for!(Report)).unwrap_or_default()
+}
+
+pub(crate) fn run(
+    args: &InfoArgs,
+    defaults: &ViewDefaults,
+    disks: &[Disk],
+    out: &mut dyn Write,
+) -> io::Result<bool> {
     let Some(disk) = find(disks, &args.target) else {
         return Ok(false);
     };
     let eligibility = evaluate(
         disk,
         FilterOptions {
-            show_internal: args.show_internal,
-            allow_virtual: args.allow_virtual,
+            show_internal: args.show_internal || defaults.show_internal,
+            allow_virtual: args.allow_virtual || defaults.allow_virtual,
         },
     );
     if args.json {
