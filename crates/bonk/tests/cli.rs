@@ -107,3 +107,51 @@ fn list_hors_linux_echoue_avec_un_message_clair() -> Resultat {
     assert!(erreur.contains("pas encore disponible"), "{erreur}");
     Ok(())
 }
+
+/// `debug sources` rend un rapport JSON versionné avec toutes les lectures, ou échoue proprement.
+#[test]
+fn debug_sources_json_reussit_ou_echoue_proprement() -> Resultat {
+    let sortie = bonk().args(["debug", "sources", "--json"]).output()?;
+    match sortie.status.code() {
+        Some(0) => {
+            let texte = String::from_utf8(sortie.stdout)?;
+            assert!(texte.contains("\"schema_version\": 1"), "{texte}");
+            assert!(texte.contains("\"reads\""), "{texte}");
+        }
+        Some(1) => {
+            let erreur = String::from_utf8(sortie.stderr)?;
+            assert!(erreur.starts_with("bonk : erreur : "), "{erreur}");
+        }
+        autre => panic!("code de sortie inattendu : {autre:?}"),
+    }
+    Ok(())
+}
+
+/// Le journal verbeux va sur la sortie d'erreur et ne pollue jamais la sortie des commandes.
+#[test]
+fn le_journal_va_sur_stderr_et_la_sortie_reste_du_json() -> Resultat {
+    let sortie = bonk()
+        .args(["-vv", "--log-format", "json", "diagnose"])
+        .output()?;
+    assert_eq!(sortie.status.code(), Some(0));
+    let rapport = String::from_utf8(sortie.stdout)?;
+    assert!(
+        rapport.trim_start().starts_with('{') && rapport.contains("\"schema_version\""),
+        "{rapport}"
+    );
+    let journal = String::from_utf8(sortie.stderr)?;
+    let lignes: Vec<&str> = journal.lines().collect();
+    assert!(!lignes.is_empty());
+    // Une ligne par événement, chacune un objet JSON complet.
+    for ligne in &lignes {
+        assert!(
+            ligne.starts_with("{\"component\"") && ligne.ends_with('}'),
+            "{ligne}"
+        );
+        assert!(
+            ligne.contains("\"session\"") && ligne.contains("\"ts\""),
+            "{ligne}"
+        );
+    }
+    Ok(())
+}

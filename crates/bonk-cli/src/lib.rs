@@ -4,6 +4,7 @@
 //! Ce crate ne connaît pas la fenêtre : le binaire lui passe la fonction qui l'ouvre. Ainsi `bonk` sans
 //! commande ouvre la fenêtre, et `bonk -v` l'ouvre avec le journal verbeux.
 
+mod debug;
 mod diagnose;
 mod info;
 mod list;
@@ -57,6 +58,11 @@ enum Command {
     Info(info::InfoArgs),
     /// Rapport de support en JSON : système, rendu, disques et verdicts, secrets masqués
     Diagnose(diagnose::DiagnoseArgs),
+    /// Bas niveau des disques, en lecture seule : sources système, filtre pas à pas, tables de partitions
+    Debug {
+        #[command(subcommand)]
+        action: debug::DebugAction,
+    },
     /// Ouvre la fenêtre (comme `bonk` seul)
     Gui,
 }
@@ -137,11 +143,14 @@ where
     T: Into<OsString> + Clone,
     G: FnOnce() -> Result<(), String>,
 {
+    // Flux non verrouillés : `execute` ouvre la fenêtre, pendant laquelle d'autres fils journalisent sur
+    // la sortie d'erreur. Un verrou tenu pendant toute l'exécution les bloquerait pour toujours
+    // (l'énumération des disques de la fenêtre incluse).
     ExitCode::from(execute(
         args,
         std::env::var("BONK_LOG").ok().as_deref(),
-        &mut io::stdout().lock(),
-        &mut io::stderr().lock(),
+        &mut io::stdout(),
+        &mut io::stderr(),
         logging::install,
         enumerate_disks,
         gui,
@@ -219,6 +228,7 @@ where
         },
         Some(Command::List(args)) => run_list(&args, out, err, enumerate),
         Some(Command::Info(args)) => run_info(&args, out, err, enumerate),
+        Some(Command::Debug { action }) => run_debug(action, out, err, enumerate),
         Some(Command::Diagnose(args)) => {
             log::debug!(target: "bonk::cli", include_serials = args.include_serials(); "command diagnose");
             let result = enumerate();
@@ -250,6 +260,42 @@ where
         let _ = writeln!(err, "bonk : erreur : {erreur}");
         EXIT_RUNTIME_ERROR
     })
+}
+
+fn run_debug<O: Write, E: Write, F>(
+    action: debug::DebugAction,
+    out: &mut O,
+    err: &mut E,
+    enumerate: F,
+) -> u8
+where
+    F: FnOnce() -> Result<Vec<Disk>, EnumerateError>,
+{
+    use debug::{DebugAction, Outcome};
+    log::debug!(target: "bonk::cli", action = format!("{action:?}").as_str(); "command debug");
+    let outcome = match action {
+        DebugAction::Sources(args) => {
+            let (result, reads) = bonk_hal::enumerate_disks_recorded();
+            debug::sources(&args, &result, &reads, out)
+        }
+        DebugAction::Filter(args) => match disks_or_exit(err, enumerate) {
+            Ok(disks) => debug::filter(&args, &disks, out),
+            Err(code) => return code,
+        },
+        DebugAction::Layout(args) => debug::layout(&args, out),
+        DebugAction::Hexdump(args) => debug::hexdump(&args, out),
+    };
+    match outcome {
+        Ok(Outcome::Done) => 0,
+        Ok(Outcome::Failed(message)) => {
+            let _ = writeln!(err, "bonk : erreur : {message}");
+            EXIT_RUNTIME_ERROR
+        }
+        Err(erreur) => {
+            let _ = writeln!(err, "bonk : erreur d'écriture de la sortie : {erreur}");
+            EXIT_RUNTIME_ERROR
+        }
+    }
 }
 
 fn run_list<O: Write, E: Write, F>(
@@ -647,6 +693,79 @@ mod tests {
         assert!(check_command_line("bonk disk info usb-cle").is_ok());
         assert!(check_command_line("bonk efface --tout").is_err());
         assert!(check_command_line("bonk info").is_err());
+    }
+
+    #[test]
+    fn debug_filter_explique_un_disque_propose() {
+        let (code, out, err) = lancer(&["debug", "filter", "usb-cle"], sample());
+        assert_eq!((code, err.as_str()), (0, ""));
+        assert!(out.contains("§3.2   bus"), "{out}");
+        assert!(out.contains("Verdict : proposé"), "{out}");
+        assert!(!out.contains("APPLIQUÉE"), "{out}");
+    }
+
+    #[test]
+    fn debug_filter_explique_un_refus_regle_par_regle() -> Result<(), serde_json::Error> {
+        let (code, out, _) = lancer(&["debug", "filter", "nvme-systeme"], sample());
+        assert_eq!(code, 0);
+        assert!(out.contains("[APPLIQUÉE] §3.1.1 system_volume"), "{out}");
+        assert!(out.contains("Verdict : interdit"), "{out}");
+
+        let (_, json, _) = lancer(&["debug", "filter", "nvme-systeme", "--json"], sample());
+        let value: Value = serde_json::from_str(&json)?;
+        assert_eq!(value["schema_version"], 1);
+        assert_eq!(value["verdict"]["verdict"], "excluded");
+        let rules = value["rules"].as_array().map_or(&[][..], Vec::as_slice);
+        assert!(
+            rules
+                .iter()
+                .any(|r| r["rule"] == "system_volume" && r["fired"] == true)
+        );
+        assert!(
+            rules
+                .iter()
+                .any(|r| r["rule"] == "active_esp" && r["fired"] == false)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn debug_filter_suit_les_reglages_et_refuse_un_inconnu() {
+        let (_, out, _) = lancer(
+            &["debug", "filter", "sata-libre", "--show-internal"],
+            sample(),
+        );
+        assert!(out.contains("disques internes proposés"), "{out}");
+        assert!(out.contains("confirmation renforcée"), "{out}");
+        let (code, out, err) = lancer(&["debug", "filter", "absent"], sample());
+        assert_eq!(code, EXIT_RUNTIME_ERROR);
+        assert!(
+            out.is_empty() && err.contains("disque introuvable"),
+            "{err}"
+        );
+    }
+
+    /// Régression : `run` tenait le verrou de la sortie d'erreur pendant que la fenêtre était ouverte,
+    /// donc tout événement journalisé par un autre fil (énumération des disques, minuteur) bloquait
+    /// pour toujours dès qu'on lançait `bonk -v`. Ici, un fil journalise pendant l'ouverture de la fenêtre.
+    #[test]
+    fn un_autre_fil_peut_journaliser_pendant_que_la_fenetre_est_ouverte() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let code = run(["bonk", "-v", "gui"], || {
+                std::thread::spawn(|| {
+                    log::warn!(target: "bonk::gui", "journal depuis un autre fil");
+                })
+                .join()
+                .map_err(|_| "le fil a paniqué".to_owned())
+            });
+            let _ = tx.send(code == ExitCode::SUCCESS);
+        });
+        assert_eq!(
+            rx.recv_timeout(std::time::Duration::from_secs(10)),
+            Ok(true),
+            "blocage : le journal d'un autre fil attend le verrou de stderr"
+        );
     }
 
     #[test]
