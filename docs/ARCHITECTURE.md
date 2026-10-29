@@ -1,5 +1,7 @@
 # Architecture de Bonk
 
+> Statut : ce document décrit l'architecture visée. Au jalon J0, les crates ne contiennent pas encore de logique : les règles de sécurité, les tests et les mécanismes décrits ci-dessous sont à venir.
+
 ## Vue d'ensemble
 
 ```
@@ -49,5 +51,5 @@ L'interface ne s'exécute jamais avec des droits élevés. Seules les opération
 ## Tests
 - `bonk-core` est testé sur des fichiers image.
 - Le filtre de sécurité est testé sur des jeux d'énumération capturés sur de vraies machines.
-- Les supports produits sont démarrés dans QEMU/OVMF (x86_64, aarch64), avec et sans Secure Boot.
+- Les supports produits sont démarrés dans QEMU avec un micrologiciel UEFI EDK2 (OVMF pour x86_64, AAVMF pour aarch64), avec et sans Secure Boot.
 - Aucun test n'écrit sur un périphérique réel.
