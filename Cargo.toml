@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2024"
 # Plancher imposé par l'édition 2024 ; il n'est testé par aucun contrôle automatique (à confirmer avec la première dépendance structurante).
 rust-version = "1.85"
-license = "GPL-3.0-or-later"
+license = "MIT"
 repository = "https://github.com/FantasmaGlad/Bonk"
 publish = false
 

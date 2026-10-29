@@ -27,4 +27,4 @@ Voir [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Licence
 
-GNU General Public License version 3 ou ultérieure : voir [LICENSE](LICENSE).
+Licence MIT : voir [LICENSE](LICENSE).
