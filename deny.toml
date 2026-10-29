@@ -1,5 +1,5 @@
 # Contrôle des dépendances par cargo-deny : licences, vulnérabilités connues, sources.
-# Lancé par le job « licences » de l'intégration continue.
+# À lancer à la main avec `cargo deny check` (outil à installer) ; aucune CI ne l'exécute pour l'instant.
 
 [advisories]
 # Une vulnérabilité connue fait toujours échouer le contrôle ; les paquets non maintenus
