@@ -1,5 +1,5 @@
 //! Tests de bout en bout du binaire `bonk`, lancé tel que Cargo le construit : options
-//! `--version` et `--help`, codes de sortie d'usage.
+//! `--version` et `--help`, codes de sortie d'usage, `list` et lancement sans argument.
 
 use std::process::Command;
 
@@ -30,16 +30,25 @@ fn help_reussit_et_commence_par_la_description_de_l_outil() -> Resultat {
     Ok(())
 }
 
+/// Sans argument, Bonk ouvre la fenêtre (CDC §1). Sans affichage graphique (SSH, serveur), il échoue
+/// proprement et renvoie vers la ligne de commande, sans panique. Le test retire les variables
+/// d'affichage : aucune fenêtre ne s'ouvre, même sur un poste de bureau.
+#[cfg(all(unix, not(target_os = "macos")))]
 #[test]
-fn sans_argument_affiche_l_aide_avec_le_code_d_usage() -> Resultat {
-    let sortie = bonk().output()?;
-    assert_eq!(sortie.status.code(), Some(2));
-    // L'aide d'un appel sans argument part sur stderr : un binaire muet ne doit pas passer.
-    let texte = String::from_utf8(sortie.stderr)?;
-    assert_eq!(
-        texte.lines().next(),
-        Some("Création de supports d'amorçage (clés USB et disques externes)")
+fn sans_argument_et_sans_affichage_renvoie_vers_la_ligne_de_commande() -> Resultat {
+    let sortie = bonk()
+        .env_remove("DISPLAY")
+        .env_remove("WAYLAND_DISPLAY")
+        .env_remove("WAYLAND_SOCKET")
+        .output()?;
+    assert_eq!(sortie.status.code(), Some(1));
+    let erreur = String::from_utf8(sortie.stderr)?;
+    assert!(
+        erreur.starts_with("bonk : erreur : impossible d'ouvrir l'interface graphique"),
+        "{erreur}"
     );
+    assert!(erreur.contains("bonk --help"), "{erreur}");
+    assert!(!erreur.contains("panicked"), "{erreur}");
     Ok(())
 }
 

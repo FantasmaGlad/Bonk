@@ -21,6 +21,8 @@ allow = [
     "MPL-2.0",
     "CC0-1.0",
     "0BSD",
+    # Licence Boost, permissive : requise par clipboard-win et error-code (dépendances Windows d'Iced).
+    "BSL-1.0",
 ]
 # La liste couvre aussi des cas futurs : ne pas signaler les entrées pas encore utilisées.
 unused-allowed-license = "allow"

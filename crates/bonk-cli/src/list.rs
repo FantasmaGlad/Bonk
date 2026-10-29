@@ -5,9 +5,7 @@
 
 use std::io::{self, Write};
 
-use bonk_hal::{
-    Bus, Disk, DiskKind, Eligibility, Exclusion, FilterOptions, HiddenReason, Warning, evaluate,
-};
+use bonk_hal::{Disk, Eligibility, FilterOptions, bus_label, evaluate, format_size, state_label};
 use clap::Args;
 use serde::Serialize;
 
@@ -129,98 +127,4 @@ fn write_row(out: &mut dyn Write, cells: &[String; 6], widths: &[usize; 6]) -> i
         }
     }
     writeln!(out, "{line}")
-}
-
-/// Taille en unités décimales, comme l'indiquent les fabricants (une clé « 16 Go » fait 16 000 000 000
-/// octets ou un peu plus), avec la virgule française.
-fn format_size(bytes: u64) -> String {
-    const UNITS: [(u64, &str); 4] = [
-        (1_000_000_000_000, "To"),
-        (1_000_000_000, "Go"),
-        (1_000_000, "Mo"),
-        (1_000, "Ko"),
-    ];
-    for (factor, unit) in UNITS {
-        if bytes >= factor {
-            let tenths = bytes * 10 / factor;
-            return format!("{},{} {unit}", tenths / 10, tenths % 10);
-        }
-    }
-    format!("{bytes} o")
-}
-
-fn bus_label(bus: Bus) -> &'static str {
-    match bus {
-        Bus::Usb => "usb",
-        Bus::Sd => "sd",
-        Bus::Thunderbolt => "thunderbolt",
-        Bus::Sata => "sata",
-        Bus::Nvme => "nvme",
-        Bus::Scsi => "scsi",
-        Bus::Virtual => "virtuel",
-        Bus::Unknown => "inconnu",
-    }
-}
-
-fn state_label(eligibility: &Eligibility) -> String {
-    match eligibility {
-        Eligibility::Offered { warning } => match warning {
-            Warning::None => "proposé".to_owned(),
-            Warning::InternalDisk => "proposé (disque interne : confirmation renforcée)".to_owned(),
-            Warning::VirtualDisk => "proposé (disque virtuel, mode test)".to_owned(),
-        },
-        Eligibility::Hidden { reason } => match reason {
-            HiddenReason::InternalBus => {
-                "non affiché (bus interne ; --show-internal pour l'afficher)".to_owned()
-            }
-        },
-        Eligibility::Excluded { reasons } => {
-            let texts: Vec<String> = reasons.iter().map(exclusion_label).collect();
-            format!("interdit : {}", texts.join(" ; "))
-        }
-    }
-}
-
-fn exclusion_label(reason: &Exclusion) -> String {
-    match reason {
-        Exclusion::SystemVolume { partition } => format!("volume système ({partition})"),
-        Exclusion::ActiveEsp { partition } => format!("partition EFI active ({partition})"),
-        Exclusion::Swap { partition } => format!("espace d'échange ({partition})"),
-        Exclusion::MountedOutsideUserPaths { partition, mount } => {
-            format!("{partition} monté sur {mount}")
-        }
-        Exclusion::AggregateMember { device, signature } => {
-            format!("{device} membre d'un agrégat ({signature})")
-        }
-        Exclusion::Stacked { device, holders } => {
-            format!("{device} utilisé par {}", holders.join(", "))
-        }
-        Exclusion::VirtualDisk { kind } => {
-            let kind = match kind {
-                DiskKind::Physical => "physique",
-                DiskKind::Loop => "loop",
-                DiskKind::Zram => "zram",
-                DiskKind::HostVirtual => "machine virtuelle",
-            };
-            format!("disque virtuel ({kind})")
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn tailles_lisibles() {
-        assert_eq!(format_size(0), "0 o");
-        assert_eq!(format_size(999), "999 o");
-        assert_eq!(format_size(999_999), "999,9 Ko");
-        assert_eq!(format_size(1_000_000), "1,0 Mo");
-        assert_eq!(format_size(16_008_609_792), "16,0 Go");
-        assert_eq!(format_size(512_110_190_592), "512,1 Go");
-        assert_eq!(format_size(2_000_398_934_016), "2,0 To");
-        // Troncature, jamais d'arrondi vers le haut : une clé ne paraît pas plus grande qu'elle n'est.
-        assert_eq!(format_size(15_999_999_999), "15,9 Go");
-    }
 }

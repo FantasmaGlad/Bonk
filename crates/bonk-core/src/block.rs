@@ -116,7 +116,7 @@ pub trait BlockDevice {
 pub fn check_geometry(size: u64, block_size: u32) -> Result<(), BlockError> {
     let valid = block_size >= DEFAULT_BLOCK_SIZE
         && block_size.is_power_of_two()
-        && size % u64::from(block_size) == 0;
+        && size.is_multiple_of(u64::from(block_size));
     if valid {
         Ok(())
     } else {
@@ -135,7 +135,7 @@ pub fn check_geometry(size: u64, block_size: u32) -> Result<(), BlockError> {
 pub fn check_access(size: u64, block_size: u32, offset: u64, len: usize) -> Result<(), BlockError> {
     let len = len as u64;
     let block = u64::from(block_size);
-    if offset % block != 0 || len % block != 0 {
+    if !offset.is_multiple_of(block) || !len.is_multiple_of(block) {
         return Err(BlockError::Unaligned {
             offset,
             len,

@@ -5,8 +5,9 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-# Plancher imposé par l'édition 2024 ; le job « msrv » de la CI le vérifie à chaque changement du code.
-rust-version = "1.85"
+# Plancher imposé par Iced 0.14 (le plancher de l'édition 2024 seule serait 1.85) ; le job « msrv » de la CI
+# le vérifie à chaque changement du code.
+rust-version = "1.88"
 license = "MIT"
 repository = "https://github.com/FantasmaGlad/Bonk"
 publish = false
@@ -21,6 +22,12 @@ bonk-gui = { path = "crates/bonk-gui" }
 clap = { version = "4.6", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+# Rendu wgpu avec repli logiciel tiny-skia obligatoire (CDC §8). `linux-theme-detection` est écarté :
+# le thème de Bonk est fixe (charte monochrome), la détection ne ferait qu'ajouter des dépendances.
+# `smol` plutôt que `thread-pool` : seul un exécuteur (tokio ou smol) fournit `iced::time::every`, utilisé pour
+# l'actualisation automatique de la liste des disques ; smol est le plus léger des deux.
+iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia", "crisp", "web-colors", "smol", "x11", "wayland"] }
+iced_test = "0.14"
 
 # `warn` plutôt que `deny` : la validation passe `-D warnings` à clippy, donc ces lints
 # empêchent de terminer un travail tout en restant tolérables pendant l'écriture.
