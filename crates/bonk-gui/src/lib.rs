@@ -6,7 +6,10 @@
 //! n'est utilisable (CDC §8).
 
 mod app;
+mod command;
 mod theme;
+
+pub use command::{ViewOptions, equivalent_commands};
 
 use iced::Size;
 

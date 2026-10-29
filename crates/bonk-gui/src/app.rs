@@ -15,6 +15,7 @@ use iced::keyboard::{self, Key, key::Named};
 use iced::widget::{Column, button, checkbox, column, container, row, scrollable, text};
 use iced::{Element, Fill, Subscription, Task, Theme};
 
+use crate::command::{ViewOptions, equivalent_commands};
 use crate::theme;
 
 /// Intervalle d'actualisation automatique : un disque branché apparaît sans geste de l'utilisateur.
@@ -33,6 +34,8 @@ pub(crate) enum Message {
     Select(String),
     /// Action au clavier (CDC §8).
     Nav(Nav),
+    /// Copie dans le presse-papiers la commande équivalente à la vue (CDC §9.1).
+    Copy,
 }
 
 /// Actions de la navigation au clavier : chacune a le même effet qu'un clic.
@@ -54,6 +57,8 @@ enum Focus {
     Virtual,
     All,
     Disk(String),
+    /// Bouton de copie de la commande équivalente, dernier de l'ordre de Tab.
+    Copy,
 }
 
 /// Identifiant de la liste défilante, pour la suivre quand le focus descend dans la liste.
@@ -108,14 +113,49 @@ impl App {
         )
     }
 
+    /// Applique un message et journalise l'événement (CDC §9.2) : ce que l'utilisateur a fait, ce que
+    /// la fenêtre en a tiré, et la commande équivalente à la vue qui en résulte.
     pub(crate) fn update(&mut self, message: Message) -> Task<Message> {
+        let event = ui_event(&message);
+        let task = self.apply(message);
+        if let Some((name, detail)) = event {
+            let commands = self.equivalents().join(" ; ");
+            let focus = format!("{:?}", self.focus);
+            log::debug!(
+                target: "bonk::gui",
+                event = name, detail = detail.as_str(), focus = focus.as_str(),
+                selected = self.selected.as_deref().unwrap_or(""), equivalent = commands.as_str();
+                "ui event"
+            );
+        }
+        task
+    }
+
+    fn view_options(&self) -> ViewOptions {
+        ViewOptions {
+            show_internal: self.show_internal,
+            allow_virtual: self.allow_virtual,
+            show_all: self.show_all,
+        }
+    }
+
+    /// Commandes qui donnent ce que montre la fenêtre en ce moment.
+    fn equivalents(&self) -> Vec<String> {
+        equivalent_commands(self.view_options(), self.selected.as_deref())
+    }
+
+    fn apply(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Refresh => {
                 self.focus = Some(Focus::Refresh);
                 self.reload()
             }
-            Message::Tick => self.reload(),
+            Message::Tick => {
+                log::trace!(target: "bonk::gui", "tick");
+                self.reload()
+            }
             Message::Loaded(Ok(disks)) => {
+                log::debug!(target: "bonk::gui", disks = disks.len(); "enumeration result received");
                 self.loading = false;
                 self.error = None;
                 // Un disque débranché ne reste pas sélectionné.
@@ -131,6 +171,7 @@ impl App {
                 Task::none()
             }
             Message::Loaded(Err(erreur)) => {
+                log::warn!(target: "bonk::gui", reason = erreur.as_str(); "enumeration failed");
                 self.loading = false;
                 // Jamais de liste périmée présentée comme valable après un échec.
                 self.disks.clear();
@@ -167,6 +208,10 @@ impl App {
                 Task::none()
             }
             Message::Nav(nav) => self.navigate(nav),
+            Message::Copy => {
+                self.focus = Some(Focus::Copy);
+                iced::clipboard::write(self.equivalents().join("\n"))
+            }
         }
     }
 
@@ -190,6 +235,7 @@ impl App {
                     .map(|(disk, _)| Focus::Disk(disk.id.clone())),
             );
         }
+        order.push(Focus::Copy);
         order
     }
 
@@ -216,11 +262,15 @@ impl App {
             Nav::Previous => Some(current.map_or(last, |i| if i == 0 { last } else { i - 1 })),
             // Les flèches se déplacent entre les disques ; depuis une commande, Bas entre dans la liste.
             Nav::Down => match current {
-                Some(i) if matches!(order[i], Focus::Disk(_)) => Some((i + 1).min(last)),
+                Some(i) if is_disk(&order, i) => Some(i + usize::from(is_disk(&order, i + 1))),
                 _ => order.iter().position(|item| matches!(item, Focus::Disk(_))),
             },
+            // Haut remonte d'un disque ; depuis le bouton de copie, il revient au dernier disque.
             Nav::Up => match current {
-                Some(i) if i > 4 => Some(i - 1),
+                Some(i) if i > 0 && is_disk(&order, i - 1) && is_disk(&order, i) => Some(i - 1),
+                Some(i) if order[i] == Focus::Copy => {
+                    i.checked_sub(1).filter(|j| is_disk(&order, *j))
+                }
                 _ => None,
             },
             Nav::Activate => return self.activate(),
@@ -239,9 +289,10 @@ impl App {
         self.focus = Some(order[index].clone());
         // La liste suit le focus : position relative de la carte parmi les disques (approximative si
         // des détails sont ouverts, suffisante pour garder la carte visible).
-        let disks = order.len() - 4;
-        if index >= 4 && disks > 1 {
-            let relative = (index - 4) as f32 / (disks - 1) as f32;
+        let disk_positions: Vec<usize> = (0..order.len()).filter(|i| is_disk(&order, *i)).collect();
+        let rank = disk_positions.iter().position(|i| *i == index);
+        if let Some(rank) = rank.filter(|_| disk_positions.len() > 1) {
+            let relative = rank as f32 / (disk_positions.len() - 1) as f32;
             return iced::widget::operation::snap_to(
                 LIST,
                 scrollable::RelativeOffset {
@@ -261,9 +312,10 @@ impl App {
             Some(Focus::Virtual) => Message::ToggleVirtual(!self.allow_virtual),
             Some(Focus::All) => Message::ToggleAll(!self.show_all),
             Some(Focus::Disk(id)) => Message::Select(id),
+            Some(Focus::Copy) => Message::Copy,
             None => return Task::none(),
         };
-        self.update(message)
+        self.apply(message)
     }
 
     pub(crate) fn subscription(&self) -> Subscription<Message> {
@@ -403,6 +455,26 @@ impl App {
                 .into()
         };
 
+        let equivalent = row![
+            column![
+                text("Commande équivalente")
+                    .size(13)
+                    .color(theme::SECONDARY),
+                text(self.equivalents().join("\n"))
+                    .size(13)
+                    .font(iced::Font::MONOSPACE),
+            ]
+            .width(Fill),
+            ring(
+                button(text("Copier").size(14))
+                    .on_press(Message::Copy)
+                    .padding([6, 14])
+                    .style(theme::primary_button),
+                self.focus == Some(Focus::Copy),
+            ),
+        ]
+        .align_y(iced::Center);
+
         container(
             column![
                 header,
@@ -410,7 +482,8 @@ impl App {
                 text(self.status_line(shown))
                     .size(13)
                     .color(theme::SECONDARY),
-                body
+                body,
+                equivalent,
             ]
             .spacing(14),
         )
@@ -459,6 +532,26 @@ impl App {
             focused,
         )
     }
+}
+
+/// Vrai si l'élément `i` de l'ordre de Tab est un disque (faux hors bornes).
+fn is_disk(order: &[Focus], i: usize) -> bool {
+    matches!(order.get(i), Some(Focus::Disk(_)))
+}
+
+/// Nom stable et détail d'un événement de l'interface, pour le journal. Le minuteur et les résultats
+/// d'énumération sont journalisés ailleurs : pas d'événement utilisateur.
+fn ui_event(message: &Message) -> Option<(&'static str, String)> {
+    Some(match message {
+        Message::Refresh => ("click_refresh", String::new()),
+        Message::ToggleInternal(on) => ("toggle_internal", on.to_string()),
+        Message::ToggleVirtual(on) => ("toggle_virtual", on.to_string()),
+        Message::ToggleAll(on) => ("toggle_all", on.to_string()),
+        Message::Select(id) => ("select_disk", id.clone()),
+        Message::Nav(nav) => ("key", format!("{nav:?}")),
+        Message::Copy => ("click_copy", String::new()),
+        Message::Tick | Message::Loaded(_) => return None,
+    })
 }
 
 /// Entoure un composant de l'indicateur de focus (visible seulement s'il a le focus).
@@ -672,7 +765,7 @@ mod tests {
     fn tab_parcourt_les_commandes_puis_les_disques_et_reboucle() {
         let mut app = avec_tout_affiche();
         let mut vus = Vec::new();
-        for _ in 0..8 {
+        for _ in 0..9 {
             nav(&mut app, Nav::Next);
             vus.push(app.focus.clone());
         }
@@ -686,6 +779,7 @@ mod tests {
                 Some(Focus::Disk("nvme-systeme".to_owned())),
                 Some(Focus::Disk("usb-cle".to_owned())),
                 Some(Focus::Disk("sata-libre".to_owned())),
+                Some(Focus::Copy),
                 Some(Focus::Refresh),
             ]
         );
@@ -694,6 +788,8 @@ mod tests {
     #[test]
     fn maj_tab_remonte_et_commence_par_le_dernier() {
         let mut app = avec_tout_affiche();
+        nav(&mut app, Nav::Previous);
+        assert_eq!(app.focus, Some(Focus::Copy));
         nav(&mut app, Nav::Previous);
         assert_eq!(app.focus, Some(Focus::Disk("sata-libre".to_owned())));
         nav(&mut app, Nav::Previous);
@@ -778,7 +874,7 @@ mod tests {
         assert_eq!(app.focus, None);
         nav(&mut app, Nav::Next);
         nav(&mut app, Nav::Previous);
-        assert_eq!(app.focus, Some(Focus::All));
+        assert_eq!(app.focus, Some(Focus::Copy));
     }
 
     #[test]
@@ -829,6 +925,78 @@ mod tests {
         assert_eq!(nav_de(&Key::Named(Named::Space), M::empty(), true), None);
         assert_eq!(nav_de(&tab, M::empty(), true), Some(Nav::Next));
         assert_eq!(nav_de(&Key::Character("a".into()), M::empty(), false), None);
+    }
+
+    #[test]
+    fn haut_depuis_le_bouton_de_copie_revient_au_dernier_disque() {
+        let mut app = avec_tout_affiche();
+        app.focus = Some(Focus::Copy);
+        nav(&mut app, Nav::Up);
+        assert_eq!(app.focus, Some(Focus::Disk("sata-libre".to_owned())));
+        // Bas depuis le dernier disque n'entre pas dans le bouton : c'est le rôle de Tab.
+        nav(&mut app, Nav::Down);
+        assert_eq!(app.focus, Some(Focus::Disk("sata-libre".to_owned())));
+        // Sans disque affiché, Haut depuis la copie ne fait rien.
+        let mut vide = loaded(vec![]);
+        vide.focus = Some(Focus::Copy);
+        nav(&mut vide, Nav::Up);
+        assert_eq!(vide.focus, Some(Focus::Copy));
+    }
+
+    #[test]
+    fn la_commande_equivalente_suit_la_vue() {
+        let mut app = loaded(sample());
+        assert_eq!(app.equivalents(), ["bonk list"]);
+        let _ = app.update(Message::ToggleAll(true));
+        let _ = app.update(Message::ToggleInternal(true));
+        let _ = app.update(Message::Select("usb-cle".to_owned()));
+        assert_eq!(
+            app.equivalents(),
+            [
+                "bonk list --show-internal --all",
+                "bonk info usb-cle --show-internal"
+            ]
+        );
+        assert!(contient(
+            &app,
+            "bonk list --show-internal --all\nbonk info usb-cle --show-internal"
+        ));
+        assert!(contient(&app, "Commande équivalente"));
+    }
+
+    #[test]
+    fn le_bouton_copier_prend_le_focus_et_garde_la_vue() {
+        let mut app = loaded(sample());
+        let _ = app.update(Message::Copy);
+        assert_eq!(app.focus, Some(Focus::Copy));
+        assert_eq!(app.equivalents(), ["bonk list"]);
+    }
+
+    #[test]
+    fn evenements_de_l_interface_journalises() {
+        assert_eq!(
+            ui_event(&Message::Refresh),
+            Some(("click_refresh", String::new()))
+        );
+        assert_eq!(
+            ui_event(&Message::ToggleInternal(true)),
+            Some(("toggle_internal", "true".to_owned()))
+        );
+        assert_eq!(
+            ui_event(&Message::Select("usb-cle".to_owned())),
+            Some(("select_disk", "usb-cle".to_owned()))
+        );
+        assert_eq!(
+            ui_event(&Message::Nav(Nav::Next)),
+            Some(("key", "Next".to_owned()))
+        );
+        assert_eq!(
+            ui_event(&Message::Copy),
+            Some(("click_copy", String::new()))
+        );
+        // Le minuteur et les résultats ont leur propre journal.
+        assert_eq!(ui_event(&Message::Tick), None);
+        assert_eq!(ui_event(&Message::Loaded(Ok(vec![]))), None);
     }
 
     fn contient(app: &App, texte: &str) -> bool {
