@@ -4,7 +4,7 @@ Utilitaire universel de création de supports d'amorçage (clés USB et disques 
 
 ## État
 
-Fondations en cours (jalon J0). Le dépôt contient pour l'instant le workspace Cargo, les crates et leurs rôles, la documentation d'architecture et l'intégration continue. `bonk --help` et `bonk --version` sont les seules commandes disponibles ; aucune écriture sur disque n'est encore implémentée.
+Fondations en cours (jalon J0). Le dépôt contient pour l'instant le workspace Cargo, les crates et leurs rôles, et la documentation d'architecture. `bonk --help` et `bonk --version` sont les seules commandes disponibles ; aucune écriture sur disque n'est encore implémentée.
 
 ## Principes
 
