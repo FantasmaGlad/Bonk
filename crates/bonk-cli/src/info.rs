@@ -61,6 +61,20 @@ pub(crate) fn schema() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(Report)).unwrap_or_default()
 }
 
+/// Le rapport `info`, en JSON, pour le service ; `None` si aucun disque ne répond à `target`.
+pub(crate) fn report_value(
+    target: &str,
+    options: FilterOptions,
+    disks: &[Disk],
+) -> Option<Result<serde_json::Value, serde_json::Error>> {
+    let disk = find(disks, target)?;
+    let eligibility = evaluate(disk, options);
+    Some(serde_json::to_value(Report {
+        schema_version: JSON_SCHEMA_VERSION,
+        disk: Entry { disk, eligibility },
+    }))
+}
+
 pub(crate) fn run(
     args: &InfoArgs,
     defaults: &ViewDefaults,

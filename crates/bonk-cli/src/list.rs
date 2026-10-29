@@ -65,6 +65,26 @@ pub(crate) fn schema() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(Report)).unwrap_or_default()
 }
 
+/// Le rapport `list`, en JSON : même contenu que la sortie `--json`, pour le service.
+pub(crate) fn report_value(
+    options: FilterOptions,
+    all: bool,
+    disks: &[Disk],
+) -> Result<serde_json::Value, serde_json::Error> {
+    let entries: Vec<Entry<'_>> = disks
+        .iter()
+        .map(|disk| Entry {
+            disk,
+            eligibility: evaluate(disk, options),
+        })
+        .filter(|entry| all || entry.eligibility.is_writable())
+        .collect();
+    serde_json::to_value(Report {
+        schema_version: JSON_SCHEMA_VERSION,
+        disks: entries,
+    })
+}
+
 pub(crate) fn run(
     args: &ListArgs,
     defaults: &ViewDefaults,

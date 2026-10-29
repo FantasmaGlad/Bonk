@@ -180,6 +180,23 @@ struct FilterReport<'a> {
     rules: &'a [bonk_hal::RuleTrace],
 }
 
+/// Le rapport `debug filter`, en JSON, pour le service ; `None` si le disque est inconnu.
+pub(crate) fn filter_value(
+    target: &str,
+    options: FilterOptions,
+    disks: &[Disk],
+) -> Option<Result<serde_json::Value, serde_json::Error>> {
+    let disk = info::find(disks, target)?;
+    let (verdict, rules) = evaluate_traced(disk, options);
+    Some(serde_json::to_value(FilterReport {
+        schema_version: JSON_SCHEMA_VERSION,
+        disk: &disk.id,
+        options,
+        verdict: &verdict,
+        rules: &rules,
+    }))
+}
+
 pub(crate) fn filter(
     args: &FilterArgs,
     disks: &[Disk],

@@ -14,6 +14,7 @@ mod job;
 mod list;
 mod logging;
 mod schema;
+mod serve;
 mod transfer;
 
 pub use config::ViewDefaults;
@@ -22,6 +23,7 @@ use std::ffi::OsString;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::sync::Arc;
 
 use bonk_hal::{Disk, EnumerateError, enumerate_disks};
 use clap::{CommandFactory, Parser, Subcommand};
@@ -93,6 +95,8 @@ enum Command {
         /// Shell visé
         shell: clap_complete::Shell,
     },
+    /// Service headless : pilote Bonk en JSON sur l'entrée et la sortie standard, sans fenêtre
+    Serve,
     /// Ouvre la fenêtre (comme `bonk` seul)
     Gui,
 }
@@ -389,6 +393,23 @@ where
                 Ok(()) => 0,
                 Err(erreur) => report(err, Code::OutputFailed, erreur),
             }
+        }
+        Some(Command::Serve) => {
+            let enumerate_fn: serve::EnumerateFn = match &fixture_reads {
+                Some(reads) => {
+                    let reads = reads.clone();
+                    Arc::new(move || bonk_hal::enumerate_disks_from_capture(&reads))
+                }
+                None => Arc::new(enumerate_disks),
+            };
+            let cfg = serve::Config {
+                enumerate: enumerate_fn,
+                make_io: Arc::new(|cancel| job::Io::with_cancel(Some(cancel))),
+                config_path: env.config_path.clone(),
+                vars: env.vars.clone(),
+                view,
+            };
+            serve::serve(io::stdin().lock(), Box::new(io::stdout()), &cfg)
         }
         Some(Command::Debug { action }) => run_debug(action, out, err, enumerate),
         Some(Command::Explain(args)) => match errors::explain(&args, out) {

@@ -305,6 +305,20 @@ fn redact(value: &mut Value, serials: &[&str], user: Option<&str>) {
     }
 }
 
+/// Le rapport de diagnostic en JSON, pour le service.
+pub(crate) fn report_value(
+    include_serials: bool,
+    env: &Environment,
+    enumeration: &Result<Vec<Disk>, EnumerateError>,
+) -> Result<Value, serde_json::Error> {
+    let args = DiagnoseArgs {
+        output: None,
+        include_serials,
+        capture: false,
+    };
+    build_with_capture(&args, env, enumeration, None)
+}
+
 /// Écrit le rapport sur `out`, ou dans le fichier demandé. Renvoie le message à afficher le cas échéant.
 pub(crate) fn run(
     args: &DiagnoseArgs,

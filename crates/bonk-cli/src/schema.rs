@@ -8,7 +8,7 @@ use std::io::{self, Write};
 use clap::Args;
 use serde_json::Value;
 
-use crate::{config, debug, diagnose, errors, info, list, transfer};
+use crate::{config, debug, diagnose, errors, info, list, serve, transfer};
 
 /// Nom d'une commande et générateur du schéma de sa sortie.
 type Entry = (&'static str, fn() -> Value);
@@ -29,7 +29,22 @@ pub(crate) fn registry() -> Vec<Entry> {
         ("verify", transfer::schema_verify),
         ("repair-gpt", transfer::schema_repair),
         ("progress", transfer::schema_progress),
+        ("serve-request", serve::schema_request),
+        ("serve-response", serve::schema_response),
     ]
+}
+
+/// Schéma d'une commande, pour le service ; `None` si le nom est inconnu.
+pub(crate) fn value(name: &str) -> Option<Value> {
+    registry()
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(_, make)| make())
+}
+
+/// Noms des schémas disponibles.
+pub(crate) fn names() -> Vec<&'static str> {
+    registry().iter().map(|(n, _)| *n).collect()
 }
 
 /// Schéma JSON de la sortie d'une commande
@@ -86,9 +101,16 @@ mod tests {
             let schema = make();
             assert_eq!(schema["type"], "object", "{name}");
             let properties = schema["properties"].as_object();
+            // Les enveloppes du service sont versionnées par le protocole (événement `ready`), pas par
+            // un champ : seules les sorties de commande portent `schema_version`.
+            let key = if name.starts_with("serve-") {
+                "id"
+            } else {
+                "schema_version"
+            };
             assert!(
-                properties.is_some_and(|p| p.contains_key("schema_version")),
-                "{name} : pas de schema_version"
+                properties.is_some_and(|p| p.contains_key(key)),
+                "{name} : pas de {key}"
             );
         }
     }

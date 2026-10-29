@@ -74,13 +74,28 @@ pub(crate) struct Io {
 
 impl Default for Io {
     fn default() -> Self {
+        Self::with_cancel(None)
+    }
+}
+
+impl Io {
+    /// Accès système réels. `cancel` est un drapeau d'annulation propre à l'opération (le service en
+    /// donne un par opération) ; Ctrl+C annule dans tous les cas.
+    pub(crate) fn with_cancel(
+        cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    ) -> Self {
         Self {
             unmount: Box::new(bonk_hal::unmount_all),
             open_node: Box::new(|path, access| {
                 bonk_hal::BlockNode::open(path, access)
                     .map(|node| Box::new(node) as Box<dyn BlockDevice>)
             }),
-            cancelled: Box::new(bonk_hal::interrupt::requested),
+            cancelled: Box::new(move || {
+                bonk_hal::interrupt::requested()
+                    || cancel
+                        .as_ref()
+                        .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::SeqCst))
+            }),
         }
     }
 }
