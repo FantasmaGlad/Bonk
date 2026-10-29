@@ -34,6 +34,12 @@ fn help_reussit_et_commence_par_la_description_de_l_outil() -> Resultat {
 fn sans_argument_affiche_l_aide_avec_le_code_d_usage() -> Resultat {
     let sortie = bonk().output()?;
     assert_eq!(sortie.status.code(), Some(2));
+    // L'aide d'un appel sans argument part sur stderr : un binaire muet ne doit pas passer.
+    let texte = String::from_utf8(sortie.stderr)?;
+    assert_eq!(
+        texte.lines().next(),
+        Some("Création de supports d'amorçage (clés USB et disques externes)")
+    );
     Ok(())
 }
 
