@@ -173,6 +173,16 @@ fn sous_affichage_virtuel_le_rendu_bascule_en_logiciel() -> Resultat {
         eprintln!("xvfb-run ou timeout absent : test ignoré");
         return Ok(());
     }
+    // Un `xvfb-run` installé ne prouve pas qu'un serveur X démarre (poste sans `Xvfb` ou sans `xauth`,
+    // exécuteur de CI) : sans cela, `bonk` ne se lance même pas et le test ne dirait rien du repli.
+    let serveur_x = Command::new("xvfb-run")
+        .args(["-a", "true"])
+        .output()
+        .is_ok_and(|s| s.status.success());
+    if !serveur_x {
+        eprintln!("xvfb-run ne parvient pas à démarrer un serveur X : test ignoré");
+        return Ok(());
+    }
     let sortie = Command::new("xvfb-run")
         .args(["-a", "-s", "-screen 0 1280x800x24", "timeout", "6"])
         .arg(env!("CARGO_BIN_EXE_bonk"))
