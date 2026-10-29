@@ -6,7 +6,11 @@
 //! testable sur des fichiers image, sans matériel ni privilèges.
 
 pub mod block;
+pub mod codec;
 pub mod partition;
+pub mod repair;
+pub mod trace;
+pub mod write;
 
 pub use block::{
     BlockDevice, BlockError, DEFAULT_BLOCK_SIZE, MemoryDevice, check_access, check_geometry,

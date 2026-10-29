@@ -12,8 +12,9 @@ publish.workspace = true
 serde.workspace = true
 schemars.workspace = true
 sha2.workspace = true
+log.workspace = true
 flate2.workspace = true
-lzma-rs.workspace = true
+lzma-rust2.workspace = true
 ruzstd.workspace = true
 
 [lints]

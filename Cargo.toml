@@ -38,7 +38,7 @@ clap_complete = "4"
 sha2 = "0.11"
 # Décompression à la volée en Rust pur (CDC §1 : rien à installer, pas de bibliothèque C à lier).
 flate2 = "1"
-lzma-rs = "0.3"
+lzma-rust2 = { version = "0.24", default-features = false, features = ["xz", "std"] }
 ruzstd = "0.9"
 
 # `warn` plutôt que `deny` : la validation passe `-D warnings` à clippy, donc ces lints
