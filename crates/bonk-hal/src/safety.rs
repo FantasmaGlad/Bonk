@@ -116,6 +116,16 @@ pub fn evaluate(disk: &Disk, options: FilterOptions) -> Eligibility {
     if disk.kind != DiskKind::Physical && !options.allow_virtual {
         reasons.push(Exclusion::VirtualDisk { kind: disk.kind });
     }
+    // Espace d'échange posé sur le disque entier, sans partition : la règle des partitions ne le voit pas.
+    if disk
+        .fs_type
+        .as_deref()
+        .is_some_and(|signature| is_one_of(signature, &SWAP_SIGNATURES))
+    {
+        reasons.push(Exclusion::Swap {
+            partition: disk.path.clone(),
+        });
+    }
     push_device_exclusions(
         &mut reasons,
         &disk.path,

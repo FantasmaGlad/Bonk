@@ -49,3 +49,52 @@ fn option_inconnue_est_une_erreur_d_usage() -> Resultat {
     assert_eq!(sortie.status.code(), Some(2));
     Ok(())
 }
+
+#[test]
+fn list_aide_decrit_les_options() -> Resultat {
+    let sortie = bonk().args(["list", "--help"]).output()?;
+    assert!(sortie.status.success());
+    let texte = String::from_utf8(sortie.stdout)?;
+    for option in ["--json", "--all", "--show-internal", "--allow-virtual"] {
+        assert!(
+            texte.contains(option),
+            "{option} absent de l'aide :\n{texte}"
+        );
+    }
+    Ok(())
+}
+
+/// Sur la machine qui exécute le test, `bonk list --json` doit soit réussir avec un JSON versionné,
+/// soit échouer proprement (code 1, message sur stderr, rien sur stdout) : jamais un autre état.
+/// Le contenu dépend de la machine et n'est pas vérifié ici ; les règles le sont par les tests des
+/// crates `bonk-hal` et `bonk-cli`.
+#[test]
+fn list_json_reussit_ou_echoue_proprement() -> Resultat {
+    let sortie = bonk().args(["list", "--json", "--all"]).output()?;
+    match sortie.status.code() {
+        Some(0) => {
+            let texte = String::from_utf8(sortie.stdout)?;
+            assert!(texte.trim_start().starts_with('{'), "{texte}");
+            assert!(texte.contains("\"schema_version\": 1"), "{texte}");
+            assert!(sortie.stderr.is_empty());
+        }
+        Some(1) => {
+            assert!(sortie.stdout.is_empty());
+            let erreur = String::from_utf8(sortie.stderr)?;
+            assert!(erreur.starts_with("bonk : erreur : "), "{erreur}");
+        }
+        autre => panic!("code de sortie inattendu : {autre:?}"),
+    }
+    Ok(())
+}
+
+/// Hors Linux, l'énumération n'existe pas encore : échec propre et message explicite.
+#[cfg(not(target_os = "linux"))]
+#[test]
+fn list_hors_linux_echoue_avec_un_message_clair() -> Resultat {
+    let sortie = bonk().arg("list").output()?;
+    assert_eq!(sortie.status.code(), Some(1));
+    let erreur = String::from_utf8(sortie.stderr)?;
+    assert!(erreur.contains("pas encore disponible"), "{erreur}");
+    Ok(())
+}

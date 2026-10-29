@@ -5,9 +5,13 @@
 //! et une interface commune.
 
 pub mod disk;
+pub mod enumerate;
 pub mod image;
+#[cfg(target_os = "linux")]
+pub mod linux;
 pub mod safety;
 
 pub use disk::{Bus, Disk, DiskKind, Partition};
+pub use enumerate::{EnumerateError, enumerate_disks};
 pub use image::{Access, FileDevice};
 pub use safety::{Eligibility, Exclusion, FilterOptions, HiddenReason, Warning, evaluate};

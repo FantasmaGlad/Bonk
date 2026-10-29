@@ -40,6 +40,11 @@
       ]
     },
     {
+      "id": "usb-echange-disque-entier",
+      "path": "/dev/sdn", "model": "Cle swap nue", "size_bytes": 8053063680, "bus": "usb", "kind": "physical",
+      "fs_type": "swap"
+    },
+    {
       "id": "usb-reprise-veille",
       "path": "/dev/sdi", "model": "Cle hibernation", "size_bytes": 16008609792, "bus": "usb", "kind": "physical",
       "partitions": [{ "path": "/dev/sdi1", "fs_type": "swsuspend", "size_bytes": 16007561216 }]
@@ -82,6 +87,7 @@
         "usb-zfs-nu": { "verdict": "excluded", "reasons": [{ "reason": "aggregate_member", "device": "/dev/sdf", "signature": "zfs_member" }] },
         "usb-md-actif": { "verdict": "excluded", "reasons": [{ "reason": "stacked", "device": "/dev/sdg", "holders": ["md127"] }] },
         "usb-echange": { "verdict": "excluded", "reasons": [{ "reason": "swap", "partition": "/dev/sdh1" }] },
+        "usb-echange-disque-entier": { "verdict": "excluded", "reasons": [{ "reason": "swap", "partition": "/dev/sdn" }] },
         "usb-reprise-veille": { "verdict": "excluded", "reasons": [{ "reason": "swap", "partition": "/dev/sdi1" }] },
         "usb-systeme-live": {
           "verdict": "excluded",
