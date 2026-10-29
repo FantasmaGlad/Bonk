@@ -116,6 +116,13 @@ pub(crate) struct WriteArgs {
     no_repair_gpt: bool,
 }
 
+impl WriteArgs {
+    /// Cette commande ouvrirait-elle un vrai disque ? (`--dry-run` et `--simulate` : non)
+    pub(crate) fn touches_real_disk(&self) -> bool {
+        !self.common.simulate && !self.dry_run
+    }
+}
+
 /// Compare un disque (ou une image) à une image, sans rien écrire
 #[derive(Debug, Args)]
 #[command(long_about = None)]
@@ -125,6 +132,12 @@ pub(crate) struct VerifyArgs {
 
     /// Image de référence
     source: PathBuf,
+}
+
+impl VerifyArgs {
+    pub(crate) fn touches_real_disk(&self) -> bool {
+        !self.common.simulate
+    }
 }
 
 /// Répare le GPT d'un disque (ou d'une image) : secours à la fin du support, principal restauré
@@ -141,6 +154,12 @@ pub(crate) struct RepairArgs {
     /// Dit s'il y a quelque chose à réparer, sans rien écrire
     #[arg(long)]
     dry_run: bool,
+}
+
+impl RepairArgs {
+    pub(crate) fn touches_real_disk(&self) -> bool {
+        !self.common.simulate
+    }
 }
 
 /// Événement de progression, tel qu'il sort en `--progress json`.

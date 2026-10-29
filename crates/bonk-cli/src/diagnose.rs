@@ -9,7 +9,7 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-use bonk_hal::{Disk, EnumerateError, FilterOptions, evaluate};
+use bonk_hal::{Disk, EnumerateError, FilterOptions, SourceRead, evaluate};
 use clap::Args;
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -37,11 +37,19 @@ pub(crate) struct DiagnoseArgs {
     /// Garde les numéros de série et le nom d'utilisateur, masqués par défaut
     #[arg(long)]
     include_serials: bool,
+
+    /// Joint les sources brutes de l'énumération (anonymisées), rejouables ailleurs avec --fixture
+    #[arg(long)]
+    capture: bool,
 }
 
 impl DiagnoseArgs {
     pub(crate) fn include_serials(&self) -> bool {
         self.include_serials
+    }
+
+    pub(crate) fn capture(&self) -> bool {
+        self.capture
     }
 }
 
@@ -54,6 +62,16 @@ struct Report<'a> {
     graphics: Graphics,
     redaction: Redaction,
     enumeration: Enumeration<'a>,
+    /// Sources brutes de l'énumération, quand `--capture` est demandé.
+    capture: Option<Capture>,
+}
+
+/// Lectures des sources système, au format que rejoue `--fixture`.
+#[derive(Serialize, JsonSchema)]
+struct Capture {
+    schema_version: u32,
+    kind: &'static str,
+    reads: Vec<SourceRead>,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -130,10 +148,21 @@ fn kernel_release() -> Option<String> {
 }
 
 /// Construit le rapport. Un échec d'énumération n'est pas un échec du diagnostic : il y figure.
+#[cfg(test)]
 pub(crate) fn build(
     args: &DiagnoseArgs,
     env: &Environment,
     enumeration: &Result<Vec<Disk>, EnumerateError>,
+) -> Result<Value, serde_json::Error> {
+    build_with_capture(args, env, enumeration, None)
+}
+
+/// Comme [`build`], avec les lectures de sources à joindre en capture.
+pub(crate) fn build_with_capture(
+    args: &DiagnoseArgs,
+    env: &Environment,
+    enumeration: &Result<Vec<Disk>, EnumerateError>,
+    reads: Option<&[SourceRead]>,
 ) -> Result<Value, serde_json::Error> {
     let (ok, error, disks) = match enumeration {
         Ok(disks) => (true, None, disks.as_slice()),
@@ -170,6 +199,11 @@ pub(crate) fn build(
                 })
                 .collect(),
         },
+        capture: reads.map(|reads| Capture {
+            schema_version: 1,
+            kind: "bonk-capture",
+            reads: sanitize_reads(reads),
+        }),
     };
     let mut value = serde_json::to_value(&report)?;
     if !args.include_serials {
@@ -181,6 +215,66 @@ pub(crate) fn build(
         redact(&mut value, &serials, env.user.as_deref());
     }
     Ok(value)
+}
+
+/// Clés udev qui identifient un exemplaire de matériel ou un utilisateur : jamais dans une capture.
+const UDEV_SENSITIVE_KEYS: [&str; 11] = [
+    "ID_SERIAL",
+    "ID_SERIAL_SHORT",
+    "ID_WWN",
+    "ID_WWN_WITH_EXTENSION",
+    "ID_FS_UUID",
+    "ID_FS_UUID_ENC",
+    "ID_FS_UUID_SUB",
+    "ID_PART_ENTRY_UUID",
+    "ID_PART_TABLE_UUID",
+    "ID_FS_LABEL",
+    "ID_FS_LABEL_ENC",
+];
+
+/// Masque, dans un enregistrement udev, ce qui identifie le disque ou son propriétaire : numéros de
+/// série, WWN, UUID, étiquettes et les liens `by-uuid`, `by-partuuid`, `by-label` et `wwn-`. Le reste
+/// (bus, signatures, types de partition) est ce qui sert à rejouer l'énumération.
+fn sanitize_udev(text: &str) -> String {
+    text.lines()
+        .map(|line| {
+            if let Some(entry) = line.strip_prefix("E:")
+                && let Some((key, _)) = entry.split_once('=')
+                && UDEV_SENSITIVE_KEYS.contains(&key)
+            {
+                return format!("E:{key}=<masked>");
+            }
+            if let Some(link) = line.strip_prefix("S:")
+                && [
+                    "/by-uuid/",
+                    "/by-partuuid/",
+                    "/by-label/",
+                    "/by-id/wwn-",
+                    "eui.",
+                ]
+                .iter()
+                .any(|marker| link.contains(marker))
+            {
+                let (dir, _) = link.rsplit_once('/').unwrap_or(("", link));
+                return format!("S:{dir}/<masked>");
+            }
+            line.to_owned()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn sanitize_reads(reads: &[SourceRead]) -> Vec<SourceRead> {
+    reads
+        .iter()
+        .cloned()
+        .map(|mut read| {
+            if read.kind == "file" && read.path.contains("/run/udev/") {
+                read.content = read.content.as_deref().map(sanitize_udev);
+            }
+            read
+        })
+        .collect()
 }
 
 /// Masque les numéros de série (partout où ils apparaissent, dans les identifiants `by-id` compris) et
@@ -216,9 +310,10 @@ pub(crate) fn run(
     args: &DiagnoseArgs,
     env: &Environment,
     enumeration: &Result<Vec<Disk>, EnumerateError>,
+    reads: Option<&[SourceRead]>,
     out: &mut dyn Write,
 ) -> io::Result<()> {
-    let report = build(args, env, enumeration).map_err(io::Error::from)?;
+    let report = build_with_capture(args, env, enumeration, reads).map_err(io::Error::from)?;
     match &args.output {
         None => {
             serde_json::to_writer_pretty(&mut *out, &report).map_err(io::Error::from)?;
@@ -279,6 +374,7 @@ mod tests {
         DiagnoseArgs {
             output: None,
             include_serials,
+            capture: false,
         }
     }
 
@@ -395,6 +491,57 @@ mod tests {
         Ok(())
     }
 
+    fn udev_read(path: &str, content: &str) -> SourceRead {
+        SourceRead {
+            path: path.to_owned(),
+            kind: "file".to_owned(),
+            ok: true,
+            bytes: Some(content.len()),
+            error: None,
+            micros: 1,
+            content: Some(content.to_owned()),
+        }
+    }
+
+    #[test]
+    fn la_capture_masque_ce_qui_identifie_le_materiel_et_garde_ce_qui_sert_a_rejouer()
+    -> Result<(), serde_json::Error> {
+        let udev = "S:disk/by-id/usb-SanDisk_Cruzer_4C530001-0:0\nS:disk/by-id/wwn-0x5000cca\nS:disk/by-uuid/1DCD-D51A\nS:disk/by-label/MA_CLE\nE:ID_SERIAL_SHORT=4C530001\nE:ID_WWN=0x5000cca\nE:ID_FS_UUID=1DCD-D51A\nE:ID_FS_LABEL=MA_CLE\nE:ID_FS_TYPE=vfat\nE:ID_BUS=usb\nE:ID_PART_ENTRY_TYPE=c12a7328\n";
+        let reads = vec![
+            udev_read("/run/udev/data/b8:17", udev),
+            udev_read(
+                "/proc/self/mountinfo",
+                "90 44 8:17 / /run/media/alice/CLE rw - vfat /dev/sdb1 rw\n",
+            ),
+        ];
+        let report = build_with_capture(&args(false), &env(), &Ok(vec![disk()]), Some(&reads))?;
+        let text = report.to_string();
+        // Rien d'identifiant n'a survécu.
+        for secret in ["4C530001", "0x5000cca", "1DCD-D51A", "MA_CLE", "alice"] {
+            assert!(!text.contains(secret), "{secret} présent dans la capture");
+        }
+        let udev_out = report["capture"]["reads"][0]["content"]
+            .as_str()
+            .ok_or_else(|| serde_json::Error::io(std::io::Error::other("contenu")))?;
+        // Ce qui sert à rejouer l'énumération reste.
+        for kept in [
+            "E:ID_FS_TYPE=vfat",
+            "E:ID_BUS=usb",
+            "E:ID_PART_ENTRY_TYPE=c12a7328",
+            "S:disk/by-id/",
+        ] {
+            assert!(udev_out.contains(kept), "{kept} perdu : {udev_out}");
+        }
+        assert_eq!(report["capture"]["kind"], "bonk-capture");
+        assert_eq!(
+            report["capture"]["reads"][1]["content"],
+            "90 44 8:17 / /run/media/<user>/CLE rw - vfat /dev/sdb1 rw\n"
+        );
+        // Sans --capture, pas de section capture.
+        assert!(build(&args(false), &env(), &Ok(vec![]))?["capture"].is_null());
+        Ok(())
+    }
+
     #[test]
     fn ecriture_dans_un_fichier_sans_ecraser() -> Result<(), Box<dyn std::error::Error>> {
         let path = std::env::temp_dir().join(format!("bonk-diag-{}.json", std::process::id()));
@@ -402,14 +549,15 @@ mod tests {
         let with_file = DiagnoseArgs {
             output: Some(path.clone()),
             include_serials: false,
+            capture: false,
         };
         let mut out = Vec::new();
-        run(&with_file, &env(), &Ok(vec![disk()]), &mut out)?;
+        run(&with_file, &env(), &Ok(vec![disk()]), None, &mut out)?;
         assert!(String::from_utf8(out)?.starts_with("Rapport écrit dans "));
         let written: Value = serde_json::from_str(&std::fs::read_to_string(&path)?)?;
         assert_eq!(written["schema_version"], 1);
         // Un second appel ne remplace pas le fichier.
-        let second = run(&with_file, &env(), &Ok(vec![]), &mut Vec::new());
+        let second = run(&with_file, &env(), &Ok(vec![]), None, &mut Vec::new());
         assert!(second.is_err_and(|e| e.kind() == io::ErrorKind::AlreadyExists));
         std::fs::remove_file(&path)?;
         Ok(())

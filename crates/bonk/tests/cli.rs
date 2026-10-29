@@ -194,3 +194,105 @@ fn sous_affichage_virtuel_le_rendu_bascule_en_logiciel() -> Resultat {
     );
     Ok(())
 }
+
+/// Capture puis rejeu : ce que `list` voit sur cette machine, `--fixture` le redonne depuis la capture,
+/// sans que les numéros de série ni le nom d'utilisateur y figurent. Linux seulement (seul système où
+/// l'énumération existe) ; ignoré si l'énumération échoue ici (conteneur sans udev).
+#[cfg(target_os = "linux")]
+#[test]
+fn une_capture_rejouee_donne_les_memes_verdicts() -> Resultat {
+    let dossier = std::env::temp_dir().join(format!("bonk-capture-{}", std::process::id()));
+    std::fs::create_dir_all(&dossier)?;
+    let capture = dossier.join("capture.json");
+    let sortie = bonk()
+        .args(["diagnose", "--capture", "--output"])
+        .arg(&capture)
+        .output()?;
+    assert_eq!(
+        sortie.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&sortie.stderr)
+    );
+    let direct = bonk().args(["list", "--all", "--json"]).output()?;
+    if direct.status.code() != Some(0) {
+        eprintln!("énumération impossible ici : test ignoré");
+        std::fs::remove_dir_all(&dossier)?;
+        return Ok(());
+    }
+    let rejoue = bonk()
+        .arg("--fixture")
+        .arg(&capture)
+        .args(["list", "--all", "--json"])
+        .output()?;
+    assert_eq!(
+        rejoue.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&rejoue.stderr)
+    );
+
+    let resume =
+        |octets: &[u8]| -> Result<Vec<(String, String, String, String)>, serde_json::Error> {
+            let json: serde_json::Value = serde_json::from_slice(octets)?;
+            Ok(json["disks"].as_array().map_or(vec![], |d| {
+                d.iter()
+                    .map(|x| {
+                        (
+                            x["path"].to_string(),
+                            x["bus"].to_string(),
+                            x["kind"].to_string(),
+                            x["eligibility"]["verdict"].to_string(),
+                        )
+                    })
+                    .collect()
+            }))
+        };
+    let (a, b) = (resume(&direct.stdout)?, resume(&rejoue.stdout)?);
+    assert!(!a.is_empty());
+    assert_eq!(a, b, "la capture rejouée diffère de la lecture directe");
+
+    // Aucun secret ne sort dans la capture : on cherche les numéros de série lus ici.
+    let texte = std::fs::read_to_string(&capture)?;
+    let direct_json: serde_json::Value = serde_json::from_slice(&direct.stdout)?;
+    for disk in direct_json["disks"].as_array().into_iter().flatten() {
+        if let Some(serie) = disk["serial"].as_str().filter(|s| s.len() >= 6) {
+            assert!(!texte.contains(serie), "numéro de série dans la capture");
+        }
+    }
+    if let Ok(user) = std::env::var("USER").map(|u| format!("/{u}/"))
+        && user.len() > 4
+    {
+        assert!(!texte.contains(&user), "nom d'utilisateur dans la capture");
+    }
+
+    // Rejouer ne doit jamais pouvoir écrire sur un vrai disque.
+    let id = direct_json["disks"][0]["id"]
+        .as_str()
+        .unwrap_or("x")
+        .to_owned();
+    let refus = bonk()
+        .arg("--fixture")
+        .arg(&capture)
+        .args(["write", &id, "/dev/null", "--yes"])
+        .output()?;
+    assert_eq!(refus.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&refus.stderr)
+            .trim_end()
+            .ends_with("[E5005]")
+    );
+    let sources = bonk()
+        .arg("--fixture")
+        .arg(&capture)
+        .args(["debug", "sources"])
+        .output()?;
+    assert_eq!(sources.status.code(), Some(2));
+    // Un fichier qui n'est pas une capture est refusé clairement.
+    let faux = dossier.join("faux.json");
+    std::fs::write(&faux, "{}")?;
+    let invalide = bonk().arg("--fixture").arg(&faux).arg("list").output()?;
+    assert_eq!(invalide.status.code(), Some(2));
+    std::fs::remove_dir_all(&dossier)?;
+    Ok(())
+}

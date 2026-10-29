@@ -8,6 +8,7 @@ mod config;
 mod debug;
 mod diagnose;
 mod errors;
+mod fixture;
 mod info;
 mod job;
 mod list;
@@ -46,6 +47,9 @@ use crate::transfer::{RepairArgs, VerifyArgs, WriteArgs};
 struct Cli {
     #[command(flatten)]
     log: LogArgs,
+
+    #[command(flatten)]
+    global: fixture::GlobalArgs,
 
     #[command(subcommand)]
     command: Option<Command>,
@@ -105,6 +109,33 @@ enum DiskAction {
     Verify(VerifyArgs),
     /// Répare le GPT d'un disque
     RepairGpt(RepairArgs),
+}
+
+/// Ce qu'une commande a d'incompatible avec `--fixture`, le cas échéant : tout ce qui lirait le système
+/// réel ou ouvrirait un vrai disque.
+fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
+    const DISK: &str = "--fixture simule l'énumération seulement : l'écriture et la lecture brute d'un disque sont refusées (utiliser --simulate ou --dry-run)";
+    match command.as_ref()? {
+        Command::Write(a)
+        | Command::Disk {
+            action: DiskAction::Write(a),
+        } if a.touches_real_disk() => Some(DISK),
+        Command::Verify(a)
+        | Command::Disk {
+            action: DiskAction::Verify(a),
+        } if a.touches_real_disk() => Some(DISK),
+        Command::RepairGpt(a)
+        | Command::Disk {
+            action: DiskAction::RepairGpt(a),
+        } if a.touches_real_disk() => Some(DISK),
+        Command::Debug {
+            action: debug::DebugAction::Sources(_),
+        } => Some("debug sources lit le système réel : incompatible avec --fixture"),
+        Command::Diagnose(a) if a.capture() => {
+            Some("--capture lit le système réel : incompatible avec --fixture")
+        }
+        _ => None,
+    }
 }
 
 /// Vérifie qu'une ligne de commande est acceptée par la CLI, sans l'exécuter, et rend ses mots. Sert
@@ -277,8 +308,28 @@ where
         "start"
     );
 
+    // Capture rejouée : l'énumération vient du fichier, et rien ne peut écrire sur un vrai disque.
+    let fixture_reads = match cli.global.path().map(fixture::load) {
+        Some(Ok(reads)) => Some(reads),
+        Some(Err(erreur)) => return report(err, Code::FixtureInvalid, erreur),
+        None => None,
+    };
+    if fixture_reads.is_some()
+        && let Some(raison) = fixture_conflict(&cli.command)
+    {
+        return report(err, Code::FixtureInvalid, raison);
+    }
+    let fixture_enumerate;
+    let enumerate: &dyn Fn() -> Result<Vec<Disk>, EnumerateError> = match &fixture_reads {
+        Some(reads) => {
+            log::info!(target: "bonk::cli", reads = reads.len(); "replaying a capture instead of reading the system");
+            fixture_enumerate = move || bonk_hal::enumerate_disks_from_capture(reads);
+            &fixture_enumerate
+        }
+        None => &enumerate,
+    };
     let deps = job::Deps {
-        enumerate: &enumerate,
+        enumerate,
         io: &env.io,
     };
     match cli.command {
@@ -351,11 +402,22 @@ where
         },
         Some(Command::Diagnose(args)) => {
             log::debug!(target: "bonk::cli", include_serials = args.include_serials(); "command diagnose");
-            let result = enumerate();
+            let (result, reads) = if args.capture() {
+                let (result, reads) = bonk_hal::enumerate_disks_recorded();
+                (result, Some(reads))
+            } else {
+                (enumerate(), None)
+            };
             if let Err(erreur) = &result {
                 log::debug!(target: "bonk::cli", reason = erreur.to_string().as_str(); "enumeration failed (reported in the report)");
             }
-            match diagnose::run(&args, &diagnose::Environment::system(), &result, out) {
+            match diagnose::run(
+                &args,
+                &diagnose::Environment::system(),
+                &result,
+                reads.as_deref(),
+                out,
+            ) {
                 Ok(()) => 0,
                 Err(erreur) => report(
                     err,

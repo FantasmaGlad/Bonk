@@ -19,7 +19,10 @@ pub use describe::{
     bus_label, exclusion_label, format_size, kind_label, state_label, verdict_badge,
 };
 pub use disk::{Bus, Disk, DiskKind, Partition};
-pub use enumerate::{EnumerateError, SourceRead, enumerate_disks, enumerate_disks_recorded};
+pub use enumerate::{
+    EnumerateError, SourceRead, enumerate_disks, enumerate_disks_from_capture,
+    enumerate_disks_recorded,
+};
 pub use image::{Access, FileDevice};
 pub use node::BlockNode;
 pub use safety::{

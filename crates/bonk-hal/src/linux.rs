@@ -143,6 +143,7 @@ fn read_disk(ctx: &Context<'_>, dir: &Path, name: &str) -> Result<Option<Disk>, 
     }
     let real = canonical(dir)?;
     let relative = real.strip_prefix(&ctx.canonical_sys).unwrap_or(&real);
+    note_link(dir, relative);
     let components: Vec<&str> = relative
         .components()
         .filter_map(|c| c.as_os_str().to_str())
@@ -538,12 +539,32 @@ fn note_read(
             };
             reads.push(SourceRead {
                 path: shown,
-                kind,
+                kind: kind.to_owned(),
                 ok: error.is_none(),
                 bytes,
                 error,
                 micros,
                 content,
+            });
+        }
+    });
+}
+
+/// Enregistre qu'un chemin de `/sys/block` est un lien vers `relative` (chemin canonique du
+/// périphérique, d'où se déduit le bus) : sans lui, une capture rejouée perdrait le bus.
+fn note_link(path: &Path, relative: &Path) {
+    let target = relative.display().to_string();
+    log::trace!(target: "bonk_hal::linux", path = path.display().to_string().as_str(), target = target.as_str(); "resolved link");
+    RECORDER.with(|recorder| {
+        if let Some(reads) = recorder.borrow_mut().as_mut() {
+            reads.push(SourceRead {
+                path: path.display().to_string(),
+                kind: "link".to_owned(),
+                ok: true,
+                bytes: Some(target.len()),
+                error: None,
+                micros: 0,
+                content: Some(target),
             });
         }
     });
@@ -581,6 +602,97 @@ fn traced_list(path: &Path) -> io::Result<Vec<String>> {
             .map(|text| (text.len(), text.as_str())),
     );
     result
+}
+
+/// Rejoue une capture : reconstruit sous un dossier temporaire l'arborescence que les lectures ont
+/// vue (fichiers, liens de `/sys/block`), énumère dessus, puis la supprime.
+///
+/// # Errors
+/// [`EnumerateError`] si la capture est incomplète pour l'énumération (par exemple sans base udev) ou
+/// si le dossier temporaire ne peut pas être créé.
+pub fn enumerate_from_reads(reads: &[SourceRead]) -> Result<Vec<Disk>, EnumerateError> {
+    struct Cleanup(PathBuf);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+    static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let base = std::env::temp_dir().join(format!("bonk-fixture-{}-{n}", std::process::id()));
+    let _cleanup = Cleanup(base.clone());
+    build_tree(&base, reads).map_err(|e| io_error(&base, e))?;
+    enumerate(&LinuxRoots::under(&base))
+}
+
+/// Chemin tel qu'il est sur un vrai système : une capture faite sous une autre racine (les tests)
+/// garde son préfixe, qu'on retire en repartant de `/sys/`, `/proc/` ou `/run/udev/`.
+fn standard_path(path: &str) -> &str {
+    ["/sys/", "/proc/", "/run/udev/"]
+        .iter()
+        .filter_map(|anchor| path.find(anchor))
+        .min()
+        .map_or(path, |start| &path[start..])
+}
+
+fn build_tree(base: &Path, reads: &[SourceRead]) -> io::Result<()> {
+    use std::collections::BTreeMap;
+    for dir in ["sys/block", "proc/self", "run/udev/data", "dev"] {
+        fs::create_dir_all(base.join(dir))?;
+    }
+    // `/sys/block/<nom>` : lien vers le chemin canonique du périphérique.
+    let links: BTreeMap<&str, &str> = reads
+        .iter()
+        .filter(|r| r.kind == "link")
+        .filter_map(|r| r.content.as_deref().map(|c| (standard_path(&r.path), c)))
+        .collect();
+    for (link, relative) in &links {
+        let Some(name) = link.rsplit('/').next() else {
+            continue;
+        };
+        fs::create_dir_all(base.join("sys").join(relative))?;
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(format!("../{relative}"), base.join("sys/block").join(name))?;
+    }
+    // Un chemin lu à travers un lien est écrit à l'emplacement canonique.
+    let place = |path: &str| -> PathBuf {
+        let path = standard_path(path);
+        for (link, relative) in &links {
+            if let Some(rest) = path
+                .strip_prefix(link)
+                .filter(|r| r.is_empty() || r.starts_with('/'))
+            {
+                return base
+                    .join("sys")
+                    .join(relative)
+                    .join(rest.trim_start_matches('/'));
+            }
+        }
+        base.join(path.trim_start_matches('/'))
+    };
+    for read in reads.iter().filter(|r| r.ok) {
+        match read.kind.as_str() {
+            "file" => {
+                let target = place(&read.path);
+                if let Some(parent) = target.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::write(target, read.content.as_deref().unwrap_or_default())?;
+            }
+            "dir" => {
+                let target = place(&read.path);
+                fs::create_dir_all(&target)?;
+                // Les périphériques empilés ne sont connus que par leurs noms.
+                if standard_path(&read.path).ends_with("/holders") {
+                    for name in read.content.as_deref().unwrap_or_default().lines() {
+                        fs::write(target.join(name), "")?;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 /// Énumère comme [`enumerate`] et rend aussi toutes les lectures de sources, pour `bonk debug sources`.
@@ -1196,6 +1308,53 @@ mod tests {
                 .filter(|r| r.path.ends_with("proc/swaps"))
                 .count(),
             1
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn une_capture_rejouee_redonne_les_memes_disques() -> Result<(), Box<dyn Error>> {
+        let fake = Fake::new()?;
+        desktop(&fake)?;
+        usb_stick(&fake)?;
+        fake.disk("loop3", "devices/virtual/block/loop3", "7:3", 2048, &[])?;
+        fake.partition(NVME_PATH, "nvme0n1p3", 3, "259:3", 2048)?;
+        fs::write(
+            fake.base
+                .join("sys")
+                .join(USB_PATH)
+                .join("sdb1/holders/dm-0"),
+            "",
+        )?;
+        let (original, reads) = enumerate_recorded(&fake.roots());
+        let original = original?;
+        assert!(
+            reads
+                .iter()
+                .any(|r| r.kind == "link" && r.path.ends_with("sys/block/sdb")),
+            "liens non enregistrés"
+        );
+        // Le fil de rejeu part d'un dossier vide : seul ce que la capture contient compte.
+        let replayed = enumerate_from_reads(&reads)?;
+        assert_eq!(replayed, original);
+        // Le bus vient du chemin canonique : s'il manquait, la clé ne serait plus reconnue comme USB.
+        assert_eq!(find(&replayed, "/dev/sdb")?.bus, Bus::Usb);
+        assert_eq!(find(&replayed, "/dev/sdb")?.partitions[0].holders, ["dm-0"]);
+        // Une capture sans les liens perd le bus : preuve que l'information passe bien par eux.
+        let without_links: Vec<_> = reads.iter().filter(|r| r.kind != "link").cloned().collect();
+        assert!(
+            enumerate_from_reads(&without_links).map_or(true, |d| d.is_empty()
+                || d.iter().all(|x| x.bus != Bus::Usb))
+        );
+        // Le dossier temporaire est supprimé.
+        assert!(
+            !std::env::temp_dir()
+                .read_dir()?
+                .filter_map(Result::ok)
+                .any(|e| e
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(&format!("bonk-fixture-{}-", std::process::id())))
         );
         Ok(())
     }

@@ -14,7 +14,7 @@ use std::fmt;
 use std::io;
 
 use schemars::JsonSchema;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::disk::Disk;
 
@@ -70,11 +70,12 @@ pub fn enumerate_disks() -> Result<Vec<Disk>, EnumerateError> {
 }
 
 /// Une lecture d'une source système, telle qu'elle s'est passée.
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SourceRead {
     pub path: String,
-    /// `file` (contenu lu) ou `dir` (liste des entrées).
-    pub kind: &'static str,
+    /// `file` (contenu lu), `dir` (liste des entrées) ou `link` (lien résolu : le contenu est la cible
+    /// canonique relative à `/sys`).
+    pub kind: String,
     pub ok: bool,
     pub bytes: Option<usize>,
     pub error: Option<String>,
@@ -98,5 +99,25 @@ pub fn enumerate_disks_recorded() -> (Result<Vec<Disk>, EnumerateError>, Vec<Sou
             }),
             Vec::new(),
         )
+    }
+}
+
+/// Énumère les disques à partir d'une capture de sources (`bonk diagnose --capture`), sans toucher au
+/// système : sert à rejouer ailleurs un cas de support (`--fixture`) et à écrire des tests sur de vraies
+/// machines. Seules les captures d'un Linux se rejouent, sur Linux.
+///
+/// # Errors
+/// [`EnumerateError`] comme [`enumerate_disks`] ; `Unsupported` hors Linux.
+pub fn enumerate_disks_from_capture(reads: &[SourceRead]) -> Result<Vec<Disk>, EnumerateError> {
+    #[cfg(target_os = "linux")]
+    {
+        crate::linux::enumerate_from_reads(reads)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = reads;
+        Err(EnumerateError::Unsupported {
+            os: std::env::consts::OS,
+        })
     }
 }
