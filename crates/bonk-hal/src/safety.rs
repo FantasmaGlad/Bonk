@@ -111,35 +111,98 @@ impl Eligibility {
 /// Décide du sort d'un disque.
 #[must_use]
 pub fn evaluate(disk: &Disk, options: FilterOptions) -> Eligibility {
+    decide(disk, options, &mut Tracer(None))
+}
+
+/// Comme [`evaluate`], et rend aussi l'examen de chaque règle, appliquée ou non, avec les faits lus :
+/// c'est ce que montre `bonk debug filter`. Le verdict est celui d'[`evaluate`], par construction (même
+/// code) et par test.
+#[must_use]
+pub fn evaluate_traced(disk: &Disk, options: FilterOptions) -> (Eligibility, Vec<RuleTrace>) {
+    let mut trace = Vec::new();
+    let verdict = decide(disk, options, &mut Tracer(Some(&mut trace)));
+    (verdict, trace)
+}
+
+/// Examen d'une règle du filtre sur un disque ou une partition.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RuleTrace {
+    /// Identifiant stable de la règle (le même que le motif d'exclusion qu'elle produit).
+    pub rule: &'static str,
+    /// Paragraphe du cahier des charges.
+    pub cdc: &'static str,
+    /// Ce qui est examiné : chemin du disque ou de la partition.
+    pub subject: String,
+    /// Les faits lus par la règle.
+    pub facts: String,
+    /// La règle a produit une exclusion (pour `bus`, elle a décidé de la proposition du disque).
+    pub fired: bool,
+}
+
+/// Enregistreur facultatif : sans trace, aucun texte n'est construit.
+struct Tracer<'t>(Option<&'t mut Vec<RuleTrace>>);
+
+impl Tracer<'_> {
+    fn note(
+        &mut self,
+        rule: &'static str,
+        cdc: &'static str,
+        subject: &str,
+        fired: bool,
+        facts: impl FnOnce() -> String,
+    ) {
+        if let Some(trace) = self.0.as_mut() {
+            trace.push(RuleTrace {
+                rule,
+                cdc,
+                subject: subject.to_owned(),
+                facts: facts(),
+                fired,
+            });
+        }
+    }
+}
+
+fn decide(disk: &Disk, options: FilterOptions, tracer: &mut Tracer<'_>) -> Eligibility {
     let mut reasons = Vec::new();
 
-    if disk.kind != DiskKind::Physical && !options.allow_virtual {
+    let virtual_disk = disk.kind != DiskKind::Physical && !options.allow_virtual;
+    tracer.note("virtual_disk", "3.1.4", &disk.path, virtual_disk, || {
+        format!(
+            "kind={:?} allow_virtual={}",
+            disk.kind, options.allow_virtual
+        )
+    });
+    if virtual_disk {
         reasons.push(Exclusion::VirtualDisk { kind: disk.kind });
     }
     // Espace d'échange posé sur le disque entier, sans partition : la règle des partitions ne le voit pas.
-    if disk
+    let swap = disk
         .fs_type
         .as_deref()
-        .is_some_and(|signature| is_one_of(signature, &SWAP_SIGNATURES))
-    {
+        .is_some_and(|signature| is_one_of(signature, &SWAP_SIGNATURES));
+    tracer.note("swap", "3.1.1", &disk.path, swap, || {
+        format!("whole-disk signature={:?}", disk.fs_type)
+    });
+    if swap {
         reasons.push(Exclusion::Swap {
             partition: disk.path.clone(),
         });
     }
     push_device_exclusions(
         &mut reasons,
+        tracer,
         &disk.path,
         disk.fs_type.as_deref(),
         &disk.holders,
     );
     for partition in &disk.partitions {
-        push_partition_exclusions(&mut reasons, disk.bus, partition);
+        push_partition_exclusions(&mut reasons, tracer, disk.bus, partition);
     }
 
-    if !reasons.is_empty() {
-        return Eligibility::Excluded { reasons };
-    }
-    if disk.bus.is_removable() {
+    let verdict = if !reasons.is_empty() {
+        Eligibility::Excluded { reasons }
+    } else if disk.bus.is_removable() {
         Eligibility::Offered {
             warning: Warning::None,
         }
@@ -155,27 +218,48 @@ pub fn evaluate(disk: &Disk, options: FilterOptions) -> Eligibility {
         Eligibility::Hidden {
             reason: HiddenReason::InternalBus,
         }
-    }
+    };
+    // La règle du bus ne s'applique qu'à un disque qu'aucune exclusion n'a écarté (CDC §3.2).
+    let excluded = matches!(verdict, Eligibility::Excluded { .. });
+    tracer.note("bus", "3.2", &disk.path, !excluded, || {
+        format!(
+            "bus={:?} removable_bus={} show_internal={} allow_virtual={} -> {}",
+            disk.bus,
+            disk.bus.is_removable(),
+            options.show_internal,
+            options.allow_virtual,
+            if excluded {
+                "not reached (excluded above)"
+            } else {
+                crate::describe::verdict_badge(&verdict)
+            }
+        )
+    });
+    verdict
 }
 
 /// Règles communes au disque entier et à ses partitions : signature d'agrégat et périphériques
 /// empilés.
 fn push_device_exclusions(
     reasons: &mut Vec<Exclusion>,
+    tracer: &mut Tracer<'_>,
     device: &str,
     fs_type: Option<&str>,
     holders: &[String],
 ) {
-    // Pas de `if let ... &&` : les chaînes de `let` exigent Rust 1.88, la version minimale est 1.85.
-    match fs_type {
-        Some(signature) if is_one_of(signature, &AGGREGATE_SIGNATURES) => {
-            reasons.push(Exclusion::AggregateMember {
-                device: device.to_owned(),
-                signature: signature.to_owned(),
-            });
-        }
-        _ => {}
+    let aggregate = fs_type.is_some_and(|signature| is_one_of(signature, &AGGREGATE_SIGNATURES));
+    tracer.note("aggregate_member", "3.1.3", device, aggregate, || {
+        format!("signature={fs_type:?}")
+    });
+    if let (true, Some(signature)) = (aggregate, fs_type) {
+        reasons.push(Exclusion::AggregateMember {
+            device: device.to_owned(),
+            signature: signature.to_owned(),
+        });
     }
+    tracer.note("stacked", "3.1.3", device, !holders.is_empty(), || {
+        format!("holders={holders:?}")
+    });
     if !holders.is_empty() {
         reasons.push(Exclusion::Stacked {
             device: device.to_owned(),
@@ -184,32 +268,63 @@ fn push_device_exclusions(
     }
 }
 
-fn push_partition_exclusions(reasons: &mut Vec<Exclusion>, bus: Bus, partition: &Partition) {
+fn push_partition_exclusions(
+    reasons: &mut Vec<Exclusion>,
+    tracer: &mut Tracer<'_>,
+    bus: Bus,
+    partition: &Partition,
+) {
+    let path = partition.path.as_str();
+    tracer.note(
+        "system_volume",
+        "3.1.1",
+        path,
+        partition.is_system_volume,
+        || format!("is_system_volume={}", partition.is_system_volume),
+    );
     if partition.is_system_volume {
         reasons.push(Exclusion::SystemVolume {
             partition: partition.path.clone(),
         });
     }
+    tracer.note("active_esp", "3.1.1", path, partition.is_active_esp, || {
+        format!("is_active_esp={}", partition.is_active_esp)
+    });
     if partition.is_active_esp {
         reasons.push(Exclusion::ActiveEsp {
             partition: partition.path.clone(),
         });
     }
-    if (partition.fs_type.as_deref())
-        .is_some_and(|signature| is_one_of(signature, &SWAP_SIGNATURES))
-    {
+    let swap = partition
+        .fs_type
+        .as_deref()
+        .is_some_and(|signature| is_one_of(signature, &SWAP_SIGNATURES));
+    tracer.note("swap", "3.1.1", path, swap, || {
+        format!("signature={:?}", partition.fs_type)
+    });
+    if swap {
         reasons.push(Exclusion::Swap {
             partition: partition.path.clone(),
         });
     }
     push_device_exclusions(
         reasons,
+        tracer,
         &partition.path,
         partition.fs_type.as_deref(),
         &partition.holders,
     );
+    if partition.mount_points.is_empty() {
+        tracer.note("mounted_outside_user_paths", "3.1.2", path, false, || {
+            "not mounted".to_owned()
+        });
+    }
     for mount in &partition.mount_points {
-        if !is_user_mount(mount, bus) {
+        let outside = !is_user_mount(mount, bus);
+        tracer.note("mounted_outside_user_paths", "3.1.2", path, outside, || {
+            format!("mount={mount:?} bus={bus:?} user_mount={}", !outside)
+        });
+        if outside {
             reasons.push(Exclusion::MountedOutsideUserPaths {
                 partition: partition.path.clone(),
                 mount: mount.clone(),
@@ -478,6 +593,85 @@ mod tests {
             Eligibility::Offered {
                 warning: Warning::VirtualDisk
             }
+        );
+    }
+
+    fn fired(trace: &[RuleTrace]) -> Vec<(&'static str, &str)> {
+        trace
+            .iter()
+            .filter(|t| t.fired && t.rule != "bus")
+            .map(|t| (t.rule, t.subject.as_str()))
+            .collect()
+    }
+
+    #[test]
+    fn la_trace_donne_le_meme_verdict_et_liste_les_regles_appliquees() {
+        let mut system = part("/dev/sdx1");
+        system.is_system_volume = true;
+        system.mount_points = vec!["/".to_owned()];
+        let usb = disk(Bus::Usb, vec![system]);
+        let options = FilterOptions::default();
+        let (verdict, trace) = evaluate_traced(&usb, options);
+        assert_eq!(verdict, evaluate(&usb, options));
+        assert_eq!(
+            fired(&trace),
+            [
+                ("system_volume", "/dev/sdx1"),
+                ("mounted_outside_user_paths", "/dev/sdx1")
+            ]
+        );
+        // Les règles examinées mais non appliquées figurent aussi, avec leurs faits.
+        let esp = trace.iter().find(|t| t.rule == "active_esp");
+        assert!(
+            esp.is_some_and(|t| !t.fired && t.facts == "is_active_esp=false" && t.cdc == "3.1.1")
+        );
+        let mount = trace
+            .iter()
+            .find(|t| t.rule == "mounted_outside_user_paths");
+        assert!(mount.is_some_and(
+            |t| t.facts.contains("mount=\"/\"") && t.facts.contains("user_mount=false")
+        ));
+        // Un disque exclu n'atteint pas la règle du bus : elle le dit.
+        let bus = trace.iter().find(|t| t.rule == "bus");
+        assert!(bus.is_some_and(|t| !t.fired && t.facts.contains("not reached")));
+    }
+
+    #[test]
+    fn la_trace_d_un_disque_propose_s_arrete_a_la_regle_du_bus() {
+        let usb = disk(Bus::Usb, vec![part("/dev/sdx1")]);
+        let (verdict, trace) = evaluate_traced(&usb, FilterOptions::default());
+        assert!(verdict.is_writable());
+        assert!(fired(&trace).is_empty());
+        let bus = trace.last();
+        assert!(bus.is_some_and(|t| t.rule == "bus" && t.fired && t.facts.contains("PROPOSÉ")));
+        // Une partition non montée est notée comme telle plutôt que passée sous silence.
+        assert!(
+            trace
+                .iter()
+                .any(|t| t.rule == "mounted_outside_user_paths" && t.facts == "not mounted")
+        );
+    }
+
+    #[test]
+    fn les_regles_ont_des_identifiants_stables_et_correspondent_aux_motifs() {
+        let known = [
+            "virtual_disk",
+            "swap",
+            "aggregate_member",
+            "stacked",
+            "system_volume",
+            "active_esp",
+            "mounted_outside_user_paths",
+            "bus",
+        ];
+        let mut lvm = part("/dev/sdx1");
+        lvm.fs_type = Some("LVM2_member".to_owned());
+        lvm.holders = vec!["dm-0".to_owned()];
+        let (_, trace) = evaluate_traced(&disk(Bus::Usb, vec![lvm]), FilterOptions::default());
+        assert!(trace.iter().all(|t| known.contains(&t.rule)), "{trace:?}");
+        assert_eq!(
+            fired(&trace),
+            [("aggregate_member", "/dev/sdx1"), ("stacked", "/dev/sdx1")]
         );
     }
 

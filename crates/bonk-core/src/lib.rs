@@ -6,6 +6,7 @@
 //! testable sur des fichiers image, sans matériel ni privilèges.
 
 pub mod block;
+pub mod partition;
 
 pub use block::{
     BlockDevice, BlockError, DEFAULT_BLOCK_SIZE, MemoryDevice, check_access, check_geometry,

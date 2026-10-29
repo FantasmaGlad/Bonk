@@ -10,7 +10,7 @@ use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
 
-use bonk_hal::{Disk, FilterOptions, evaluate};
+use bonk_hal::{Disk, FilterOptions, evaluate, evaluate_traced};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -93,7 +93,16 @@ fn check_fixture(path: &PathBuf) -> Result<Vec<String>, Box<dyn Error>> {
         }
 
         for disk in &fixture.disks {
-            let actual = serde_json::to_value(evaluate(disk, scenario.options))?;
+            let verdict = evaluate(disk, scenario.options);
+            // L'examen règle par règle donne toujours le même verdict que le filtre lui-même.
+            let (traced, trace) = evaluate_traced(disk, scenario.options);
+            if traced != verdict || trace.is_empty() {
+                failures.push(format!(
+                    "{label} / {} : évaluation tracée différente",
+                    disk.id
+                ));
+            }
+            let actual = serde_json::to_value(verdict)?;
             // Pas de `if let ... &&` : les chaînes de `let` exigent Rust 1.88, la version minimale est 1.85.
             match expected.get(&disk.id) {
                 Some(want) if want != &actual => {

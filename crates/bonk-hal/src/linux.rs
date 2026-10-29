@@ -22,10 +22,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use serde::Serialize;
-
 use crate::disk::{Bus, Disk, DiskKind, Partition};
-use crate::enumerate::EnumerateError;
+use crate::enumerate::{EnumerateError, SourceRead};
 
 /// Type de partition GPT « EFI System Partition ».
 const GPT_ESP: &str = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b";
@@ -492,20 +490,6 @@ fn load_udev(roots: &LinuxRoots, devnum: &str) -> Result<UdevRecord, EnumerateEr
 // ---------------------------------------------------------------------------------------------
 // Trace des lectures : journal au niveau `trace` et enregistrement pour `bonk debug sources`
 // ---------------------------------------------------------------------------------------------
-
-/// Une lecture d'une source système, telle qu'elle s'est passée.
-#[derive(Debug, Clone, Serialize)]
-pub struct SourceRead {
-    pub path: String,
-    /// `file` (contenu lu) ou `dir` (liste des entrées).
-    pub kind: &'static str,
-    pub ok: bool,
-    pub bytes: Option<usize>,
-    pub error: Option<String>,
-    pub micros: u64,
-    /// Contenu (fichier) ou entrées (répertoire), tronqué ; seulement quand on enregistre.
-    pub content: Option<String>,
-}
 
 /// Taille maximale du contenu conservé par lecture enregistrée.
 const CONTENT_LIMIT: usize = 8 * 1024;

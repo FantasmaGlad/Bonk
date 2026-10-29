@@ -13,6 +13,8 @@ use std::error::Error;
 use std::fmt;
 use std::io;
 
+use serde::Serialize;
+
 use crate::disk::Disk;
 
 /// Échec de l'énumération.
@@ -63,5 +65,37 @@ pub fn enumerate_disks() -> Result<Vec<Disk>, EnumerateError> {
         Err(EnumerateError::Unsupported {
             os: std::env::consts::OS,
         })
+    }
+}
+
+/// Une lecture d'une source système, telle qu'elle s'est passée.
+#[derive(Debug, Clone, Serialize)]
+pub struct SourceRead {
+    pub path: String,
+    /// `file` (contenu lu) ou `dir` (liste des entrées).
+    pub kind: &'static str,
+    pub ok: bool,
+    pub bytes: Option<usize>,
+    pub error: Option<String>,
+    pub micros: u64,
+    /// Contenu (fichier) ou entrées (répertoire), tronqué ; seulement quand on enregistre.
+    pub content: Option<String>,
+}
+
+/// Comme [`enumerate_disks`], et rend aussi chaque lecture de source système avec son contenu, pour
+/// `bonk debug sources`. Hors Linux, aucune lecture n'est enregistrée (pas encore d'énumération).
+pub fn enumerate_disks_recorded() -> (Result<Vec<Disk>, EnumerateError>, Vec<SourceRead>) {
+    #[cfg(target_os = "linux")]
+    {
+        crate::linux::enumerate_recorded(&crate::linux::LinuxRoots::system())
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        (
+            Err(EnumerateError::Unsupported {
+                os: std::env::consts::OS,
+            }),
+            Vec::new(),
+        )
     }
 }
