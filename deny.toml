@@ -1,0 +1,39 @@
+# Contrôle des dépendances par cargo-deny : licences, vulnérabilités connues, sources.
+# Lancé par le job « licences » de l'intégration continue.
+
+[advisories]
+# Une vulnérabilité connue fait toujours échouer le contrôle ; les paquets non maintenus
+# et les versions retirées du registre sont signalés par défaut.
+ignore = []
+
+[licenses]
+# Licences permissives, compatibles avec la licence du projet. Toute autre licence fait échouer.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "MPL-2.0",
+    "CC0-1.0",
+    "0BSD",
+]
+# La liste couvre aussi des cas futurs : ne pas signaler les entrées pas encore utilisées.
+unused-allowed-license = "allow"
+
+# Les crates du workspace (publish = false) portent la licence du projet : non contrôlées.
+[licenses.private]
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Les dépendances par chemin entre crates du workspace n'ont pas de version : autorisé pour les crates privées.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
