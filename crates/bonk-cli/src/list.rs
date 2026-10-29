@@ -51,10 +51,10 @@ struct Report<'a> {
 }
 
 #[derive(Serialize)]
-struct Entry<'a> {
+pub(crate) struct Entry<'a> {
     #[serde(flatten)]
-    disk: &'a Disk,
-    eligibility: Eligibility,
+    pub(crate) disk: &'a Disk,
+    pub(crate) eligibility: Eligibility,
 }
 
 /// Écrit le résultat de `bonk list` sur `out`.

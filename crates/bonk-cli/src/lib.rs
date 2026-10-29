@@ -4,6 +4,8 @@
 //! Ce crate ne connaît pas la fenêtre : le binaire lui passe la fonction qui l'ouvre. Ainsi `bonk` sans
 //! commande ouvre la fenêtre, et `bonk -v` l'ouvre avec le journal verbeux.
 
+mod diagnose;
+mod info;
 mod list;
 mod logging;
 
@@ -44,10 +46,81 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Disques : liste et détail
+    Disk {
+        #[command(subcommand)]
+        action: DiskAction,
+    },
     /// Liste les disques que Bonk peut écrire (raccourci de `disk list`)
     List(list::ListArgs),
+    /// Détail d'un disque (raccourci de `disk info`)
+    Info(info::InfoArgs),
+    /// Rapport de support en JSON : système, rendu, disques et verdicts, secrets masqués
+    Diagnose(diagnose::DiagnoseArgs),
     /// Ouvre la fenêtre (comme `bonk` seul)
     Gui,
+}
+
+#[derive(Debug, Subcommand)]
+enum DiskAction {
+    /// Liste les disques que Bonk peut écrire (lecture seule)
+    List(list::ListArgs),
+    /// Détail d'un disque (lecture seule)
+    Info(info::InfoArgs),
+}
+
+/// Vérifie qu'une ligne de commande est acceptée par la CLI, sans l'exécuter, et rend ses mots. Sert
+/// au test de parité (CDC §9.1) : chaque commande équivalente que la fenêtre affiche doit être valide.
+///
+/// # Errors
+/// Guillemets mal fermés, ou ligne que la CLI refuse (le message de clap est repris).
+pub fn check_command_line(command: &str) -> Result<Vec<String>, String> {
+    let words = split_words(command)?;
+    Cli::try_parse_from(&words).map_err(|erreur| erreur.to_string())?;
+    Ok(words)
+}
+
+/// Découpe une ligne en mots à la façon d'un shell POSIX : espaces, apostrophes simples, guillemets
+/// doubles. Les variables et substitutions ne sont pas interprétées (la fenêtre n'en produit pas).
+fn split_words(line: &str) -> Result<Vec<String>, String> {
+    let mut words = Vec::new();
+    let mut current = String::new();
+    let mut in_word = false;
+    let mut quote: Option<char> = None;
+    let mut chars = line.chars();
+    while let Some(c) = chars.next() {
+        match (quote, c) {
+            (Some(q), c) if c == q => quote = None,
+            (Some(_), c) => current.push(c),
+            // Hors guillemets, l'antislash rend le caractère suivant littéral (`'\''` dans le texte
+            // d'un identifiant contenant une apostrophe).
+            (None, '\\') => {
+                current.push(chars.next().ok_or("antislash final")?);
+                in_word = true;
+            }
+            (None, '\'' | '"') => {
+                quote = Some(c);
+                in_word = true;
+            }
+            (None, c) if c.is_whitespace() => {
+                if in_word {
+                    words.push(std::mem::take(&mut current));
+                    in_word = false;
+                }
+            }
+            (None, c) => {
+                current.push(c);
+                in_word = true;
+            }
+        }
+    }
+    if quote.is_some() {
+        return Err("guillemet non fermé".to_owned());
+    }
+    if in_word {
+        words.push(current);
+    }
+    Ok(words)
 }
 
 /// Exécute la ligne de commande et renvoie le code de sortie du processus. `gui` ouvre la fenêtre et
@@ -140,23 +213,95 @@ where
                 }
             }
         }
-        Some(Command::List(args)) => {
-            log::debug!(target: "bonk::cli", all = args.all(), json = args.json(); "command list");
-            let disks = match enumerate() {
-                Ok(disks) => disks,
-                Err(erreur) => {
-                    log::debug!(target: "bonk::cli", reason = erreur.to_string().as_str(); "enumeration failed");
-                    let _ = writeln!(err, "bonk : erreur : {erreur}");
-                    return EXIT_RUNTIME_ERROR;
-                }
-            };
-            match list::run(&args, &disks, out) {
+        Some(Command::Disk { action }) => match action {
+            DiskAction::List(args) => run_list(&args, out, err, enumerate),
+            DiskAction::Info(args) => run_info(&args, out, err, enumerate),
+        },
+        Some(Command::List(args)) => run_list(&args, out, err, enumerate),
+        Some(Command::Info(args)) => run_info(&args, out, err, enumerate),
+        Some(Command::Diagnose(args)) => {
+            log::debug!(target: "bonk::cli", include_serials = args.include_serials(); "command diagnose");
+            let result = enumerate();
+            if let Err(erreur) = &result {
+                log::debug!(target: "bonk::cli", reason = erreur.to_string().as_str(); "enumeration failed (reported in the report)");
+            }
+            match diagnose::run(&args, &diagnose::Environment::system(), &result, out) {
                 Ok(()) => 0,
                 Err(erreur) => {
-                    let _ = writeln!(err, "bonk : erreur d'écriture de la sortie : {erreur}");
+                    let _ = writeln!(
+                        err,
+                        "bonk : erreur : rapport impossible à écrire : {erreur}"
+                    );
                     EXIT_RUNTIME_ERROR
                 }
             }
+        }
+    }
+}
+
+/// Énumère les disques ; en cas d'échec, écrit l'erreur et renvoie le code de sortie.
+fn disks_or_exit<E, F>(err: &mut E, enumerate: F) -> Result<Vec<Disk>, u8>
+where
+    E: Write,
+    F: FnOnce() -> Result<Vec<Disk>, EnumerateError>,
+{
+    enumerate().map_err(|erreur| {
+        log::debug!(target: "bonk::cli", reason = erreur.to_string().as_str(); "enumeration failed");
+        let _ = writeln!(err, "bonk : erreur : {erreur}");
+        EXIT_RUNTIME_ERROR
+    })
+}
+
+fn run_list<O: Write, E: Write, F>(
+    args: &list::ListArgs,
+    out: &mut O,
+    err: &mut E,
+    enumerate: F,
+) -> u8
+where
+    F: FnOnce() -> Result<Vec<Disk>, EnumerateError>,
+{
+    log::debug!(target: "bonk::cli", all = args.all(), json = args.json(); "command list");
+    let disks = match disks_or_exit(err, enumerate) {
+        Ok(disks) => disks,
+        Err(code) => return code,
+    };
+    match list::run(args, &disks, out) {
+        Ok(()) => 0,
+        Err(erreur) => {
+            let _ = writeln!(err, "bonk : erreur d'écriture de la sortie : {erreur}");
+            EXIT_RUNTIME_ERROR
+        }
+    }
+}
+
+fn run_info<O: Write, E: Write, F>(
+    args: &info::InfoArgs,
+    out: &mut O,
+    err: &mut E,
+    enumerate: F,
+) -> u8
+where
+    F: FnOnce() -> Result<Vec<Disk>, EnumerateError>,
+{
+    log::debug!(target: "bonk::cli", target_disk = args.target(); "command info");
+    let disks = match disks_or_exit(err, enumerate) {
+        Ok(disks) => disks,
+        Err(code) => return code,
+    };
+    match info::run(args, &disks, out) {
+        Ok(true) => 0,
+        Ok(false) => {
+            let _ = writeln!(
+                err,
+                "bonk : erreur : disque introuvable : « {} » (identifiants : bonk list --all)",
+                args.target()
+            );
+            EXIT_RUNTIME_ERROR
+        }
+        Err(erreur) => {
+            let _ = writeln!(err, "bonk : erreur d'écriture de la sortie : {erreur}");
+            EXIT_RUNTIME_ERROR
         }
     }
 }
@@ -368,6 +513,140 @@ mod tests {
         let (code, out, _) = lancer(&["list", "--efface-tout"], sample());
         assert_eq!(code, EXIT_USAGE);
         assert!(out.is_empty());
+    }
+
+    #[test]
+    fn disk_list_et_list_sont_equivalents() {
+        let court = lancer(&["list", "--all"], sample());
+        let long = lancer(&["disk", "list", "--all"], sample());
+        assert_eq!(court, long);
+        assert_eq!(court.0, 0);
+    }
+
+    #[test]
+    fn info_par_identifiant_ou_par_chemin() {
+        for cible in ["usb-cle", "/dev/sdb"] {
+            let (code, out, err) = lancer(&["info", cible], sample());
+            assert_eq!((code, err.as_str()), (0, ""), "{cible}");
+            assert!(out.contains("Identifiant"), "{out}");
+            assert!(out.contains("usb-cle"), "{out}");
+            assert!(out.contains("/dev/sdb"), "{out}");
+            assert!(out.contains("proposé"), "{out}");
+        }
+        assert_eq!(
+            lancer(&["disk", "info", "usb-cle"], sample()),
+            lancer(&["info", "usb-cle"], sample())
+        );
+    }
+
+    #[test]
+    fn info_montre_les_partitions_et_les_motifs() {
+        let (code, out, _) = lancer(&["info", "nvme-systeme"], sample());
+        assert_eq!(code, 0);
+        assert!(out.contains("Partitions :"), "{out}");
+        assert!(out.contains("/dev/nvme0n1p2"), "{out}");
+        assert!(out.contains("monté sur /"), "{out}");
+        assert!(out.contains("interdit : volume système"), "{out}");
+    }
+
+    #[test]
+    fn info_suit_les_reglages_du_filtre() {
+        let (_, defaut, _) = lancer(&["info", "sata-libre"], sample());
+        assert!(defaut.contains("non affiché"), "{defaut}");
+        let (_, interne, _) = lancer(&["info", "sata-libre", "--show-internal"], sample());
+        assert!(interne.contains("confirmation renforcée"), "{interne}");
+    }
+
+    #[test]
+    fn info_json_est_versionne() -> Result<(), serde_json::Error> {
+        let (code, out, _) = lancer(&["info", "usb-cle", "--json"], sample());
+        assert_eq!(code, 0);
+        let json: Value = serde_json::from_str(&out)?;
+        assert_eq!(json["schema_version"], 1);
+        assert_eq!(json["disk"]["id"], "usb-cle");
+        assert_eq!(json["disk"]["eligibility"]["verdict"], "offered");
+        Ok(())
+    }
+
+    #[test]
+    fn info_d_un_disque_inconnu_echoue_sans_rien_ecrire_sur_stdout() {
+        let (code, out, err) = lancer(&["info", "n-existe-pas"], sample());
+        assert_eq!(code, EXIT_RUNTIME_ERROR);
+        assert!(out.is_empty());
+        assert!(
+            err.contains("disque introuvable : « n-existe-pas »"),
+            "{err}"
+        );
+        assert!(err.contains("bonk list --all"), "{err}");
+    }
+
+    #[test]
+    fn info_exige_une_cible() {
+        let (code, _, _) = lancer(&["info"], sample());
+        assert_eq!(code, EXIT_USAGE);
+    }
+
+    #[test]
+    fn diagnose_ecrit_un_rapport_json_sur_la_sortie() -> Result<(), serde_json::Error> {
+        let (code, out, _) = lancer(&["diagnose"], sample());
+        assert_eq!(code, 0);
+        let json: Value = serde_json::from_str(&out)?;
+        assert_eq!(json["schema_version"], 1);
+        assert_eq!(json["enumeration"]["ok"], true);
+        assert_eq!(
+            json["enumeration"]["disks"].as_array().map(Vec::len),
+            Some(3)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn diagnose_rapporte_un_echec_d_enumeration_avec_le_code_zero() -> Result<(), serde_json::Error>
+    {
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = execute(
+            ["bonk", "diagnose"],
+            None,
+            &mut out,
+            &mut err,
+            |_| Ok(()),
+            || Err(EnumerateError::Unsupported { os: "test" }),
+            || Ok(()),
+        );
+        assert_eq!(code, 0);
+        let json: Value = serde_json::from_slice(&out)?;
+        assert_eq!(json["enumeration"]["ok"], false);
+        Ok(())
+    }
+
+    #[test]
+    fn decoupage_des_mots_comme_un_shell() {
+        assert_eq!(
+            split_words("bonk info 'clé usb' --json").ok(),
+            Some(vec![
+                "bonk".into(),
+                "info".into(),
+                "clé usb".into(),
+                "--json".into()
+            ])
+        );
+        assert_eq!(
+            split_words("bonk info 'it'\\''s'").ok(),
+            Some(vec!["bonk".into(), "info".into(), "it's".into()])
+        );
+        assert_eq!(
+            split_words("a  ''  b").ok(),
+            Some(vec!["a".into(), String::new(), "b".into()])
+        );
+        assert!(split_words("bonk info 'ouvert").is_err());
+    }
+
+    #[test]
+    fn une_ligne_valide_est_acceptee_et_une_invalide_refusee() {
+        assert!(check_command_line("bonk list --all --show-internal").is_ok());
+        assert!(check_command_line("bonk disk info usb-cle").is_ok());
+        assert!(check_command_line("bonk efface --tout").is_err());
+        assert!(check_command_line("bonk info").is_err());
     }
 
     #[test]
