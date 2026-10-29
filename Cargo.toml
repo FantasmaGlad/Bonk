@@ -5,7 +5,7 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-# Plancher imposé par l'édition 2024 ; il n'est testé par aucun contrôle automatique (à confirmer avec la première dépendance structurante).
+# Plancher imposé par l'édition 2024 ; le job « msrv » de la CI le vérifie à chaque changement du code.
 rust-version = "1.85"
 license = "MIT"
 repository = "https://github.com/FantasmaGlad/Bonk"

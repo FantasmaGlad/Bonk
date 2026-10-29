@@ -1,5 +1,5 @@
 # Contrôle des dépendances par cargo-deny : licences, vulnérabilités connues, sources.
-# À lancer à la main avec `cargo deny check` (outil à installer) ; aucune CI ne l'exécute pour l'instant.
+# Lancé par le workflow « dependances » (changements de dépendances, puis chaque semaine) ; aussi à la main avec `cargo deny check`.
 
 [advisories]
 # Une vulnérabilité connue fait toujours échouer le contrôle ; les paquets non maintenus
@@ -7,7 +7,8 @@
 ignore = []
 
 [licenses]
-# Licences permissives, compatibles avec la licence du projet. Toute autre licence fait échouer.
+# Licences permissives, plus MPL-2.0 (copyleft faible : le partage n'est exigé que pour ses propres fichiers
+# modifiés). Toutes sont compatibles avec la licence du projet ; toute autre licence fait échouer.
 allow = [
     "MIT",
     "Apache-2.0",

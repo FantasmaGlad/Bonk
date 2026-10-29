@@ -1,0 +1,119 @@
+# Validation de la compilation.
+# Linux d'abord, car c'est le moins cher : formatage, lint, tests, version minimale de Rust. Windows et macOS
+# ne démarrent que si ces deux jobs Linux réussissent.
+# Aucun job pour une PR en brouillon ; aucune exécution pour un changement qui ne touche ni le code, ni la
+# chaîne Rust, ni ce fichier (le modifier relance la CI, pour le valider).
+name: ci
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/ci.yml"
+  workflow_dispatch:
+
+# Droits minimaux : la CI ne fait que lire le dépôt.
+permissions:
+  contents: read
+
+# Sur une PR, une nouvelle exécution annule la précédente : aucune minute payée pour un état dépassé.
+# Sur main, une exécution en cours n'est jamais interrompue (son build release compte).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  # Pas de compilation incrémentale : elle alourdit le cache et ne sert à rien sur une machine neuve.
+  CARGO_INCREMENTAL: "0"
+  CARGO_NET_RETRY: "10"
+  RUST_BACKTRACE: "1"
+
+jobs:
+  qualite:
+    name: qualité (Linux)
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Le canal et les composants (rustfmt, clippy) viennent de rust-toolchain.toml.
+      - name: Installer la chaîne Rust du dépôt
+        run: rustup toolchain install
+      - name: Restaurer le cache de compilation
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Formatage
+        run: cargo fmt --all --check
+      - name: Lint
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Tests
+        run: cargo test --workspace --locked
+      # Le build release n'est vérifié qu'après fusion : il est plus long et la PR a déjà prouvé le reste.
+      - name: Build release
+        if: github.event_name == 'push'
+        run: cargo build --workspace --release --locked
+
+  msrv:
+    name: version minimale de Rust (Linux)
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Lire la version minimale déclarée
+        id: msrv
+        run: echo "version=$(sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)" >> "$GITHUB_OUTPUT"
+      - name: Vérifier que la compilation passe avec cette version
+        env:
+          MSRV: ${{ steps.msrv.outputs.version }}
+        run: |
+          test -n "$MSRV"
+          rustup toolchain install "$MSRV" --profile minimal
+          cargo "+$MSRV" check --workspace --locked
+
+  # Le code propre à un système n'est exercé que sur ce système : Windows et macOS sont payants,
+  # donc ils ne démarrent qu'une fois les deux jobs Linux verts.
+  portabilite:
+    name: portabilité (${{ matrix.os }})
+    needs: [qualite, msrv]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Installer la chaîne Rust du dépôt
+        run: rustup toolchain install
+      - name: Restaurer le cache de compilation
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # Clippy est relancé ici : il analyse le code conditionné par cfg(target_os), qui n'est pas compilé sous Linux.
+      - name: Lint
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Tests
+        run: cargo test --workspace --locked
+      - name: Build release
+        if: github.event_name == 'push'
+        run: cargo build --workspace --release --locked
