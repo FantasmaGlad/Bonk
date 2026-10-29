@@ -9,9 +9,11 @@ mod debug;
 mod diagnose;
 mod errors;
 mod info;
+mod job;
 mod list;
 mod logging;
 mod schema;
+mod transfer;
 
 pub use config::ViewDefaults;
 
@@ -27,6 +29,7 @@ use crate::config::ConfigAction;
 use crate::errors::{Code, EXIT_USAGE, ExplainArgs, report};
 use crate::logging::{LogArgs, LogFormat, Settings};
 use crate::schema::SchemaArgs;
+use crate::transfer::{RepairArgs, VerifyArgs, WriteArgs};
 
 /// Arguments de la ligne de commande de Bonk.
 ///
@@ -59,6 +62,12 @@ enum Command {
     List(list::ListArgs),
     /// Détail d'un disque (raccourci de `disk info`)
     Info(info::InfoArgs),
+    /// Écrit une image sur un disque, puis la vérifie (`--simulate` : sur un fichier image)
+    Write(WriteArgs),
+    /// Compare un disque à une image, sans rien écrire
+    Verify(VerifyArgs),
+    /// Répare le GPT d'un disque ou d'une image
+    RepairGpt(RepairArgs),
     /// Rapport de support en JSON : système, rendu, disques et verdicts, secrets masqués
     Diagnose(diagnose::DiagnoseArgs),
     /// Bas niveau des disques, en lecture seule : sources système, filtre pas à pas, tables de partitions
@@ -90,6 +99,12 @@ enum DiskAction {
     List(list::ListArgs),
     /// Détail d'un disque (lecture seule)
     Info(info::InfoArgs),
+    /// Écrit une image sur un disque, puis la vérifie
+    Write(WriteArgs),
+    /// Compare un disque à une image, sans rien écrire
+    Verify(VerifyArgs),
+    /// Répare le GPT d'un disque
+    RepairGpt(RepairArgs),
 }
 
 /// Vérifie qu'une ligne de commande est acceptée par la CLI, sans l'exécuter, et rend ses mots. Sert
@@ -174,8 +189,8 @@ where
     ))
 }
 
-/// Ce que Bonk lit de l'environnement du processus : injectable pour les tests.
-#[derive(Debug, Default)]
+/// Ce que Bonk lit de l'environnement du processus et demande au système : injectable pour les tests.
+#[derive(Default)]
 struct Env {
     /// Valeur de `BONK_LOG`.
     bonk_log: Option<String>,
@@ -183,6 +198,8 @@ struct Env {
     config_path: Option<PathBuf>,
     /// Variables `BONK_*` (hors `BONK_LOG` et `BONK_CONFIG`) qui surchargent les réglages.
     vars: Vec<(String, String)>,
+    /// Accès aux disques et au signal d'annulation.
+    io: job::Io,
 }
 
 impl Env {
@@ -194,6 +211,7 @@ impl Env {
             vars: std::env::vars()
                 .filter(|(name, _)| name.starts_with("BONK_"))
                 .collect(),
+            io: job::Io::default(),
         }
     }
 }
@@ -214,7 +232,7 @@ where
     O: Write,
     E: Write,
     L: FnOnce(Settings) -> Result<(), String>,
-    F: FnOnce() -> Result<Vec<Disk>, EnumerateError>,
+    F: Fn() -> Result<Vec<Disk>, EnumerateError>,
     G: FnOnce(ViewDefaults) -> Result<(), String>,
 {
     let cli = match Cli::try_parse_from(args) {
@@ -259,6 +277,10 @@ where
         "start"
     );
 
+    let deps = job::Deps {
+        enumerate: &enumerate,
+        io: &env.io,
+    };
     match cli.command {
         None | Some(Command::Gui) => {
             log::debug!(target: "bonk::cli", "opening the window");
@@ -281,7 +303,13 @@ where
         Some(Command::Disk { action }) => match action {
             DiskAction::List(args) => run_list(&args, &view, out, err, enumerate),
             DiskAction::Info(args) => run_info(&args, &view, out, err, enumerate),
+            DiskAction::Write(args) => transfer::run_write(&args, &view, &deps, out, err),
+            DiskAction::Verify(args) => transfer::run_verify(&args, &view, &deps, out, err),
+            DiskAction::RepairGpt(args) => transfer::run_repair(&args, &view, &deps, out, err),
         },
+        Some(Command::Write(args)) => transfer::run_write(&args, &view, &deps, out, err),
+        Some(Command::Verify(args)) => transfer::run_verify(&args, &view, &deps, out, err),
+        Some(Command::RepairGpt(args)) => transfer::run_repair(&args, &view, &deps, out, err),
         Some(Command::List(args)) => run_list(&args, &view, out, err, enumerate),
         Some(Command::Info(args)) => run_info(&args, &view, out, err, enumerate),
         Some(Command::Config { action }) => {
@@ -343,7 +371,7 @@ where
 fn disks_or_exit<E, F>(err: &mut E, enumerate: F) -> Result<Vec<Disk>, u8>
 where
     E: Write,
-    F: FnOnce() -> Result<Vec<Disk>, EnumerateError>,
+    F: Fn() -> Result<Vec<Disk>, EnumerateError>,
 {
     enumerate().map_err(|erreur| {
         log::debug!(target: "bonk::cli", reason = erreur.to_string().as_str(); "enumeration failed");
@@ -358,7 +386,7 @@ fn run_debug<O: Write, E: Write, F>(
     enumerate: F,
 ) -> u8
 where
-    F: FnOnce() -> Result<Vec<Disk>, EnumerateError>,
+    F: Fn() -> Result<Vec<Disk>, EnumerateError>,
 {
     use debug::{DebugAction, Outcome};
     log::debug!(target: "bonk::cli", action = format!("{action:?}").as_str(); "command debug");
@@ -389,7 +417,7 @@ fn run_list<O: Write, E: Write, F>(
     enumerate: F,
 ) -> u8
 where
-    F: FnOnce() -> Result<Vec<Disk>, EnumerateError>,
+    F: Fn() -> Result<Vec<Disk>, EnumerateError>,
 {
     log::debug!(target: "bonk::cli", all = args.all(), json = args.json(); "command list");
     let disks = match disks_or_exit(err, enumerate) {
@@ -410,7 +438,7 @@ fn run_info<O: Write, E: Write, F>(
     enumerate: F,
 ) -> u8
 where
-    F: FnOnce() -> Result<Vec<Disk>, EnumerateError>,
+    F: Fn() -> Result<Vec<Disk>, EnumerateError>,
 {
     log::debug!(target: "bonk::cli", target_disk = args.target(); "command info");
     let disks = match disks_or_exit(err, enumerate) {
@@ -430,6 +458,9 @@ where
         Err(erreur) => report(err, Code::OutputFailed, erreur),
     }
 }
+
+#[cfg(test)]
+mod job_tests;
 
 #[cfg(test)]
 mod tests {
@@ -513,7 +544,7 @@ mod tests {
                 *journal.borrow_mut() = true;
                 Ok(())
             },
-            || Ok(disks),
+            || Ok(disks.clone()),
             |_| {
                 *ouverte.borrow_mut() = true;
                 fenetre
@@ -907,6 +938,7 @@ mod tests {
                 .iter()
                 .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
                 .collect(),
+            io: job::Io::default(),
         };
         let code = execute(
             std::iter::once("bonk").chain(args.iter().copied()),
@@ -914,7 +946,7 @@ mod tests {
             &mut out,
             &mut err,
             |_| Ok(()),
-            || Ok(disks),
+            || Ok(disks.clone()),
             |view| {
                 *vues.borrow_mut() = Some(view);
                 Ok(())

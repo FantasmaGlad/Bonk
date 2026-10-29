@@ -26,4 +26,4 @@ pub use safety::{
     Eligibility, Exclusion, FilterOptions, HiddenReason, RuleTrace, Warning, evaluate,
     evaluate_traced,
 };
-pub use target::{OpenTargetError, TargetIdentity, reverify, unmount_all};
+pub use target::{OpenTargetError, TargetIdentity, mount_points, reverify, unmount_all};

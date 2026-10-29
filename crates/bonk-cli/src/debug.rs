@@ -86,7 +86,7 @@ pub(crate) struct HexdumpArgs {
 }
 
 /// Nombre décimal ou hexadécimal (`0x1BE`).
-fn parse_number(text: &str) -> Result<u64, String> {
+pub(crate) fn parse_number(text: &str) -> Result<u64, String> {
     let parsed = match text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
         Some(hex) => u64::from_str_radix(hex, 16),
         None => text.parse(),

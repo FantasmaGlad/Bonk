@@ -362,6 +362,7 @@ dependencies = [
  "bonk-customizer",
  "bonk-gui",
  "bonk-hal",
+ "serde_json",
 ]
 
 [[package]]

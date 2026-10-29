@@ -9,6 +9,7 @@ use std::io::{self, BufRead, BufReader, Read};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use schemars::JsonSchema;
 use serde::Serialize;
 
 const GZIP: [u8; 2] = [0x1F, 0x8B];
@@ -18,7 +19,7 @@ const BZIP2: [u8; 3] = *b"BZh";
 const ZIP: [u8; 4] = [b'P', b'K', 0x03, 0x04];
 
 /// Format d'une image, d'après ses premiers octets.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Format {
     /// Image brute (`.img`, `.iso`, ou tout ce qui n'a pas de signature de compression).
