@@ -1,6 +1,8 @@
 # Validation de la compilation.
-# Linux d'abord, car c'est le moins cher : formatage, lint, tests. Windows et macOS ne démarrent que si Linux réussit.
-# Rien ne tourne pour une PR en brouillon, ni pour un changement qui ne touche ni le code ni la chaîne Rust.
+# Linux d'abord, car c'est le moins cher : formatage, lint, tests, version minimale de Rust. Windows et macOS
+# ne démarrent que si ces deux jobs Linux réussissent.
+# Aucun job pour une PR en brouillon ; aucune exécution pour un changement qui ne touche ni le code, ni la
+# chaîne Rust, ni ce fichier (le modifier relance la CI, pour le valider).
 name: ci
 
 on:
@@ -26,10 +28,11 @@ on:
 permissions:
   contents: read
 
-# Une nouvelle exécution annule la précédente sur la même référence : aucune minute payée pour un état dépassé.
+# Sur une PR, une nouvelle exécution annule la précédente : aucune minute payée pour un état dépassé.
+# Sur main, une exécution en cours n'est jamais interrompue (son build release compte).
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -87,10 +90,10 @@ jobs:
           cargo "+$MSRV" check --workspace --locked
 
   # Le code propre à un système n'est exercé que sur ce système : Windows et macOS sont payants,
-  # donc ils ne démarrent qu'une fois Linux vert.
+  # donc ils ne démarrent qu'une fois les deux jobs Linux verts.
   portabilite:
     name: portabilité (${{ matrix.os }})
-    needs: qualite
+    needs: [qualite, msrv]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -106,7 +109,7 @@ jobs:
         run: rustup toolchain install
       - name: Restaurer le cache de compilation
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      # Clippy est relancé ici : il lint aussi le code compilé sous cfg(target_os), absent sur Linux.
+      # Clippy est relancé ici : il analyse le code conditionné par cfg(target_os), qui n'est pas compilé sous Linux.
       - name: Lint
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Tests

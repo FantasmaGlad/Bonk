@@ -29,9 +29,10 @@ on:
 permissions:
   contents: read
 
+# Annulation sur une PR seulement : le contrôle de main et le contrôle hebdomadaire ne sont jamais interrompus.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   cargo-deny:
