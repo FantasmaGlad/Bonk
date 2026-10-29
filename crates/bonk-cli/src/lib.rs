@@ -6,6 +6,7 @@
 
 mod debug;
 mod diagnose;
+mod errors;
 mod info;
 mod list;
 mod logging;
@@ -17,13 +18,8 @@ use std::process::ExitCode;
 use bonk_hal::{Disk, EnumerateError, enumerate_disks};
 use clap::{Parser, Subcommand};
 
+use crate::errors::{Code, EXIT_USAGE, ExplainArgs, report};
 use crate::logging::{LogArgs, Settings};
-
-/// Code de sortie d'une erreur d'exécution (énumération impossible, écriture de la sortie en échec,
-/// fenêtre impossible à ouvrir). Les erreurs d'usage gardent le code `2` de clap.
-const EXIT_RUNTIME_ERROR: u8 = 1;
-/// Code de sortie d'une erreur d'usage, celui de clap.
-const EXIT_USAGE: u8 = 2;
 
 /// Arguments de la ligne de commande de Bonk.
 ///
@@ -63,6 +59,8 @@ enum Command {
         #[command(subcommand)]
         action: debug::DebugAction,
     },
+    /// Explique un code d'erreur (`bonk explain E1003`) ou liste tous les codes
+    Explain(ExplainArgs),
     /// Ouvre la fenêtre (comme `bonk` seul)
     Gui,
 }
@@ -188,14 +186,10 @@ where
 
     let settings = match Settings::from_args(&cli.log, env_log) {
         Ok(settings) => settings,
-        Err(erreur) => {
-            let _ = writeln!(err, "bonk : erreur : {erreur}");
-            return EXIT_USAGE;
-        }
+        Err(erreur) => return report(err, Code::LogSettingInvalid, erreur),
     };
     if let Err(erreur) = install_log(settings) {
-        let _ = writeln!(err, "bonk : erreur : {erreur}");
-        return EXIT_RUNTIME_ERROR;
+        return report(err, Code::LogUnusable, erreur);
     }
     log::info!(
         target: "bonk::cli",
@@ -213,12 +207,14 @@ where
                 Err(erreur) => {
                     // Pas d'affichage (SSH, serveur) ou pas de rendu utilisable : la CLI reste là.
                     log::debug!(target: "bonk::cli", reason = erreur.as_str(); "window failed to open");
-                    let _ = writeln!(
+                    report(
                         err,
-                        "bonk : erreur : impossible d'ouvrir l'interface graphique : {erreur}\n\
-                         Utilisez la ligne de commande : bonk --help"
-                    );
-                    EXIT_RUNTIME_ERROR
+                        Code::WindowUnavailable,
+                        format!(
+                            "impossible d'ouvrir l'interface graphique : {erreur}\n\
+                             Utilisez la ligne de commande : bonk --help"
+                        ),
+                    )
                 }
             }
         }
@@ -229,6 +225,15 @@ where
         Some(Command::List(args)) => run_list(&args, out, err, enumerate),
         Some(Command::Info(args)) => run_info(&args, out, err, enumerate),
         Some(Command::Debug { action }) => run_debug(action, out, err, enumerate),
+        Some(Command::Explain(args)) => match errors::explain(&args, out) {
+            Ok(true) => 0,
+            Ok(false) => report(
+                err,
+                Code::InvalidArgument,
+                errors::unknown_code_message(args.code().unwrap_or_default()),
+            ),
+            Err(erreur) => report(err, Code::OutputFailed, erreur),
+        },
         Some(Command::Diagnose(args)) => {
             log::debug!(target: "bonk::cli", include_serials = args.include_serials(); "command diagnose");
             let result = enumerate();
@@ -237,13 +242,11 @@ where
             }
             match diagnose::run(&args, &diagnose::Environment::system(), &result, out) {
                 Ok(()) => 0,
-                Err(erreur) => {
-                    let _ = writeln!(
-                        err,
-                        "bonk : erreur : rapport impossible à écrire : {erreur}"
-                    );
-                    EXIT_RUNTIME_ERROR
-                }
+                Err(erreur) => report(
+                    err,
+                    Code::OutputFailed,
+                    format!("rapport impossible à écrire : {erreur}"),
+                ),
             }
         }
     }
@@ -257,8 +260,7 @@ where
 {
     enumerate().map_err(|erreur| {
         log::debug!(target: "bonk::cli", reason = erreur.to_string().as_str(); "enumeration failed");
-        let _ = writeln!(err, "bonk : erreur : {erreur}");
-        EXIT_RUNTIME_ERROR
+        report(err, Code::of_enumeration(&erreur), erreur)
     })
 }
 
@@ -287,14 +289,8 @@ where
     };
     match outcome {
         Ok(Outcome::Done) => 0,
-        Ok(Outcome::Failed(message)) => {
-            let _ = writeln!(err, "bonk : erreur : {message}");
-            EXIT_RUNTIME_ERROR
-        }
-        Err(erreur) => {
-            let _ = writeln!(err, "bonk : erreur d'écriture de la sortie : {erreur}");
-            EXIT_RUNTIME_ERROR
-        }
+        Ok(Outcome::Failed(code, message)) => report(err, code, message),
+        Err(erreur) => report(err, Code::OutputFailed, erreur),
     }
 }
 
@@ -314,10 +310,7 @@ where
     };
     match list::run(args, &disks, out) {
         Ok(()) => 0,
-        Err(erreur) => {
-            let _ = writeln!(err, "bonk : erreur d'écriture de la sortie : {erreur}");
-            EXIT_RUNTIME_ERROR
-        }
+        Err(erreur) => report(err, Code::OutputFailed, erreur),
     }
 }
 
@@ -337,18 +330,15 @@ where
     };
     match info::run(args, &disks, out) {
         Ok(true) => 0,
-        Ok(false) => {
-            let _ = writeln!(
-                err,
-                "bonk : erreur : disque introuvable : « {} » (identifiants : bonk list --all)",
+        Ok(false) => report(
+            err,
+            Code::DiskNotFound,
+            format!(
+                "disque introuvable : « {} » (identifiants : bonk list --all)",
                 args.target()
-            );
-            EXIT_RUNTIME_ERROR
-        }
-        Err(erreur) => {
-            let _ = writeln!(err, "bonk : erreur d'écriture de la sortie : {erreur}");
-            EXIT_RUNTIME_ERROR
-        }
+            ),
+        ),
+        Err(erreur) => report(err, Code::OutputFailed, erreur),
     }
 }
 
@@ -360,6 +350,7 @@ mod tests {
     use serde_json::Value;
 
     use super::*;
+    use crate::errors::EXIT_RUNTIME_ERROR;
 
     fn partition(path: &str, mounts: &[&str], system: bool) -> Partition {
         Partition {
@@ -766,6 +757,46 @@ mod tests {
             Ok(true),
             "blocage : le journal d'un autre fil attend le verrou de stderr"
         );
+    }
+
+    #[test]
+    fn toute_erreur_porte_son_code_en_fin_de_message() {
+        let (_, _, err) = lancer(&["info", "absent"], sample());
+        assert!(err.trim_end().ends_with("[E1003]"), "{err}");
+        let r = lancer_avec(&["list"], Some("gui=bavard"), sample(), Ok(()));
+        assert!(r.err.trim_end().ends_with("[E5001]"), "{}", r.err);
+        let r = lancer_avec(&[], None, vec![], Err("x".to_owned()));
+        assert!(r.err.trim_end().ends_with("[E5003]"), "{}", r.err);
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = execute(
+            ["bonk", "list"],
+            None,
+            &mut out,
+            &mut err,
+            |_| Ok(()),
+            || Err(EnumerateError::Unsupported { os: "test" }),
+            || Ok(()),
+        );
+        assert_eq!(code, 1);
+        assert!(
+            String::from_utf8_lossy(&err)
+                .trim_end()
+                .ends_with("[E1002]")
+        );
+    }
+
+    #[test]
+    fn explain_donne_le_sens_d_un_code_et_refuse_un_code_inconnu() {
+        let (code, out, _) = lancer(&["explain", "E1003"], vec![]);
+        assert_eq!(code, 0);
+        assert!(out.starts_with("E1003 : Disque introuvable"), "{out}");
+        let (code, out, _) = lancer(&["explain"], vec![]);
+        assert_eq!(code, 0);
+        assert!(out.lines().count() >= 20, "{out}");
+        let (code, out, err) = lancer(&["explain", "E9999"], vec![]);
+        assert_eq!(code, EXIT_USAGE);
+        assert!(out.is_empty() && err.contains("code inconnu"), "{err}");
+        assert!(err.trim_end().ends_with("[E0001]"), "{err}");
     }
 
     #[test]

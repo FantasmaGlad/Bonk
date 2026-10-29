@@ -14,6 +14,7 @@ use bonk_hal::{
 use clap::{Args, Subcommand};
 use serde::Serialize;
 
+use crate::errors::Code;
 use crate::info;
 
 const JSON_SCHEMA_VERSION: u32 = 1;
@@ -96,7 +97,7 @@ fn parse_number(text: &str) -> Result<u64, String> {
 pub(crate) enum Outcome {
     Done,
     /// Échec expliqué par un message pour la sortie d'erreur.
-    Failed(String),
+    Failed(Code, String),
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -158,7 +159,10 @@ pub(crate) fn sources(
     }
     Ok(match result {
         Ok(_) => Outcome::Done,
-        Err(erreur) => Outcome::Failed(format!("l'énumération a échoué : {erreur}")),
+        Err(erreur) => Outcome::Failed(
+            Code::of_enumeration(erreur),
+            format!("l'énumération a échoué : {erreur}"),
+        ),
     })
 }
 
@@ -181,10 +185,13 @@ pub(crate) fn filter(
     out: &mut dyn Write,
 ) -> io::Result<Outcome> {
     let Some(disk) = info::find(disks, &args.target) else {
-        return Ok(Outcome::Failed(format!(
-            "disque introuvable : « {} » (identifiants : bonk list --all)",
-            args.target
-        )));
+        return Ok(Outcome::Failed(
+            Code::DiskNotFound,
+            format!(
+                "disque introuvable : « {} » (identifiants : bonk list --all)",
+                args.target
+            ),
+        ));
     };
     let options = FilterOptions {
         show_internal: args.show_internal,
@@ -247,26 +254,38 @@ pub(crate) fn filter(
 
 /// Ouvre une image en lecture seule. Un identifiant de disque réel est reconnu pour dire pourquoi il
 /// n'est pas lisible, plutôt que d'échouer sur un chemin inexistant.
-fn open_image(path: &Path) -> Result<FileDevice, String> {
+fn open_image(path: &Path) -> Result<FileDevice, (Code, String)> {
     if !path.exists() && path.to_string_lossy().starts_with("/dev/") {
-        return Err(format!(
-            "« {} » est un disque réel : sa lecture brute n'est pas encore disponible (étude des \
-             privilèges, D-03) ; passez une image",
-            path.display()
+        return Err((
+            Code::RawDiskUnavailable,
+            format!(
+                "« {} » est un disque réel : sa lecture brute n'est pas encore disponible (étude des \
+                 privilèges, D-03) ; passez une image",
+                path.display()
+            ),
         ));
     }
-    FileDevice::open(path, Access::ReadOnly, 512)
-        .map_err(|erreur| format!("{} : {erreur}", path.display()))
+    FileDevice::open(path, Access::ReadOnly, 512).map_err(|erreur| {
+        (
+            Code::SourceUnreadable,
+            format!("{} : {erreur}", path.display()),
+        )
+    })
 }
 
 pub(crate) fn layout(args: &LayoutArgs, out: &mut dyn Write) -> io::Result<Outcome> {
     let device = match open_image(&args.image) {
         Ok(device) => device,
-        Err(message) => return Ok(Outcome::Failed(message)),
+        Err((code, message)) => return Ok(Outcome::Failed(code, message)),
     };
     let layout = match inspect(&device) {
         Ok(layout) => layout,
-        Err(erreur) => return Ok(Outcome::Failed(format!("lecture impossible : {erreur}"))),
+        Err(erreur) => {
+            return Ok(Outcome::Failed(
+                Code::SourceUnreadable,
+                format!("lecture impossible : {erreur}"),
+            ));
+        }
     };
     if args.json {
         #[derive(Serialize)]
@@ -385,27 +404,38 @@ fn write_layout(layout: &Layout, image: &Path, out: &mut dyn Write) -> io::Resul
 
 pub(crate) fn hexdump(args: &HexdumpArgs, out: &mut dyn Write) -> io::Result<Outcome> {
     if args.len == 0 || args.len > HEXDUMP_MAX {
-        return Ok(Outcome::Failed(format!(
-            "longueur invalide : {} (de 1 à {HEXDUMP_MAX} octets)",
-            args.len
-        )));
+        return Ok(Outcome::Failed(
+            Code::InvalidArgument,
+            format!(
+                "longueur invalide : {} (de 1 à {HEXDUMP_MAX} octets)",
+                args.len
+            ),
+        ));
     }
     let device = match open_image(&args.image) {
         Ok(device) => device,
-        Err(message) => return Ok(Outcome::Failed(message)),
+        Err((code, message)) => return Ok(Outcome::Failed(code, message)),
     };
     let size = device.size();
     if args.offset >= size {
-        return Ok(Outcome::Failed(format!(
-            "décalage {} au-delà de la fin de l'image ({size} octets)",
-            args.offset
-        )));
+        return Ok(Outcome::Failed(
+            Code::InvalidArgument,
+            format!(
+                "décalage {} au-delà de la fin de l'image ({size} octets)",
+                args.offset
+            ),
+        ));
     }
     // La plage est ramenée à la taille de l'image ; la lecture est alignée par `read_range`.
     let len = args.len.min(size - args.offset);
     let bytes = match read_range(&device, args.offset, len) {
         Ok(bytes) => bytes,
-        Err(erreur) => return Ok(Outcome::Failed(format!("lecture impossible : {erreur}"))),
+        Err(erreur) => {
+            return Ok(Outcome::Failed(
+                Code::SourceUnreadable,
+                format!("lecture impossible : {erreur}"),
+            ));
+        }
     };
     for line in hexdump_lines(args.offset, &bytes) {
         writeln!(out, "{line}")?;
@@ -605,7 +635,8 @@ mod tests {
             json: false,
         };
         match layout(&args, &mut out)? {
-            Outcome::Failed(message) => {
+            Outcome::Failed(code, message) => {
+                assert_eq!(code, Code::RawDiskUnavailable);
                 assert!(
                     message.contains("lecture brute n'est pas encore disponible"),
                     "{message}"
@@ -622,7 +653,7 @@ mod tests {
         };
         assert!(matches!(
             layout(&args, &mut Vec::new())?,
-            Outcome::Failed(_)
+            Outcome::Failed(Code::SourceUnreadable, _)
         ));
         Ok(())
     }
