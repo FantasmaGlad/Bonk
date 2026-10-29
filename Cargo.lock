@@ -368,6 +368,7 @@ dependencies = [
  "bonk-customizer",
  "bonk-hal",
  "clap",
+ "log",
  "serde",
  "serde_json",
 ]
@@ -393,6 +394,7 @@ dependencies = [
  "bonk-hal",
  "iced",
  "iced_test",
+ "log",
 ]
 
 [[package]]
@@ -400,6 +402,7 @@ name = "bonk-hal"
 version = "0.1.0"
 dependencies = [
  "bonk-core",
+ "log",
  "serde",
  "serde_json",
 ]

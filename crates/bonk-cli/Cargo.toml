@@ -16,6 +16,7 @@ bonk-catalog.workspace = true
 clap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+log.workspace = true
 
 [lints]
 workspace = true

@@ -22,6 +22,8 @@ bonk-gui = { path = "crates/bonk-gui" }
 clap = { version = "4.6", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+# Façade de journal : nos crates, Iced, wgpu et winit émettent par elle ; `kv` pour les champs structurés, `std` pour installer le puits.
+log = { version = "0.4", features = ["kv", "std"] }
 # Rendu wgpu avec repli logiciel tiny-skia obligatoire (CDC §8). `linux-theme-detection` est écarté :
 # le thème de Bonk est fixe (charte monochrome), la détection ne ferait qu'ajouter des dépendances.
 # `smol` plutôt que `thread-pool` : seul un exécuteur (tokio ou smol) fournit `iced::time::every`, utilisé pour

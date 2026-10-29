@@ -14,6 +14,7 @@ bonk-hal.workspace = true
 bonk-customizer.workspace = true
 bonk-catalog.workspace = true
 iced.workspace = true
+log.workspace = true
 
 [dev-dependencies]
 iced_test.workspace = true

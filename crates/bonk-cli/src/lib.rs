@@ -1,8 +1,11 @@
-//! Ligne de commande de Bonk : analyse des arguments, sortie texte et JSON, codes de sortie stables.
+//! Ligne de commande de Bonk : analyse des arguments, sortie texte et JSON, journal, codes de sortie
+//! stables (CDC §9).
 //!
-//! Sous-commandes disponibles : `list` (lecture seule). Les autres arrivent avec les jalons suivants.
+//! Ce crate ne connaît pas la fenêtre : le binaire lui passe la fonction qui l'ouvre. Ainsi `bonk` sans
+//! commande ouvre la fenêtre, et `bonk -v` l'ouvre avec le journal verbeux.
 
 mod list;
+mod logging;
 
 use std::ffi::OsString;
 use std::io::{self, Write};
@@ -11,16 +14,17 @@ use std::process::ExitCode;
 use bonk_hal::{Disk, EnumerateError, enumerate_disks};
 use clap::{Parser, Subcommand};
 
-/// Code de sortie d'une erreur d'exécution (énumération impossible, écriture de la sortie en échec).
-/// Les erreurs d'usage gardent le code `2` de clap.
+use crate::logging::{LogArgs, Settings};
+
+/// Code de sortie d'une erreur d'exécution (énumération impossible, écriture de la sortie en échec,
+/// fenêtre impossible à ouvrir). Les erreurs d'usage gardent le code `2` de clap.
 const EXIT_RUNTIME_ERROR: u8 = 1;
 /// Code de sortie d'une erreur d'usage, celui de clap.
 const EXIT_USAGE: u8 = 2;
 
 /// Arguments de la ligne de commande de Bonk.
 ///
-/// Sans argument, l'aide s'affiche : l'interface graphique, lancée dans ce cas à partir du
-/// jalon J1, n'existe pas encore.
+/// Sans commande, la fenêtre s'ouvre.
 #[derive(Debug, Parser)]
 // `long_about = None` : sans lui, clap reprend ce commentaire de documentation comme texte long
 // et `--help` afficherait une note de développeur au lieu de la description de l'outil.
@@ -29,45 +33,66 @@ const EXIT_USAGE: u8 = 2;
     version,
     about = "Création de supports d'amorçage (clés USB et disques externes)",
     long_about = None,
-    arg_required_else_help = true
 )]
 struct Cli {
+    #[command(flatten)]
+    log: LogArgs,
+
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Liste les disques que Bonk peut écrire (raccourci de `disk list`)
     List(list::ListArgs),
+    /// Ouvre la fenêtre (comme `bonk` seul)
+    Gui,
 }
 
-/// Exécute la ligne de commande et renvoie le code de sortie du processus.
+/// Exécute la ligne de commande et renvoie le code de sortie du processus. `gui` ouvre la fenêtre et
+/// rend la main à sa fermeture.
 ///
 /// Codes de sortie, stables d'une version à l'autre :
 /// - `0` : succès, `--help` et `--version` compris, même si aucun disque n'est proposé ;
-/// - `1` : erreur d'exécution (énumération des disques impossible ou non disponible sur ce système) ;
-/// - `2` : erreur d'usage (code de clap).
-pub fn run<I, T>(args: I) -> ExitCode
+/// - `1` : erreur d'exécution (énumération des disques impossible ou non disponible sur ce système,
+///   fenêtre impossible à ouvrir) ;
+/// - `2` : erreur d'usage (code de clap), réglage de journal invalide compris.
+pub fn run<I, T, G>(args: I, gui: G) -> ExitCode
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
+    G: FnOnce() -> Result<(), String>,
 {
     ExitCode::from(execute(
         args,
+        std::env::var("BONK_LOG").ok().as_deref(),
         &mut io::stdout().lock(),
         &mut io::stderr().lock(),
+        logging::install,
         enumerate_disks,
+        gui,
     ))
 }
 
-/// Cœur de [`run`], avec les flux et l'énumération injectés pour les tests.
-fn execute<I, T, O, E, F>(args: I, out: &mut O, err: &mut E, enumerate: F) -> u8
+/// Cœur de [`run`], avec les flux, l'environnement et les dépendances injectés pour les tests.
+fn execute<I, T, O, E, L, F, G>(
+    args: I,
+    env_log: Option<&str>,
+    out: &mut O,
+    err: &mut E,
+    install_log: L,
+    enumerate: F,
+    gui: G,
+) -> u8
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
     O: Write,
     E: Write,
+    L: FnOnce(Settings) -> Result<(), String>,
     F: FnOnce() -> Result<Vec<Disk>, EnumerateError>,
+    G: FnOnce() -> Result<(), String>,
 {
     let cli = match Cli::try_parse_from(args) {
         Ok(cli) => cli,
@@ -79,11 +104,48 @@ where
         }
     };
 
+    let settings = match Settings::from_args(&cli.log, env_log) {
+        Ok(settings) => settings,
+        Err(erreur) => {
+            let _ = writeln!(err, "bonk : erreur : {erreur}");
+            return EXIT_USAGE;
+        }
+    };
+    if let Err(erreur) = install_log(settings) {
+        let _ = writeln!(err, "bonk : erreur : {erreur}");
+        return EXIT_RUNTIME_ERROR;
+    }
+    log::info!(
+        target: "bonk::cli",
+        version = env!("CARGO_PKG_VERSION"),
+        os = std::env::consts::OS,
+        arch = std::env::consts::ARCH;
+        "start"
+    );
+
     match cli.command {
-        Command::List(args) => {
+        None | Some(Command::Gui) => {
+            log::debug!(target: "bonk::cli", "opening the window");
+            match gui() {
+                Ok(()) => 0,
+                Err(erreur) => {
+                    // Pas d'affichage (SSH, serveur) ou pas de rendu utilisable : la CLI reste là.
+                    log::debug!(target: "bonk::cli", reason = erreur.as_str(); "window failed to open");
+                    let _ = writeln!(
+                        err,
+                        "bonk : erreur : impossible d'ouvrir l'interface graphique : {erreur}\n\
+                         Utilisez la ligne de commande : bonk --help"
+                    );
+                    EXIT_RUNTIME_ERROR
+                }
+            }
+        }
+        Some(Command::List(args)) => {
+            log::debug!(target: "bonk::cli", all = args.all(), json = args.json(); "command list");
             let disks = match enumerate() {
                 Ok(disks) => disks,
                 Err(erreur) => {
+                    log::debug!(target: "bonk::cli", reason = erreur.to_string().as_str(); "enumeration failed");
                     let _ = writeln!(err, "bonk : erreur : {erreur}");
                     return EXIT_RUNTIME_ERROR;
                 }
@@ -101,6 +163,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+
     use bonk_hal::{Bus, DiskKind, Partition};
     use serde_json::Value;
 
@@ -148,20 +212,52 @@ mod tests {
         ]
     }
 
-    /// Lance la commande avec des disques fixes ; renvoie code, sortie standard, sortie d'erreur.
-    fn lancer(args: &[&str], disks: Vec<Disk>) -> (u8, String, String) {
+    /// Ce que `execute` a fait : code, sorties, et réglages de journal reçus.
+    struct Resultat {
+        code: u8,
+        out: String,
+        err: String,
+        journal_installe: bool,
+        fenetre_ouverte: bool,
+    }
+
+    fn lancer_avec(
+        args: &[&str],
+        env_log: Option<&str>,
+        disks: Vec<Disk>,
+        fenetre: Result<(), String>,
+    ) -> Resultat {
         let (mut out, mut err) = (Vec::new(), Vec::new());
+        let journal = RefCell::new(false);
+        let ouverte = RefCell::new(false);
         let code = execute(
             std::iter::once("bonk").chain(args.iter().copied()),
+            env_log,
             &mut out,
             &mut err,
+            |_| {
+                *journal.borrow_mut() = true;
+                Ok(())
+            },
             || Ok(disks),
+            || {
+                *ouverte.borrow_mut() = true;
+                fenetre
+            },
         );
-        (
+        Resultat {
             code,
-            String::from_utf8_lossy(&out).into_owned(),
-            String::from_utf8_lossy(&err).into_owned(),
-        )
+            out: String::from_utf8_lossy(&out).into_owned(),
+            err: String::from_utf8_lossy(&err).into_owned(),
+            journal_installe: *journal.borrow(),
+            fenetre_ouverte: *ouverte.borrow(),
+        }
+    }
+
+    /// Lance la commande avec des disques fixes ; renvoie code, sortie standard, sortie d'erreur.
+    fn lancer(args: &[&str], disks: Vec<Disk>) -> (u8, String, String) {
+        let r = lancer_avec(args, None, disks, Ok(()));
+        (r.code, r.out, r.err)
     }
 
     #[test]
@@ -252,9 +348,15 @@ mod tests {
     #[test]
     fn echec_de_l_enumeration_donne_le_code_un_et_rien_sur_stdout() {
         let (mut out, mut err) = (Vec::new(), Vec::new());
-        let code = execute(["bonk", "list"], &mut out, &mut err, || {
-            Err(EnumerateError::Unsupported { os: "test" })
-        });
+        let code = execute(
+            ["bonk", "list"],
+            None,
+            &mut out,
+            &mut err,
+            |_| Ok(()),
+            || Err(EnumerateError::Unsupported { os: "test" }),
+            || Ok(()),
+        );
         assert_eq!(code, EXIT_RUNTIME_ERROR);
         assert!(out.is_empty());
         let err = String::from_utf8_lossy(&err);
@@ -265,6 +367,80 @@ mod tests {
     fn option_inconnue_donne_le_code_d_usage() {
         let (code, out, _) = lancer(&["list", "--efface-tout"], sample());
         assert_eq!(code, EXIT_USAGE);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn sans_commande_la_fenetre_s_ouvre() {
+        let r = lancer_avec(&[], None, vec![], Ok(()));
+        assert_eq!(r.code, 0);
+        assert!(r.fenetre_ouverte && r.journal_installe);
+        assert!(r.out.is_empty());
+    }
+
+    #[test]
+    fn verbeux_sans_commande_ouvre_la_fenetre_avec_le_journal() {
+        for args in [&["-v"][..], &["-vv"], &["gui", "-v"]] {
+            let r = lancer_avec(args, None, vec![], Ok(()));
+            assert_eq!(r.code, 0, "{args:?}");
+            assert!(r.fenetre_ouverte && r.journal_installe, "{args:?}");
+        }
+    }
+
+    #[test]
+    fn l_echec_de_la_fenetre_renvoie_vers_la_ligne_de_commande() {
+        let r = lancer_avec(&[], None, vec![], Err("aucun affichage".to_owned()));
+        assert_eq!(r.code, EXIT_RUNTIME_ERROR);
+        assert!(
+            r.err.starts_with(
+                "bonk : erreur : impossible d'ouvrir l'interface graphique : aucun affichage"
+            ),
+            "{}",
+            r.err
+        );
+        assert!(r.err.contains("bonk --help"), "{}", r.err);
+    }
+
+    #[test]
+    fn les_options_de_journal_sont_acceptees_apres_la_commande() {
+        let r = lancer_avec(
+            &[
+                "list",
+                "-vv",
+                "--log-format",
+                "json",
+                "--log-file",
+                "/tmp/x.log",
+            ],
+            None,
+            sample(),
+            Ok(()),
+        );
+        assert_eq!(r.code, 0, "{}", r.err);
+        assert!(r.journal_installe);
+    }
+
+    #[test]
+    fn un_reglage_de_journal_invalide_est_une_erreur_d_usage() {
+        let r = lancer_avec(&["list"], Some("gui=bavard"), sample(), Ok(()));
+        assert_eq!(r.code, EXIT_USAGE);
+        assert!(r.err.contains("niveau de journal inconnu"), "{}", r.err);
+        assert!(!r.journal_installe && r.out.is_empty());
+    }
+
+    #[test]
+    fn un_journal_impossible_a_installer_est_une_erreur_d_execution() {
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = execute(
+            ["bonk", "list"],
+            None,
+            &mut out,
+            &mut err,
+            |_| Err("journal : ouverture impossible".to_owned()),
+            || Ok(vec![]),
+            || Ok(()),
+        );
+        assert_eq!(code, EXIT_RUNTIME_ERROR);
         assert!(out.is_empty());
     }
 }

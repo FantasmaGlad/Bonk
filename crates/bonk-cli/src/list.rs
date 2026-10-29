@@ -34,6 +34,16 @@ pub(crate) struct ListArgs {
     allow_virtual: bool,
 }
 
+impl ListArgs {
+    pub(crate) fn all(&self) -> bool {
+        self.all
+    }
+
+    pub(crate) fn json(&self) -> bool {
+        self.json
+    }
+}
+
 #[derive(Serialize)]
 struct Report<'a> {
     schema_version: u32,

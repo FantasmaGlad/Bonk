@@ -14,11 +14,15 @@
 //! Tous les chemins système sont regroupés dans [`LinuxRoots`] : les tests construisent une
 //! arborescence factice et vérifient l'énumération sans toucher au vrai système.
 
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
+
+use serde::Serialize;
 
 use crate::disk::{Bus, Disk, DiskKind, Partition};
 use crate::enumerate::EnumerateError;
@@ -91,14 +95,37 @@ pub fn enumerate(roots: &LinuxRoots) -> Result<Vec<Disk>, EnumerateError> {
         swaps,
     };
 
+    let started = Instant::now();
     let mut names = list_dir(&sys_block)?;
     names.sort_by(|a, b| natural_cmp(a, b));
+    log::debug!(
+        target: "bonk_hal::linux",
+        candidates = names.len(), mounts = mounts.len(), swaps = ctx.swaps.len();
+        "enumerating block devices"
+    );
     let mut disks = Vec::new();
     for name in names {
-        if let Some(disk) = read_disk(&ctx, &sys_block.join(&name), &name)? {
-            disks.push(disk);
+        match read_disk(&ctx, &sys_block.join(&name), &name)? {
+            Some(disk) => {
+                log::debug!(
+                    target: "bonk_hal::linux",
+                    id = disk.id.as_str(), path = disk.path.as_str(), bus = format!("{:?}", disk.bus).as_str(),
+                    kind = format!("{:?}", disk.kind).as_str(), size_bytes = disk.size_bytes,
+                    partitions = disk.partitions.len();
+                    "disk found"
+                );
+                disks.push(disk);
+            }
+            None => {
+                log::trace!(target: "bonk_hal::linux", device = name.as_str(); "device ignored (stacked, memory, optical or hidden)")
+            }
         }
     }
+    log::debug!(
+        target: "bonk_hal::linux",
+        disks = disks.len(), millis = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        "enumeration done"
+    );
     Ok(disks)
 }
 
@@ -451,7 +478,7 @@ fn parse_udev(text: &str) -> UdevRecord {
 /// [`enumerate`]).
 fn load_udev(roots: &LinuxRoots, devnum: &str) -> Result<UdevRecord, EnumerateError> {
     let path = roots.udev_data.join(format!("b{devnum}"));
-    match fs::read_to_string(&path) {
+    match traced_read(&path) {
         Ok(text) => Ok(parse_udev(&text)),
         Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(UdevRecord::default()),
         Err(err) => Err(io_error(&path, err)),
@@ -462,6 +489,126 @@ fn load_udev(roots: &LinuxRoots, devnum: &str) -> Result<UdevRecord, EnumerateEr
 // Lecture de fichiers
 // ---------------------------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------------------------
+// Trace des lectures : journal au niveau `trace` et enregistrement pour `bonk debug sources`
+// ---------------------------------------------------------------------------------------------
+
+/// Une lecture d'une source système, telle qu'elle s'est passée.
+#[derive(Debug, Clone, Serialize)]
+pub struct SourceRead {
+    pub path: String,
+    /// `file` (contenu lu) ou `dir` (liste des entrées).
+    pub kind: &'static str,
+    pub ok: bool,
+    pub bytes: Option<usize>,
+    pub error: Option<String>,
+    pub micros: u64,
+    /// Contenu (fichier) ou entrées (répertoire), tronqué ; seulement quand on enregistre.
+    pub content: Option<String>,
+}
+
+/// Taille maximale du contenu conservé par lecture enregistrée.
+const CONTENT_LIMIT: usize = 8 * 1024;
+
+thread_local! {
+    // Enregistrement propre au fil d'exécution qui énumère : la fenêtre énumère sur un autre fil et
+    // n'est donc jamais gênée par un `debug sources` en cours.
+    static RECORDER: RefCell<Option<Vec<SourceRead>>> = const { RefCell::new(None) };
+}
+
+fn note_read(
+    kind: &'static str,
+    path: &Path,
+    started: Instant,
+    outcome: Result<(usize, &str), &io::Error>,
+) {
+    let micros = u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX);
+    let shown = path.display().to_string();
+    match &outcome {
+        Ok((bytes, _)) => log::trace!(
+            target: "bonk_hal::linux",
+            path = shown.as_str(), kind = kind, bytes = *bytes, micros = micros;
+            "read source"
+        ),
+        Err(err) => log::trace!(
+            target: "bonk_hal::linux",
+            path = shown.as_str(), kind = kind, error = err.to_string().as_str(), micros = micros;
+            "read source failed"
+        ),
+    }
+    RECORDER.with(|recorder| {
+        if let Some(reads) = recorder.borrow_mut().as_mut() {
+            let (bytes, error, content) = match outcome {
+                Ok((bytes, content)) => {
+                    let mut kept = content.to_owned();
+                    if kept.len() > CONTENT_LIMIT {
+                        let mut end = CONTENT_LIMIT;
+                        while !kept.is_char_boundary(end) {
+                            end -= 1;
+                        }
+                        kept.truncate(end);
+                    }
+                    (Some(bytes), None, Some(kept))
+                }
+                Err(err) => (None, Some(err.to_string()), None),
+            };
+            reads.push(SourceRead {
+                path: shown,
+                kind,
+                ok: error.is_none(),
+                bytes,
+                error,
+                micros,
+                content,
+            });
+        }
+    });
+}
+
+fn traced_read(path: &Path) -> io::Result<String> {
+    let started = Instant::now();
+    let result = fs::read_to_string(path);
+    note_read(
+        "file",
+        path,
+        started,
+        result.as_ref().map(|text| (text.len(), text.as_str())),
+    );
+    result
+}
+
+fn traced_list(path: &Path) -> io::Result<Vec<String>> {
+    let started = Instant::now();
+    let result = (|| {
+        let mut names = Vec::new();
+        for entry in fs::read_dir(path)? {
+            names.push(entry?.file_name().to_string_lossy().into_owned());
+        }
+        Ok(names)
+    })();
+    let joined = result.as_ref().map(|names: &Vec<String>| names.join("\n"));
+    note_read(
+        "dir",
+        path,
+        started,
+        joined
+            .as_ref()
+            .map_err(|erreur| *erreur)
+            .map(|text| (text.len(), text.as_str())),
+    );
+    result
+}
+
+/// Énumère comme [`enumerate`] et rend aussi toutes les lectures de sources, pour `bonk debug sources`.
+pub fn enumerate_recorded(
+    roots: &LinuxRoots,
+) -> (Result<Vec<Disk>, EnumerateError>, Vec<SourceRead>) {
+    RECORDER.with(|recorder| *recorder.borrow_mut() = Some(Vec::new()));
+    let result = enumerate(roots);
+    let reads = RECORDER.with(|recorder| recorder.borrow_mut().take().unwrap_or_default());
+    (result, reads)
+}
+
 fn io_error(path: &Path, source: io::Error) -> EnumerateError {
     EnumerateError::Io {
         what: path.display().to_string(),
@@ -470,12 +617,12 @@ fn io_error(path: &Path, source: io::Error) -> EnumerateError {
 }
 
 fn read_required(path: &Path) -> Result<String, EnumerateError> {
-    fs::read_to_string(path).map_err(|e| io_error(path, e))
+    traced_read(path).map_err(|e| io_error(path, e))
 }
 
 /// Attribut descriptif : absent ou illisible vaut « inconnu ».
 fn read_optional(path: &Path) -> Option<String> {
-    let text = fs::read_to_string(path).ok()?;
+    let text = traced_read(path).ok()?;
     let trimmed = text.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_owned())
 }
@@ -485,21 +632,14 @@ fn canonical(path: &Path) -> Result<PathBuf, EnumerateError> {
 }
 
 fn list_dir(path: &Path) -> Result<Vec<String>, EnumerateError> {
-    let entries = fs::read_dir(path).map_err(|e| io_error(path, e))?;
-    let mut names = Vec::new();
-    for entry in entries {
-        let entry = entry.map_err(|e| io_error(path, e))?;
-        names.push(entry.file_name().to_string_lossy().into_owned());
-    }
-    Ok(names)
+    traced_list(path).map_err(|e| io_error(path, e))
 }
 
 /// Comme [`list_dir`], mais un répertoire absent est vide (`holders` n'existe que pour les disques
 /// que le noyau a rendus visibles).
 fn list_dir_optional(path: &Path) -> Result<Vec<String>, EnumerateError> {
-    match fs::read_dir(path) {
-        Ok(_) => {
-            let mut names = list_dir(path)?;
+    match traced_list(path) {
+        Ok(mut names) => {
             names.sort();
             Ok(names)
         }
@@ -1032,6 +1172,47 @@ mod tests {
             enumerate(&fake.roots()),
             Err(EnumerateError::Malformed { .. })
         ));
+        Ok(())
+    }
+
+    #[test]
+    fn les_lectures_de_sources_sont_enregistrees_avec_leur_contenu() -> Result<(), Box<dyn Error>> {
+        let fake = Fake::new()?;
+        desktop(&fake)?;
+        let (disks, reads) = enumerate_recorded(&fake.roots());
+        assert_eq!(disks?.len(), 1);
+        let mountinfo = reads
+            .iter()
+            .find(|r| r.path.ends_with("proc/self/mountinfo"))
+            .ok_or("mountinfo non enregistré")?;
+        assert!(mountinfo.ok && mountinfo.kind == "file");
+        assert!(
+            mountinfo
+                .content
+                .as_deref()
+                .is_some_and(|c| c.contains("/boot/efi"))
+        );
+        // Les échecs sont enregistrés aussi : un fichier optionnel absent est une lecture ratée.
+        assert!(
+            reads.iter().any(|r| !r.ok && r.error.is_some()),
+            "{reads:?}"
+        );
+        assert!(
+            reads
+                .iter()
+                .any(|r| r.kind == "dir" && r.path.ends_with("sys/block"))
+        );
+        // L'enregistrement s'arrête avec l'appel : une énumération ordinaire ne garde rien.
+        let again = enumerate(&fake.roots())?;
+        assert_eq!(again.len(), 1);
+        let (_, none_left) = enumerate_recorded(&fake.roots());
+        assert_eq!(
+            none_left
+                .iter()
+                .filter(|r| r.path.ends_with("proc/swaps"))
+                .count(),
+            1
+        );
         Ok(())
     }
 
