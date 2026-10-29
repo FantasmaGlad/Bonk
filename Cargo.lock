@@ -415,7 +415,9 @@ dependencies = [
  "bonk-hal",
  "iced",
  "iced_test",
+ "libc",
  "log",
+ "serde_json",
 ]
 
 [[package]]

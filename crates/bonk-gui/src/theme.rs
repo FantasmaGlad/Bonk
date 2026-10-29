@@ -5,7 +5,7 @@
 //! Les états ne reposent jamais sur la couleur : ils sont écrits en toutes lettres.
 
 use iced::theme::Palette;
-use iced::widget::{button, checkbox, container};
+use iced::widget::{button, checkbox, container, text_input};
 use iced::{Border, Color, Theme};
 
 /// Fond principal `#FFFFFF`.
@@ -116,5 +116,25 @@ pub(crate) fn focus_ring(focused: bool) -> impl Fn(&Theme) -> container::Style {
             radius: (RADIUS + 2.0).into(),
         },
         ..container::Style::default()
+    }
+}
+
+/// Champ de saisie : fond blanc, contour noir de 2 px (un champ est un composant, WCAG 1.4.11).
+pub(crate) fn input_style(_theme: &Theme, status: text_input::Status) -> text_input::Style {
+    text_input::Style {
+        background: BACKGROUND.into(),
+        border: Border {
+            color: CONTROL_BORDER,
+            width: if matches!(status, text_input::Status::Focused { .. }) {
+                3.0
+            } else {
+                2.0
+            },
+            radius: RADIUS.into(),
+        },
+        icon: TEXT,
+        placeholder: SECONDARY,
+        value: TEXT,
+        selection: HOVER,
     }
 }

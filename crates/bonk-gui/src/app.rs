@@ -1,9 +1,13 @@
-//! Fenêtre de détection des disques : liste, verdict du filtre de sécurité, détail d'un disque.
+//! Fenêtre de Bonk : liste des disques, verdict du filtre de sécurité, détail d'un disque et écriture
+//! d'une image.
 //!
-//! Elle est en lecture seule : aucun bouton d'écriture n'existe. Comme `bonk list`, elle ne fait que
-//! présenter le verdict de `bonk_hal::evaluate`, sans aucune règle propre.
+//! Elle ne contient aucune règle de sécurité ni aucune logique d'écriture : comme `bonk list`, elle
+//! présente le verdict de `bonk_hal::evaluate`, et l'écriture lance `bonk write` dans un processus
+//! séparé (voir `transfer`), avec tous ses garde-fous. Le disque doit être proposé, un récapitulatif est
+//! affiché et le bouton ne s'active qu'après trois secondes (CDC §3.3).
 
-use std::time::Duration;
+use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
 use bonk_hal::{
     Disk, Eligibility, FilterOptions, bus_label, enumerate_disks, evaluate, format_size,
@@ -12,11 +16,14 @@ use bonk_hal::{
 #[cfg(test)]
 use iced::Size;
 use iced::keyboard::{self, Key, key::Named};
-use iced::widget::{Column, button, checkbox, column, container, row, scrollable, text};
+use iced::widget::{
+    Column, button, checkbox, column, container, progress_bar, row, scrollable, text, text_input,
+};
 use iced::{Element, Fill, Subscription, Task, Theme};
 
 use crate::command::{ViewOptions, equivalent_commands};
 use crate::theme;
+use crate::transfer::{self, Outcome};
 
 /// Intervalle d'actualisation automatique : un disque branché apparaît sans geste de l'utilisateur.
 const REFRESH_EVERY: Duration = Duration::from_secs(2);
@@ -36,6 +43,17 @@ pub(crate) enum Message {
     Nav(Nav),
     /// Copie dans le presse-papiers la commande équivalente à la vue (CDC §9.1).
     Copy,
+    /// Saisie du chemin de l'image à écrire.
+    ImageInput(String),
+    /// Battement qui rafraîchit le décompte avant d'autoriser l'écriture.
+    Clock,
+    /// Lance l'écriture (après le délai de réflexion).
+    StartWrite,
+    CancelWrite,
+    /// Referme le résultat d'une écriture.
+    DismissWrite,
+    /// Ce que rapporte le processus d'écriture.
+    Write(transfer::Event),
 }
 
 /// Actions de la navigation au clavier : chacune a le même effet qu'un clic.
@@ -57,6 +75,10 @@ enum Focus {
     Virtual,
     All,
     Disk(String),
+    /// Champ du chemin de l'image, dans le panneau d'écriture du disque sélectionné.
+    Image,
+    /// Bouton du panneau d'écriture : écrire, annuler ou fermer selon l'état.
+    Action,
     /// Bouton de copie de la commande équivalente, dernier de l'ordre de Tab.
     Copy,
 }
@@ -83,6 +105,45 @@ pub(crate) fn map_key(key: &Key, modifiers: keyboard::Modifiers, repeat: bool) -
     Some(Message::Nav(nav))
 }
 
+/// Délai de réflexion avant que « Écrire » ne s'active (CDC §3.3).
+const WRITE_DELAY: Duration = Duration::from_secs(3);
+
+/// Où en est l'écriture d'une image depuis la fenêtre.
+#[derive(Debug, Default)]
+enum WriteState {
+    #[default]
+    Idle,
+    /// Récapitulatif affiché, chemin en cours de saisie ; `opened` démarre le délai de réflexion.
+    Draft {
+        disk_id: String,
+        image: String,
+        opened: Instant,
+    },
+    Running {
+        disk_id: String,
+        pid: Option<u32>,
+        phase: String,
+        done: u64,
+        total: Option<u64>,
+        rate: f64,
+    },
+    Finished {
+        disk_id: String,
+        outcome: Outcome,
+    },
+}
+
+impl WriteState {
+    fn disk_id(&self) -> Option<&str> {
+        match self {
+            Self::Idle => None,
+            Self::Draft { disk_id, .. }
+            | Self::Running { disk_id, .. }
+            | Self::Finished { disk_id, .. } => Some(disk_id),
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct App {
     disks: Vec<Disk>,
@@ -93,6 +154,9 @@ pub(crate) struct App {
     show_all: bool,
     selected: Option<String>,
     focus: Option<Focus>,
+    write: WriteState,
+    /// Programme lancé pour écrire : `bonk` lui-même, sauf dans les tests.
+    program: Option<PathBuf>,
 }
 
 fn load() -> Task<Message> {
@@ -144,7 +208,11 @@ impl App {
 
     /// Commandes qui donnent ce que montre la fenêtre en ce moment.
     fn equivalents(&self) -> Vec<String> {
-        equivalent_commands(self.view_options(), self.selected.as_deref())
+        let image = match &self.write {
+            WriteState::Draft { image, .. } => Some(image.as_str()),
+            _ => None,
+        };
+        equivalent_commands(self.view_options(), self.selected.as_deref(), image)
     }
 
     fn apply(&mut self, message: Message) -> Task<Message> {
@@ -170,6 +238,7 @@ impl App {
                     self.selected = None;
                 }
                 self.disks = disks;
+                self.sync_write();
                 self.fix_focus();
                 Task::none()
             }
@@ -180,24 +249,28 @@ impl App {
                 self.disks.clear();
                 self.selected = None;
                 self.error = Some(erreur);
+                self.sync_write();
                 self.fix_focus();
                 Task::none()
             }
             Message::ToggleInternal(on) => {
                 self.show_internal = on;
                 self.focus = Some(Focus::Internal);
+                self.sync_write();
                 self.fix_focus();
                 Task::none()
             }
             Message::ToggleVirtual(on) => {
                 self.allow_virtual = on;
                 self.focus = Some(Focus::Virtual);
+                self.sync_write();
                 self.fix_focus();
                 Task::none()
             }
             Message::ToggleAll(on) => {
                 self.show_all = on;
                 self.focus = Some(Focus::All);
+                self.sync_write();
                 self.fix_focus();
                 Task::none()
             }
@@ -208,12 +281,39 @@ impl App {
                 } else {
                     Some(id)
                 };
+                self.sync_write();
                 Task::none()
             }
             Message::Nav(nav) => self.navigate(nav),
             Message::Copy => {
                 self.focus = Some(Focus::Copy);
                 iced::clipboard::write(self.equivalents().join("\n"))
+            }
+            Message::ImageInput(text) => {
+                if let WriteState::Draft { image, .. } = &mut self.write {
+                    *image = text;
+                    self.focus = Some(Focus::Image);
+                }
+                Task::none()
+            }
+            Message::Clock => Task::none(),
+            Message::StartWrite => self.start_write(),
+            Message::CancelWrite => {
+                self.focus = Some(Focus::Action);
+                if let WriteState::Running { pid: Some(pid), .. } = &self.write {
+                    log::info!(target: "bonk::gui", pid = *pid; "cancelling the write");
+                    transfer::cancel(*pid);
+                }
+                Task::none()
+            }
+            Message::DismissWrite => {
+                self.write = WriteState::Idle;
+                self.sync_write();
+                Task::none()
+            }
+            Message::Write(event) => {
+                self.on_write_event(event);
+                Task::none()
             }
         }
     }
@@ -232,11 +332,15 @@ impl App {
     fn focus_order(&self) -> Vec<Focus> {
         let mut order = vec![Focus::Refresh, Focus::Internal, Focus::Virtual, Focus::All];
         if self.error.is_none() {
-            order.extend(
-                self.entries()
-                    .into_iter()
-                    .map(|(disk, _)| Focus::Disk(disk.id.clone())),
-            );
+            for (disk, _) in self.entries() {
+                order.push(Focus::Disk(disk.id.clone()));
+                if self.write.disk_id() == Some(disk.id.as_str()) {
+                    if matches!(self.write, WriteState::Draft { .. }) {
+                        order.push(Focus::Image);
+                    }
+                    order.push(Focus::Action);
+                }
+            }
         }
         order.push(Focus::Copy);
         order
@@ -265,14 +369,37 @@ impl App {
             Nav::Previous => Some(current.map_or(last, |i| if i == 0 { last } else { i - 1 })),
             // Les flèches se déplacent entre les disques ; depuis une commande, Bas entre dans la liste.
             Nav::Down => match current {
-                Some(i) if is_disk(&order, i) => Some(i + usize::from(is_disk(&order, i + 1))),
+                Some(i)
+                    if !matches!(
+                        order[i],
+                        Focus::Refresh
+                            | Focus::Internal
+                            | Focus::Virtual
+                            | Focus::All
+                            | Focus::Copy
+                    ) =>
+                {
+                    // Disque suivant, en sautant le panneau d'écriture du disque courant.
+                    (i + 1..order.len())
+                        .find(|j| is_disk(&order, *j))
+                        .or(Some(i))
+                }
                 _ => order.iter().position(|item| matches!(item, Focus::Disk(_))),
             },
             // Haut remonte d'un disque ; depuis le bouton de copie, il revient au dernier disque.
             Nav::Up => match current {
-                Some(i) if i > 0 && is_disk(&order, i - 1) && is_disk(&order, i) => Some(i - 1),
-                Some(i) if order[i] == Focus::Copy => {
-                    i.checked_sub(1).filter(|j| is_disk(&order, *j))
+                Some(i)
+                    if matches!(
+                        order[i],
+                        Focus::Disk(_) | Focus::Image | Focus::Action | Focus::Copy
+                    ) =>
+                {
+                    // Disque précédent ; depuis les panneaux et le bouton de copie, le disque le plus proche.
+                    let from_disk = matches!(order[i], Focus::Disk(_));
+                    (0..i)
+                        .rev()
+                        .find(|j| is_disk(&order, *j))
+                        .filter(|j| *j >= 4 || !from_disk)
                 }
                 _ => None,
             },
@@ -316,24 +443,38 @@ impl App {
             Some(Focus::All) => Message::ToggleAll(!self.show_all),
             Some(Focus::Disk(id)) => Message::Select(id),
             Some(Focus::Copy) => Message::Copy,
-            None => return Task::none(),
+            // Le champ de l'image reçoit les touches lui-même : Espace et Entrée n'y activent rien.
+            Some(Focus::Image) | None => return Task::none(),
+            Some(Focus::Action) => match self.write {
+                WriteState::Draft { .. } => Message::StartWrite,
+                WriteState::Running { .. } => Message::CancelWrite,
+                WriteState::Finished { .. } => Message::DismissWrite,
+                WriteState::Idle => return Task::none(),
+            },
         };
         self.apply(message)
     }
 
     pub(crate) fn subscription(&self) -> Subscription<Message> {
-        Subscription::batch([
+        let mut subscriptions = vec![
             iced::time::every(REFRESH_EVERY).map(|_| Message::Tick),
-            iced::event::listen_with(|event, _status, _window| match event {
+            // Une touche prise par un champ de saisie (le chemin de l'image) n'est pas une commande.
+            iced::event::listen_with(|event, status, _window| match event {
                 iced::Event::Keyboard(keyboard::Event::KeyPressed {
                     key,
                     modifiers,
                     repeat,
                     ..
-                }) => map_key(&key, modifiers, repeat),
+                }) if status == iced::event::Status::Ignored => map_key(&key, modifiers, repeat),
                 _ => None,
             }),
-        ])
+        ];
+        // Le décompte avant l'activation de « Écrire » se rafraîchit tant que le panneau est ouvert.
+        if matches!(self.write, WriteState::Draft { .. }) {
+            subscriptions
+                .push(iced::time::every(Duration::from_millis(500)).map(|_| Message::Clock));
+        }
+        Subscription::batch(subscriptions)
     }
 
     pub(crate) fn theme(&self) -> Theme {
@@ -376,7 +517,7 @@ impl App {
 
         let header = column![
             text("BONK").size(28),
-            text("Détection des disques. Lecture seule : aucune écriture n'est possible depuis cette fenêtre.")
+            text("Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.")
                 .size(14)
                 .color(theme::SECONDARY),
         ]
@@ -448,10 +589,18 @@ impl App {
                 .padding(12)
                 .into()
         } else {
-            let cards: Vec<Element<'_, Message>> = entries
-                .into_iter()
-                .map(|(disk, verdict)| self.card(disk, verdict))
-                .collect();
+            let mut cards: Vec<Element<'_, Message>> = Vec::new();
+            for (disk, verdict) in entries {
+                cards.push(self.card(disk, verdict));
+                // Le panneau d'écriture est hors de la carte : un clic dedans ne referme pas le disque.
+                // Une écriture en cours ou terminée reste visible même si l'on désélectionne le disque :
+                // sinon on ne pourrait plus ni la suivre ni l'annuler.
+                let show_panel = self.selected.as_deref() == Some(disk.id.as_str())
+                    || !matches!(self.write, WriteState::Draft { .. });
+                if show_panel && let Some(panel) = self.write_panel(disk) {
+                    cards.push(panel);
+                }
+            }
             scrollable(Column::with_children(cards).spacing(4).width(Fill))
                 .id(LIST)
                 .height(Fill)
@@ -537,6 +686,247 @@ impl App {
     }
 }
 
+impl App {
+    /// Le disque est-il proposé, avec les réglages actuels ?
+    fn offered(&self, id: &str) -> bool {
+        self.entries()
+            .iter()
+            .any(|(disk, verdict)| disk.id == id && verdict.is_writable())
+    }
+
+    /// Fait suivre le panneau d'écriture à la sélection : il s'ouvre sur un disque proposé, se referme
+    /// sinon, et ne bouge jamais pendant qu'une écriture tourne.
+    fn sync_write(&mut self) {
+        if matches!(self.write, WriteState::Running { .. }) {
+            return;
+        }
+        let wanted = self.selected.clone().filter(|id| self.offered(id));
+        match (&self.write, wanted) {
+            (current, Some(id)) if current.disk_id() == Some(id.as_str()) => {}
+            (_, Some(id)) => {
+                self.write = WriteState::Draft {
+                    disk_id: id,
+                    image: String::new(),
+                    opened: Instant::now(),
+                };
+            }
+            (_, None) => self.write = WriteState::Idle,
+        }
+    }
+
+    fn program(&self) -> PathBuf {
+        self.program
+            .clone()
+            .or_else(|| std::env::current_exe().ok())
+            .unwrap_or_else(|| PathBuf::from("bonk"))
+    }
+
+    /// Lance `bonk write` dans un processus séparé, une fois le délai de réflexion écoulé.
+    fn start_write(&mut self) -> Task<Message> {
+        self.focus = Some(Focus::Action);
+        let WriteState::Draft {
+            disk_id,
+            image,
+            opened,
+        } = &self.write
+        else {
+            return Task::none();
+        };
+        if image.trim().is_empty() || opened.elapsed() < WRITE_DELAY || !self.offered(disk_id) {
+            return Task::none();
+        }
+        let args = transfer::write_args(disk_id, image.trim(), self.view_options());
+        log::info!(target: "bonk::gui", disk = disk_id.as_str(); "starting the write");
+        let receiver = transfer::spawn(&self.program(), &args);
+        self.write = WriteState::Running {
+            disk_id: disk_id.clone(),
+            pid: None,
+            phase: "write".to_owned(),
+            done: 0,
+            total: None,
+            rate: 0.0,
+        };
+        Task::run(receiver, Message::Write)
+    }
+
+    fn on_write_event(&mut self, event: transfer::Event) {
+        match (event, &mut self.write) {
+            (transfer::Event::Started(new), WriteState::Running { pid, .. }) => *pid = Some(new),
+            (
+                transfer::Event::Progress {
+                    phase: p,
+                    done: d,
+                    total: t,
+                    rate: r,
+                },
+                WriteState::Running {
+                    phase,
+                    done,
+                    total,
+                    rate,
+                    ..
+                },
+            ) => {
+                (*phase, *done, *total, *rate) = (p, d, t, r);
+            }
+            (transfer::Event::Finished(outcome), WriteState::Running { disk_id, .. }) => {
+                log::info!(target: "bonk::gui", outcome = format!("{outcome:?}").as_str(); "write finished");
+                self.write = WriteState::Finished {
+                    disk_id: disk_id.clone(),
+                    outcome,
+                };
+                self.fix_focus();
+            }
+            _ => {}
+        }
+    }
+
+    /// Panneau d'écriture du disque sélectionné : récapitulatif (CDC §3.3), saisie de l'image, bouton
+    /// désactivé pendant 3 secondes, progression, annulation, résultat.
+    fn write_panel<'a>(&'a self, disk: &'a Disk) -> Option<Element<'a, Message>> {
+        if self.write.disk_id() != Some(disk.id.as_str()) {
+            return None;
+        }
+        let focused = |target: Focus| self.focus.as_ref() == Some(&target);
+        let body: Element<'a, Message> = match &self.write {
+            WriteState::Idle => return None,
+            WriteState::Draft { image, opened, .. } => {
+                let remaining = WRITE_DELAY.saturating_sub(opened.elapsed()).as_secs() + 1;
+                let ready = opened.elapsed() >= WRITE_DELAY && !image.trim().is_empty();
+                let label = if opened.elapsed() < WRITE_DELAY {
+                    format!("Écrire et effacer ce disque (dans {remaining} s)")
+                } else if image.trim().is_empty() {
+                    "Écrire et effacer ce disque (saisir une image)".to_owned()
+                } else {
+                    "Écrire et effacer ce disque".to_owned()
+                };
+                let labels: Vec<&str> = disk
+                    .partitions
+                    .iter()
+                    .filter_map(|p| p.label.as_deref())
+                    .collect();
+                column![
+                    text("ÉCRIRE UNE IMAGE SUR CE DISQUE").size(14),
+                    text(format!(
+                        "{}  série {}  {}  {} partition(s){}",
+                        disk.model,
+                        disk.serial.as_deref().unwrap_or("inconnue"),
+                        format_size(disk.size_bytes),
+                        disk.partitions.len(),
+                        if labels.is_empty() { String::new() } else { format!("  étiquettes : {}", labels.join(", ")) },
+                    ))
+                    .size(13),
+                    text("Toutes les données de ce disque seront effacées. Cette action est irréversible.")
+                        .size(13)
+                        .color(theme::SECONDARY),
+                    ring(
+                        text_input("Chemin de l'image (.img, .iso, .gz, .xz, .zst)", image)
+                            .on_input(Message::ImageInput)
+                            .on_submit(Message::StartWrite)
+                            .padding(8)
+                            .size(14)
+                            .style(theme::input_style),
+                        focused(Focus::Image),
+                    ),
+                    ring(
+                        button(text(label).size(14))
+                            .on_press_maybe(ready.then_some(Message::StartWrite))
+                            .padding([6, 14])
+                            .style(theme::primary_button),
+                        focused(Focus::Action),
+                    ),
+                ]
+                .spacing(8)
+                .into()
+            }
+            WriteState::Running {
+                phase,
+                done,
+                total,
+                rate,
+                ..
+            } => {
+                let step = if phase == "verify" {
+                    "Vérification"
+                } else if phase == "flush" {
+                    "Vidage des tampons"
+                } else {
+                    "Écriture"
+                };
+                let fraction = total
+                    .filter(|t| *t > 0)
+                    .map_or(0.0, |t| (*done as f32 / t as f32).clamp(0.0, 1.0));
+                column![
+                    text(format!(
+                        "{step} : {}{}  ({}/s)",
+                        format_size(*done),
+                        total.map_or_else(String::new, |t| format!(" sur {}", format_size(t))),
+                        format_size(*rate as u64),
+                    ))
+                    .size(14),
+                    progress_bar(0.0..=1.0, fraction).girth(14),
+                    ring(
+                        button(text("Annuler").size(14))
+                            .on_press(Message::CancelWrite)
+                            .padding([6, 14])
+                            .style(theme::primary_button),
+                        focused(Focus::Action),
+                    ),
+                ]
+                .spacing(8)
+                .into()
+            }
+            WriteState::Finished { outcome, .. } => {
+                let message = match outcome {
+                    Outcome::Done {
+                        bytes,
+                        verified,
+                        gpt_repaired,
+                    } => format!(
+                        "ÉCRITURE TERMINÉE : {} écrits{}{}.",
+                        format_size(*bytes),
+                        if *verified {
+                            ", relus et vérifiés"
+                        } else {
+                            ""
+                        },
+                        if *gpt_repaired {
+                            ", GPT de secours réparé"
+                        } else {
+                            ""
+                        },
+                    ),
+                    Outcome::Failed { code, message } => format!(
+                        "ÉCHEC : {message}{}",
+                        code.as_ref().map_or_else(String::new, |c| format!(
+                            " [{c}] : voir « bonk explain {c} »"
+                        )),
+                    ),
+                };
+                column![
+                    text(message).size(14),
+                    ring(
+                        button(text("Fermer").size(14))
+                            .on_press(Message::DismissWrite)
+                            .padding([6, 14])
+                            .style(theme::primary_button),
+                        focused(Focus::Action),
+                    ),
+                ]
+                .spacing(8)
+                .into()
+            }
+        };
+        Some(
+            container(body)
+                .padding(12)
+                .width(Fill)
+                .style(theme::panel)
+                .into(),
+        )
+    }
+}
+
 /// Vrai si l'élément `i` de l'ordre de Tab est un disque (faux hors bornes).
 fn is_disk(order: &[Focus], i: usize) -> bool {
     matches!(order.get(i), Some(Focus::Disk(_)))
@@ -553,7 +943,15 @@ fn ui_event(message: &Message) -> Option<(&'static str, String)> {
         Message::Select(id) => ("select_disk", id.clone()),
         Message::Nav(nav) => ("key", format!("{nav:?}")),
         Message::Copy => ("click_copy", String::new()),
-        Message::Tick | Message::Loaded(_) => return None,
+        // Le chemin saisi n'est jamais journalisé (CDC §9.2) : seulement le fait qu'on saisit.
+        Message::ImageInput(text) => (
+            "type_image_path",
+            format!("{} caractères", text.chars().count()),
+        ),
+        Message::StartWrite => ("click_write", String::new()),
+        Message::CancelWrite => ("click_cancel_write", String::new()),
+        Message::DismissWrite => ("click_close_write", String::new()),
+        Message::Tick | Message::Clock | Message::Loaded(_) | Message::Write(_) => return None,
     })
 }
 
@@ -1002,6 +1400,223 @@ mod tests {
         assert_eq!(ui_event(&Message::Loaded(Ok(vec![]))), None);
     }
 
+    fn vieillir_le_panneau(app: &mut App) {
+        if let WriteState::Draft { opened, .. } = &mut app.write {
+            *opened = Instant::now() - Duration::from_secs(5);
+        }
+    }
+
+    fn app_avec_panneau() -> App {
+        let mut app = loaded(sample());
+        // Jamais le vrai binaire : le lancement échoue tout de suite, sans rien écrire.
+        app.program = Some(PathBuf::from("/n/existe/pas"));
+        let _ = app.update(Message::Select("usb-cle".to_owned()));
+        app
+    }
+
+    #[test]
+    fn le_panneau_d_ecriture_ne_s_ouvre_que_sur_un_disque_propose() {
+        let mut app = loaded(sample());
+        let _ = app.update(Message::ToggleAll(true));
+        let _ = app.update(Message::Select("nvme-systeme".to_owned()));
+        assert!(
+            matches!(app.write, WriteState::Idle),
+            "un disque interdit n'a pas de panneau"
+        );
+        let _ = app.update(Message::Select("usb-cle".to_owned()));
+        assert!(matches!(&app.write, WriteState::Draft { disk_id, .. } if disk_id == "usb-cle"));
+        let _ = app.update(Message::Select("usb-cle".to_owned()));
+        assert!(
+            matches!(app.write, WriteState::Idle),
+            "désélectionner referme le panneau"
+        );
+        // Un disque interne n'est proposé (donc écrivable) qu'avec l'option.
+        let _ = app.update(Message::Select("sata-libre".to_owned()));
+        assert!(matches!(app.write, WriteState::Idle));
+        let _ = app.update(Message::ToggleInternal(true));
+        assert!(matches!(&app.write, WriteState::Draft { disk_id, .. } if disk_id == "sata-libre"));
+        // Retirer l'option referme le panneau : le disque n'est plus proposé.
+        let _ = app.update(Message::ToggleInternal(false));
+        assert!(matches!(app.write, WriteState::Idle));
+    }
+
+    #[test]
+    fn l_ecriture_exige_une_image_et_trois_secondes() {
+        let mut app = app_avec_panneau();
+        // Immédiatement : refusé, même avec une image.
+        let _ = app.update(Message::ImageInput("/tmp/x.img".to_owned()));
+        let _ = app.update(Message::StartWrite);
+        assert!(
+            matches!(app.write, WriteState::Draft { .. }),
+            "le délai de réflexion n'est pas écoulé"
+        );
+        vieillir_le_panneau(&mut app);
+        // Délai écoulé mais champ vide : refusé.
+        let _ = app.update(Message::ImageInput("   ".to_owned()));
+        let _ = app.update(Message::StartWrite);
+        assert!(matches!(app.write, WriteState::Draft { .. }));
+        // Image saisie et délai écoulé : l'écriture démarre.
+        let _ = app.update(Message::ImageInput("/tmp/x.img".to_owned()));
+        let _ = app.update(Message::StartWrite);
+        assert!(matches!(&app.write, WriteState::Running { disk_id, .. } if disk_id == "usb-cle"));
+    }
+
+    #[test]
+    fn un_disque_devenu_interdit_n_est_pas_ecrit() {
+        let mut app = app_avec_panneau();
+        let _ = app.update(Message::ImageInput("/tmp/x.img".to_owned()));
+        vieillir_le_panneau(&mut app);
+        // La clé est débranchée entre-temps : la liste ne la contient plus.
+        let _ = app.update(Message::Loaded(Ok(vec![])));
+        let _ = app.update(Message::StartWrite);
+        assert!(matches!(app.write, WriteState::Idle));
+    }
+
+    #[test]
+    fn progression_puis_resultat() {
+        let mut app = app_avec_panneau();
+        let _ = app.update(Message::ImageInput("/tmp/x.img".to_owned()));
+        vieillir_le_panneau(&mut app);
+        let _ = app.update(Message::StartWrite);
+        let _ = app.update(Message::Write(transfer::Event::Started(4242)));
+        let _ = app.update(Message::Write(transfer::Event::Progress {
+            phase: "write".into(),
+            done: 1_000_000,
+            total: Some(4_000_000),
+            rate: 2e6,
+        }));
+        assert!(matches!(
+            &app.write,
+            WriteState::Running {
+                pid: Some(4242),
+                done: 1_000_000,
+                ..
+            }
+        ));
+        assert!(contient(&app, "Écriture : 1,0 Mo sur 4,0 Mo  (2,0 Mo/s)"));
+        assert!(contient(&app, "Annuler"));
+        // Pendant l'écriture, désélectionner le disque ne cache pas la progression ni l'annulation.
+        let _ = app.update(Message::Select("usb-cle".to_owned()));
+        assert!(app.selected.is_none());
+        assert!(matches!(app.write, WriteState::Running { .. }));
+        assert!(contient(&app, "Annuler"));
+        let _ = app.update(Message::Write(transfer::Event::Finished(Outcome::Done {
+            bytes: 4_000_000,
+            verified: true,
+            gpt_repaired: true,
+        })));
+        assert!(matches!(&app.write, WriteState::Finished { .. }));
+        assert!(contient(
+            &app,
+            "ÉCRITURE TERMINÉE : 4,0 Mo écrits, relus et vérifiés, GPT de secours réparé."
+        ));
+        let _ = app.update(Message::DismissWrite);
+        // Fermé : le disque n'est plus sélectionné, rien ne s'ouvre ; le resélectionner rouvre un panneau neuf.
+        assert!(matches!(app.write, WriteState::Idle));
+        let _ = app.update(Message::Select("usb-cle".to_owned()));
+        assert!(matches!(app.write, WriteState::Draft { .. }));
+    }
+
+    #[test]
+    fn un_echec_s_affiche_avec_son_code_et_sa_commande_d_aide() {
+        let mut app = app_avec_panneau();
+        app.write = WriteState::Running {
+            disk_id: "usb-cle".into(),
+            pid: None,
+            phase: "write".into(),
+            done: 0,
+            total: None,
+            rate: 0.0,
+        };
+        let _ = app.update(Message::Write(transfer::Event::Finished(Outcome::Failed {
+            code: Some("E4004".into()),
+            message: "ouverture du disque refusée".into(),
+        })));
+        assert!(contient(
+            &app,
+            "ÉCHEC : ouverture du disque refusée [E4004] : voir « bonk explain E4004 »"
+        ));
+    }
+
+    #[test]
+    fn le_panneau_montre_le_recapitulatif_et_le_decompte() {
+        let app = app_avec_panneau();
+        assert!(contient(&app, "ÉCRIRE UNE IMAGE SUR CE DISQUE"));
+        assert!(contient(
+            &app,
+            "Toutes les données de ce disque seront effacées. Cette action est irréversible."
+        ));
+        assert!(contient(
+            &app,
+            "Cle de test  série 4C530001  16,0 Go  1 partition(s)  étiquettes : CLE"
+        ));
+        assert!(contient(&app, "Écrire et effacer ce disque (dans 3 s)"));
+        let mut vieux = app_avec_panneau();
+        vieillir_le_panneau(&mut vieux);
+        assert!(contient(
+            &vieux,
+            "Écrire et effacer ce disque (saisir une image)"
+        ));
+        let _ = vieux.update(Message::ImageInput("/tmp/x.img".to_owned()));
+        assert!(contient(&vieux, "Écrire et effacer ce disque"));
+    }
+
+    #[test]
+    fn la_commande_equivalente_inclut_l_ecriture_saisie() {
+        let mut app = app_avec_panneau();
+        assert_eq!(app.equivalents().len(), 2);
+        let _ = app.update(Message::ImageInput("/home/u/Mes images/a.iso".to_owned()));
+        assert_eq!(
+            app.equivalents().last().map(String::as_str),
+            Some("bonk write usb-cle '/home/u/Mes images/a.iso' --yes")
+        );
+    }
+
+    #[test]
+    fn le_chemin_saisi_n_est_jamais_journalise() {
+        let event = ui_event(&Message::ImageInput("/home/alice/secret.img".to_owned()));
+        // Seul le nombre de caractères est connu du journal, jamais le chemin.
+        assert_eq!(event, Some(("type_image_path", "22 caractères".to_owned())));
+    }
+
+    #[test]
+    fn le_clavier_parcourt_le_panneau_et_l_action_respecte_le_delai() {
+        let mut app = app_avec_panneau();
+        app.focus = Some(Focus::Disk("usb-cle".to_owned()));
+        nav(&mut app, Nav::Next);
+        assert_eq!(app.focus, Some(Focus::Image));
+        nav(&mut app, Nav::Next);
+        assert_eq!(app.focus, Some(Focus::Action));
+        // Espace sur le bouton avant le délai : sans effet.
+        let _ = app.update(Message::ImageInput("/tmp/x.img".to_owned()));
+        app.focus = Some(Focus::Action);
+        nav(&mut app, Nav::Activate);
+        assert!(matches!(app.write, WriteState::Draft { .. }));
+        vieillir_le_panneau(&mut app);
+        nav(&mut app, Nav::Activate);
+        assert!(matches!(app.write, WriteState::Running { .. }));
+        // Les flèches sautent le panneau : Bas ne s'arrête pas sur le champ ou le bouton.
+        let mut autre = app_avec_panneau();
+        let _ = autre.update(Message::ToggleAll(true));
+        autre.focus = Some(Focus::Disk("usb-cle".to_owned()));
+        nav(&mut autre, Nav::Down);
+        assert_eq!(autre.focus, Some(Focus::Disk("sata-libre".to_owned())));
+    }
+
+    #[test]
+    fn les_touches_prises_par_le_champ_ne_sont_pas_des_commandes() {
+        // Le filtre de l'abonnement ne transmet que les touches ignorées par les composants : ici, la
+        // correspondance elle-même, qui reste inchangée.
+        assert!(matches!(
+            map_key(
+                &Key::Named(Named::Space),
+                keyboard::Modifiers::empty(),
+                false
+            ),
+            Some(Message::Nav(Nav::Activate))
+        ));
+    }
+
     fn contient(app: &App, texte: &str) -> bool {
         Simulator::new(app.view()).find(texte).is_ok()
     }
@@ -1105,6 +1720,36 @@ mod tests {
         )
         .snapshot(&theme)?
         .matches_image(dossier.join("fenetre-focus-case"))?;
+        // Panneau d'écriture : saisie d'une image, puis progression.
+        let mut ecriture = loaded(sample());
+        let _ = ecriture.update(Message::Select("usb-cle".to_owned()));
+        let _ = ecriture.update(Message::ImageInput(
+            "/home/alice/images/debian-12.iso".to_owned(),
+        ));
+        vieillir_le_panneau(&mut ecriture);
+        ecriture.focus = Some(Focus::Action);
+        Simulator::with_size(
+            iced::Settings::default(),
+            Size::new(960.0, 760.0),
+            ecriture.view(),
+        )
+        .snapshot(&theme)?
+        .matches_image(dossier.join("fenetre-ecriture"))?;
+        ecriture.program = Some(PathBuf::from("/n/existe/pas"));
+        let _ = ecriture.update(Message::StartWrite);
+        let _ = ecriture.update(Message::Write(transfer::Event::Progress {
+            phase: "write".into(),
+            done: 1_300_000_000,
+            total: Some(2_100_000_000),
+            rate: 41e6,
+        }));
+        Simulator::with_size(
+            iced::Settings::default(),
+            Size::new(960.0, 760.0),
+            ecriture.view(),
+        )
+        .snapshot(&theme)?
+        .matches_image(dossier.join("fenetre-progression"))?;
         let mut erreur = App::default();
         let _ = erreur.update(Message::Loaded(Err("base udev introuvable".to_owned())));
         Simulator::with_size(
