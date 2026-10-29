@@ -104,3 +104,17 @@ pub(crate) fn checkbox_style(_theme: &Theme, status: checkbox::Status) -> checkb
         text_color: Some(TEXT),
     }
 }
+
+/// Indicateur de focus clavier : contour de 3 px de la couleur du texte, séparé du composant par un
+/// espace (le composant lui-même peut déjà être noir). Hors focus, le contour est transparent : la mise
+/// en page ne bouge pas quand le focus se déplace.
+pub(crate) fn focus_ring(focused: bool) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        border: Border {
+            color: if focused { TEXT } else { Color::TRANSPARENT },
+            width: 3.0,
+            radius: (RADIUS + 2.0).into(),
+        },
+        ..container::Style::default()
+    }
+}

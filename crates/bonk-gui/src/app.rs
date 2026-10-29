@@ -11,6 +11,7 @@ use bonk_hal::{
 };
 #[cfg(test)]
 use iced::Size;
+use iced::keyboard::{self, Key, key::Named};
 use iced::widget::{Column, button, checkbox, column, container, row, scrollable, text};
 use iced::{Element, Fill, Subscription, Task, Theme};
 
@@ -30,6 +31,51 @@ pub(crate) enum Message {
     ToggleAll(bool),
     /// Sélectionne (ou désélectionne) un disque, par identifiant.
     Select(String),
+    /// Action au clavier (CDC §8).
+    Nav(Nav),
+}
+
+/// Actions de la navigation au clavier : chacune a le même effet qu'un clic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Nav {
+    Next,
+    Previous,
+    Activate,
+    Up,
+    Down,
+    Escape,
+}
+
+/// Composant qui a le focus clavier.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Focus {
+    Refresh,
+    Internal,
+    Virtual,
+    All,
+    Disk(String),
+}
+
+/// Identifiant de la liste défilante, pour la suivre quand le focus descend dans la liste.
+const LIST: &str = "disques";
+
+/// Touche pressée vers action : Tab et Maj+Tab, Espace et Entrée, flèches haut et bas, Échap.
+/// Les combinaisons avec Ctrl, Alt ou Logo sont laissées au système (raccourcis).
+pub(crate) fn map_key(key: &Key, modifiers: keyboard::Modifiers, repeat: bool) -> Option<Message> {
+    if modifiers.control() || modifiers.alt() || modifiers.logo() {
+        return None;
+    }
+    let nav = match key {
+        Key::Named(Named::Tab) if modifiers.shift() => Nav::Previous,
+        Key::Named(Named::Tab) => Nav::Next,
+        // Une touche maintenue enfoncée ne doit pas cocher et décocher en boucle.
+        Key::Named(Named::Space | Named::Enter) if !repeat => Nav::Activate,
+        Key::Named(Named::ArrowUp) => Nav::Up,
+        Key::Named(Named::ArrowDown) => Nav::Down,
+        Key::Named(Named::Escape) => Nav::Escape,
+        _ => return None,
+    };
+    Some(Message::Nav(nav))
 }
 
 #[derive(Debug, Default)]
@@ -41,6 +87,7 @@ pub(crate) struct App {
     allow_virtual: bool,
     show_all: bool,
     selected: Option<String>,
+    focus: Option<Focus>,
 }
 
 fn load() -> Task<Message> {
@@ -63,15 +110,11 @@ impl App {
 
     pub(crate) fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            // Une seule énumération à la fois : le minuteur ne les empile pas si l'une est lente.
-            Message::Refresh | Message::Tick => {
-                if self.loading {
-                    Task::none()
-                } else {
-                    self.loading = true;
-                    load()
-                }
+            Message::Refresh => {
+                self.focus = Some(Focus::Refresh);
+                self.reload()
             }
+            Message::Tick => self.reload(),
             Message::Loaded(Ok(disks)) => {
                 self.loading = false;
                 self.error = None;
@@ -84,6 +127,7 @@ impl App {
                     self.selected = None;
                 }
                 self.disks = disks;
+                self.fix_focus();
                 Task::none()
             }
             Message::Loaded(Err(erreur)) => {
@@ -92,21 +136,29 @@ impl App {
                 self.disks.clear();
                 self.selected = None;
                 self.error = Some(erreur);
+                self.fix_focus();
                 Task::none()
             }
             Message::ToggleInternal(on) => {
                 self.show_internal = on;
+                self.focus = Some(Focus::Internal);
+                self.fix_focus();
                 Task::none()
             }
             Message::ToggleVirtual(on) => {
                 self.allow_virtual = on;
+                self.focus = Some(Focus::Virtual);
+                self.fix_focus();
                 Task::none()
             }
             Message::ToggleAll(on) => {
                 self.show_all = on;
+                self.focus = Some(Focus::All);
+                self.fix_focus();
                 Task::none()
             }
             Message::Select(id) => {
+                self.focus = Some(Focus::Disk(id.clone()));
                 self.selected = if self.selected.as_deref() == Some(id.as_str()) {
                     None
                 } else {
@@ -114,11 +166,119 @@ impl App {
                 };
                 Task::none()
             }
+            Message::Nav(nav) => self.navigate(nav),
         }
     }
 
+    /// Lance une énumération, une seule à la fois : le minuteur ne les empile pas si l'une est lente.
+    fn reload(&mut self) -> Task<Message> {
+        if self.loading {
+            Task::none()
+        } else {
+            self.loading = true;
+            load()
+        }
+    }
+
+    /// Composants focalisables dans l'ordre de Tab : les commandes, puis les disques affichés.
+    fn focus_order(&self) -> Vec<Focus> {
+        let mut order = vec![Focus::Refresh, Focus::Internal, Focus::Virtual, Focus::All];
+        if self.error.is_none() {
+            order.extend(
+                self.entries()
+                    .into_iter()
+                    .map(|(disk, _)| Focus::Disk(disk.id.clone())),
+            );
+        }
+        order
+    }
+
+    /// Le focus ne reste pas sur un disque qui a disparu de la liste (débranché ou masqué).
+    fn fix_focus(&mut self) {
+        if self
+            .focus
+            .as_ref()
+            .is_some_and(|focus| !self.focus_order().contains(focus))
+        {
+            self.focus = None;
+        }
+    }
+
+    fn navigate(&mut self, nav: Nav) -> Task<Message> {
+        let order = self.focus_order();
+        let current = self
+            .focus
+            .as_ref()
+            .and_then(|focus| order.iter().position(|item| item == focus));
+        let last = order.len() - 1;
+        let target = match nav {
+            Nav::Next => Some(current.map_or(0, |i| if i == last { 0 } else { i + 1 })),
+            Nav::Previous => Some(current.map_or(last, |i| if i == 0 { last } else { i - 1 })),
+            // Les flèches se déplacent entre les disques ; depuis une commande, Bas entre dans la liste.
+            Nav::Down => match current {
+                Some(i) if matches!(order[i], Focus::Disk(_)) => Some((i + 1).min(last)),
+                _ => order.iter().position(|item| matches!(item, Focus::Disk(_))),
+            },
+            Nav::Up => match current {
+                Some(i) if i > 4 => Some(i - 1),
+                _ => None,
+            },
+            Nav::Activate => return self.activate(),
+            Nav::Escape => {
+                if self.selected.is_some() {
+                    self.selected = None;
+                } else {
+                    self.focus = None;
+                }
+                None
+            }
+        };
+        let Some(index) = target else {
+            return Task::none();
+        };
+        self.focus = Some(order[index].clone());
+        // La liste suit le focus : position relative de la carte parmi les disques (approximative si
+        // des détails sont ouverts, suffisante pour garder la carte visible).
+        let disks = order.len() - 4;
+        if index >= 4 && disks > 1 {
+            let relative = (index - 4) as f32 / (disks - 1) as f32;
+            return iced::widget::operation::snap_to(
+                LIST,
+                scrollable::RelativeOffset {
+                    x: 0.0,
+                    y: relative,
+                },
+            );
+        }
+        Task::none()
+    }
+
+    /// Espace ou Entrée : même effet qu'un clic sur le composant qui a le focus.
+    fn activate(&mut self) -> Task<Message> {
+        let message = match self.focus.clone() {
+            Some(Focus::Refresh) => Message::Refresh,
+            Some(Focus::Internal) => Message::ToggleInternal(!self.show_internal),
+            Some(Focus::Virtual) => Message::ToggleVirtual(!self.allow_virtual),
+            Some(Focus::All) => Message::ToggleAll(!self.show_all),
+            Some(Focus::Disk(id)) => Message::Select(id),
+            None => return Task::none(),
+        };
+        self.update(message)
+    }
+
     pub(crate) fn subscription(&self) -> Subscription<Message> {
-        iced::time::every(REFRESH_EVERY).map(|_| Message::Tick)
+        Subscription::batch([
+            iced::time::every(REFRESH_EVERY).map(|_| Message::Tick),
+            iced::event::listen_with(|event, _status, _window| match event {
+                iced::Event::Keyboard(keyboard::Event::KeyPressed {
+                    key,
+                    modifiers,
+                    repeat,
+                    ..
+                }) => map_key(&key, modifiers, repeat),
+                _ => None,
+            }),
+        ])
     }
 
     pub(crate) fn theme(&self) -> Theme {
@@ -167,28 +327,41 @@ impl App {
         ]
         .spacing(4);
 
+        let focused = |target: Focus| self.focus.as_ref() == Some(&target);
         let controls = row![
-            button(text("Actualiser").size(14))
-                .on_press(Message::Refresh)
-                .padding([6, 14])
-                .style(theme::primary_button),
-            checkbox(self.show_internal)
-                .label("Disques internes non système")
-                .on_toggle(Message::ToggleInternal)
-                .size(18)
-                .style(theme::checkbox_style),
-            checkbox(self.allow_virtual)
-                .label("Disques virtuels (mode test)")
-                .on_toggle(Message::ToggleVirtual)
-                .size(18)
-                .style(theme::checkbox_style),
-            checkbox(self.show_all)
-                .label("Afficher aussi les disques écartés")
-                .on_toggle(Message::ToggleAll)
-                .size(18)
-                .style(theme::checkbox_style),
+            ring(
+                button(text("Actualiser").size(14))
+                    .on_press(Message::Refresh)
+                    .padding([6, 14])
+                    .style(theme::primary_button),
+                focused(Focus::Refresh),
+            ),
+            ring(
+                checkbox(self.show_internal)
+                    .label("Disques internes non système")
+                    .on_toggle(Message::ToggleInternal)
+                    .size(18)
+                    .style(theme::checkbox_style),
+                focused(Focus::Internal),
+            ),
+            ring(
+                checkbox(self.allow_virtual)
+                    .label("Disques virtuels (mode test)")
+                    .on_toggle(Message::ToggleVirtual)
+                    .size(18)
+                    .style(theme::checkbox_style),
+                focused(Focus::Virtual),
+            ),
+            ring(
+                checkbox(self.show_all)
+                    .label("Afficher aussi les disques écartés")
+                    .on_toggle(Message::ToggleAll)
+                    .size(18)
+                    .style(theme::checkbox_style),
+                focused(Focus::All),
+            ),
         ]
-        .spacing(20)
+        .spacing(12)
         .align_y(iced::Center);
 
         let body: Element<'_, Message> = if let Some(erreur) = &self.error {
@@ -224,7 +397,8 @@ impl App {
                 .into_iter()
                 .map(|(disk, verdict)| self.card(disk, verdict))
                 .collect();
-            scrollable(Column::with_children(cards).spacing(8).width(Fill))
+            scrollable(Column::with_children(cards).spacing(4).width(Fill))
+                .id(LIST)
                 .height(Fill)
                 .into()
         };
@@ -275,13 +449,24 @@ impl App {
             content = content.push(detail(disk));
         }
 
-        button(content)
-            .on_press(Message::Select(disk.id.clone()))
-            .padding(12)
-            .width(Fill)
-            .style(theme::card_button(selected))
-            .into()
+        let focused = self.focus == Some(Focus::Disk(disk.id.clone()));
+        ring(
+            button(content)
+                .on_press(Message::Select(disk.id.clone()))
+                .padding(12)
+                .width(Fill)
+                .style(theme::card_button(selected)),
+            focused,
+        )
     }
+}
+
+/// Entoure un composant de l'indicateur de focus (visible seulement s'il a le focus).
+fn ring<'a>(content: impl Into<Element<'a, Message>>, focused: bool) -> Element<'a, Message> {
+    container(content)
+        .padding(6)
+        .style(theme::focus_ring(focused))
+        .into()
 }
 
 /// Récapitulatif d'un disque (CDC §3.3) : série, nature, partitions, étiquettes, montages.
@@ -471,6 +656,181 @@ mod tests {
         assert_eq!(app.error, None);
     }
 
+    fn nav(app: &mut App, nav: Nav) {
+        let _ = app.update(Message::Nav(nav));
+    }
+
+    fn avec_tout_affiche() -> App {
+        let mut app = loaded(sample());
+        let _ = app.update(Message::ToggleAll(true));
+        let _ = app.update(Message::ToggleInternal(true));
+        app.focus = None;
+        app
+    }
+
+    #[test]
+    fn tab_parcourt_les_commandes_puis_les_disques_et_reboucle() {
+        let mut app = avec_tout_affiche();
+        let mut vus = Vec::new();
+        for _ in 0..8 {
+            nav(&mut app, Nav::Next);
+            vus.push(app.focus.clone());
+        }
+        assert_eq!(
+            vus,
+            [
+                Some(Focus::Refresh),
+                Some(Focus::Internal),
+                Some(Focus::Virtual),
+                Some(Focus::All),
+                Some(Focus::Disk("nvme-systeme".to_owned())),
+                Some(Focus::Disk("usb-cle".to_owned())),
+                Some(Focus::Disk("sata-libre".to_owned())),
+                Some(Focus::Refresh),
+            ]
+        );
+    }
+
+    #[test]
+    fn maj_tab_remonte_et_commence_par_le_dernier() {
+        let mut app = avec_tout_affiche();
+        nav(&mut app, Nav::Previous);
+        assert_eq!(app.focus, Some(Focus::Disk("sata-libre".to_owned())));
+        nav(&mut app, Nav::Previous);
+        assert_eq!(app.focus, Some(Focus::Disk("usb-cle".to_owned())));
+    }
+
+    #[test]
+    fn espace_a_le_meme_effet_qu_un_clic() {
+        let mut app = loaded(sample());
+        app.focus = Some(Focus::Internal);
+        nav(&mut app, Nav::Activate);
+        assert!(app.show_internal);
+        nav(&mut app, Nav::Activate);
+        assert!(!app.show_internal);
+
+        app.focus = Some(Focus::All);
+        nav(&mut app, Nav::Activate);
+        assert!(app.show_all);
+
+        app.focus = Some(Focus::Disk("usb-cle".to_owned()));
+        nav(&mut app, Nav::Activate);
+        assert_eq!(app.selected.as_deref(), Some("usb-cle"));
+        nav(&mut app, Nav::Activate);
+        assert_eq!(app.selected, None);
+
+        app.focus = Some(Focus::Refresh);
+        nav(&mut app, Nav::Activate);
+        assert!(app.loading);
+    }
+
+    #[test]
+    fn rien_n_est_active_sans_focus() {
+        let mut app = loaded(sample());
+        nav(&mut app, Nav::Activate);
+        assert!(!app.show_all && !app.show_internal && app.selected.is_none() && !app.loading);
+    }
+
+    #[test]
+    fn les_fleches_se_deplacent_entre_les_disques() {
+        let mut app = avec_tout_affiche();
+        app.focus = Some(Focus::Refresh);
+        // Bas depuis une commande entre dans la liste.
+        nav(&mut app, Nav::Down);
+        assert_eq!(app.focus, Some(Focus::Disk("nvme-systeme".to_owned())));
+        nav(&mut app, Nav::Down);
+        nav(&mut app, Nav::Down);
+        assert_eq!(app.focus, Some(Focus::Disk("sata-libre".to_owned())));
+        // Pas de bouclage en bas ni en haut.
+        nav(&mut app, Nav::Down);
+        assert_eq!(app.focus, Some(Focus::Disk("sata-libre".to_owned())));
+        nav(&mut app, Nav::Up);
+        nav(&mut app, Nav::Up);
+        nav(&mut app, Nav::Up);
+        assert_eq!(app.focus, Some(Focus::Disk("nvme-systeme".to_owned())));
+    }
+
+    #[test]
+    fn echap_referme_le_detail_puis_retire_le_focus() {
+        let mut app = loaded(sample());
+        let _ = app.update(Message::Select("usb-cle".to_owned()));
+        nav(&mut app, Nav::Escape);
+        assert_eq!(app.selected, None);
+        assert_eq!(app.focus, Some(Focus::Disk("usb-cle".to_owned())));
+        nav(&mut app, Nav::Escape);
+        assert_eq!(app.focus, None);
+    }
+
+    #[test]
+    fn le_focus_quitte_un_disque_qui_disparait() {
+        let mut app = avec_tout_affiche();
+        app.focus = Some(Focus::Disk("sata-libre".to_owned()));
+        // La case « écartés » masque le disque interne : le focus ne reste pas sur un composant absent.
+        let _ = app.update(Message::ToggleInternal(false));
+        assert_eq!(app.focus, Some(Focus::Internal));
+        app.focus = Some(Focus::Disk("sata-libre".to_owned()));
+        let _ = app.update(Message::Loaded(Ok(vec![])));
+        assert_eq!(app.focus, None);
+        // Un échec de détection retire aussi les disques de l'ordre de Tab.
+        let mut app = avec_tout_affiche();
+        app.focus = Some(Focus::Disk("usb-cle".to_owned()));
+        let _ = app.update(Message::Loaded(Err("panne".to_owned())));
+        assert_eq!(app.focus, None);
+        nav(&mut app, Nav::Next);
+        nav(&mut app, Nav::Previous);
+        assert_eq!(app.focus, Some(Focus::All));
+    }
+
+    #[test]
+    fn un_clic_donne_le_focus_au_composant() {
+        let mut app = loaded(sample());
+        let _ = app.update(Message::Select("usb-cle".to_owned()));
+        assert_eq!(app.focus, Some(Focus::Disk("usb-cle".to_owned())));
+        let _ = app.update(Message::ToggleAll(true));
+        assert_eq!(app.focus, Some(Focus::All));
+        // Le minuteur ne touche pas au focus.
+        let _ = app.update(Message::Tick);
+        assert_eq!(app.focus, Some(Focus::All));
+    }
+
+    #[test]
+    fn touches_vers_actions() {
+        use keyboard::Modifiers as M;
+        let tab = Key::Named(Named::Tab);
+        let nav_de = |key: &Key, mods: M, repeat: bool| match map_key(key, mods, repeat) {
+            Some(Message::Nav(n)) => Some(n),
+            _ => None,
+        };
+        assert_eq!(nav_de(&tab, M::empty(), false), Some(Nav::Next));
+        assert_eq!(nav_de(&tab, M::SHIFT, false), Some(Nav::Previous));
+        assert_eq!(
+            nav_de(&Key::Named(Named::Space), M::empty(), false),
+            Some(Nav::Activate)
+        );
+        assert_eq!(
+            nav_de(&Key::Named(Named::Enter), M::empty(), false),
+            Some(Nav::Activate)
+        );
+        assert_eq!(
+            nav_de(&Key::Named(Named::ArrowDown), M::empty(), false),
+            Some(Nav::Down)
+        );
+        assert_eq!(
+            nav_de(&Key::Named(Named::ArrowUp), M::empty(), false),
+            Some(Nav::Up)
+        );
+        assert_eq!(
+            nav_de(&Key::Named(Named::Escape), M::empty(), false),
+            Some(Nav::Escape)
+        );
+        // Raccourcis du système laissés tranquilles, répétition de touche ignorée pour activer.
+        assert_eq!(nav_de(&tab, M::CTRL, false), None);
+        assert_eq!(nav_de(&tab, M::ALT, false), None);
+        assert_eq!(nav_de(&Key::Named(Named::Space), M::empty(), true), None);
+        assert_eq!(nav_de(&tab, M::empty(), true), Some(Nav::Next));
+        assert_eq!(nav_de(&Key::Character("a".into()), M::empty(), false), None);
+    }
+
     fn contient(app: &App, texte: &str) -> bool {
         Simulator::new(app.view()).find(texte).is_ok()
     }
@@ -554,6 +914,26 @@ mod tests {
         )
         .snapshot(&theme)?
         .matches_image(dossier.join("fenetre-tout"))?;
+        // Focus clavier sur la deuxième carte, détail fermé.
+        let _ = app.update(Message::Select("usb-cle".to_owned()));
+        nav(&mut app, Nav::Escape);
+        nav(&mut app, Nav::Previous);
+        nav(&mut app, Nav::Previous);
+        Simulator::with_size(
+            iced::Settings::default(),
+            Size::new(960.0, 640.0),
+            app.view(),
+        )
+        .snapshot(&theme)?
+        .matches_image(dossier.join("fenetre-focus"))?;
+        app.focus = Some(Focus::Virtual);
+        Simulator::with_size(
+            iced::Settings::default(),
+            Size::new(960.0, 640.0),
+            app.view(),
+        )
+        .snapshot(&theme)?
+        .matches_image(dossier.join("fenetre-focus-case"))?;
         let mut erreur = App::default();
         let _ = erreur.update(Message::Loaded(Err("base udev introuvable".to_owned())));
         Simulator::with_size(
