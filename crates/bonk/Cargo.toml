@@ -1,0 +1,20 @@
+[package]
+name = "bonk"
+description = "Point d'entrée unique de Bonk : interface graphique ou ligne de commande."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+bonk-core.workspace = true
+bonk-hal.workspace = true
+bonk-customizer.workspace = true
+bonk-catalog.workspace = true
+bonk-cli.workspace = true
+bonk-gui.workspace = true
+
+[lints]
+workspace = true
