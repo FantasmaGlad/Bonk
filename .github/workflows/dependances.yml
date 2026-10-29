@@ -1,0 +1,48 @@
+# Contrôle des dépendances avec cargo-deny : licences compatibles, vulnérabilités connues, sources du registre.
+# Tourne quand les dépendances ou la politique (deny.toml) changent, et chaque semaine : de nouvelles
+# vulnérabilités sont publiées sans qu'aucun commit ne touche le dépôt.
+name: dependances
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**/Cargo.toml"
+      - "deny.toml"
+      - ".github/workflows/dependances.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**/Cargo.toml"
+      - "deny.toml"
+      - ".github/workflows/dependances.yml"
+  # Le lundi à 06:23 UTC, hors des heures rondes très chargées.
+  schedule:
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
+
+# Droits minimaux : le contrôle ne fait que lire le dépôt.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cargo-deny:
+    name: licences et vulnérabilités
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Contrôler les dépendances
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
