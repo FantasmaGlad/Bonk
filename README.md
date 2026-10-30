@@ -5,13 +5,13 @@ Utilitaire de création de supports d'amorçage (clés USB et disques externes) 
 [![binaires](https://github.com/FantasmaGlad/Bonk/actions/workflows/binaires.yml/badge.svg)](https://github.com/FantasmaGlad/Bonk/actions/workflows/binaires.yml)
 [![ci](https://github.com/FantasmaGlad/Bonk/actions/workflows/ci.yml/badge.svg)](https://github.com/FantasmaGlad/Bonk/actions/workflows/ci.yml)
 
-## État
+## Portée
 
-Version 0.0.1, premier essai. Seul Linux écrit réellement sur un disque (écriture brute d'images `.img`, `.iso`, `.gz`, `.xz`, `.zst`, avec vérification). Sous Windows et macOS, le binaire se lance mais l'énumération des disques n'existe pas encore.
+Bonk écrit des images disque (`.img`, `.iso`, `.gz`, `.xz`, `.zst`) sur une clé USB ou un disque externe, puis vérifie l'écriture. Il fonctionne sur Linux, Windows et macOS, en x86_64, x86 et ARM64 selon le système, avec une interface graphique et une ligne de commande équivalentes. Un disque système n'est jamais proposé ni écrit.
 
 ## Télécharger
 
-Binaires de la version [v0.0.1](https://github.com/FantasmaGlad/Bonk/releases/tag/v0.0.1), construits par la CI et attestés. Empreintes : [SHA256SUMS](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/SHA256SUMS). Inventaire des composants : [bonk.cdx.json](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/bonk.cdx.json).
+Binaires de la version [0.0.1](https://github.com/FantasmaGlad/Bonk/releases/tag/v0.0.1), construits par la CI et attestés. Empreintes : [SHA256SUMS](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/SHA256SUMS). Inventaire des composants : [bonk.cdx.json](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/bonk.cdx.json).
 
 | Système | Architecture | Binaire v0.0.1 | Système minimal |
 |---|---|---|---|
