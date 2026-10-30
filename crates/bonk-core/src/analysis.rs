@@ -131,7 +131,8 @@ fn declared_by_tables(layout: &Layout) -> Option<u64> {
         .as_ref()
         .and_then(|g| g.primary.as_ref())
         .filter(|h| h.header_crc_ok && h.alternate_lba > 1)
-        .map(|h| (h.alternate_lba + 1) * block);
+        // Valeur lue dans l'image : un débordement passerait pour une petite taille.
+        .map(|h| h.alternate_lba.saturating_add(1).saturating_mul(block));
     let by_mbr = layout
         .mbr
         .as_ref()
@@ -300,5 +301,37 @@ mod tests {
         let report = analyze(&image, Some(HEAD_LEN as u64));
         assert_eq!(report.declared_bytes, None);
         assert_eq!(report.truncated, Some(false));
+    }
+
+    /// En-tête GPT valide qui annonce son secours à `alternate_lba` : la valeur vient de l'image.
+    fn with_gpt_alternate(image: &mut [u8], alternate_lba: u64) {
+        with_mbr_entry(image, MBR_PROTECTIVE, 1, 2047);
+        let entries = vec![0u8; 128 * 128];
+        let mut h = vec![0u8; 92];
+        h[..8].copy_from_slice(b"EFI PART");
+        h[8..12].copy_from_slice(&0x10000u32.to_le_bytes());
+        h[12..16].copy_from_slice(&92u32.to_le_bytes());
+        h[24..32].copy_from_slice(&1u64.to_le_bytes());
+        h[32..40].copy_from_slice(&alternate_lba.to_le_bytes());
+        h[40..48].copy_from_slice(&34u64.to_le_bytes());
+        h[48..56].copy_from_slice(&2000u64.to_le_bytes());
+        h[72..80].copy_from_slice(&2u64.to_le_bytes());
+        h[80..84].copy_from_slice(&128u32.to_le_bytes());
+        h[84..88].copy_from_slice(&128u32.to_le_bytes());
+        h[88..92].copy_from_slice(&crate::partition::crc32(&entries).to_le_bytes());
+        let crc = crate::partition::crc32(&h);
+        h[16..20].copy_from_slice(&crc.to_le_bytes());
+        image[512..604].copy_from_slice(&h);
+    }
+
+    #[test]
+    fn une_position_de_secours_aberrante_ne_passe_pas_pour_une_taille() {
+        for alternate in [u64::MAX, u64::MAX / 2] {
+            let mut image = blank();
+            with_gpt_alternate(&mut image, alternate);
+            let report = analyze(&image, Some(HEAD_LEN as u64));
+            assert_eq!(report.truncated, Some(true), "{alternate}");
+            assert_eq!(report.declared_bytes, Some(u64::MAX), "{alternate}");
+        }
     }
 }

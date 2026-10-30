@@ -195,9 +195,12 @@ pub(crate) fn build_with_capture(
     };
     let mut value = serde_json::to_value(&report)?;
     if !args.include_serials {
+        // Les lectures aussi : une énumération en échec ne rend aucun disque, mais ses lectures restent
+        // dans le rapport, avec les numéros dans les liens `by-id`.
         let serials: Vec<&str> = disks
             .iter()
             .filter_map(|disk| disk.serial.as_deref())
+            .chain(reads.unwrap_or_default().iter().flat_map(serials_read))
             .filter(|serial| serial.chars().count() >= 4)
             .collect();
         redact(&mut value, &serials, env.user.as_deref());
@@ -252,6 +255,21 @@ fn sanitize_udev(text: &str) -> String {
         .join("\n")
 }
 
+/// Numéros de série qu'une lecture contient en clair.
+fn serials_read(read: &SourceRead) -> Vec<&str> {
+    let content = read.content.as_deref().unwrap_or_default();
+    if read.path.ends_with("/serial") {
+        return vec![content.trim()];
+    }
+    if !read.path.contains("/run/udev/") {
+        return Vec::new();
+    }
+    content
+        .lines()
+        .filter_map(|line| line.strip_prefix("E:ID_SERIAL_SHORT="))
+        .collect()
+}
+
 fn sanitize_reads(reads: &[SourceRead]) -> Vec<SourceRead> {
     reads
         .iter()
@@ -259,6 +277,10 @@ fn sanitize_reads(reads: &[SourceRead]) -> Vec<SourceRead> {
         .map(|mut read| {
             if read.kind == "file" && read.path.contains("/run/udev/") {
                 read.content = read.content.as_deref().map(sanitize_udev);
+            }
+            // Sans disque énuméré, `redact` ne connaît aucun numéro : celui-ci se masque d'après sa source.
+            if read.kind == "file" && read.path.ends_with("/serial") && read.content.is_some() {
+                read.content = Some(SERIAL_MASK.to_owned());
             }
             read
         })
@@ -503,6 +525,25 @@ mod tests {
             micros: 1,
             content: Some(content.to_owned()),
         }
+    }
+
+    /// Le rapport part chez le support : le masquage ne peut pas dépendre de la réussite de l'énumération.
+    #[test]
+    fn une_enumeration_en_echec_ne_laisse_pas_passer_de_numero_de_serie()
+    -> Result<(), serde_json::Error> {
+        let reads = vec![
+            udev_read("/sys/block/sda/device/serial", "S4X9NF0M123456\n"),
+            udev_read(
+                "/run/udev/data/b8:0",
+                "S:disk/by-id/usb-SanDisk_Cruzer_4C530001-0:0\nE:ID_SERIAL_SHORT=4C530001\n",
+            ),
+        ];
+        let failed = Err(EnumerateError::Unsupported { os: "test" });
+        let text = build_with_capture(&args(false), &env(), &failed, Some(&reads))?.to_string();
+        for numero in ["S4X9NF0M123456", "4C530001"] {
+            assert!(!text.contains(numero), "numéro laissé en clair");
+        }
+        Ok(())
     }
 
     #[test]

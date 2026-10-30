@@ -275,7 +275,10 @@ impl Env {
             vars: std::env::vars()
                 .filter(|(name, _)| name.starts_with("BONK_"))
                 .collect(),
-            io: job::Io::default(),
+            io: job::Io {
+                ask_internal: Box::new(transfer::ask_internal_on_terminal),
+                ..job::Io::default()
+            },
             privileged: bonk_hal::platform::current().is_privileged(),
         }
     }
@@ -394,13 +397,13 @@ where
         Some(Command::Disk { action }) => match action {
             DiskAction::List(args) => run_list(&args, &view, out, err, enumerate),
             DiskAction::Info(args) => run_info(&args, &view, out, err, enumerate),
-            DiskAction::Write(args) => transfer::run_write(&args, &view, &deps, out, err),
+            DiskAction::Write(args) => transfer::run_write(&args, &deps, out, err),
             DiskAction::Verify(args) => transfer::run_verify(&args, &view, &deps, out, err),
-            DiskAction::RepairGpt(args) => transfer::run_repair(&args, &view, &deps, out, err),
+            DiskAction::RepairGpt(args) => transfer::run_repair(&args, &deps, out, err),
         },
-        Some(Command::Write(args)) => transfer::run_write(&args, &view, &deps, out, err),
+        Some(Command::Write(args)) => transfer::run_write(&args, &deps, out, err),
         Some(Command::Verify(args)) => transfer::run_verify(&args, &view, &deps, out, err),
-        Some(Command::RepairGpt(args)) => transfer::run_repair(&args, &view, &deps, out, err),
+        Some(Command::RepairGpt(args)) => transfer::run_repair(&args, &deps, out, err),
         Some(Command::List(args)) => run_list(&args, &view, out, err, enumerate),
         Some(Command::Info(args)) => run_info(&args, &view, out, err, enumerate),
         Some(Command::Config { action }) => {
@@ -1057,7 +1060,10 @@ mod tests {
                 .iter()
                 .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
                 .collect(),
-            io: job::Io::default(),
+            io: job::Io {
+                ask_internal: Box::new(transfer::ask_internal_on_terminal),
+                ..job::Io::default()
+            },
             privileged: bonk_hal::platform::current().is_privileged(),
         };
         let code = execute(

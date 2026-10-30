@@ -10,6 +10,7 @@ use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+use bonk_hal::INTERNAL_CONFIRMATION;
 use iced::futures::channel::mpsc::{UnboundedReceiver, unbounded};
 use serde_json::Value;
 
@@ -44,7 +45,12 @@ pub(crate) enum Outcome {
 }
 
 /// Arguments de `bonk write` équivalents à ce que montre la fenêtre.
-pub(crate) fn write_args(disk_id: &str, image: &str, options: ViewOptions) -> Vec<String> {
+pub(crate) fn write_args(
+    disk_id: &str,
+    image: &str,
+    options: ViewOptions,
+    internal_confirmed: bool,
+) -> Vec<String> {
     let mut args: Vec<String> = ["write", disk_id, image, "--yes", "--progress", "json"]
         .iter()
         .map(|s| (*s).to_owned())
@@ -54,6 +60,13 @@ pub(crate) fn write_args(disk_id: &str, image: &str, options: ViewOptions) -> Ve
     }
     if options.allow_virtual {
         args.push("--allow-virtual".to_owned());
+    }
+    // La personne a confirmé dans la fenêtre : le sous-processus n'a pas de terminal pour le demander.
+    if internal_confirmed {
+        args.extend([
+            "--confirm-internal".to_owned(),
+            INTERNAL_CONFIRMATION.to_owned(),
+        ]);
     }
     args
 }
@@ -185,7 +198,7 @@ mod tests {
     #[test]
     fn arguments_de_la_commande() {
         assert_eq!(
-            write_args("usb-a", "/tmp/x.img", ViewOptions::default()),
+            write_args("usb-a", "/tmp/x.img", ViewOptions::default(), false),
             [
                 "write",
                 "usb-a",
@@ -200,11 +213,12 @@ mod tests {
             allow_virtual: true,
             show_all: true,
         };
-        let args = write_args("usb-a", "x", options);
+        let args = write_args("usb-a", "x", options, true);
         assert!(
             args.contains(&"--show-internal".to_owned())
                 && args.contains(&"--allow-virtual".to_owned())
         );
+        assert!(args.ends_with(&["--confirm-internal".to_owned(), "confirme".to_owned()]));
         // `--all` n'a pas de sens pour une écriture.
         assert!(!args.contains(&"--all".to_owned()));
     }

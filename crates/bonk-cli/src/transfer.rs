@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use bonk_core::analysis::{ImageKind, ImageReport};
 use bonk_core::write::{Control, Phase, Progress};
-use bonk_hal::{Elevation, FilterOptions, format_size};
+use bonk_hal::{Disk, Elevation, FilterOptions, INTERNAL_CONFIRMATION, format_size};
 use clap::{Args, ValueEnum};
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -146,6 +146,15 @@ impl CommonArgs {
             allow_virtual: self.allow_virtual || view.allow_virtual,
         }
     }
+
+    /// Pour écrire, seules les options de la commande comptent : un réglage ou une variable oubliés règlent
+    /// l'affichage, ils n'autorisent jamais à effacer un disque de plus.
+    fn write_options(&self) -> FilterOptions {
+        FilterOptions {
+            show_internal: self.show_internal,
+            allow_virtual: self.allow_virtual,
+        }
+    }
 }
 
 /// Écrit une image sur un disque (ou un fichier image avec --simulate), puis la vérifie
@@ -181,6 +190,10 @@ pub(crate) struct WriteArgs {
     /// Ne répare pas le GPT de secours après l'écriture
     #[arg(long)]
     no_repair_gpt: bool,
+
+    /// Disque interne : donne d'avance le mot `confirme`, à défaut de terminal pour le taper
+    #[arg(long, value_name = "MOT")]
+    confirm_internal: Option<String>,
 }
 
 impl WriteArgs {
@@ -221,12 +234,40 @@ pub(crate) struct RepairArgs {
     /// Dit s'il y a quelque chose à réparer, sans rien écrire
     #[arg(long)]
     dry_run: bool,
+
+    /// Disque interne : donne d'avance le mot `confirme`, à défaut de terminal pour le taper
+    #[arg(long, value_name = "MOT")]
+    confirm_internal: Option<String>,
 }
 
 impl RepairArgs {
     pub(crate) fn touches_real_disk(&self) -> bool {
         !self.common.simulate
     }
+}
+
+/// Prévient et demande le mot de confirmation d'un disque interne, s'il y a quelqu'un au terminal.
+pub(crate) fn ask_internal_on_terminal(disk: &Disk) -> Option<String> {
+    let stdin = io::stdin();
+    if !stdin.is_terminal() {
+        return None;
+    }
+    eprintln!("{}", internal_warning(disk));
+    eprint!("Taper « {INTERNAL_CONFIRMATION} » pour continuer : ");
+    let _ = io::stderr().flush();
+    let mut line = String::new();
+    stdin.read_line(&mut line).ok()?;
+    Some(line)
+}
+
+fn internal_warning(disk: &Disk) -> String {
+    format!(
+        "ATTENTION : {} ({}, {}) est un disque INTERNE de cette machine. Toutes ses données seront \
+         effacées, sans retour possible.",
+        disk.path,
+        disk.model,
+        format_size(disk.size_bytes)
+    )
 }
 
 /// Événement de progression, tel qu'il sort en `--progress json`.
@@ -387,7 +428,6 @@ fn finish<T: Serialize>(
 
 pub(crate) fn run_write(
     args: &WriteArgs,
-    view: &ViewDefaults,
     deps: &Deps<'_>,
     out: &mut dyn Write,
     err: &mut dyn Write,
@@ -396,7 +436,7 @@ pub(crate) fn run_write(
     let job = WriteJob {
         target: args.common.target(),
         source: args.source.clone(),
-        options: args.common.options(view),
+        options: args.common.write_options(),
         verify: !args.no_verify,
         repair_gpt: !args.no_repair_gpt,
         trace_io: args.common.trace_io.map(TraceIo::from),
@@ -405,6 +445,7 @@ pub(crate) fn run_write(
         expected_sha256: args.sha256.clone(),
         mode: args.mode.into(),
         elevation: args.common.elevate.into(),
+        confirm_internal: args.confirm_internal.clone(),
     };
     log::debug!(target: "bonk::cli", target_kind = if args.common.simulate { "image" } else { "disk" }, dry_run = args.dry_run; "command write");
     let result = {
@@ -468,6 +509,7 @@ pub(crate) fn run_write(
                 }
                 match &done.gpt_repair {
                     Some(r) => writeln!(out, "  GPT : réparé ({})", r.actions.join(", ")),
+                    None if args.no_repair_gpt => writeln!(out, "  GPT : contrôle non demandé"),
                     None => writeln!(out, "  GPT : rien à réparer"),
                 }
             }
@@ -514,7 +556,6 @@ pub(crate) fn run_verify(
 
 pub(crate) fn run_repair(
     args: &RepairArgs,
-    view: &ViewDefaults,
     deps: &Deps<'_>,
     out: &mut dyn Write,
     err: &mut dyn Write,
@@ -522,11 +563,12 @@ pub(crate) fn run_repair(
     bonk_hal::interrupt::install();
     let job = RepairJob {
         target: args.common.target(),
-        options: args.common.options(view),
+        options: args.common.write_options(),
         trace_io: args.common.trace_io.map(TraceIo::from),
         dry_run: args.dry_run,
         yes: args.yes,
         elevation: args.common.elevate.into(),
+        confirm_internal: args.confirm_internal.clone(),
     };
     let result = job::repair(&job, deps);
     finish(result, &args.common, out, err, |done, out| {

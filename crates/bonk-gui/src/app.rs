@@ -10,14 +10,15 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use bonk_hal::{
-    Disk, Eligibility, FilterOptions, bus_label, enumerate_disks, evaluate, format_size,
+    Disk, Eligibility, FilterOptions, Warning, bus_label, enumerate_disks, evaluate, format_size,
     kind_label, state_label, verdict_badge,
 };
 #[cfg(test)]
 use iced::Size;
 use iced::keyboard::{self, Key, key::Named};
 use iced::widget::{
-    Column, button, checkbox, column, container, progress_bar, row, scrollable, text, text_input,
+    Column, button, center, checkbox, column, container, opaque, progress_bar, row, scrollable,
+    stack, text, text_input,
 };
 use iced::{Element, Fill, Subscription, Task, Theme};
 
@@ -27,6 +28,39 @@ use crate::transfer::{self, Outcome};
 
 /// Intervalle d'actualisation automatique : un disque branché apparaît sans geste de l'utilisateur.
 const REFRESH_EVERY: Duration = Duration::from_secs(2);
+
+/// Demande de confirmation avant d'effacer un disque interne (CDC §3.2).
+fn internal_dialog(disk: &Disk) -> Element<'_, Message> {
+    container(
+        column![
+            text("ATTENTION : DISQUE INTERNE").size(18),
+            text(format!(
+                "{} ({}, {}) fait partie de cette machine. Toutes ses données seront effacées, sans \
+                 retour possible.",
+                disk.path,
+                disk.model,
+                format_size(disk.size_bytes)
+            ))
+            .size(14),
+            row![
+                button(text("Renoncer").size(14))
+                    .on_press(Message::CloseInternal)
+                    .padding([6, 14])
+                    .style(theme::primary_button),
+                button(text("Effacer ce disque interne").size(14))
+                    .on_press(Message::ConfirmInternal)
+                    .padding([6, 14])
+                    .style(theme::primary_button),
+            ]
+            .spacing(12),
+        ]
+        .spacing(12)
+        .max_width(520),
+    )
+    .padding(20)
+    .style(theme::panel)
+    .into()
+}
 
 #[derive(Debug, Clone)]
 pub(crate) enum Message {
@@ -52,6 +86,10 @@ pub(crate) enum Message {
     CancelWrite,
     /// Referme le résultat d'une écriture.
     DismissWrite,
+    /// Dans la demande de confirmation d'un disque interne : effacer quand même.
+    ConfirmInternal,
+    /// Dans la demande de confirmation d'un disque interne : renoncer.
+    CloseInternal,
     /// Ce que rapporte le processus d'écriture.
     Write(transfer::Event),
 }
@@ -161,6 +199,8 @@ pub(crate) struct App {
     selected: Option<String>,
     focus: Option<Focus>,
     write: WriteState,
+    /// La demande de confirmation d'un disque interne est à l'écran.
+    confirming_internal: bool,
     /// Programme lancé pour écrire : `bonk` lui-même, sauf dans les tests.
     program: Option<PathBuf>,
 }
@@ -303,7 +343,16 @@ impl App {
                 Task::none()
             }
             Message::Clock => Task::none(),
-            Message::StartWrite => self.start_write(),
+            Message::StartWrite => self.start_write(false),
+            Message::ConfirmInternal => {
+                self.confirming_internal = false;
+                self.start_write(true)
+            }
+            Message::CloseInternal => {
+                self.confirming_internal = false;
+                self.focus = Some(Focus::Action);
+                Task::none()
+            }
             Message::CancelWrite => {
                 self.focus = Some(Focus::Action);
                 if let WriteState::Running { pid: Some(pid), .. } = &self.write {
@@ -364,6 +413,14 @@ impl App {
     }
 
     fn navigate(&mut self, nav: Nav) -> Task<Message> {
+        // Devant la demande de confirmation, le clavier ne peut que renoncer : Entrée ne doit pas effacer.
+        if self.confirming_internal {
+            return if nav == Nav::Escape {
+                self.apply(Message::CloseInternal)
+            } else {
+                Task::none()
+            };
+        }
         let order = self.focus_order();
         let current = self
             .focus
@@ -633,7 +690,7 @@ impl App {
         ]
         .align_y(iced::Center);
 
-        container(
+        let window = container(
             column![
                 header,
                 controls,
@@ -647,8 +704,32 @@ impl App {
         )
         .padding(20)
         .width(Fill)
-        .height(Fill)
-        .into()
+        .height(Fill);
+        match self.internal_to_confirm() {
+            Some(disk) => stack![window, opaque(center(internal_dialog(disk)))].into(),
+            None => window.into(),
+        }
+    }
+
+    /// Le disque dont la confirmation est demandée : le panneau peut avoir changé depuis l'ouverture.
+    fn internal_to_confirm(&self) -> Option<&Disk> {
+        let id = self.write.disk_id().filter(|_| {
+            self.confirming_internal && matches!(self.write, WriteState::Draft { .. })
+        })?;
+        self.disks
+            .iter()
+            .find(|disk| disk.id == id && self.is_internal(id))
+    }
+
+    /// Le disque est-il proposé en tant que disque interne ?
+    fn is_internal(&self, id: &str) -> bool {
+        self.entries().iter().any(|(disk, verdict)| {
+            disk.id == id
+                && *verdict
+                    == (Eligibility::Offered {
+                        warning: Warning::InternalDisk,
+                    })
+        })
     }
 
     fn card<'a>(&'a self, disk: &'a Disk, verdict: Eligibility) -> Element<'a, Message> {
@@ -728,7 +809,7 @@ impl App {
     }
 
     /// Lance `bonk write` dans un processus séparé, une fois le délai de réflexion écoulé.
-    fn start_write(&mut self) -> Task<Message> {
+    fn start_write(&mut self, internal_confirmed: bool) -> Task<Message> {
         self.focus = Some(Focus::Action);
         let WriteState::Draft {
             disk_id,
@@ -741,7 +822,16 @@ impl App {
         if image.trim().is_empty() || opened.elapsed() < WRITE_DELAY || !self.offered(disk_id) {
             return Task::none();
         }
-        let args = transfer::write_args(disk_id, image.trim(), self.view_options());
+        if self.is_internal(disk_id) && !internal_confirmed {
+            self.confirming_internal = true;
+            return Task::none();
+        }
+        let args = transfer::write_args(
+            disk_id,
+            image.trim(),
+            self.view_options(),
+            internal_confirmed,
+        );
         log::info!(target: "bonk::gui", disk = disk_id.as_str(); "starting the write");
         let receiver = transfer::spawn(&self.program(), &args);
         self.write = WriteState::Running {
@@ -962,6 +1052,8 @@ fn ui_event(message: &Message) -> Option<(&'static str, String)> {
         Message::StartWrite => ("click_write", String::new()),
         Message::CancelWrite => ("click_cancel_write", String::new()),
         Message::DismissWrite => ("click_close_write", String::new()),
+        Message::ConfirmInternal => ("click_confirm_internal", String::new()),
+        Message::CloseInternal => ("click_close_internal", String::new()),
         Message::Tick | Message::Clock | Message::Loaded(_) | Message::Write(_) => return None,
     })
 }
@@ -1488,6 +1580,69 @@ mod tests {
         let _ = app.update(Message::Loaded(Ok(vec![])));
         let _ = app.update(Message::StartWrite);
         assert!(matches!(app.write, WriteState::Idle));
+    }
+
+    fn app_sur_disque_interne() -> App {
+        let mut app = App {
+            show_internal: true,
+            program: Some(PathBuf::from("/bonk-programme-inexistant")),
+            ..App::default()
+        };
+        let _ = app.update(Message::Loaded(Ok(vec![disk(
+            "sata-x",
+            "/dev/sda",
+            "Interne",
+            Bus::Sata,
+            vec![],
+        )])));
+        let _ = app.update(Message::Select("sata-x".to_owned()));
+        let _ = app.update(Message::ImageInput("/tmp/x.img".to_owned()));
+        vieillir_le_panneau(&mut app);
+        app
+    }
+
+    #[test]
+    fn un_disque_interne_demande_confirmation_avant_de_lancer() {
+        let mut app = app_sur_disque_interne();
+        let _ = app.update(Message::StartWrite);
+        assert!(app.confirming_internal);
+        assert!(matches!(app.write, WriteState::Draft { .. }));
+        // Le clavier ne confirme pas : Entrée ne fait rien, Échap renonce.
+        let _ = app.update(Message::Nav(Nav::Activate));
+        assert!(matches!(app.write, WriteState::Draft { .. }));
+        let _ = app.update(Message::Nav(Nav::Escape));
+        assert!(!app.confirming_internal);
+        assert!(matches!(app.write, WriteState::Draft { .. }));
+        // Confirmer lance l'écriture.
+        let _ = app.update(Message::StartWrite);
+        let _ = app.update(Message::ConfirmInternal);
+        assert!(!app.confirming_internal);
+        assert!(matches!(app.write, WriteState::Running { .. }));
+    }
+
+    #[test]
+    fn la_demande_de_confirmation_previent_et_propose_les_deux_choix() {
+        let mut app = app_sur_disque_interne();
+        assert!(
+            Simulator::new(app.view())
+                .find("ATTENTION : DISQUE INTERNE")
+                .is_err()
+        );
+        let _ = app.update(Message::StartWrite);
+        let mut simulateur = Simulator::new(app.view());
+        assert!(simulateur.find("ATTENTION : DISQUE INTERNE").is_ok());
+        assert!(simulateur.find("Renoncer").is_ok());
+        assert!(simulateur.find("Effacer ce disque interne").is_ok());
+    }
+
+    #[test]
+    fn un_disque_amovible_ne_demande_pas_de_confirmation_supplementaire() {
+        let mut app = app_avec_panneau();
+        let _ = app.update(Message::ImageInput("/tmp/x.img".to_owned()));
+        vieillir_le_panneau(&mut app);
+        let _ = app.update(Message::StartWrite);
+        assert!(!app.confirming_internal);
+        assert!(matches!(app.write, WriteState::Running { .. }));
     }
 
     #[test]

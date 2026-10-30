@@ -41,7 +41,7 @@ impl Platform for Unsupported {
         Err(unsupported())
     }
 
-    fn unmount(&self, _disk: &Disk) -> Result<Vec<String>, OpenTargetError> {
+    fn unmount(&self, _disk: &Disk, _elevation: Elevation) -> Result<Vec<String>, OpenTargetError> {
         Err(OpenTargetError::Unmount(format!(
             "démontage non disponible sous {}",
             std::env::consts::OS

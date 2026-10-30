@@ -104,7 +104,8 @@ pub fn mount_points(disk: &Disk) -> Vec<String> {
         .iter()
         .flat_map(|partition| partition.mount_points.iter().cloned())
         .collect();
-    mounts.sort_by_key(|mount| std::cmp::Reverse(mount.len()));
+    // La valeur départage les longueurs égales : `dedup` ne retire que des voisins.
+    mounts.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
     mounts.dedup();
     mounts
 }
@@ -212,6 +213,17 @@ mod tests {
             ..FilterOptions::default()
         };
         assert!(reverify(&expected, &disks, with_internal).is_ok());
+    }
+
+    #[test]
+    fn un_point_de_montage_repete_n_est_demonte_qu_une_fois() {
+        let mut d = usb();
+        d.partitions = vec![
+            part("/dev/sdb1", &["/media/a"], false),
+            part("/dev/sdb2", &["/media/b"], false),
+            part("/dev/sdb3", &["/media/a"], false),
+        ];
+        assert_eq!(mount_points(&d), ["/media/a", "/media/b"]);
     }
 
     #[test]

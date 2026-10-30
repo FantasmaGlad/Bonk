@@ -30,6 +30,7 @@ pub enum Code {
     IdentityChanged,
     UnmountFailed,
     ConfirmationRequired,
+    InternalConfirmationRequired,
     SourceUnreadable,
     SourceFormatUnsupported,
     SourceTooLarge,
@@ -153,6 +154,17 @@ pub const CATALOG: &[Entry] = &[
         title: "Confirmation requise",
         causes: &["une écriture sans `--yes` : Bonk ne pose jamais de question hors terminal"],
         remedy: "Décrire d'abord l'opération avec `--dry-run`, puis relancer avec `--yes`.",
+    },
+    Entry {
+        code: Code::InternalConfirmationRequired,
+        id: "E2005",
+        exit: EXIT_USAGE,
+        title: "Confirmation requise pour un disque interne",
+        causes: &[
+            "écriture sur un disque interne sans avoir tapé le mot demandé",
+            "aucun terminal pour le demander, et `--confirm-internal` absent",
+        ],
+        remedy: "Vérifier la cible avec `bonk info <disque>` : toutes ses données seront perdues. Taper `confirme` quand Bonk le demande ; dans un script, ajouter `--confirm-internal confirme`.",
     },
     Entry {
         code: Code::SourceUnreadable,
