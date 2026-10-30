@@ -193,6 +193,7 @@ struct Scenario {
     device: Shared,
     /// Énumérations successives : la n-ième appelée rend la n-ième liste (la dernière se répète).
     enumerations: Vec<Vec<Disk>>,
+    prepare: Result<(), String>,
     unmount: Result<Vec<String>, String>,
     open: Result<(), io::ErrorKind>,
     faulty_reads: bool,
@@ -205,6 +206,7 @@ impl Scenario {
             log: Rc::new(RefCell::new(Vec::new())),
             device: Shared::new(),
             enumerations: vec![vec![usb("S1"), system_disk()]],
+            prepare: Ok(()),
             unmount: Ok(vec!["/run/media/u/A".to_owned()]),
             open: Ok(()),
             faulty_reads: false,
@@ -226,14 +228,24 @@ impl Scenario {
         let device = self.device.clone();
         let (open, faulty) = (self.open, self.faulty_reads);
         let cancel = self.cancel;
+        let log_prepare = self.log.clone();
+        let prepare = self.prepare.clone();
         let io = Io {
+            prepare: Box::new(move |path, _, _| {
+                log_prepare
+                    .borrow_mut()
+                    .push(format!("prepare:{}", path.display()));
+                prepare
+                    .clone()
+                    .map_err(|m| BlockError::Io(io::Error::new(io::ErrorKind::PermissionDenied, m)))
+            }),
             unmount: Box::new(move |disk: &Disk| {
                 log_unmount
                     .borrow_mut()
                     .push(format!("unmount:{}", disk.id));
                 unmount.clone().map_err(OpenTargetError::Unmount)
             }),
-            open_node: Box::new(move |path, access| {
+            open_node: Box::new(move |path, access, _| {
                 log.borrow_mut()
                     .push(format!("open:{}:{access:?}", path.display()));
                 match open {
@@ -300,7 +312,12 @@ fn ecriture_complete_dans_l_ordre_des_garde_fous() {
     // Démontage d'abord, ouverture en écriture ensuite, jamais l'inverse.
     assert_eq!(
         scenario.log(),
-        ["unmount:usb-a", "open:/dev/sdb:ReadWrite", "drop_cache"]
+        [
+            "prepare:/dev/sdb",
+            "unmount:usb-a",
+            "open:/dev/sdb:ReadWrite",
+            "drop_cache"
+        ]
     );
     assert_eq!(scenario.written(1 << 20), source.bytes());
     assert!(out.contains("Démonté : /run/media/u/A"), "{out}");
@@ -395,7 +412,7 @@ fn un_disque_remplace_entre_les_deux_enumerations_n_est_pas_ecrit() {
         "{err}"
     );
     // Le démontage a eu lieu, l'ouverture jamais.
-    assert_eq!(scenario.log(), ["unmount:usb-a"]);
+    assert_eq!(scenario.log(), ["prepare:/dev/sdb", "unmount:usb-a"]);
     assert!(scenario.written(4096).iter().all(|b| *b == 0));
 }
 
@@ -416,7 +433,7 @@ fn un_disque_devenu_interdit_entre_les_deux_enumerations_n_est_pas_ecrit() {
     ]);
     assert_eq!(code, EXIT_TARGET_REFUSED);
     assert!(err.trim_end().ends_with("[E2001]"), "{err}");
-    assert_eq!(scenario.log(), ["unmount:usb-a"]);
+    assert_eq!(scenario.log(), ["prepare:/dev/sdb", "unmount:usb-a"]);
 }
 
 #[test]
@@ -437,7 +454,7 @@ fn echec_de_demontage_empeche_l_ouverture() {
         err.contains("busy") && err.trim_end().ends_with("[E2003]"),
         "{err}"
     );
-    assert_eq!(scenario.log(), ["unmount:usb-a"]);
+    assert_eq!(scenario.log(), ["prepare:/dev/sdb", "unmount:usb-a"]);
 }
 
 #[test]
@@ -540,7 +557,10 @@ fn la_commande_verify_compare_sans_ecrire() {
     assert_eq!((code, err.as_str()), (0, ""));
     assert!(out.contains("Vérification réussie"), "{out}");
     // Relecture seule : pas de démontage, ouverture en lecture.
-    assert_eq!(scenario.log(), ["open:/dev/sdb:ReadOnly", "drop_cache"]);
+    assert_eq!(
+        scenario.log(),
+        ["prepare:/dev/sdb", "open:/dev/sdb:ReadOnly", "drop_cache"]
+    );
     // Un octet qui change : la comparaison échoue avec le code dédié.
     scenario
         .device
@@ -650,5 +670,21 @@ fn la_relecture_de_controle_ne_lit_jamais_le_cache() {
     scenario.log.borrow_mut().clear();
     let (code, _, err) = scenario.run(&["verify", "usb-a", &source.arg(), "--progress", "none"]);
     assert_eq!((code, err.as_str()), (0, ""));
-    assert_eq!(scenario.log(), ["open:/dev/sdb:ReadOnly", "drop_cache"]);
+    assert_eq!(
+        scenario.log(),
+        ["prepare:/dev/sdb", "open:/dev/sdb:ReadOnly", "drop_cache"]
+    );
+}
+
+#[test]
+fn un_refus_d_autorisation_ne_demonte_rien() {
+    let source = TempSource::new("refus", 1 << 20);
+    let mut scenario = Scenario::new();
+    scenario.prepare = Err("autorisation annulée".to_owned());
+    let (code, _, err) = scenario.run(&["write", "usb-a", &source.arg(), "--yes"]);
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("[E4004]"), "{err}");
+    assert!(err.contains("autorisation annulée"), "{err}");
+    let log = scenario.log.borrow();
+    assert_eq!(*log, ["prepare:/dev/sdb"], "ni démontage ni ouverture");
 }

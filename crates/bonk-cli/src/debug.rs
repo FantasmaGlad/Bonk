@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use bonk_core::BlockDevice;
 use bonk_core::partition::{Layout, Severity, inspect, read_range};
 use bonk_hal::{
-    Access, Disk, EnumerateError, FileDevice, FilterOptions, SourceRead, evaluate_traced,
-    state_label,
+    Access, Disk, Elevation, EnumerateError, FileDevice, FilterOptions, SourceRead,
+    evaluate_traced, state_label,
 };
 use clap::{Args, Subcommand};
 use schemars::JsonSchema;
@@ -270,25 +270,46 @@ pub(crate) fn filter(
 // layout
 // ---------------------------------------------------------------------------------------------
 
-/// Ouvre une image en lecture seule. Un identifiant de disque réel est reconnu pour dire pourquoi il
-/// n'est pas lisible, plutôt que d'échouer sur un chemin inexistant.
-fn open_image(path: &Path) -> Result<FileDevice, (Code, String)> {
-    if !path.exists() && path.to_string_lossy().starts_with("/dev/") {
+/// Ouvre une image, ou un disque réel désigné par son chemin ou son identifiant stable, en lecture seule.
+/// Rien ne l'écrit : le type rendu ne sert ici qu'à lire.
+fn open_read_only(target: &Path) -> Result<Box<dyn BlockDevice>, (Code, String)> {
+    let platform = bonk_hal::platform::current();
+    let disk_path = if target.is_file() || target.is_dir() {
+        None
+    } else if target.exists() {
+        Some(target.to_path_buf())
+    } else {
+        let wanted = target.to_string_lossy();
+        platform
+            .enumerate()
+            .ok()
+            .and_then(|disks| disks.into_iter().find(|d| d.id == wanted))
+            .map(|d| PathBuf::from(d.path))
+    };
+    if let Some(path) = disk_path {
+        return platform
+            .open_disk(&path, Access::ReadOnly, Elevation::Auto)
+            .map_err(|erreur| {
+                (
+                    Code::RawDiskUnavailable,
+                    format!("{} : {erreur}", path.display()),
+                )
+            });
+    }
+    if !target.exists() && target.to_string_lossy().starts_with("/dev/") {
         return Err((
             Code::RawDiskUnavailable,
-            format!(
-                "« {} » est un disque réel : sa lecture brute n'est pas encore disponible (étude des \
-                 privilèges, D-03) ; passez une image",
-                path.display()
-            ),
+            format!("« {} » n'existe pas", target.display()),
         ));
     }
-    FileDevice::open(path, Access::ReadOnly, 512).map_err(|erreur| {
-        (
-            Code::SourceUnreadable,
-            format!("{} : {erreur}", path.display()),
-        )
-    })
+    FileDevice::open(target, Access::ReadOnly, 512)
+        .map(|device| Box::new(device) as Box<dyn BlockDevice>)
+        .map_err(|erreur| {
+            (
+                Code::SourceUnreadable,
+                format!("{} : {erreur}", target.display()),
+            )
+        })
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -311,11 +332,11 @@ pub(crate) fn schema_layout() -> serde_json::Value {
 }
 
 pub(crate) fn layout(args: &LayoutArgs, out: &mut dyn Write) -> io::Result<Outcome> {
-    let device = match open_image(&args.image) {
+    let device = match open_read_only(&args.image) {
         Ok(device) => device,
         Err((code, message)) => return Ok(Outcome::Failed(code, message)),
     };
-    let layout = match inspect(&device) {
+    let layout = match inspect(&*device) {
         Ok(layout) => layout,
         Err(erreur) => {
             return Ok(Outcome::Failed(
@@ -443,7 +464,7 @@ pub(crate) fn hexdump(args: &HexdumpArgs, out: &mut dyn Write) -> io::Result<Out
             ),
         ));
     }
-    let device = match open_image(&args.image) {
+    let device = match open_read_only(&args.image) {
         Ok(device) => device,
         Err((code, message)) => return Ok(Outcome::Failed(code, message)),
     };
@@ -459,7 +480,7 @@ pub(crate) fn hexdump(args: &HexdumpArgs, out: &mut dyn Write) -> io::Result<Out
     }
     // La plage est ramenée à la taille de l'image ; la lecture est alignée par `read_range`.
     let len = args.len.min(size - args.offset);
-    let bytes = match read_range(&device, args.offset, len) {
+    let bytes = match read_range(&*device, args.offset, len) {
         Ok(bytes) => bytes,
         Err(erreur) => {
             return Ok(Outcome::Failed(
@@ -668,11 +689,7 @@ mod tests {
         match layout(&args, &mut out)? {
             Outcome::Failed(code, message) => {
                 assert_eq!(code, Code::RawDiskUnavailable);
-                assert!(
-                    message.contains("lecture brute n'est pas encore disponible"),
-                    "{message}"
-                );
-                assert!(message.contains("D-03"), "{message}");
+                assert!(message.contains("n'existe pas"), "{message}");
             }
             Outcome::Done => panic!("un disque réel ne doit pas être lu"),
         }

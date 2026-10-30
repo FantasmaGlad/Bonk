@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use bonk_core::analysis::{ImageKind, ImageReport};
 use bonk_core::write::{Control, Phase, Progress};
-use bonk_hal::{FilterOptions, format_size};
+use bonk_hal::{Elevation, FilterOptions, format_size};
 use clap::{Args, ValueEnum};
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -36,6 +36,24 @@ impl From<TraceIoArg> for TraceIo {
         match arg {
             TraceIoArg::Metadata => Self::Metadata,
             TraceIoArg::Data => Self::Data,
+        }
+    }
+}
+
+/// Valeur de `--elevate` (voir [`Elevation`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub(crate) enum ElevateArg {
+    /// Demande l'autorisation du système au moment d'ouvrir le disque
+    Auto,
+    /// Droits de l'appelant seulement
+    Never,
+}
+
+impl From<ElevateArg> for Elevation {
+    fn from(arg: ElevateArg) -> Self {
+        match arg {
+            ElevateArg::Auto => Self::Auto,
+            ElevateArg::Never => Self::Never,
         }
     }
 }
@@ -96,6 +114,10 @@ pub(crate) struct CommonArgs {
     /// premiers octets, pour un fichier image seulement
     #[arg(long, value_enum, num_args = 0..=1, default_missing_value = "metadata", require_equals = true)]
     trace_io: Option<TraceIoArg>,
+
+    /// Droits manquants : auto (demande au système) ou never (droits de l'appelant seulement)
+    #[arg(long, value_enum, default_value_t = ElevateArg::Auto)]
+    elevate: ElevateArg,
 
     /// Progression : auto, json (un événement par ligne) ou none
     #[arg(long, value_enum, default_value_t = ProgressMode::Auto)]
@@ -264,6 +286,7 @@ fn sink<'a>(
                 if boundary || last.elapsed() >= Duration::from_millis(250) {
                     last = Instant::now();
                     let step = match p.phase {
+                        Phase::Authorize => "autorisation du système",
                         Phase::Source => "contrôle de l'empreinte",
                         Phase::Write => "écriture",
                         Phase::Flush => "vidage des tampons",
@@ -381,6 +404,7 @@ pub(crate) fn run_write(
         yes: args.yes,
         expected_sha256: args.sha256.clone(),
         mode: args.mode.into(),
+        elevation: args.common.elevate.into(),
     };
     log::debug!(target: "bonk::cli", target_kind = if args.common.simulate { "image" } else { "disk" }, dry_run = args.dry_run; "command write");
     let result = {
@@ -464,6 +488,7 @@ pub(crate) fn run_verify(
         source: args.source.clone(),
         options: args.common.options(view),
         trace_io: args.common.trace_io.map(TraceIo::from),
+        elevation: args.common.elevate.into(),
     };
     let result = {
         let mut progress = sink(args.common.progress, &mut *out, &mut *err);
@@ -501,6 +526,7 @@ pub(crate) fn run_repair(
         trace_io: args.common.trace_io.map(TraceIo::from),
         dry_run: args.dry_run,
         yes: args.yes,
+        elevation: args.common.elevate.into(),
     };
     let result = job::repair(&job, deps);
     finish(result, &args.common, out, err, |done, out| {

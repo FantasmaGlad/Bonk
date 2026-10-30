@@ -1,0 +1,144 @@
+//! UDisks2 : obtenir un disque sans lancer Bonk en administrateur (D-36).
+//!
+//! Le service du système ouvre le périphérique et nous rend un descripteur ; l'autorisation passe par
+//! polkit, au moment où on en a besoin. Tout échec devient `PermissionDenied` avec une phrase qui dit
+//! quoi faire : `bonk-ops` le traduit en `E4004`.
+
+use std::collections::HashMap;
+use std::io;
+use std::os::fd::OwnedFd;
+use std::path::Path;
+
+use bonk_core::BlockError;
+use zbus::{Connection, OwnedObjectPath, Variant, block_on};
+
+const SERVICE: &str = "org.freedesktop.UDisks2";
+const MANAGER_PATH: &str = "/org/freedesktop/UDisks2/Manager";
+const MANAGER: &str = "org.freedesktop.UDisks2.Manager";
+const BLOCK: &str = "org.freedesktop.UDisks2.Block";
+const FILESYSTEM: &str = "org.freedesktop.UDisks2.Filesystem";
+const SUDO_HINT: &str = "relancer avec sudo";
+
+type Options<'a> = HashMap<&'a str, Variant<'a>>;
+
+/// Traduit un nom d'erreur D-Bus en phrase ; `None` : erreur sans remède connu.
+fn advice(error_name: &str) -> Option<String> {
+    match error_name {
+        "org.freedesktop.UDisks2.Error.NotAuthorizedDismissed" => {
+            Some("autorisation annulée".to_owned())
+        }
+        "org.freedesktop.UDisks2.Error.NotAuthorized"
+        | "org.freedesktop.UDisks2.Error.NotAuthorizedCanObtain" => Some(format!(
+            "autorisation impossible : aucun agent polkit dans cette session (SSH ?) ; {SUDO_HINT}"
+        )),
+        "org.freedesktop.DBus.Error.ServiceUnknown"
+        | "org.freedesktop.DBus.Error.NameHasNoOwner" => {
+            Some(format!("service UDisks2 absent ; {SUDO_HINT}"))
+        }
+        _ => None,
+    }
+}
+
+fn denied(message: String) -> BlockError {
+    BlockError::Io(io::Error::new(io::ErrorKind::PermissionDenied, message))
+}
+
+fn from_zbus(error: zbus::Error) -> BlockError {
+    if let zbus::Error::MethodError(name, detail, _) = &error {
+        return denied(advice(name.as_str()).unwrap_or_else(|| {
+            format!(
+                "UDisks2 : {} : {}",
+                name.as_str(),
+                detail.as_deref().unwrap_or("sans détail")
+            )
+        }));
+    }
+    denied(format!("UDisks2 injoignable : {error} ; {SUDO_HINT}"))
+}
+
+fn connect() -> Result<Connection, BlockError> {
+    block_on(Connection::system()).map_err(from_zbus)
+}
+
+/// L'objet UDisks2 d'un périphérique, d'après son chemin.
+fn resolve(connection: &Connection, device: &Path) -> Result<OwnedObjectPath, BlockError> {
+    let path = device
+        .to_str()
+        .ok_or_else(|| denied("nom de périphérique illisible".to_owned()))?;
+    let spec: Options<'_> = HashMap::from([("path", Variant::from(path))]);
+    let options: Options<'_> = HashMap::new();
+    let reply = block_on(connection.call_method(
+        Some(SERVICE),
+        MANAGER_PATH,
+        Some(MANAGER),
+        "ResolveDevice",
+        &(spec, options),
+    ))
+    .map_err(from_zbus)?;
+    let objects: Vec<OwnedObjectPath> = reply.body().deserialize().map_err(from_zbus)?;
+    objects
+        .into_iter()
+        .next()
+        .ok_or_else(|| denied(format!("{} inconnu de UDisks2", device.display())))
+}
+
+/// Demande au service d'ouvrir `device`. `mode` : `r` ou `rw` ; `flags` : ceux d'`open(2)`, hors mode.
+///
+/// # Errors
+/// `PermissionDenied` avec le remède, si le service refuse ou n'est pas joignable.
+pub(super) fn open(device: &Path, mode: &str, flags: i32) -> Result<OwnedFd, BlockError> {
+    let connection = connect()?;
+    let object = resolve(&connection, device)?;
+    let options: Options<'_> = HashMap::from([("flags", Variant::from(flags))]);
+    let reply = block_on(connection.call_method(
+        Some(SERVICE),
+        object.as_str(),
+        Some(BLOCK),
+        "OpenDevice",
+        &(mode, options),
+    ))
+    .map_err(from_zbus)?;
+    let fd: zbus::wire::OwnedFd = reply.body().deserialize().map_err(from_zbus)?;
+    Ok(fd.into())
+}
+
+/// Démonte une partition par le service, quand `umount` n'en a pas le droit.
+///
+/// # Errors
+/// `PermissionDenied` avec le remède, si le service refuse ou n'est pas joignable.
+pub(super) fn unmount(partition: &Path) -> Result<(), BlockError> {
+    let connection = connect()?;
+    let object = resolve(&connection, partition)?;
+    let options: Options<'_> = HashMap::new();
+    block_on(connection.call_method(
+        Some(SERVICE),
+        object.as_str(),
+        Some(FILESYSTEM),
+        "Unmount",
+        &(options,),
+    ))
+    .map_err(from_zbus)?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn chaque_refus_connu_dit_quoi_faire() {
+        assert_eq!(
+            advice("org.freedesktop.UDisks2.Error.NotAuthorizedDismissed").as_deref(),
+            Some("autorisation annulée")
+        );
+        for name in [
+            "org.freedesktop.UDisks2.Error.NotAuthorized",
+            "org.freedesktop.UDisks2.Error.NotAuthorizedCanObtain",
+            "org.freedesktop.DBus.Error.ServiceUnknown",
+            "org.freedesktop.DBus.Error.NameHasNoOwner",
+        ] {
+            assert!(advice(name).is_some_and(|m| m.contains("sudo")), "{name}");
+        }
+        assert_eq!(advice("org.freedesktop.UDisks2.Error.Failed"), None);
+    }
+}

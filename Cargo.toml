@@ -5,9 +5,9 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.0.1"
 edition = "2024"
-# Plancher imposé par Iced 0.14 (le plancher de l'édition 2024 seule serait 1.85) ; le job « msrv » de la CI
-# le vérifie à chaque changement du code.
-rust-version = "1.88"
+# Plancher imposé par zbus 6 (Iced 0.14 demande 1.88) ; le job « msrv » de la CI le vérifie à chaque changement
+# du code.
+rust-version = "1.89"
 license = "MIT"
 repository = "https://github.com/FantasmaGlad/Bonk"
 publish = false
@@ -39,6 +39,8 @@ clap_complete = "4"
 sha2 = "0.11"
 # Décompression à la volée en Rust pur (CDC §1 : rien à installer, pas de bibliothèque C à lier).
 flate2 = "1"
+# Service du système pour ouvrir un disque sans droits d'administrateur (D-36) .
+zbus = "6"
 # Constantes d'ouverture des périphériques (O_EXCL : refuse un disque déjà utilisé).
 libc = "0.2"
 lzma-rust2 = { version = "0.24", default-features = false, features = ["xz", "std"] }

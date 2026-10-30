@@ -21,7 +21,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use bonk_core::write::{Control, Progress};
-use bonk_hal::{Disk, EnumerateError, FilterOptions};
+use bonk_hal::{Disk, Elevation, EnumerateError, FilterOptions};
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -222,6 +222,8 @@ struct TransferParams {
     sha256: Option<String>,
     /// `auto` (par défaut) ou `raw`.
     mode: Option<String>,
+    /// `never` (par défaut : personne devant l'écran) ou `auto`.
+    elevate: Option<String>,
 }
 
 fn parse<T: DeserializeOwned>(params: &Value) -> Result<T, Failure> {
@@ -275,6 +277,17 @@ impl TransferParams {
             Some(autre) => Err(failure(
                 Code::ProtocolError,
                 format!("mode inconnu : « {autre} » (auto ou raw)"),
+            )),
+        }
+    }
+
+    fn elevation(&self) -> Result<Elevation, Failure> {
+        match self.elevate.as_deref() {
+            None | Some("never") => Ok(Elevation::Never),
+            Some("auto") => Ok(Elevation::Auto),
+            Some(autre) => Err(failure(
+                Code::ProtocolError,
+                format!("elevate inconnu : « {autre} » (auto ou never)"),
             )),
         }
     }
@@ -477,6 +490,7 @@ fn start_job(
     let p: TransferParams = parse(params)?;
     let (target, options, trace) = (p.target()?, p.options(&cfg.view), p.trace()?);
     let mode = p.mode()?;
+    let elevation = p.elevation()?;
     let source = match kind {
         Kind::Repair => PathBuf::new(),
         _ => p.source()?,
@@ -509,6 +523,7 @@ fn start_job(
                     yes: p.yes,
                     expected_sha256: p.sha256.clone(),
                     mode,
+                    elevation,
                 },
                 &deps,
                 &mut progress,
@@ -525,6 +540,7 @@ fn start_job(
                     source,
                     options,
                     trace_io: trace,
+                    elevation,
                 },
                 &deps,
                 &mut progress,
@@ -542,6 +558,7 @@ fn start_job(
                     trace_io: trace,
                     dry_run: p.dry_run,
                     yes: p.yes,
+                    elevation,
                 },
                 &deps,
             )
@@ -785,8 +802,9 @@ mod tests {
                 make_io: Arc::new(move |cancel| {
                     let dev = dev.clone();
                     Io {
+                        prepare: Box::new(|_, _, _| Ok(())),
                         unmount: Box::new(|_| Ok(vec![])),
-                        open_node: Box::new(move |_, _| {
+                        open_node: Box::new(move |_, _, _| {
                             Ok(Box::new(dev.clone()) as Box<dyn BlockDevice>)
                         }),
                         cancelled: Box::new(move || cancel.load(Ordering::SeqCst)),

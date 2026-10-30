@@ -5,7 +5,7 @@ use std::path::Path;
 
 use bonk_core::{BlockDevice, BlockError};
 
-use super::Platform;
+use super::{Elevation, Platform};
 use crate::disk::Disk;
 use crate::enumerate::{EnumerateError, SourceRead};
 use crate::image::Access;
@@ -14,6 +14,13 @@ use crate::target::OpenTargetError;
 /// Implémentation pour un système que Bonk ne sait pas encore piloter.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Unsupported;
+
+fn no_raw_access() -> BlockError {
+    BlockError::Io(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "accès brut aux disques non disponible sur ce système",
+    ))
+}
 
 fn unsupported() -> EnumerateError {
     EnumerateError::Unsupported {
@@ -41,11 +48,26 @@ impl Platform for Unsupported {
         )))
     }
 
-    fn open_disk(&self, _path: &Path, _access: Access) -> Result<Box<dyn BlockDevice>, BlockError> {
-        Err(BlockError::Io(std::io::Error::new(
-            std::io::ErrorKind::Unsupported,
-            "accès brut aux disques non disponible sur ce système",
-        )))
+    fn prepare_access(
+        &self,
+        _path: &Path,
+        _access: Access,
+        _elevation: Elevation,
+    ) -> Result<(), BlockError> {
+        Err(no_raw_access())
+    }
+
+    fn open_disk(
+        &self,
+        _path: &Path,
+        _access: Access,
+        _elevation: Elevation,
+    ) -> Result<Box<dyn BlockDevice>, BlockError> {
+        Err(no_raw_access())
+    }
+
+    fn is_privileged(&self) -> bool {
+        false
     }
 
     fn kernel_release(&self) -> Option<String> {
@@ -69,7 +91,7 @@ mod tests {
         assert!(reads.is_empty());
         assert!(platform.enumerate_from_capture(&[]).is_err());
         assert!(matches!(
-            platform.open_disk(Path::new("disque"), Access::ReadOnly),
+            platform.open_disk(Path::new("disque"), Access::ReadOnly, Elevation::Auto),
             Err(BlockError::Io(err)) if err.kind() == std::io::ErrorKind::Unsupported
         ));
         assert_eq!(platform.kernel_release(), None);

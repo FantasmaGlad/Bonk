@@ -105,9 +105,12 @@ pub const CATALOG: &[Entry] = &[
         code: Code::RawDiskUnavailable,
         id: "E1004",
         exit: EXIT_RUNTIME_ERROR,
-        title: "Lecture brute d'un disque réel non disponible",
-        causes: &["`debug layout` et `debug hexdump` n'ouvrent que des fichiers image"],
-        remedy: "Copier le début du disque dans une image avec un outil du système, ou attendre l'accès brut via les privilèges (décision D-03).",
+        title: "Lecture brute du disque impossible",
+        causes: &[
+            "chemin qui ne désigne ni une image ni un disque",
+            "droits refusés, ou système sans accès brut",
+        ],
+        remedy: "Vérifier la cible avec `bonk list --all`, accepter l'autorisation du système, ou copier le début du disque dans une image.",
     },
     Entry {
         code: Code::TargetRefused,

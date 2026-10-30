@@ -855,7 +855,9 @@ impl App {
                 rate,
                 ..
             } => {
-                let step = if phase == "verify" {
+                let step = if phase == "authorize" {
+                    "En attente de l'autorisation du système"
+                } else if phase == "verify" {
                     "Vérification"
                 } else if phase == "flush" {
                     "Vidage des tampons"

@@ -19,13 +19,13 @@ use bonk_core::partition::inspect;
 use bonk_core::repair::{RepairError, RepairReport, needs_repair, repair_gpt};
 use bonk_core::trace::TracedDevice;
 use bonk_core::write::{
-    self as engine, Control, DEFAULT_CHUNK, Progress, VerifyError, VerifyReport, WriteError,
+    self as engine, Control, DEFAULT_CHUNK, Phase, Progress, VerifyError, VerifyReport, WriteError,
     WriteReport,
 };
 use bonk_core::{BlockDevice, BlockError};
 use bonk_hal::{
-    Access, Disk, EnumerateError, FileDevice, FilterOptions, OpenTargetError, TargetIdentity,
-    mount_points, reverify,
+    Access, Disk, Elevation, EnumerateError, FileDevice, FilterOptions, OpenTargetError,
+    TargetIdentity, mount_points, reverify,
 };
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -71,12 +71,16 @@ fn fail(code: Code, message: impl Display) -> JobError {
 /// Démontage des partitions d'un disque : rend les points démontés.
 pub type UnmountFn = Box<dyn Fn(&Disk) -> Result<Vec<String>, OpenTargetError>>;
 /// Ouverture d'un disque entier en accès brut.
-pub type OpenNodeFn = Box<dyn Fn(&Path, Access) -> Result<Box<dyn BlockDevice>, BlockError>>;
+pub type OpenNodeFn =
+    Box<dyn Fn(&Path, Access, Elevation) -> Result<Box<dyn BlockDevice>, BlockError>>;
+/// Obtention du droit d'ouvrir un disque, avant tout geste sur lui.
+pub type PrepareFn = Box<dyn Fn(&Path, Access, Elevation) -> Result<(), BlockError>>;
 /// Cible ouverte : périphérique, informations et points démontés.
 type OpenedTarget = (Box<dyn BlockDevice>, TargetInfo, Vec<String>);
 
 /// Ce que les opérations demandent au système : injectable pour les tests.
 pub struct Io {
+    pub prepare: PrepareFn,
     pub unmount: UnmountFn,
     pub open_node: OpenNodeFn,
     pub cancelled: Box<dyn Fn() -> bool>,
@@ -93,9 +97,12 @@ impl Io {
     /// donne un par opération) ; Ctrl+C annule dans tous les cas.
     pub fn with_cancel(cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>) -> Self {
         Self {
+            prepare: Box::new(|path, access, elevation| {
+                bonk_hal::platform::current().prepare_access(path, access, elevation)
+            }),
             unmount: Box::new(|disk| bonk_hal::platform::current().unmount(disk)),
-            open_node: Box::new(|path, access| {
-                bonk_hal::platform::current().open_disk(path, access)
+            open_node: Box::new(|path, access, elevation| {
+                bonk_hal::platform::current().open_disk(path, access, elevation)
             }),
             cancelled: Box::new(move || {
                 bonk_hal::interrupt::requested()
@@ -324,20 +331,35 @@ fn open_error(err: BlockError) -> JobError {
     }
 }
 
+/// Comment ouvrir la cible.
+struct OpenRequest {
+    options: FilterOptions,
+    access: Access,
+    elevation: Elevation,
+    size_hint: Option<u64>,
+    trace_io: Option<TraceIo>,
+}
+
 /// Ouvre la cible choisie et rend le périphérique, ses informations et les points démontés.
 fn open_target(
     chosen: Chosen,
     target: &Target,
-    options: FilterOptions,
-    access: Access,
-    size_hint: Option<u64>,
-    trace_io: Option<TraceIo>,
+    request: &OpenRequest,
     deps: &Deps<'_>,
 ) -> Result<OpenedTarget, JobError> {
+    let &OpenRequest {
+        options,
+        access,
+        elevation,
+        size_hint,
+        trace_io,
+    } = request;
     let writing = access == Access::ReadWrite;
     let (device, unmounted): (Box<dyn BlockDevice>, Vec<String>) = match (&chosen.disk, target) {
         (Some(disk), _) => {
             let identity = TargetIdentity::from(disk);
+            // Le droit d'abord : un refus ne doit laisser la clé ni démontée ni touchée.
+            (deps.io.prepare)(Path::new(&disk.path), access, elevation).map_err(open_error)?;
             // Démonter seulement pour écrire : relire un volume monté ne le perturbe pas.
             let unmounted = if writing {
                 (deps.io.unmount)(disk).map_err(map_open_target)?
@@ -347,7 +369,8 @@ fn open_target(
             // CDC §3.3 : identité revérifiée immédiatement avant d'ouvrir.
             let fresh = enumerate(deps)?;
             let again = reverify(&identity, &fresh, options).map_err(map_open_target)?;
-            let node = (deps.io.open_node)(Path::new(&again.path), access).map_err(open_error)?;
+            let node = (deps.io.open_node)(Path::new(&again.path), access, elevation)
+                .map_err(open_error)?;
             if node.size() != identity.size_bytes {
                 return Err(map_open_target(OpenTargetError::IdentityChanged {
                     expected: identity.clone(),
@@ -464,6 +487,7 @@ pub struct WriteJob {
     /// Empreinte SHA-256 publiée pour le fichier source, en hexadécimal.
     pub expected_sha256: Option<String>,
     pub mode: WriteMode,
+    pub elevation: Elevation,
 }
 
 /// Contrôle le fichier source contre l'empreinte attendue. Avant tout geste : un fichier faux ne doit
@@ -619,13 +643,28 @@ pub fn write(
         source = source_info.path.as_str(), format = source_info.format.name();
         "write starting"
     );
+    if chosen.disk.is_some() {
+        let waiting = Progress {
+            phase: Phase::Authorize,
+            bytes_done: 0,
+            bytes_total: source_info.size_bytes,
+            bytes_per_second: 0.0,
+            elapsed_ms: 0,
+        };
+        if guarded(deps, progress)(&waiting) == Control::Cancel {
+            return Err(fail(Code::Cancelled, "annulée avant l'ouverture du disque"));
+        }
+    }
     let (mut device, info, unmounted) = open_target(
         chosen,
         &job.target,
-        job.options,
-        Access::ReadWrite,
-        source_info.size_bytes,
-        job.trace_io,
+        &OpenRequest {
+            options: job.options,
+            access: Access::ReadWrite,
+            elevation: job.elevation,
+            size_hint: source_info.size_bytes,
+            trace_io: job.trace_io,
+        },
         deps,
     )?;
     let mut report_progress = guarded(deps, progress);
@@ -691,6 +730,7 @@ pub struct VerifyJob {
     pub source: PathBuf,
     pub options: FilterOptions,
     pub trace_io: Option<TraceIo>,
+    pub elevation: Elevation,
 }
 
 pub fn verify(
@@ -703,10 +743,13 @@ pub fn verify(
     let (mut device, info, _) = open_target(
         chosen,
         &job.target,
-        job.options,
-        Access::ReadOnly,
-        None,
-        job.trace_io,
+        &OpenRequest {
+            options: job.options,
+            access: Access::ReadOnly,
+            elevation: job.elevation,
+            size_hint: None,
+            trace_io: job.trace_io,
+        },
         deps,
     )?;
     let mut report_progress = guarded(deps, progress);
@@ -795,6 +838,7 @@ pub struct RepairJob {
     pub trace_io: Option<TraceIo>,
     pub dry_run: bool,
     pub yes: bool,
+    pub elevation: Elevation,
 }
 
 pub fn repair(job: &RepairJob, deps: &Deps<'_>) -> Result<RepairDone, JobError> {
@@ -812,10 +856,13 @@ pub fn repair(job: &RepairJob, deps: &Deps<'_>) -> Result<RepairDone, JobError> 
         let (device, info, _) = open_target(
             chosen,
             &job.target,
-            job.options,
-            Access::ReadOnly,
-            None,
-            job.trace_io,
+            &OpenRequest {
+                options: job.options,
+                access: Access::ReadOnly,
+                elevation: job.elevation,
+                size_hint: None,
+                trace_io: job.trace_io,
+            },
             deps,
         )?;
         let layout = inspect(&*device).map_err(|e| fail(Code::GptRepairFailed, e))?;
@@ -834,10 +881,13 @@ pub fn repair(job: &RepairJob, deps: &Deps<'_>) -> Result<RepairDone, JobError> 
     let (mut device, info, _) = open_target(
         chosen,
         &job.target,
-        job.options,
-        Access::ReadWrite,
-        None,
-        job.trace_io,
+        &OpenRequest {
+            options: job.options,
+            access: Access::ReadWrite,
+            elevation: job.elevation,
+            size_hint: None,
+            trace_io: job.trace_io,
+        },
         deps,
     )?;
     let before = inspect(&*device).map_err(|e| fail(Code::GptRepairFailed, e))?;
