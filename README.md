@@ -15,8 +15,6 @@ Version 0.0.1, en développement, aucune release publiée.
 
 ## Plateformes
 
-<sub>Le même binaire couvre toute une famille. Windows et macOS ne sont pas pris en charge pour l'instant comme systèmes à installer depuis Bonk : macOS n'est pas prévu, Windows viendra après la première version.</sub>
-
 | <sub>Famille</sub> | <sub>Systèmes</sub> | <sub>Puces</sub> | <sub>Fichier prévu</sub> | <sub>Lien</sub> |
 |---|---|---|---|---|
 | <sub>Debian</sub> | <sub>Debian, Ubuntu, Kubuntu, Xubuntu, Mint, Pop!_OS, Kali, Zorin, MX, elementary, Tuxedo, Deepin, Devuan, Proxmox VE, Tails, Raspberry Pi OS</sub> | <sub>x86_64, ARM64</sub> | <sub>`.deb`, `linux-<puce>.tar.gz`</sub> | <sub>à venir</sub> |
