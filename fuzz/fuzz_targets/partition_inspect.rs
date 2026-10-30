@@ -19,7 +19,11 @@ fn fix_primary_gpt_crcs(disk: &mut [u8]) {
     if disk.len() < 2 * SECTOR {
         return;
     }
-    let lba = u64::from_le_bytes(disk[header + 72..header + 80].try_into().unwrap_or([0xFF; 8]));
+    let lba = u64::from_le_bytes(
+        disk[header + 72..header + 80]
+            .try_into()
+            .unwrap_or([0xFF; 8]),
+    );
     let count = u64::from(le_u32(disk, header + 80));
     let entry_size = u64::from(le_u32(disk, header + 84));
     let range = lba
