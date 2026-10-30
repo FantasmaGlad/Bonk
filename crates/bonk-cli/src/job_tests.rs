@@ -123,6 +123,12 @@ impl TempSource {
         std::fs::write(&path, data).expect("écriture de l'image de test");
         Self(path)
     }
+    fn from_bytes(label: &str, data: &[u8]) -> Self {
+        let path =
+            std::env::temp_dir().join(format!("bonk-job-{}-{label}.img", std::process::id()));
+        std::fs::write(&path, data).expect("écriture de l'image de test");
+        Self(path)
+    }
     fn arg(&self) -> String {
         self.0.display().to_string()
     }
@@ -527,4 +533,38 @@ fn verify_json_et_progression_json() {
         .map(|e| e["bytes_done"].as_u64().unwrap_or(0))
         .collect();
     assert!(done.windows(2).all(|w| w[0] <= w[1]), "{done:?}");
+}
+
+/// Régression constatée sur une vraie clé : après `write`, la réparation du GPT modifie le MBR de
+/// protection et l'en-tête principal ; un `verify` de la même image échouait donc (E4002) alors que le
+/// contenu était intact.
+#[test]
+fn verify_d_une_image_gpt_reussit_apres_la_reparation_du_gpt() {
+    use bonk_core::partition::testing::{LINUX, gpt_image};
+
+    let image = gpt_image(2048, &[(64, 1023, LINUX, "donnees")]);
+    let source = TempSource::from_bytes("gpt-verify", &image);
+    let scenario = Scenario::new();
+    let (code, out, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &source.arg(),
+        "--yes",
+        "--progress",
+        "none",
+    ]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(out.contains("GPT : réparé"), "{out}");
+    let (code, out, err) = scenario.run(&["verify", "usb-a", &source.arg(), "--progress", "none"]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    // Un octet modifié hors des champs que la réparation réécrit reste détecté.
+    scenario
+        .device
+        .0
+        .borrow_mut()
+        .write_at(4096, &[0xAA; 512])
+        .expect("écriture de test");
+    let (code, _, err) = scenario.run(&["verify", "usb-a", &source.arg(), "--progress", "none"]);
+    assert_eq!(code, EXIT_VERIFY_FAILED);
+    assert!(err.trim_end().ends_with("[E4002]"), "{err}");
 }

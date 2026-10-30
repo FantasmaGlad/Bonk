@@ -7,6 +7,7 @@
 //! confirmation) ou sur une image.
 
 use std::fmt;
+use std::ops::Range;
 
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -25,6 +26,37 @@ const REPAIRABLE: [&str; 8] = [
     "gpt_primary_entries_crc",
     "gpt_headers_not_pointing_to_each_other",
 ];
+
+/// Plages d'octets d'une image GPT que [`repair_gpt`] réécrit quand l'image est posée sur un support
+/// plus grand : la taille de l'entrée du MBR de protection et, dans l'en-tête principal, la somme de
+/// contrôle et les quatre positions (le sien, celui de secours, premier et dernier secteur utilisables).
+/// `head` contient le début de l'image (deux secteurs au moins, 8 Kio pour couvrir les secteurs de
+/// 4 Kio). Vide si ce n'est pas une image GPT.
+///
+/// Sert à comparer un support à son image après coup sans prendre pour une erreur ce que la réparation
+/// a légitimement modifié, tout en gardant le reste de ces deux secteurs (GUID du disque...) comparé.
+#[must_use]
+pub fn ranges_rewritten_by_repair(head: &[u8]) -> Vec<Range<u64>> {
+    for block in [512usize, 4096] {
+        if head.len() < 2 * block || &head[block..block + 8] != b"EFI PART" {
+            continue;
+        }
+        let block = block as u64;
+        let mut ranges = Vec::new();
+        if head[510] == 0x55 && head[511] == 0xAA {
+            for entry in (0..4u64).map(|i| 446 + i * 16) {
+                let at = usize::try_from(entry).unwrap_or(0);
+                if head[at + 4] == 0xEE {
+                    ranges.push(entry + 8..entry + 16);
+                }
+            }
+        }
+        ranges.push(block + 16..block + 20);
+        ranges.push(block + 24..block + 56);
+        return ranges;
+    }
+    Vec::new()
+}
 
 /// Vrai si l'inspection montre un défaut que [`repair_gpt`] sait corriger.
 #[must_use]
@@ -377,5 +409,39 @@ mod tests {
         // Le secours est perdu avec la coupure : seul le principal sert de modèle.
         assert!(matches!(repair_gpt(&mut small), Err(RepairError::TooSmall)));
         Ok(())
+    }
+
+    /// Garde-fou : tout octet que la réparation change dans les deux premiers secteurs est annoncé par
+    /// `ranges_rewritten_by_repair`, et rien d'autre dans l'image n'est touché. Si `repair_gpt` se met à
+    /// écrire ailleurs, ce test échoue au lieu de laisser la vérification passer à côté.
+    #[test]
+    fn les_plages_annoncees_couvrent_exactement_ce_que_la_reparation_change()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let image = image();
+        let ranges = ranges_rewritten_by_repair(&image);
+        assert!(!ranges.is_empty());
+        // Support quatre fois plus grand que l'image : le secours n'est plus à la fin.
+        let mut dev = grown(&image, 4096 * 4)?;
+        let report = repair_gpt(&mut dev)?;
+        assert!(!report.actions.is_empty());
+        let after = dev.as_bytes();
+        let changed: Vec<u64> = (0..image.len())
+            .filter(|&i| after[i] != image[i])
+            .map(|i| i as u64)
+            .collect();
+        assert!(!changed.is_empty(), "la réparation devait modifier l'image");
+        for offset in changed {
+            assert!(
+                ranges.iter().any(|r| r.contains(&offset)),
+                "octet {offset} modifié mais non annoncé ({ranges:?})"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn une_image_sans_gpt_n_annonce_aucune_plage() {
+        assert!(ranges_rewritten_by_repair(&[0u8; 8192]).is_empty());
+        assert!(ranges_rewritten_by_repair(&[0u8; 100]).is_empty());
     }
 }

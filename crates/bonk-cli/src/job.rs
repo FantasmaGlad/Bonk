@@ -166,6 +166,19 @@ pub(crate) struct VerifyDone {
     pub(crate) target: TargetInfo,
     pub(crate) source: SourceInfo,
     pub(crate) verify: VerifyReport,
+    /// Octets exclus de la comparaison (`sha256` est alors l'empreinte de l'image avec ces octets remis
+    /// à zéro). Vide pour une image sans GPT ou aussi grande que le support.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) ignored_ranges: Vec<IgnoredRange>,
+}
+
+/// Plage d'octets exclue d'une comparaison, avec la raison.
+#[derive(Debug, Serialize, JsonSchema)]
+pub(crate) struct IgnoredRange {
+    pub(crate) offset: u64,
+    pub(crate) length: u64,
+    /// `gpt_repair` : champs que la réparation du GPT réécrit sur un support plus grand que l'image.
+    pub(crate) reason: &'static str,
 }
 
 /// Résultat (ou plan) d'une réparation du GPT.
@@ -576,10 +589,18 @@ pub(crate) fn verify(
         deps,
     )?;
     let mut report_progress = guarded(deps, progress);
-    let (len, sha) = engine::hash_source(
+    // Une image GPT posée sur un support plus grand a vu quelques champs réécrits par la réparation du
+    // GPT (MBR de protection, positions de l'en-tête) : les comparer à l'image donnerait un faux échec.
+    let ignore = if source_info.size_bytes.is_none_or(|n| n < device.size()) {
+        repair_ranges(&job.source)
+    } else {
+        Vec::new()
+    };
+    let (len, sha) = engine::hash_source_ignoring(
         &mut source.reader,
         source_info.size_bytes,
         DEFAULT_CHUNK,
+        &ignore,
         &mut report_progress,
     )
     .map_err(|e| map_verify_error(e, source_info.format))?;
@@ -592,15 +613,46 @@ pub(crate) fn verify(
             ),
         ));
     }
-    let verify = engine::verify(&*device, len, &sha, DEFAULT_CHUNK, &mut report_progress)
-        .map_err(|e| map_verify_error(e, source_info.format))?;
+    let verify = engine::verify_ignoring(
+        &*device,
+        len,
+        &sha,
+        DEFAULT_CHUNK,
+        &ignore,
+        &mut report_progress,
+    )
+    .map_err(|e| map_verify_error(e, source_info.format))?;
     Ok(VerifyDone {
         schema_version: SCHEMA_VERSION,
         event: "result",
         target: info,
         source: source_info,
         verify,
+        ignored_ranges: ignore
+            .iter()
+            .map(|r| IgnoredRange {
+                offset: r.start,
+                length: r.end - r.start,
+                reason: "gpt_repair",
+            })
+            .collect(),
     })
+}
+
+/// Plages d'une image GPT que la réparation du GPT peut réécrire (début de l'image relu à part, car le
+/// flux principal est consommé par le calcul de l'empreinte). Vide si l'image est illisible : l'erreur
+/// sera remontée par la lecture principale.
+fn repair_ranges(path: &Path) -> Vec<std::ops::Range<u64>> {
+    use std::io::Read;
+
+    let Ok((source, _)) = open_source(path) else {
+        return Vec::new();
+    };
+    let mut head = Vec::new();
+    if source.reader.take(8192).read_to_end(&mut head).is_err() {
+        return Vec::new();
+    }
+    bonk_core::repair::ranges_rewritten_by_repair(&head)
 }
 
 // ---------------------------------------------------------------------------------------------

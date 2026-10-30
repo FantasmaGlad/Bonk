@@ -401,6 +401,13 @@ pub(crate) fn run_verify(
             format_size(done.verify.bytes),
             target_line(&done.target)
         )?;
+        if !done.ignored_ranges.is_empty() {
+            let octets: u64 = done.ignored_ranges.iter().map(|r| r.length).sum();
+            writeln!(
+                out,
+                "  Exclus de la comparaison : {octets} octets de champs du GPT que sa réparation réécrit"
+            )?;
+        }
         writeln!(out, "  SHA-256 : {}", done.verify.sha256)
     })
 }
