@@ -156,7 +156,13 @@ impl TempSource {
     fn new(label: &str, len: usize) -> Self {
         let path =
             std::env::temp_dir().join(format!("bonk-job-{}-{label}.img", std::process::id()));
-        let data: Vec<u8> = (0..len).map(|i| (i * 13 % 251) as u8).collect();
+        let mut data: Vec<u8> = (0..len).map(|i| (i * 13 % 251) as u8).collect();
+        // Signature d'amorçage : l'analyse y voit une image de disque.
+        if len >= 512 {
+            data[446..510].fill(0);
+            data[510] = 0x55;
+            data[511] = 0xAA;
+        }
         std::fs::write(&path, data).expect("écriture de l'image de test");
         Self(path)
     }

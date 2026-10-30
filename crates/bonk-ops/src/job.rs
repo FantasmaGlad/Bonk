@@ -13,6 +13,7 @@ use std::fmt::Display;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 
+use bonk_core::analysis::{self, ImageKind, ImageReport};
 use bonk_core::codec::{self, CodecError, Format, Source};
 use bonk_core::partition::inspect;
 use bonk_core::repair::{RepairError, RepairReport, needs_repair, repair_gpt};
@@ -41,6 +42,16 @@ pub enum TraceIo {
     Metadata,
     /// Avec les 16 premiers octets : réservé aux fichiers image.
     Data,
+}
+
+/// Que faire de l'analyse de l'image.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WriteMode {
+    /// Refuse une image qui ne démarrerait pas écrite telle quelle, ou tronquée.
+    #[default]
+    Auto,
+    /// Écrit les octets tels quels, quelle que soit l'analyse.
+    Raw,
 }
 
 /// Une erreur d'opération, avec son code stable.
@@ -136,6 +147,9 @@ pub struct Plan {
     pub dry_run: bool,
     pub target: TargetInfo,
     pub source: SourceInfo,
+    pub image: ImageReport,
+    /// L'empreinte fournie a été contrôlée et correspond.
+    pub sha256_checked: bool,
     /// Points de montage qui seront démontés.
     pub unmount: Vec<String>,
     pub steps: Vec<&'static str>,
@@ -148,6 +162,9 @@ pub struct WriteDone {
     pub event: &'static str,
     pub target: TargetInfo,
     pub source: SourceInfo,
+    pub image: ImageReport,
+    /// L'empreinte fournie a été contrôlée et correspond.
+    pub sha256_checked: bool,
     pub unmounted: Vec<String>,
     pub write: WriteReport,
     pub verify: Option<VerifyReport>,
@@ -444,6 +461,101 @@ pub struct WriteJob {
     pub trace_io: Option<TraceIo>,
     pub dry_run: bool,
     pub yes: bool,
+    /// Empreinte SHA-256 publiée pour le fichier source, en hexadécimal.
+    pub expected_sha256: Option<String>,
+    pub mode: WriteMode,
+}
+
+/// Contrôle le fichier source contre l'empreinte attendue. Avant tout geste : un fichier faux ne doit
+/// coûter ni un démontage, ni le contenu de la clé.
+fn check_sha256(
+    path: &Path,
+    expected: &str,
+    deps: &Deps<'_>,
+    progress: &mut dyn FnMut(&Progress) -> Control,
+) -> Result<(), JobError> {
+    let expected = expected.trim().to_ascii_lowercase();
+    if expected.len() != 64 || !expected.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(fail(
+            Code::InvalidArgument,
+            format!("empreinte SHA-256 invalide : « {expected} » (64 caractères hexadécimaux)"),
+        ));
+    }
+    let mut file = File::open(path)
+        .map_err(|e| fail(Code::SourceUnreadable, format!("{} : {e}", path.display())))?;
+    let total = file.metadata().ok().map(|m| m.len());
+    let mut report = guarded(deps, progress);
+    let actual =
+        engine::hash_stream(&mut file, total, DEFAULT_CHUNK, &mut report).map_err(|e| match e {
+            VerifyError::Cancelled => fail(Code::Cancelled, e),
+            _ => fail(Code::SourceUnreadable, format!("{} : {e}", path.display())),
+        })?;
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(fail(
+            Code::SourceHashMismatch,
+            format!("{} : attendu {expected}, calculé {actual}", path.display()),
+        ))
+    }
+}
+
+/// Lit le début de l'image (décompressé) et l'analyse. Rouvre le fichier : le flux principal doit rester
+/// intact pour l'écriture.
+fn analyze_source(path: &Path, real_len: Option<u64>) -> Result<ImageReport, JobError> {
+    use std::io::Read;
+
+    let (source, _) = open_source(path)?;
+    let mut head = Vec::new();
+    source
+        .reader
+        .take(analysis::HEAD_LEN as u64)
+        .read_to_end(&mut head)
+        .map_err(|e| {
+            fail(
+                Code::DecompressionFailed,
+                format!("{} : {e}", path.display()),
+            )
+        })?;
+    Ok(analysis::analyze(&head, real_len))
+}
+
+/// Applique le mode d'écriture à l'analyse : `Raw` passe outre en le journalisant.
+fn judge_image(report: &ImageReport, mode: WriteMode) -> Result<(), JobError> {
+    let problem = if report.truncated == Some(true) {
+        Some((
+            Code::ImageTruncated,
+            format!(
+                "l'image annonce {} octets",
+                report.declared_bytes.unwrap_or_default()
+            ),
+        ))
+    } else if report.is_writable_as_is() {
+        None
+    } else if report.kind == ImageKind::PlainIso {
+        let hint = if report.udf {
+            " ; les ISO d'installation de Windows sont de ce type"
+        } else {
+            ""
+        };
+        Some((
+            Code::ImageNotBootable,
+            format!("ISO sans amorçage de disque : elle ne démarrerait pas depuis une clé{hint}"),
+        ))
+    } else {
+        Some((
+            Code::ImageNotBootable,
+            "aucune structure d'amorçage ni table de partitions reconnue".to_owned(),
+        ))
+    };
+    match (problem, mode) {
+        (None, _) => Ok(()),
+        (Some((code, message)), WriteMode::Auto) => Err(fail(code, message)),
+        (Some((code, message)), WriteMode::Raw) => {
+            log::warn!(target: "bonk::write", code = code.id(), reason = message.as_str(); "written anyway: raw mode");
+            Ok(())
+        }
+    }
 }
 
 pub fn write(
@@ -453,6 +565,8 @@ pub fn write(
 ) -> Result<WriteOutcome, JobError> {
     let (mut source, source_info) = open_source(&job.source)?;
     let chosen = choose(&job.target, job.options, deps)?;
+    let image = analyze_source(&job.source, source_info.size_bytes)?;
+    judge_image(&image, job.mode)?;
     // Refus avant tout geste quand la taille de l'image est connue et dépasse la cible.
     if let (Some(needed), Some(available)) = (source_info.size_bytes, chosen.info.size_bytes)
         && needed > available
@@ -462,6 +576,11 @@ pub fn write(
             format!("l'image fait {needed} octets, la cible {available} octets"),
         ));
     }
+
+    if let Some(expected) = &job.expected_sha256 {
+        check_sha256(&job.source, expected, deps, progress)?;
+    }
+    let sha256_checked = job.expected_sha256.is_some();
 
     if job.dry_run {
         let mut steps = Vec::new();
@@ -481,6 +600,8 @@ pub fn write(
             dry_run: true,
             target: chosen.info,
             source: source_info,
+            image,
+            sha256_checked,
             unmount: chosen.mounts,
             steps,
         })));
@@ -552,6 +673,8 @@ pub fn write(
         event: "result",
         target: info,
         source: source_info,
+        image,
+        sha256_checked,
         unmounted,
         write,
         verify,
