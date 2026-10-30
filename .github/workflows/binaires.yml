@@ -17,10 +17,11 @@ on:
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - ".github/workflows/binaires.yml"
+      - ".github/pip/ziglang.txt"
     tags: ["v*.*.*"]
   # Une modification du workflow est validée par sa propre PR (construction sans attestation).
   pull_request:
-    paths: [".github/workflows/binaires.yml"]
+    paths: [".github/workflows/binaires.yml", ".github/pip/ziglang.txt"]
   schedule:
     - cron: "17 5 * * 1"
   workflow_dispatch:
@@ -87,7 +88,7 @@ jobs:
         if: matrix.outil == 'zigbuild'
         run: |
           python3 -m venv "$RUNNER_TEMP/zig"
-          "$RUNNER_TEMP/zig/bin/pip" install --quiet ziglang==0.17.0
+          "$RUNNER_TEMP/zig/bin/pip" install --quiet --require-hashes -r .github/pip/ziglang.txt
           echo "$RUNNER_TEMP/zig/bin" >> "$GITHUB_PATH"
           cargo install --locked --version 0.24.0 cargo-zigbuild
       - name: Construire
