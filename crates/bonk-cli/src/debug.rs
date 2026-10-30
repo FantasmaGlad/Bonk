@@ -19,6 +19,8 @@ use crate::errors::Code;
 use crate::info;
 
 const JSON_SCHEMA_VERSION: u32 = 1;
+/// `debug filter` est passé à 2 en retirant le champ `cdc` de chaque règle.
+const FILTER_SCHEMA_VERSION: u32 = 2;
 /// Taille d'un dump par défaut, et plafond.
 const HEXDUMP_DEFAULT: u64 = 4096;
 const HEXDUMP_MAX: u64 = 1 << 20;
@@ -189,7 +191,7 @@ pub(crate) fn filter_value(
     let disk = info::find(disks, target)?;
     let (verdict, rules) = evaluate_traced(disk, options);
     Some(serde_json::to_value(FilterReport {
-        schema_version: JSON_SCHEMA_VERSION,
+        schema_version: FILTER_SCHEMA_VERSION,
         disk: &disk.id,
         options,
         verdict: &verdict,
@@ -218,7 +220,7 @@ pub(crate) fn filter(
     let (verdict, rules) = evaluate_traced(disk, options);
     if args.json {
         let report = FilterReport {
-            schema_version: JSON_SCHEMA_VERSION,
+            schema_version: FILTER_SCHEMA_VERSION,
             disk: &disk.id,
             options,
             verdict: &verdict,
@@ -258,8 +260,8 @@ pub(crate) fn filter(
         };
         writeln!(
             out,
-            "[{mark}] §{:<5} {:<rule_width$}  {:<subject_width$}  {}",
-            rule.cdc, rule.rule, rule.subject, rule.facts
+            "[{mark}] {:<rule_width$}  {:<subject_width$}  {}",
+            rule.rule, rule.subject, rule.facts
         )?;
     }
     writeln!(out, "Verdict : {}", state_label(&verdict))?;
