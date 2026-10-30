@@ -8,6 +8,7 @@
 
 use std::fmt;
 use std::io::{self, Read};
+use std::ops::Range;
 use std::time::Instant;
 
 use schemars::JsonSchema;
@@ -261,6 +262,35 @@ pub fn verify(
     chunk: usize,
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<VerifyReport, VerifyError> {
+    verify_ignoring(dev, len, expected_sha256, chunk, &[], progress)
+}
+
+/// Remet à zéro, dans `buf` (lu à `offset`), les octets que couvrent les plages `ignore`.
+fn zero_ignored(buf: &mut [u8], offset: u64, ignore: &[Range<u64>]) {
+    let end = offset + buf.len() as u64;
+    for range in ignore {
+        let (from, to) = (range.start.max(offset), range.end.min(end));
+        if from < to {
+            let (from, to) = (from - offset, to - offset);
+            buf[usize::try_from(from).unwrap_or(0)..usize::try_from(to).unwrap_or(0)].fill(0);
+        }
+    }
+}
+
+/// Comme [`verify`], mais les octets des plages `ignore` sont remplacés par des zéros avant l'empreinte,
+/// des deux côtés (voir [`hash_source_ignoring`]) : pour comparer un support dont la réparation du GPT a
+/// légitimement réécrit quelques champs.
+///
+/// # Errors
+/// [`VerifyError::Mismatch`] si l'empreinte diffère.
+pub fn verify_ignoring(
+    dev: &dyn BlockDevice,
+    len: u64,
+    expected_sha256: &str,
+    chunk: usize,
+    ignore: &[Range<u64>],
+    progress: &mut dyn FnMut(&Progress) -> Control,
+) -> Result<VerifyReport, VerifyError> {
     let block = u64::from(dev.block_size());
     let step = chunk_for(chunk, dev.block_size());
     let mut buf = vec![0u8; step];
@@ -271,6 +301,7 @@ pub fn verify(
         let n = usize::try_from((len - done).min(step as u64)).unwrap_or(step);
         let padded = usize::try_from((n as u64).div_ceil(block) * block).unwrap_or(n);
         dev.read_at(done, &mut buf[..padded])?;
+        zero_ignored(&mut buf[..n], done, ignore);
         hasher.update(&buf[..n]);
         done += n as u64;
         let current = Progress {
@@ -311,6 +342,20 @@ pub fn hash_source(
     chunk: usize,
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<(u64, String), VerifyError> {
+    hash_source_ignoring(src, size_hint, chunk, &[], progress)
+}
+
+/// Comme [`hash_source`], avec les octets des plages `ignore` remplacés par des zéros avant l'empreinte.
+///
+/// # Errors
+/// [`VerifyError::Source`] si l'image est illisible, [`VerifyError::Cancelled`] sur annulation.
+pub fn hash_source_ignoring(
+    src: &mut dyn Read,
+    size_hint: Option<u64>,
+    chunk: usize,
+    ignore: &[Range<u64>],
+    progress: &mut dyn FnMut(&Progress) -> Control,
+) -> Result<(u64, String), VerifyError> {
     let mut buf = vec![0u8; chunk.max(4096)];
     let mut hasher = Sha256::new();
     let started = Instant::now();
@@ -320,6 +365,7 @@ pub fn hash_source(
         if n == 0 {
             break;
         }
+        zero_ignored(&mut buf[..n], total, ignore);
         hasher.update(&buf[..n]);
         total += n as u64;
         let current = Progress {
@@ -605,6 +651,38 @@ mod tests {
         assert!(matches!(
             error,
             Some(WriteError::Device(BlockError::ReadOnly))
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn les_plages_ignorees_sont_exclues_des_deux_cotes_et_le_reste_est_compare()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let image: Vec<u8> = (0..4096u32).map(|i| (i % 251) as u8).collect();
+        let ignore = [10..20u64, 4090..4096];
+        let (len, sha) = hash_source_ignoring(
+            &mut Cursor::new(image.clone()),
+            None,
+            1024,
+            &ignore,
+            &mut |_| Control::Continue,
+        )?;
+        assert_eq!(len, 4096);
+        // Le support diffère dans les plages ignorées (y compris à cheval sur deux blocs de lecture).
+        let mut other = image.clone();
+        other[12] ^= 0xFF;
+        other[4092] ^= 0xFF;
+        let dev = MemoryDevice::from_bytes(other.clone(), 512)?;
+        assert!(
+            verify_ignoring(&dev, len, &sha, 1024, &ignore, &mut |_| Control::Continue).is_ok()
+        );
+        // Sans ignorer, la même différence est détectée ; un octet hors plage l'est aussi.
+        assert!(verify(&dev, len, &sha, 1024, &mut |_| Control::Continue).is_err());
+        other[100] ^= 1;
+        let dev = MemoryDevice::from_bytes(other, 512)?;
+        assert!(matches!(
+            verify_ignoring(&dev, len, &sha, 1024, &ignore, &mut |_| Control::Continue),
+            Err(VerifyError::Mismatch { .. })
         ));
         Ok(())
     }
