@@ -106,6 +106,17 @@ pub trait BlockDevice {
     /// # Errors
     /// [`BlockError::Io`].
     fn flush(&mut self) -> Result<(), BlockError>;
+
+    /// Oublie les copies en cache pour que les lectures suivantes viennent du **support** et non de la
+    /// mémoire du système : sans cela, une relecture de contrôle juste après l'écriture lit ce que le
+    /// noyau garde en cache, même si le support a mal écrit. À appeler après [`Self::flush`] et avant la
+    /// relecture. Sans effet par défaut (tampon en mémoire, fichier image).
+    ///
+    /// # Errors
+    /// [`BlockError::Io`].
+    fn drop_cache(&mut self) -> Result<(), BlockError> {
+        Ok(())
+    }
 }
 
 /// Vérifie qu'une géométrie est utilisable : bloc en puissance de deux d'au moins 512 octets, taille

@@ -192,7 +192,12 @@ pub fn repair_gpt(dev: &mut dyn BlockDevice) -> Result<RepairReport, RepairError
     let last_usable = backup_table_lba
         .checked_sub(1)
         .ok_or(RepairError::TooSmall)?;
-    let first_usable = model.first_usable_lba.max(2 + table_sectors);
+    // La table principale reste où l'image l'a mise (une image hybride comme l'ISO de Debian la place
+    // au secteur 12, pas au 2) ; seule une table restaurée depuis le secours est écrite au secteur 2.
+    let primary_entries_lba = if from_primary { model.entries_lba } else { 2 };
+    let first_usable = model
+        .first_usable_lba
+        .max(primary_entries_lba + table_sectors);
     if last_usable < first_usable || gpt.entries.iter().any(|e| e.last_lba > last_usable) {
         return Err(RepairError::TooSmall);
     }
@@ -241,7 +246,7 @@ pub fn repair_gpt(dev: &mut dyn BlockDevice) -> Result<RepairReport, RepairError
             &Placement {
                 my_lba: 1,
                 alternate_lba: last,
-                entries_lba: 2,
+                entries_lba: primary_entries_lba,
             },
         ),
     )?;
@@ -290,6 +295,23 @@ mod tests {
             4096,
             &[(2048, 2559, ESP, "EFI"), (2560, 4000, LINUX, "racine")],
         )
+    }
+
+    /// Image dont la table principale est au secteur `lba` et non au 2 : c'est le cas des images
+    /// hybrides (ISO de Debian : table au secteur 12, 208 entrées).
+    fn image_table_at(lba: u64) -> Vec<u8> {
+        let mut img = image();
+        let count = u32::from_le_bytes([img[592], img[593], img[594], img[595]]) as usize;
+        let size = u32::from_le_bytes([img[596], img[597], img[598], img[599]]) as usize;
+        let table = img[1024..1024 + count * size].to_vec();
+        img[1024..1024 + count * size].fill(0);
+        let at = usize::try_from(lba * 512).unwrap_or(0);
+        img[at..at + table.len()].copy_from_slice(&table);
+        put_u64(&mut img, 512 + 72, lba);
+        put_u32(&mut img, 512 + 16, 0);
+        let crc = crc32(&img[512..512 + 92]);
+        put_u32(&mut img, 512 + 16, crc);
+        img
     }
 
     fn codes(layout: &Layout) -> Vec<&'static str> {
@@ -417,11 +439,17 @@ mod tests {
     #[test]
     fn les_plages_annoncees_couvrent_exactement_ce_que_la_reparation_change()
     -> Result<(), Box<dyn std::error::Error>> {
-        let image = image();
-        let ranges = ranges_rewritten_by_repair(&image);
+        for image in [image(), image_table_at(40)] {
+            check_ranges_cover_repair(&image)?;
+        }
+        Ok(())
+    }
+
+    fn check_ranges_cover_repair(image: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+        let ranges = ranges_rewritten_by_repair(image);
         assert!(!ranges.is_empty());
         // Support quatre fois plus grand que l'image : le secours n'est plus à la fin.
-        let mut dev = grown(&image, 4096 * 4)?;
+        let mut dev = grown(image, 4096 * 4)?;
         let report = repair_gpt(&mut dev)?;
         assert!(!report.actions.is_empty());
         let after = dev.as_bytes();
@@ -436,6 +464,32 @@ mod tests {
                 "octet {offset} modifié mais non annoncé ({ranges:?})"
             );
         }
+        Ok(())
+    }
+
+    /// Régression constatée sur l'ISO de Debian : la réparation réécrivait l'en-tête principal avec
+    /// « table au secteur 2 » sans y copier la table, qui reste là où l'image l'a mise.
+    #[test]
+    fn la_reparation_laisse_la_table_principale_la_ou_l_image_la_met()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = image_table_at(40);
+        let mut dev = grown(&source, 4096 * 4)?;
+        let report = repair_gpt(&mut dev)?;
+        assert!(report.actions.contains(&"primary_header_updated"));
+        let layout = inspect(&dev)?;
+        let gpt = layout.gpt.as_ref().ok_or("gpt")?;
+        let primary = gpt.primary.as_ref().ok_or("en-tête principal")?;
+        assert_eq!(primary.entries_lba, 40, "la table n'a pas bougé");
+        assert!(
+            primary.header_crc_ok && primary.entries_crc_ok,
+            "{primary:?}"
+        );
+        assert!(!needs_repair(&layout), "{:?}", codes(&layout));
+        // La table elle-même est intacte à sa place d'origine.
+        assert_eq!(
+            dev.as_bytes()[40 * 512..72 * 512],
+            source[40 * 512..72 * 512]
+        );
         Ok(())
     }
 
