@@ -1,53 +1,46 @@
 # Bonk
 
-Utilitaire de création de supports d'amorçage (clés USB et disques externes), écrit en Rust. Un seul exécutable : l'interface graphique sans argument, la ligne de commande sinon. Projet en développement, version 0.0.1.
+Écrit des images amorçables sur clé USB ou disque externe, en ligne de commande sur toute plateforme, avec une fenêtre quand c'est possible. Écrit en Rust, un seul binaire, licence [MIT](LICENSE).
 
 [![binaires](https://github.com/FantasmaGlad/Bonk/actions/workflows/binaires.yml/badge.svg)](https://github.com/FantasmaGlad/Bonk/actions/workflows/binaires.yml)
 [![ci](https://github.com/FantasmaGlad/Bonk/actions/workflows/ci.yml/badge.svg)](https://github.com/FantasmaGlad/Bonk/actions/workflows/ci.yml)
 
-## Portée
+## État
 
-Bonk écrit des images disque (`.img`, `.iso`, `.gz`, `.xz`, `.zst`) sur une clé USB ou un disque externe, puis vérifie l'écriture. Un disque système n'est jamais proposé ni écrit.
+Version 0.0.1, en développement, aucune release publiée.
 
-État actuel :
+- **Fait, Linux** : liste des disques, écriture, vérification, réparation du GPT, décompression gzip, xz, zstd, service `bonk serve`. L'écriture exige `sudo`.
+- **En cours** : contrôle d'empreinte et analyse d'image, écriture sans `sudo`.
+- **À venir** : formatage, téléchargement, Windows et macOS (binaires construits, sans accès aux disques), clé d'installation Windows, DOS, Android.
 
-- **Linux** : liste des disques, écriture et vérification. L'écriture exige aujourd'hui les droits d'administrateur (`sudo`) ; la fenêtre ne peut donc pas encore écrire pour un utilisateur ordinaire.
-- **Windows et macOS** : les binaires sont construits et testés, mais l'accès aux disques n'existe pas encore (`bonk list` échoue avec le code `E1002`).
-- **Pas encore fait** : téléchargement, formatage, clé d'installation Windows, application Android.
+## Plateformes
 
-## Télécharger
+<sub>Le même binaire couvre toute une famille. Windows et macOS ne sont pas pris en charge pour l'instant comme systèmes à installer depuis Bonk : macOS n'est pas prévu, Windows viendra après la première version.</sub>
 
-Binaires de la version [0.0.1](https://github.com/FantasmaGlad/Bonk/releases/tag/v0.0.1), construits par la CI et attestés. Empreintes : [SHA256SUMS](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/SHA256SUMS). Inventaire des composants : [bonk.cdx.json](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/bonk.cdx.json).
+| <sub>Famille</sub> | <sub>Systèmes</sub> | <sub>Puces</sub> | <sub>Fichier prévu</sub> | <sub>Lien</sub> |
+|---|---|---|---|---|
+| <sub>Debian</sub> | <sub>Debian, Ubuntu, Kubuntu, Xubuntu, Mint, Pop!_OS, Kali, Zorin, MX, elementary, Tuxedo, Deepin, Devuan, Proxmox VE, Tails, Raspberry Pi OS</sub> | <sub>x86_64, ARM64</sub> | <sub>`.deb`, `linux-<puce>.tar.gz`</sub> | <sub>à venir</sub> |
+| <sub>Red Hat</sub> | <sub>Fedora, RHEL, CentOS, Rocky, AlmaLinux, Oracle Linux, Amazon Linux, Nobara</sub> | <sub>x86_64, ARM64</sub> | <sub>`.rpm`, `linux-<puce>.tar.gz`</sub> | <sub>à venir</sub> |
+| <sub>SUSE</sub> | <sub>SLES, openSUSE Leap, Tumbleweed</sub> | <sub>x86_64, ARM64</sub> | <sub>`.rpm`, `linux-<puce>.tar.gz`</sub> | <sub>à venir</sub> |
+| <sub>Arch</sub> | <sub>Arch, CachyOS, EndeavourOS, Manjaro, Garuda</sub> | <sub>x86_64, ARM64</sub> | <sub>AUR, `linux-<puce>.tar.gz`</sub> | <sub>à venir</sub> |
+| <sub>Linux immuable</sub> | <sub>SteamOS, Bazzite</sub> | <sub>x86_64, ARM64</sub> | <sub>AppImage, Flatpak</sub> | <sub>à venir</sub> |
+| <sub>Linux 32 bits</sub> | <sub>Debian, Kali, MX, Devuan, Slackware, Arch Linux 32, LMDE</sub> | <sub>x86</sub> | <sub>`linux-i686.tar.gz`</sub> | <sub>à venir</sub> |
+| <sub>Linux ARM 32 bits</sub> | <sub>Raspberry Pi OS 32 bits, Debian, Kali, Arch Linux ARM</sub> | <sub>ARMv7</sub> | <sub>`linux-armv7.tar.gz`</sub> | <sub>à venir</sub> |
+| <sub>Indépendantes</sub> | <sub>Slackware, Gentoo, Void</sub> | <sub>x86_64, ARM64</sub> | <sub>`linux-<puce>.tar.gz`</sub> | <sub>à venir</sub> |
+| <sub>Statique, CLI</sub> | <sub>Alpine, NixOS, Void musl, Gentoo musl, serveurs, tout Linux</sub> | <sub>x86_64, ARM64, x86, ARMv6</sub> | <sub>`linux-<puce>-musl.tar.gz`</sub> | <sub>à venir</sub> |
+| <sub>Statique, CLI</sub> | <sub>Debian, Ubuntu, Fedora, openSUSE, RHEL, Deepin, Gentoo</sub> | <sub>RISC-V, POWER, LoongArch</sub> | <sub>`linux-<puce>-musl.tar.gz`</sub> | <sub>à venir</sub> |
+| <sub>ChromeOS</sub> | <sub>ChromeOS par Crostini, CLI ; accès à la clé à vérifier</sub> | <sub>x86_64, ARM64</sub> | <sub>`linux-<puce>-musl.tar.gz`</sub> | <sub>à venir</sub> |
+| <sub>Windows</sub> | <sub>Windows 10, 11, Server 2016 et plus</sub> | <sub>x86_64, ARM64, x86</sub> | <sub>`windows-<puce>.zip`, MSIX</sub> | <sub>à venir</sub> |
+| <sub>macOS</sub> | <sub>macOS 12 et plus</sub> | <sub>Apple Silicon, Intel</sub> | <sub>`macos-universal.tar.gz`, `.dmg`</sub> | <sub>à venir</sub> |
+| <sub>Android</sub> | <sub>Android 8.0 et plus, téléphones et tablettes, Bliss OS, Android-x86, ChromeOS</sub> | <sub>ARM64, ARMv7, x86_64, x86</sub> | <sub>APK, Google Play</sub> | <sub>à venir</sub> |
 
-| Système | Architecture | Binaire v0.0.1 | Système minimal |
-|---|---|---|---|
-| Linux | x86_64 | [tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/bonk-0.0.1-linux-x86_64.tar.gz), [deb](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/bonk_0.0.1-1_amd64.deb), [rpm](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/bonk-0.0.1-1.x86_64.rpm) | glibc 2.17 (noyau 3.2) |
-| Linux | aarch64 | [tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/bonk-0.0.1-linux-aarch64.tar.gz), [deb](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/bonk_0.0.1-1_arm64.deb), [rpm](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/bonk-0.0.1-1.aarch64.rpm) | glibc 2.17 (noyau 4.1) |
-| Linux | i686 | [tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/bonk-0.0.1-linux-i686.tar.gz) | glibc 2.17 |
-| Linux (statique, ligne de commande) | x86_64 | [tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/bonk-0.0.1-linux-x86_64-musl.tar.gz) | tout noyau 3.2+ |
-| Linux (statique, ligne de commande) | aarch64 | [tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/bonk-0.0.1-linux-aarch64-musl.tar.gz) | tout noyau 4.1+ |
-| Windows | x86_64 | [zip](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/bonk-0.0.1-windows-x86_64.zip) | Windows 10 |
-| Windows | ARM64 | [zip](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/bonk-0.0.1-windows-aarch64.zip) | Windows 10 ARM64 |
-| Windows | x86 (32 bits) | [zip](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/bonk-0.0.1-windows-i686.zip) | Windows 10 |
-| macOS | Apple Silicon | [tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/bonk-0.0.1-macos-aarch64.tar.gz) | macOS 12 |
-| macOS | Intel | [tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/bonk-0.0.1-macos-x86_64.tar.gz) | macOS 12 |
-| macOS | universel | [tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.1/bonk-0.0.1-macos-universal.tar.gz) | macOS 12 |
-
-Les liens fonctionnent une fois la release publiée. Les binaires de chaque fusion sur `main` sont dans les [exécutions du workflow `binaires`](https://github.com/FantasmaGlad/Bonk/actions/workflows/binaires.yml).
-
-Vérifier une archive :
-
-```bash
-gh attestation verify bonk-0.0.1-linux-x86_64.tar.gz --repo FantasmaGlad/Bonk
-```
-
-Les binaires ne sont pas encore signés Authenticode (Windows) ni notarisés (macOS) : SmartScreen et Gatekeeper peuvent avertir.
+<sub>Noms complets : `bonk-<version>-<cible>.<format>`. Empreintes `SHA256SUMS`, inventaire `bonk.cdx.json`, provenance vérifiable : `gh attestation verify <fichier> --repo FantasmaGlad/Bonk`. Pas de signature Authenticode ni de notarisation : SmartScreen et Gatekeeper peuvent avertir.</sub>
 
 ## Principes
 
-- Sécurité des disques : un disque système de l'hôte n'est jamais proposé ni écrit.
-- Aucune télémétrie : le réseau ne servira qu'au catalogue et aux téléchargements demandés.
-- Aucune dépendance à installer par l'utilisateur.
+- Un disque système n'est jamais proposé ni écrit.
+- Aucune télémétrie.
+- Rien à installer en plus.
 
 ## Compiler
 
@@ -56,12 +49,4 @@ cargo build --workspace --release
 cargo test --workspace
 ```
 
-La chaîne Rust (stable, avec rustfmt et clippy) est sélectionnée par `rust-toolchain.toml`.
-
-## Architecture
-
-Voir [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## Licence
-
-Licence MIT : voir [LICENSE](LICENSE).
+Architecture : [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
