@@ -158,7 +158,8 @@ fn le_journal_va_sur_stderr_et_la_sortie_reste_du_json() -> Resultat {
 
 /// Régression : sous un affichage virtuel (Xvfb), wgpu paniquait (« incompatible window kind ») au lieu
 /// de basculer sur le rendu logiciel (CDC §8). Maintenant Bonk se relance en `tiny-skia` et la fenêtre
-/// reste ouverte jusqu'à l'arrêt par `timeout` (code 124), sans panique. Ignoré si `xvfb-run` ou
+/// reste ouverte jusqu'à l'arrêt par `timeout` (code 124), sans panique. Quand wgpu réussit (pilote
+/// logiciel présent), le test vérifie seulement l'ouverture sans panique. Ignoré si `xvfb-run` ou
 /// `timeout` n'est pas installé.
 #[cfg(all(unix, not(target_os = "macos")))]
 #[test]
@@ -209,10 +210,15 @@ fn sous_affichage_virtuel_le_rendu_bascule_en_logiciel() -> Resultat {
     // Le message par défaut d'une panique (« thread 'main' panicked ») ne doit pas atteindre l'utilisateur ;
     // le journal verbeux, lui, raconte le repli.
     assert!(!journal.contains("thread 'main' panicked"), "{journal}");
-    assert!(
-        journal.contains("restarting with the software renderer"),
-        "{journal}"
-    );
+    // Le repli n'a lieu que si wgpu panique : sur la machine du mainteneur c'est le cas sous Xvfb, pas sur
+    // l'exécuteur de CI, où un pilote logiciel (llvmpipe) permet à wgpu de réussir. Quand la fenêtre
+    // panique, le repli est donc exigé ; sinon le test garantit seulement qu'elle s'ouvre sans panique.
+    if journal.contains("window panicked") {
+        assert!(
+            journal.contains("restarting with the software renderer"),
+            "{journal}"
+        );
+    }
     Ok(())
 }
 
