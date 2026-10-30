@@ -65,7 +65,7 @@ pub(crate) struct FilterArgs {
 #[derive(Debug, Args)]
 #[command(long_about = None)]
 pub(crate) struct LayoutArgs {
-    /// Fichier image à décoder (les disques réels ne sont pas encore lisibles en brut)
+    /// Fichier image ou disque (identifiant ou /dev/...) à décoder ; un disque demande l'autorisation du système
     image: PathBuf,
     /// Sortie JSON
     #[arg(long)]
@@ -75,7 +75,7 @@ pub(crate) struct LayoutArgs {
 #[derive(Debug, Args)]
 #[command(long_about = None)]
 pub(crate) struct HexdumpArgs {
-    /// Fichier image à lire (les disques réels ne sont pas encore lisibles en brut)
+    /// Fichier image ou disque (identifiant ou /dev/...) à lire ; un disque demande l'autorisation du système
     image: PathBuf,
     /// Décalage de départ en octets (décimal ou 0x...)
     #[arg(long, default_value = "0", value_parser = parse_number)]

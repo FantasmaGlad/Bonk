@@ -1,6 +1,6 @@
 //! Commandes `bonk write`, `bonk verify` et `bonk repair-gpt` : arguments, progression, affichage.
 //!
-//! La logique est dans [`crate::job`] ; ce module la présente. Avec `--progress json`, la sortie
+//! La logique est dans `bonk_ops::job` ; ce module la présente. Avec `--progress json`, la sortie
 //! standard est un flux de lignes JSON (événements `progress` puis un événement `result`), les mêmes
 //! événements que la barre de la fenêtre ; sinon le résultat est du texte ou, avec `--json`, un JSON.
 

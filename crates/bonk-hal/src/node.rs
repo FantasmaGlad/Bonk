@@ -95,8 +95,8 @@ mod imp {
         }
 
         /// Reprend un descripteur ouvert par le service du système. Il n'est cru sur rien : c'est bien un
-        /// disque entier, et le même périphérique que `path`. Supprime la course entre la revérification
-        /// de l'identité et l'ouverture.
+        /// disque entier, et le même périphérique que `path`. Ne prouve pas que ce soit celui qui a été
+        /// choisi : `path` a pu changer de disque après la revérification (audit, B7).
         ///
         /// # Errors
         /// [`BlockError::Io`] : `InvalidInput` si le descripteur n'est pas ce disque.

@@ -66,7 +66,7 @@ pub type FormatPartitionFn =
     Box<dyn Fn(&Path, Filesystem, Option<&str>, Elevation) -> Result<(), BlockError>>;
 
 /// Relecture de la table de partitions d'un disque par le système.
-pub type PrepareRescanFn = Box<dyn Fn(&Path, Elevation) -> Result<(), BlockError>>;
+pub type RescanFn = Box<dyn Fn(&Path, Elevation) -> Result<(), BlockError>>;
 
 /// Ce que les opérations demandent au système : injectable pour les tests.
 pub struct Io {
@@ -76,7 +76,7 @@ pub struct Io {
     pub cancelled: Box<dyn Fn() -> bool>,
     pub capabilities: Box<dyn Fn() -> Vec<Capability>>,
     pub format_partition: FormatPartitionFn,
-    pub rescan: PrepareRescanFn,
+    pub rescan: RescanFn,
     /// Attente courte entre deux regards sur une partition que le système n'a pas encore créée.
     pub pause: Box<dyn Fn()>,
 }
@@ -89,7 +89,7 @@ impl Default for Io {
 
 impl Io {
     /// Accès système réels. `cancel` est un drapeau d'annulation propre à l'opération (le service en
-    /// donne un par opération) ; Ctrl+C annule dans tous les cas.
+    /// donne un par opération) ; Ctrl+C annule aussi les commandes, qui appellent `interrupt::install`.
     pub fn with_cancel(cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>) -> Self {
         Self {
             prepare: Box::new(|path, access, elevation| {
