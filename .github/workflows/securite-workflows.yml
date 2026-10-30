@@ -28,7 +28,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Installer actionlint
-        run: pip install --quiet actionlint-py==1.7.12
+        run: pip install --quiet actionlint-py==1.7.12.25
       - name: Contrôler
         run: actionlint
 
