@@ -131,7 +131,8 @@ fn ecriture_simulee_par_le_service() -> Resultat {
     let erreur = &ko.last().ok_or("réponse")?["error"];
     assert_eq!(
         (erreur["code"].as_str(), erreur["exit_code"].as_u64()),
-        (Some("E4002"), Some(4))
+        (Some("E4002"), Some(4)),
+        "{erreur}"
     );
 
     // Un disque réel ne s'écrit pas sans confirmation, même par le service.
@@ -141,6 +142,35 @@ fn ecriture_simulee_par_le_service() -> Resultat {
         &json!({"target": "n-importe-quel-disque", "source": source.display().to_string()}),
     )?;
     assert!(sans_yes.last().ok_or("réponse")?["error"]["code"].is_string());
+    assert_eq!(client.close()?, Some(0));
+    fs::remove_dir_all(&dir)?;
+    Ok(())
+}
+
+/// Régression : le service répondait avant de libérer l'emplacement de l'opération, donc une requête
+/// envoyée dès la réponse reçue pouvait être refusée (« déjà en cours »). Constaté sous Windows en CI.
+#[test]
+fn des_operations_enchainees_sans_attente_ne_sont_jamais_refusees() -> Resultat {
+    let dir = std::env::temp_dir().join(format!("bonk-serve-chain-{}", std::process::id()));
+    fs::create_dir_all(&dir)?;
+    let (source, cible) = (dir.join("src.img"), dir.join("out.img"));
+    fs::write(&source, vec![7u8; 4096])?;
+    let params = json!({
+        "target": cible.display().to_string(), "simulate": true, "size": 8192,
+        "source": source.display().to_string(), "yes": true,
+    });
+    let mut client = Client::start()?;
+    client.next()?; // ready
+    let ecrit = client.call(1, "disk.write", &params)?;
+    assert_eq!(ecrit.last().ok_or("réponse")?["result"]["event"], "result");
+    for id in 2..200 {
+        let reponse = client.call(id, "disk.verify", &params)?;
+        let derniere = reponse.last().ok_or("réponse")?;
+        assert_eq!(
+            derniere["result"]["event"], "result",
+            "requête {id} : {derniere}"
+        );
+    }
     assert_eq!(client.close()?, Some(0));
     fs::remove_dir_all(&dir)?;
     Ok(())

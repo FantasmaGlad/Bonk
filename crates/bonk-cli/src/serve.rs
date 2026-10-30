@@ -409,7 +409,17 @@ fn config_method(method: &str, params: &Value, cfg: &Config) -> Result<Value, Fa
 
 struct JobHandle {
     cancel: Arc<AtomicBool>,
+    /// Vrai tant que l'opération n'a pas rendu son emplacement. Libéré **avant** d'envoyer la réponse :
+    /// `thread.is_finished()` ne devient vrai qu'après, et une requête envoyée dès la réponse reçue
+    /// serait refusée à tort.
+    busy: Arc<AtomicBool>,
     thread: JoinHandle<()>,
+}
+
+impl JobHandle {
+    fn is_busy(&self) -> bool {
+        self.busy.load(Ordering::SeqCst)
+    }
 }
 
 struct WatchHandle {
@@ -448,7 +458,7 @@ fn start_job(
     out: &Out,
     state: &mut State,
 ) -> Result<(), Failure> {
-    if state.job.as_ref().is_some_and(|j| !j.thread.is_finished()) {
+    if state.job.as_ref().is_some_and(JobHandle::is_busy) {
         return Err(failure(
             Code::ProtocolError,
             "une opération d'écriture est déjà en cours (voir « cancel »)",
@@ -462,6 +472,8 @@ fn start_job(
         _ => p.source()?,
     };
     let cancel = Arc::new(AtomicBool::new(false));
+    let busy = Arc::new(AtomicBool::new(true));
+    let release = Arc::clone(&busy);
     let (enumerate_fn, make_io) = (Arc::clone(&cfg.enumerate), Arc::clone(&cfg.make_io));
     let (out, id, flag) = (out.clone(), id.clone(), Arc::clone(&cancel));
     out.send(&json!({"event": "job_started", "request_id": id}));
@@ -530,6 +542,7 @@ fn start_job(
                 })
             }),
         };
+        release.store(false, Ordering::SeqCst);
         out.respond(
             &id,
             outcome.map_err(|e| Failure {
@@ -538,7 +551,11 @@ fn start_job(
             }),
         );
     });
-    state.job = Some(JobHandle { cancel, thread });
+    state.job = Some(JobHandle {
+        cancel,
+        busy,
+        thread,
+    });
     Ok(())
 }
 
@@ -618,7 +635,7 @@ fn handle(line: &str, cfg: &Config, out: &Out, state: &mut State) {
         "disk.verify" => start_or_fail(Kind::Verify, &request, cfg, out, state),
         "disk.repair_gpt" => start_or_fail(Kind::Repair, &request, cfg, out, state),
         "cancel" => {
-            let running = state.job.as_ref().is_some_and(|j| !j.thread.is_finished());
+            let running = state.job.as_ref().is_some_and(JobHandle::is_busy);
             if let (true, Some(job)) = (running, &state.job) {
                 job.cancel.store(true, Ordering::SeqCst);
             }
