@@ -57,6 +57,10 @@ jobs:
         run: rustup toolchain install
       - name: Restaurer le cache de compilation
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # Le test de la fenêtre sous affichage virtuel (Xvfb) charge libxkbcommon-x11 à l'exécution ; l'image
+      # de l'exécuteur ne la fournit pas (Xvfb, lui, y est).
+      - name: Bibliothèque système de la fenêtre
+        run: sudo apt-get install -y --no-install-recommends libxkbcommon-x11-0
       - name: Formatage
         run: cargo fmt --all --check
       - name: Lint
