@@ -130,8 +130,6 @@ pub fn evaluate_traced(disk: &Disk, options: FilterOptions) -> (Eligibility, Vec
 pub struct RuleTrace {
     /// Identifiant stable de la règle (le même que le motif d'exclusion qu'elle produit).
     pub rule: &'static str,
-    /// Paragraphe du cahier des charges.
-    pub cdc: &'static str,
     /// Ce qui est examiné : chemin du disque ou de la partition.
     pub subject: String,
     /// Les faits lus par la règle.
@@ -147,7 +145,6 @@ impl Tracer<'_> {
     fn note(
         &mut self,
         rule: &'static str,
-        cdc: &'static str,
         subject: &str,
         fired: bool,
         facts: impl FnOnce() -> String,
@@ -155,7 +152,6 @@ impl Tracer<'_> {
         if let Some(trace) = self.0.as_mut() {
             trace.push(RuleTrace {
                 rule,
-                cdc,
                 subject: subject.to_owned(),
                 facts: facts(),
                 fired,
@@ -168,7 +164,7 @@ fn decide(disk: &Disk, options: FilterOptions, tracer: &mut Tracer<'_>) -> Eligi
     let mut reasons = Vec::new();
 
     let virtual_disk = disk.kind != DiskKind::Physical && !options.allow_virtual;
-    tracer.note("virtual_disk", "3.1.4", &disk.path, virtual_disk, || {
+    tracer.note("virtual_disk", &disk.path, virtual_disk, || {
         format!(
             "kind={:?} allow_virtual={}",
             disk.kind, options.allow_virtual
@@ -182,7 +178,7 @@ fn decide(disk: &Disk, options: FilterOptions, tracer: &mut Tracer<'_>) -> Eligi
         .fs_type
         .as_deref()
         .is_some_and(|signature| is_one_of(signature, &SWAP_SIGNATURES));
-    tracer.note("swap", "3.1.1", &disk.path, swap, || {
+    tracer.note("swap", &disk.path, swap, || {
         format!("whole-disk signature={:?}", disk.fs_type)
     });
     if swap {
@@ -222,7 +218,7 @@ fn decide(disk: &Disk, options: FilterOptions, tracer: &mut Tracer<'_>) -> Eligi
     };
     // La règle du bus ne s'applique qu'à un disque qu'aucune exclusion n'a écarté.
     let excluded = matches!(verdict, Eligibility::Excluded { .. });
-    tracer.note("bus", "3.2", &disk.path, !excluded, || {
+    tracer.note("bus", &disk.path, !excluded, || {
         format!(
             "bus={:?} removable_bus={} show_internal={} allow_virtual={} -> {}",
             disk.bus,
@@ -249,7 +245,7 @@ fn push_device_exclusions(
     holders: &[String],
 ) {
     let aggregate = fs_type.is_some_and(|signature| is_one_of(signature, &AGGREGATE_SIGNATURES));
-    tracer.note("aggregate_member", "3.1.3", device, aggregate, || {
+    tracer.note("aggregate_member", device, aggregate, || {
         format!("signature={fs_type:?}")
     });
     if let (true, Some(signature)) = (aggregate, fs_type) {
@@ -258,7 +254,7 @@ fn push_device_exclusions(
             signature: signature.to_owned(),
         });
     }
-    tracer.note("stacked", "3.1.3", device, !holders.is_empty(), || {
+    tracer.note("stacked", device, !holders.is_empty(), || {
         format!("holders={holders:?}")
     });
     if !holders.is_empty() {
@@ -276,19 +272,15 @@ fn push_partition_exclusions(
     partition: &Partition,
 ) {
     let path = partition.path.as_str();
-    tracer.note(
-        "system_volume",
-        "3.1.1",
-        path,
-        partition.is_system_volume,
-        || format!("is_system_volume={}", partition.is_system_volume),
-    );
+    tracer.note("system_volume", path, partition.is_system_volume, || {
+        format!("is_system_volume={}", partition.is_system_volume)
+    });
     if partition.is_system_volume {
         reasons.push(Exclusion::SystemVolume {
             partition: partition.path.clone(),
         });
     }
-    tracer.note("active_esp", "3.1.1", path, partition.is_active_esp, || {
+    tracer.note("active_esp", path, partition.is_active_esp, || {
         format!("is_active_esp={}", partition.is_active_esp)
     });
     if partition.is_active_esp {
@@ -300,7 +292,7 @@ fn push_partition_exclusions(
         .fs_type
         .as_deref()
         .is_some_and(|signature| is_one_of(signature, &SWAP_SIGNATURES));
-    tracer.note("swap", "3.1.1", path, swap, || {
+    tracer.note("swap", path, swap, || {
         format!("signature={:?}", partition.fs_type)
     });
     if swap {
@@ -316,13 +308,13 @@ fn push_partition_exclusions(
         &partition.holders,
     );
     if partition.mount_points.is_empty() {
-        tracer.note("mounted_outside_user_paths", "3.1.2", path, false, || {
+        tracer.note("mounted_outside_user_paths", path, false, || {
             "not mounted".to_owned()
         });
     }
     for mount in &partition.mount_points {
         let outside = !is_user_mount(mount, bus);
-        tracer.note("mounted_outside_user_paths", "3.1.2", path, outside, || {
+        tracer.note("mounted_outside_user_paths", path, outside, || {
             format!("mount={mount:?} bus={bus:?} user_mount={}", !outside)
         });
         if outside {
@@ -623,9 +615,7 @@ mod tests {
         );
         // Les règles examinées mais non appliquées figurent aussi, avec leurs faits.
         let esp = trace.iter().find(|t| t.rule == "active_esp");
-        assert!(
-            esp.is_some_and(|t| !t.fired && t.facts == "is_active_esp=false" && t.cdc == "3.1.1")
-        );
+        assert!(esp.is_some_and(|t| !t.fired && t.facts == "is_active_esp=false"));
         let mount = trace
             .iter()
             .find(|t| t.rule == "mounted_outside_user_paths");

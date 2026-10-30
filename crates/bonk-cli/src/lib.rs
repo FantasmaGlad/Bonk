@@ -933,7 +933,8 @@ mod tests {
     fn debug_filter_explique_un_disque_propose() {
         let (code, out, err) = lancer(&["debug", "filter", "usb-cle"], sample());
         assert_eq!((code, err.as_str()), (0, ""));
-        assert!(out.contains("§3.2   bus"), "{out}");
+        assert!(out.contains("[VERDICT  ] bus"), "{out}");
+        assert!(!out.contains('§'), "{out}");
         assert!(out.contains("Verdict : proposé"), "{out}");
         assert!(!out.contains("APPLIQUÉE"), "{out}");
     }
@@ -942,12 +943,12 @@ mod tests {
     fn debug_filter_explique_un_refus_regle_par_regle() -> Result<(), serde_json::Error> {
         let (code, out, _) = lancer(&["debug", "filter", "nvme-systeme"], sample());
         assert_eq!(code, 0);
-        assert!(out.contains("[APPLIQUÉE] §3.1.1 system_volume"), "{out}");
+        assert!(out.contains("[APPLIQUÉE] system_volume"), "{out}");
         assert!(out.contains("Verdict : interdit"), "{out}");
 
         let (_, json, _) = lancer(&["debug", "filter", "nvme-systeme", "--json"], sample());
         let value: Value = serde_json::from_str(&json)?;
-        assert_eq!(value["schema_version"], 1);
+        assert_eq!(value["schema_version"], 2);
         assert_eq!(value["verdict"]["verdict"], "excluded");
         let rules = value["rules"].as_array().map_or(&[][..], Vec::as_slice);
         assert!(
@@ -960,6 +961,7 @@ mod tests {
                 .iter()
                 .any(|r| r["rule"] == "active_esp" && r["fired"] == false)
         );
+        assert!(rules.iter().all(|r| r.get("cdc").is_none()), "{json}");
         Ok(())
     }
 
