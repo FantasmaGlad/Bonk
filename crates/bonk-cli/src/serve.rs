@@ -20,6 +20,8 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+use bonk_core::format::Filesystem;
+use bonk_core::format::table::TableKind;
 use bonk_core::write::{Control, Progress};
 use bonk_hal::{Disk, Elevation, EnumerateError, FilterOptions};
 use schemars::JsonSchema;
@@ -30,8 +32,10 @@ use serde_json::{Value, json};
 use crate::config::{self, ConfigAction, ConfigError, ViewDefaults};
 use crate::errors::{self, Code};
 use crate::slot::JobSlot;
-use crate::{debug, diagnose, info, list, schema};
-use bonk_ops::job::{self, Deps, Io, RepairJob, Target, TraceIo, VerifyJob, WriteJob, WriteMode};
+use crate::{debug, diagnose, format, info, list, schema};
+use bonk_ops::job::{
+    self, Deps, FormatJob, Io, RepairJob, Target, TraceIo, VerifyJob, WriteJob, WriteMode,
+};
 
 /// Version du protocole, incrémentée à chaque changement incompatible.
 pub(crate) const PROTOCOL: u32 = 1;
@@ -85,7 +89,7 @@ pub(crate) fn schema_response() -> Value {
 }
 
 /// Méthodes du service : nom, la méthode lance-t-elle une opération longue ?
-const METHODS: [(&str, &str); 19] = [
+const METHODS: [(&str, &str); 21] = [
     ("ping", "répond pong"),
     ("version", "version de Bonk, système, protocole"),
     ("methods", "liste des méthodes"),
@@ -114,6 +118,11 @@ const METHODS: [(&str, &str); 19] = [
         "bonk disk verify : compare sans écrire (opération longue)",
     ),
     ("disk.repair_gpt", "bonk disk repair-gpt (opération longue)"),
+    (
+        "disk.format",
+        "bonk format : table et système de fichiers (opération longue)",
+    ),
+    ("capabilities", "bonk capabilities : ce que cet hôte permet"),
 ];
 
 struct Failure {
@@ -226,6 +235,12 @@ struct TransferParams {
     elevate: Option<String>,
     /// Tient lieu de `yes` et autorise un disque interne admis par `show_internal`.
     force: bool,
+    /// Système de fichiers de `disk.format` : `fat32`, `exfat`, `ntfs`, `ext4`.
+    fs: Option<String>,
+    /// Table de `disk.format` : `gpt` (par défaut) ou `mbr`.
+    table: Option<String>,
+    /// Étiquette de `disk.format`.
+    label: Option<String>,
 }
 
 fn parse<T: DeserializeOwned>(params: &Value) -> Result<T, Failure> {
@@ -299,6 +314,37 @@ impl TransferParams {
                 Code::ProtocolError,
                 format!("elevate inconnu : « {autre} » (auto ou never)"),
             )),
+        }
+    }
+
+    fn filesystem(&self) -> Result<Option<Filesystem>, Failure> {
+        match self.fs.as_deref() {
+            None => Ok(None),
+            Some(name) => Filesystem::ALL
+                .into_iter()
+                .find(|fs| fs.name() == name)
+                .map(Some)
+                .ok_or_else(|| {
+                    failure(
+                        Code::ProtocolError,
+                        format!("fs inconnu : « {name} » (fat32, exfat, ntfs ou ext4)"),
+                    )
+                }),
+        }
+    }
+
+    fn table(&self) -> Result<TableKind, Failure> {
+        match self.table.as_deref() {
+            None => Ok(TableKind::Gpt),
+            Some(name) => TableKind::ALL
+                .into_iter()
+                .find(|table| table.name() == name)
+                .ok_or_else(|| {
+                    failure(
+                        Code::ProtocolError,
+                        format!("table inconnue : « {name} » (gpt ou mbr)"),
+                    )
+                }),
         }
     }
 
@@ -401,6 +447,9 @@ fn quick(method: &str, params: &Value, cfg: &Config) -> Result<Value, Failure> {
                     .ok_or_else(|| failure(Code::InvalidArgument, schema::unknown_message(&name))),
             }
         }
+        "capabilities" => {
+            format::report_value(bonk_hal::platform::current().capabilities()).map_err(json_error)
+        }
         "config.list" | "config.get" | "config.set" | "config.reset" => {
             config_method(method, params, cfg)
         }
@@ -470,6 +519,7 @@ enum Kind {
     Write,
     Verify,
     Repair,
+    Format,
 }
 
 fn progress_event(p: &Progress, request: &Value) -> Value {
@@ -500,13 +550,14 @@ fn start_job(
     let p: TransferParams = parse(params)?;
     let options = match kind {
         Kind::Verify => p.options(&cfg.view),
-        Kind::Write | Kind::Repair => p.write_options(),
+        Kind::Write | Kind::Repair | Kind::Format => p.write_options(),
     };
     let (target, trace) = (p.target()?, p.trace()?);
     let mode = p.mode()?;
     let elevation = p.elevation()?;
+    let (filesystem, table) = (p.filesystem()?, p.table()?);
     let source = match kind {
-        Kind::Repair => PathBuf::new(),
+        Kind::Repair | Kind::Format => PathBuf::new(),
         _ => p.source()?,
     };
     let cancel = Arc::new(AtomicBool::new(false));
@@ -575,6 +626,27 @@ fn start_job(
                     yes: p.yes,
                     elevation,
                     force: p.force,
+                },
+                &deps,
+            )
+            .and_then(|o| {
+                serde_json::to_value(o).map_err(|e| job::JobError {
+                    code: Code::OutputFailed,
+                    message: e.to_string(),
+                })
+            }),
+            Kind::Format => job::format(
+                &FormatJob {
+                    target,
+                    filesystem,
+                    table,
+                    label: p.label.clone(),
+                    options,
+                    trace_io: trace,
+                    dry_run: p.dry_run,
+                    yes: p.yes,
+                    force: p.force,
+                    elevation,
                 },
                 &deps,
             )
@@ -674,6 +746,7 @@ fn handle(line: &str, cfg: &Config, out: &Out, state: &mut State) {
         "disk.write" => start_or_fail(Kind::Write, &request, cfg, out, state),
         "disk.verify" => start_or_fail(Kind::Verify, &request, cfg, out, state),
         "disk.repair_gpt" => start_or_fail(Kind::Repair, &request, cfg, out, state),
+        "disk.format" => start_or_fail(Kind::Format, &request, cfg, out, state),
         "cancel" => {
             let running = state.slot.is_busy();
             if let (true, Some(job)) = (running, &state.job) {
@@ -820,6 +893,10 @@ mod tests {
                     Io {
                         prepare: Box::new(|_, _, _| Ok(())),
                         unmount: Box::new(|_, _| Ok(vec![])),
+                        capabilities: Box::new(Vec::new),
+                        format_partition: Box::new(|_, _, _, _| Ok(())),
+                        rescan: Box::new(|_, _| Ok(())),
+                        pause: Box::new(|| {}),
                         open_node: Box::new(move |_, _, _| {
                             Ok(Box::new(dev.clone()) as Box<dyn BlockDevice>)
                         }),

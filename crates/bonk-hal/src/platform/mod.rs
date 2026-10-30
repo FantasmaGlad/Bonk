@@ -12,7 +12,10 @@ mod unsupported;
 
 use std::path::{Path, PathBuf};
 
+use bonk_core::format::Filesystem;
 use bonk_core::{BlockDevice, BlockError};
+use schemars::JsonSchema;
+use serde::Serialize;
 
 pub use unsupported::Unsupported;
 
@@ -29,6 +32,56 @@ pub enum Elevation {
     Auto,
     /// Non : droits de l'appelant seulement. Pour un service sans personne devant l'écran.
     Never,
+}
+
+/// Pourquoi une fonction manque.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Missing {
+    /// Un outil de l'hôte manque : `detail` le nomme.
+    MissingTool,
+    /// Ce système ne le permet pas, ou Bonk ne le sait pas encore sur lui.
+    OsUnsupported,
+    /// Le système refuse à cet utilisateur.
+    NoPermission,
+}
+
+/// Une fonction que l'hôte permet, ou pourquoi il ne la permet pas.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+pub struct Capability {
+    /// Nom stable : `write`, `format.fat32`...
+    pub name: String,
+    pub available: bool,
+    pub missing: Option<Missing>,
+    pub detail: Option<String>,
+}
+
+impl Capability {
+    #[must_use]
+    pub fn yes(name: &str) -> Self {
+        Self {
+            name: name.to_owned(),
+            available: true,
+            missing: None,
+            detail: None,
+        }
+    }
+
+    #[must_use]
+    pub fn no(name: &str, missing: Missing, detail: impl Into<String>) -> Self {
+        Self {
+            name: name.to_owned(),
+            available: false,
+            missing: Some(missing),
+            detail: Some(detail.into()),
+        }
+    }
+}
+
+/// Nom de la capacité de formatage d'un système de fichiers.
+#[must_use]
+pub fn format_capability(fs: Filesystem) -> String {
+    format!("format.{}", fs.name())
 }
 
 /// Accès d'un système d'exploitation aux disques.
@@ -78,6 +131,29 @@ pub trait Platform: Send + Sync {
         access: Access,
         elevation: Elevation,
     ) -> Result<Box<dyn BlockDevice>, BlockError>;
+
+    /// Ce que ce système permet, et pourquoi pas le reste (`bonk capabilities`).
+    fn capabilities(&self) -> Vec<Capability>;
+
+    /// Formate une partition avec les outils de l'hôte (exFAT, NTFS, ext4 ; D-04). Seul le résultat de
+    /// l'outil compte, sa sortie n'est pas interprétée.
+    ///
+    /// # Errors
+    /// [`BlockError`] : outil absent, droits refusés, échec de l'outil.
+    fn format_partition(
+        &self,
+        partition: &Path,
+        fs: Filesystem,
+        label: Option<&str>,
+        elevation: Elevation,
+    ) -> Result<(), BlockError>;
+
+    /// Demande au système de relire la table de partitions du disque, qu'on vient de remplacer : sans
+    /// cela, il peut montrer un moment les anciennes partitions, ou aucune.
+    ///
+    /// # Errors
+    /// [`BlockError`] : droits refusés, service absent.
+    fn rescan(&self, disk: &Path, elevation: Elevation) -> Result<(), BlockError>;
 
     /// Le processus tourne-t-il en administrateur ? La fenêtre refuse alors de s'ouvrir (invariant 2).
     fn is_privileged(&self) -> bool;

@@ -9,6 +9,7 @@ mod debug;
 mod diagnose;
 mod errors;
 mod fixture;
+mod format;
 mod info;
 mod list;
 mod logging;
@@ -75,6 +76,10 @@ enum Command {
     Verify(VerifyArgs),
     /// Répare le GPT d'un disque ou d'une image
     RepairGpt(RepairArgs),
+    /// Remet un disque en état de stockage : table, partition, système de fichiers
+    Format(format::FormatArgs),
+    /// Ce que cet hôte permet, et pourquoi pas le reste
+    Capabilities(format::CapabilitiesArgs),
     /// Rapport de support en JSON : système, rendu, disques et verdicts, secrets masqués
     Diagnose(diagnose::DiagnoseArgs),
     /// Bas niveau des disques, en lecture seule : sources système, filtre pas à pas, tables de partitions
@@ -134,13 +139,16 @@ fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
         | Command::Disk {
             action: DiskAction::RepairGpt(a),
         } if a.touches_real_disk() => Some(DISK),
+        Command::Format(a) if a.touches_real_disk() => Some(DISK),
         Command::Debug {
             action: debug::DebugAction::Sources(_),
         } => Some("debug sources lit le système réel : incompatible avec --fixture"),
         Command::Diagnose(a) if a.capture() => {
             Some("--capture lit le système réel : incompatible avec --fixture")
         }
-        Command::Write(_)
+        Command::Format(_)
+        | Command::Capabilities(_)
+        | Command::Write(_)
         | Command::Verify(_)
         | Command::RepairGpt(_)
         | Command::Disk {
@@ -401,6 +409,8 @@ where
         Some(Command::Write(args)) => transfer::run_write(&args, &deps, out, err),
         Some(Command::Verify(args)) => transfer::run_verify(&args, &view, &deps, out, err),
         Some(Command::RepairGpt(args)) => transfer::run_repair(&args, &deps, out, err),
+        Some(Command::Format(args)) => format::run_format(&args, &deps, out, err),
+        Some(Command::Capabilities(args)) => format::run_capabilities(&args, &deps, out, err),
         Some(Command::List(args)) => run_list(&args, &view, out, err, enumerate),
         Some(Command::Info(args)) => run_info(&args, &view, out, err, enumerate),
         Some(Command::Config { action }) => {

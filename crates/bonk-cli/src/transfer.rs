@@ -90,12 +90,12 @@ pub(crate) enum ProgressMode {
 #[derive(Debug, Args)]
 pub(crate) struct CommonArgs {
     /// Identifiant stable du disque (voir `bonk list`) ; avec --simulate, chemin du fichier image cible
-    target: String,
+    pub(crate) target: String,
 
     /// La cible est un fichier image (créé s'il n'existe pas, avec --size) et non un disque : rejoue
     /// l'opération sans matériel
     #[arg(long)]
-    simulate: bool,
+    pub(crate) simulate: bool,
 
     /// Taille de l'image cible créée par --simulate (décimal ou 0x...) ; par défaut celle de l'image
     /// source quand elle est brute
@@ -113,11 +113,11 @@ pub(crate) struct CommonArgs {
     /// Journalise chaque accès bloc (décalage, durée, somme de contrôle) ; `=data` ajoute les
     /// premiers octets, pour un fichier image seulement
     #[arg(long, value_enum, num_args = 0..=1, default_missing_value = "metadata", require_equals = true)]
-    trace_io: Option<TraceIoArg>,
+    pub(crate) trace_io: Option<TraceIoArg>,
 
     /// Droits manquants : auto (demande au système) ou never (droits de l'appelant seulement)
     #[arg(long, value_enum, default_value_t = ElevateArg::Auto)]
-    elevate: ElevateArg,
+    pub(crate) elevate: ElevateArg,
 
     /// Progression : auto, json (un événement par ligne) ou none
     #[arg(long, value_enum, default_value_t = ProgressMode::Auto)]
@@ -129,7 +129,7 @@ pub(crate) struct CommonArgs {
 }
 
 impl CommonArgs {
-    fn target(&self) -> Target {
+    pub(crate) fn target(&self) -> Target {
         if self.simulate {
             Target::Image {
                 path: PathBuf::from(&self.target),
@@ -149,7 +149,7 @@ impl CommonArgs {
 
     /// Pour écrire, seules les options de la commande comptent : un réglage ou une variable oubliés règlent
     /// l'affichage, ils n'autorisent jamais à effacer un disque de plus.
-    fn write_options(&self) -> FilterOptions {
+    pub(crate) fn write_options(&self) -> FilterOptions {
         FilterOptions {
             show_internal: self.show_internal,
             allow_virtual: self.allow_virtual,
@@ -348,7 +348,7 @@ fn print_json(out: &mut dyn Write, value: &impl Serialize, compact: bool) -> io:
     }
 }
 
-fn target_line(info: &job::TargetInfo) -> String {
+pub(crate) fn target_line(info: &job::TargetInfo) -> String {
     match &info.id {
         Some(id) => format!("disque {id} ({})", info.path),
         None => format!("image {}", info.path),
@@ -378,7 +378,7 @@ fn seconds(ms: u64) -> String {
     format!("{},{:01} s", ms / 1000, ms % 1000 / 100)
 }
 
-fn finish<T: Serialize>(
+pub(crate) fn finish<T: Serialize>(
     result: Result<T, JobError>,
     args: &CommonArgs,
     out: &mut dyn Write,

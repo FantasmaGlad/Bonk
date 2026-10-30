@@ -9,9 +9,9 @@
 
 Version 0.0.1, en développement, aucune release publiée.
 
-- **Fait, Linux** : liste des disques, écriture, vérification, réparation du GPT, décompression gzip, xz, zstd, service `bonk serve`, contrôle d'empreinte et analyse d'image, écriture sans `sudo` (UDisks2 et polkit).
-- **En cours** : formatage.
-- **À venir** : téléchargement, Windows et macOS (binaires construits, sans accès aux disques), clé d'installation Windows, DOS, Android.
+- **Fait, Linux** : liste des disques, écriture, vérification, réparation du GPT, décompression gzip, xz, zstd, service `bonk serve`, contrôle d'empreinte et analyse d'image, écriture sans `sudo` (UDisks2 et polkit), formatage (`bonk format`, `bonk capabilities`).
+- **En cours** : téléchargement depuis une URL officielle.
+- **À venir** : Windows et macOS (binaires construits, sans accès aux disques), clé d'installation Windows, DOS, Android.
 
 ## Plateformes
 

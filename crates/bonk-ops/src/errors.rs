@@ -43,6 +43,8 @@ pub enum Code {
     Cancelled,
     DeviceOpenDenied,
     GptRepairFailed,
+    FormatFailed,
+    FilesystemUnavailable,
     LogSettingInvalid,
     ConfigInvalid,
     WindowUnavailable,
@@ -273,6 +275,29 @@ pub const CATALOG: &[Entry] = &[
             "le support est trop petit pour la table",
         ],
         remedy: "Inspecter le support avec `bonk debug layout` et réécrire l'image si besoin.",
+    },
+    Entry {
+        code: Code::FormatFailed,
+        id: "E4006",
+        exit: EXIT_RUNTIME_ERROR,
+        title: "Formatage impossible",
+        causes: &[
+            "support trop petit ou trop grand pour la table ou le système de fichiers demandés",
+            "erreur d'écriture, ou relecture différente de ce qui a été écrit",
+            "échec de l'outil du système",
+        ],
+        remedy: "Voir `bonk format --dry-run` : il dit ce qui serait fait, sans rien écrire. Un autre `--fs` ou `--table` peut convenir.",
+    },
+    Entry {
+        code: Code::FilesystemUnavailable,
+        id: "E4007",
+        exit: EXIT_RUNTIME_ERROR,
+        title: "Système de fichiers indisponible sur cet hôte",
+        causes: &[
+            "exFAT, NTFS et ext4 passent par les outils du système : l'outil ou le service manque",
+            "`--simulate` : seul FAT32 s'écrit sur un fichier image",
+        ],
+        remedy: "Voir `bonk capabilities`. Installer l'outil nommé, ou choisir `--fs fat32`, écrit par Bonk lui-même.",
     },
     Entry {
         code: Code::LogSettingInvalid,
