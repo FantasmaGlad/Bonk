@@ -27,15 +27,30 @@ pub fn run(initial: ViewOptions) -> Result<(), String> {
     if !display_available(|name| std::env::var_os(name)) {
         return Err("aucun affichage graphique (ni WAYLAND_DISPLAY ni DISPLAY)".to_owned());
     }
-    let can_fall_back = fallback_allowed(|name| std::env::var_os(name));
-    match launch_catching_panics(initial) {
+    run_with_fallback(
+        move || launch(initial),
+        fallback_allowed(|name| std::env::var_os(name)),
+        relaunch_with_software_renderer,
+    )
+}
+
+/// Ouvre la fenêtre (`open`) ; si elle panique et que le repli est permis, relance en rendu logiciel
+/// (`relaunch`). Les deux étapes sont injectées pour éprouver ce chemin sans GPU ni affichage : le test
+/// d'intégration sous Xvfb ne le parcourt que là où wgpu panique. Une erreur ordinaire de la fenêtre
+/// (sans panique) n'est jamais rejouée.
+fn run_with_fallback(
+    open: impl FnOnce() -> Result<(), String> + std::panic::UnwindSafe,
+    can_fall_back: bool,
+    relaunch: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    match catching_panics(open) {
         Ok(result) => result,
         Err(message) if can_fall_back => {
             log::warn!(
                 target: "bonk::gui", reason = message.as_str();
                 "window panicked, restarting with the software renderer"
             );
-            relaunch_with_software_renderer()
+            relaunch()
         }
         Err(message) => Err(message),
     }
@@ -54,14 +69,16 @@ fn fallback_allowed(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> bool {
 /// pilote comme fatales (panique sur le fil principal) au lieu de laisser Iced basculer sur le rendu
 /// logiciel : sous un affichage virtuel, sur certaines machines virtuelles ou avec un pilote incomplet,
 /// la surface ne peut pas être configurée (CDC §8 : le repli logiciel est obligatoire).
-fn launch_catching_panics(initial: ViewOptions) -> Result<Result<(), String>, String> {
+fn catching_panics(
+    open: impl FnOnce() -> Result<(), String> + std::panic::UnwindSafe,
+) -> Result<Result<(), String>, String> {
     let previous = std::panic::take_hook();
     // Le message est journalisé, pas imprimé : il serait redondant avec le repli, ou repris dans
     // l'erreur finale si le repli est impossible.
     std::panic::set_hook(Box::new(|info| {
         log::debug!(target: "bonk::gui", "panic in the window: {info}");
     }));
-    let outcome = std::panic::catch_unwind(|| launch(initial));
+    let outcome = std::panic::catch_unwind(open);
     std::panic::set_hook(previous);
     outcome.map_err(|payload| panic_message(payload.as_ref()))
 }
@@ -177,5 +194,82 @@ mod tests {
     fn sans_variable_ou_variable_vide_pas_d_affichage() {
         assert!(!display_available(avec(&[])));
         assert!(!display_available(avec(&[("DISPLAY", "")])));
+    }
+}
+
+#[cfg(test)]
+mod repli_tests {
+    use std::cell::Cell;
+
+    use super::run_with_fallback;
+
+    #[test]
+    fn une_fenetre_qui_s_ouvre_ne_relance_rien() {
+        let relances = Cell::new(0);
+        let resultat = run_with_fallback(
+            || Ok(()),
+            true,
+            || {
+                relances.set(relances.get() + 1);
+                Ok(())
+            },
+        );
+        assert_eq!(resultat, Ok(()));
+        assert_eq!(relances.get(), 0);
+    }
+
+    #[test]
+    fn une_erreur_ordinaire_n_est_pas_rejouee_en_logiciel() {
+        let relances = Cell::new(0);
+        let resultat = run_with_fallback(
+            || Err("pas de rendu".to_owned()),
+            true,
+            || {
+                relances.set(relances.get() + 1);
+                Ok(())
+            },
+        );
+        assert_eq!(resultat, Err("pas de rendu".to_owned()));
+        assert_eq!(relances.get(), 0);
+    }
+
+    #[test]
+    fn une_panique_relance_une_fois_en_logiciel() {
+        let relances = Cell::new(0);
+        let resultat = run_with_fallback(
+            || panic!("wgpu error: Invalid surface"),
+            true,
+            || {
+                relances.set(relances.get() + 1);
+                Ok(())
+            },
+        );
+        assert_eq!(resultat, Ok(()));
+        assert_eq!(relances.get(), 1);
+    }
+
+    #[test]
+    fn l_echec_du_rendu_logiciel_est_rendu_tel_quel() {
+        let resultat = run_with_fallback(
+            || panic!("wgpu error"),
+            true,
+            || Err("le rendu logiciel a échoué aussi".to_owned()),
+        );
+        assert_eq!(resultat, Err("le rendu logiciel a échoué aussi".to_owned()));
+    }
+
+    #[test]
+    fn sans_repli_permis_la_panique_devient_l_erreur() {
+        let relances = Cell::new(0);
+        let resultat = run_with_fallback(
+            || panic!("wgpu error: Invalid surface"),
+            false,
+            || {
+                relances.set(relances.get() + 1);
+                Ok(())
+            },
+        );
+        assert_eq!(resultat, Err("wgpu error: Invalid surface".to_owned()));
+        assert_eq!(relances.get(), 0);
     }
 }
