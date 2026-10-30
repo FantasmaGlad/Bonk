@@ -22,3 +22,22 @@ serde_json.workspace = true
 
 [lints]
 workspace = true
+
+# Paquets Linux (workflow `paquets`) : le binaire est autonome, les bibliothèques graphiques sont chargées
+# à l'exécution quand elles existent.
+[package.metadata.deb]
+maintainer = "FantasmaGlad <193235053+FantasmaGlad@users.noreply.github.com>"
+section = "utils"
+priority = "optional"
+depends = "libc6"
+extended-description = "Création de supports d'amorçage (clés USB et disques externes), interface graphique et ligne de commande."
+assets = [
+    ["target/release/bonk", "usr/bin/", "755"],
+    ["../../LICENSE", "usr/share/doc/bonk/copyright", "644"],
+]
+
+[package.metadata.generate-rpm]
+assets = [
+    { source = "target/release/bonk", dest = "/usr/bin/bonk", mode = "755" },
+    { source = "../../LICENSE", dest = "/usr/share/licenses/bonk/LICENSE", mode = "644", doc = true },
+]

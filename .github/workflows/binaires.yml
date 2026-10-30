@@ -65,8 +65,8 @@ jobs:
           - { nom: windows-x86_64, os: windows-2025, target: x86_64-pc-windows-msvc, outil: build, suffixe: "", fumee: true, glibc: false, exe: ".exe" }
           - { nom: windows-aarch64, os: windows-11-arm, target: aarch64-pc-windows-msvc, outil: build, suffixe: "", fumee: true, glibc: false, exe: ".exe" }
           - { nom: windows-i686, os: windows-2025, target: i686-pc-windows-msvc, outil: build, suffixe: "", fumee: true, glibc: false, exe: ".exe" }
-          - { nom: macos-aarch64, os: macos-latest, target: aarch64-apple-darwin, outil: build, suffixe: "", fumee: true, glibc: false }
-          - { nom: macos-x86_64, os: macos-15-intel, target: x86_64-apple-darwin, outil: build, suffixe: "", fumee: true, glibc: false }
+          - { nom: macos-aarch64, os: macos-latest, target: aarch64-apple-darwin, outil: build, suffixe: "", fumee: true, glibc: false, deploiement: "12.0" }
+          - { nom: macos-x86_64, os: macos-15-intel, target: x86_64-apple-darwin, outil: build, suffixe: "", fumee: true, glibc: false, deploiement: "12.0" }
     env:
       TARGET: ${{ matrix.target }}
       NOM: ${{ matrix.nom }}
@@ -81,10 +81,7 @@ jobs:
           rustup toolchain install
           rustup target add "$TARGET"
         shell: bash
-      - name: Restaurer le cache de compilation
-        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          key: ${{ matrix.nom }}
+      # Pas de cache de compilation : ces binaires entrent dans les releases, un cache empoisonné n'y a pas sa place.
       # Versions identiques à celles éprouvées en local (2026-10-30).
       - name: Installer zig et cargo-zigbuild
         if: matrix.outil == 'zigbuild'
@@ -97,7 +94,10 @@ jobs:
         env:
           OUTIL: ${{ matrix.outil }}
           SUFFIXE: ${{ matrix.suffixe }}
-        run: cargo "$OUTIL" --release --locked -p bonk --target "$TARGET$SUFFIXE"
+          DEPLOIEMENT: ${{ matrix.deploiement }}
+        run: |
+          if [ -n "$DEPLOIEMENT" ]; then export MACOSX_DEPLOYMENT_TARGET="$DEPLOIEMENT"; fi
+          cargo "$OUTIL" --release --locked -p bonk --target "$TARGET$SUFFIXE"
         shell: bash
       # Un symbole de glibc plus récent que 2.17 ferait échouer le binaire sur les distributions anciennes.
       - name: Vérifier la version minimale de la glibc
@@ -106,6 +106,52 @@ jobs:
           max=$(objdump -T "target/$TARGET/release/bonk" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -n 1)
           echo "glibc maximale exigée : $max"
           test "$(printf '%s\n2.17\n' "$max" | sort -V | tail -n 1)" = "2.17"
+      # Signature : sans les secrets, ces deux étapes ne font rien (message d'information). Jamais éprouvées
+      # faute de certificats : à valider à la première signature réelle.
+      - name: Signer (Authenticode, Windows)
+        if: runner.os == 'Windows'
+        env:
+          WIN_CERT_PFX_BASE64: ${{ secrets.WIN_CERT_PFX_BASE64 }}
+          WIN_CERT_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
+        shell: pwsh
+        run: |
+          if (-not $env:WIN_CERT_PFX_BASE64) { Write-Output "::notice::Authenticode : certificat absent, binaire non signé"; exit 0 }
+          $pfx = Join-Path $env:RUNNER_TEMP 'cert.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WIN_CERT_PFX_BASE64))
+          $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1).FullName
+          $exe = "target\$env:TARGET\release\bonk.exe"
+          & $signtool sign /f $pfx /p $env:WIN_CERT_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $exe
+          & $signtool verify /pa $exe
+          Remove-Item $pfx
+      - name: Signer et notariser (Developer ID, macOS)
+        if: runner.os == 'macOS'
+        env:
+          MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
+          MAC_NOTARY_KEY_BASE64: ${{ secrets.MAC_NOTARY_KEY_BASE64 }}
+          MAC_NOTARY_KEY_ID: ${{ secrets.MAC_NOTARY_KEY_ID }}
+          MAC_NOTARY_ISSUER: ${{ secrets.MAC_NOTARY_ISSUER }}
+        run: |
+          if [ -z "$MAC_CERT_P12_BASE64" ]; then echo "::notice::Developer ID : certificat absent, binaire non signé"; exit 0; fi
+          bin="target/$TARGET/release/bonk"
+          trousseau="$RUNNER_TEMP/bonk.keychain-db"
+          mot_de_passe=$(uuidgen)
+          security create-keychain -p "$mot_de_passe" "$trousseau"
+          security set-keychain-settings -lut 21600 "$trousseau"
+          security unlock-keychain -p "$mot_de_passe" "$trousseau"
+          echo "$MAC_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$trousseau" -P "$MAC_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$mot_de_passe" "$trousseau"
+          security list-keychains -d user -s "$trousseau"
+          codesign --force --options runtime --timestamp --sign "$MAC_SIGN_IDENTITY" --keychain "$trousseau" "$bin"
+          codesign --verify --strict --verbose=2 "$bin"
+          # Un exécutable nu ne s'agrafe pas (stapler) : la notarisation est vérifiée en ligne par Gatekeeper.
+          echo "$MAC_NOTARY_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          ditto -c -k --keepParent "$bin" "$RUNNER_TEMP/bonk-notarisation.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/bonk-notarisation.zip" --key "$RUNNER_TEMP/notary.p8" --key-id "$MAC_NOTARY_KEY_ID" --issuer "$MAC_NOTARY_ISSUER" --wait
+          security delete-keychain "$trousseau"
+          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/notary.p8"
       - name: Essai de démarrage
         if: matrix.fumee
         run: |
@@ -200,34 +246,58 @@ jobs:
           docker run --rm --volume "$PWD/dist:/dist:ro" "$IMAGE" sh -c \
             'mkdir /tmp/bonk && tar -xzf /dist/bonk-*.tar.gz -C /tmp/bonk && /tmp/bonk/bonk-*/bonk --version && /tmp/bonk/bonk-*/bonk explain E2001 > /dev/null'
 
+  # Paquets natifs (deb, rpm, macOS universel) à partir des binaires ci-dessus.
+  paquets:
+    name: paquets
+    needs: construire
+    uses: ./.github/workflows/paquets.yml
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+
+  sbom:
+    name: sbom
+    uses: ./.github/workflows/sbom.yml
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+
   # Release en brouillon : la publication reste une décision du mainteneur.
   publication:
     name: release (brouillon)
     if: github.ref_type == 'tag'
-    needs: construire
+    needs: [construire, compatibilite, paquets, sbom]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
     steps:
-      - name: Récupérer les archives
+      - name: Récupérer les archives, paquets et SBOM
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: binaire-*
+          pattern: "{binaire,paquet,sbom}*"
           merge-multiple: true
           path: dist
       - name: Empreintes réunies
+        working-directory: dist
         run: |
-          cd dist
-          cat ./*.sha256 > SHA256SUMS
-          sha256sum --check SHA256SUMS
-        shell: bash
+          for f in *.sha256; do sha256sum --check "$f"; done
+          sha256sum -- *.tar.gz *.zip *.deb *.rpm *.json > SHA256SUMS
+          cat SHA256SUMS
       - name: Créer la release en brouillon
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
-        with:
-          draft: true
-          fail_on_unmatched_files: true
-          files: |
-            dist/*.tar.gz
-            dist/*.zip
-            dist/SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          {
+            echo "Binaires construits par la CI, attestés (provenance Sigstore)."
+            echo
+            echo "Vérifier une archive : gh attestation verify <archive> --repo $GITHUB_REPOSITORY"
+            echo "Empreintes : SHA256SUMS. SBOM : bonk.cdx.json."
+          } > notes.md
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "$TAG" --notes-file notes.md \
+            dist/*.tar.gz dist/*.zip dist/*.deb dist/*.rpm dist/bonk.cdx.json dist/SHA256SUMS
