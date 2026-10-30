@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use bonk_core::analysis::{ImageKind, ImageReport};
-use bonk_core::write::{Control, Phase, Progress};
+use bonk_core::write::{Control, Phase, Progress, VerifyReport};
 use bonk_hal::{Elevation, FilterOptions, format_size};
 use clap::{Args, ValueEnum};
 use schemars::JsonSchema;
@@ -481,7 +481,8 @@ pub(crate) fn run_write(
                 writeln!(out, "  SHA-256 : {}", done.write.sha256)?;
                 match &done.verify {
                     Some(v) => {
-                        writeln!(out, "  Vérification : réussie ({} octets relus)", v.bytes)?
+                        writeln!(out, "  Vérification : réussie ({} octets relus)", v.bytes)?;
+                        cache_warning(v, out)?;
                     }
                     None => writeln!(out, "  Vérification : non demandée")?,
                 }
@@ -528,8 +529,19 @@ pub(crate) fn run_verify(
                 "  Exclus de la comparaison : {octets} octets de champs du GPT que sa réparation réécrit"
             )?;
         }
+        cache_warning(&done.verify, out)?;
         writeln!(out, "  SHA-256 : {}", done.verify.sha256)
     })
+}
+
+fn cache_warning(report: &VerifyReport, out: &mut dyn Write) -> io::Result<()> {
+    if report.cache_dropped {
+        return Ok(());
+    }
+    writeln!(
+        out,
+        "  Attention : le cache du système n'a pas pu être vidé, la relecture a pu lire la mémoire et non le support"
+    )
 }
 
 pub(crate) fn run_repair(

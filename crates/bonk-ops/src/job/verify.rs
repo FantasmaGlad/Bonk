@@ -43,7 +43,6 @@ pub fn verify(
         deps,
     )?;
     let mut report_progress = guarded(deps, progress);
-    drop_cache_before_verify(&mut *device);
     // Une image GPT posée sur un support plus grand a vu quelques champs réécrits par la réparation du
     // GPT (MBR de protection, positions de l'en-tête) : les comparer à l'image donnerait un faux échec.
     let ignore = if source_info.size_bytes.is_none_or(|n| n < device.size()) {
@@ -69,7 +68,7 @@ pub fn verify(
         ));
     }
     let verify = engine::verify_ignoring(
-        &*device,
+        &mut *device,
         len,
         &sha,
         DEFAULT_CHUNK,
@@ -77,6 +76,7 @@ pub fn verify(
         &mut report_progress,
     )
     .map_err(|e| map_verify_error(e, source_info.format))?;
+    warn_if_cache_kept(&verify);
     Ok(VerifyDone {
         schema_version: SCHEMA_VERSION,
         event: "result",
@@ -94,11 +94,18 @@ pub fn verify(
     })
 }
 
-/// Vide le cache avant une relecture de contrôle. Un échec n'arrête pas l'opération et n'est que
-/// journalisé : la comparaison pourrait alors porter sur le cache du système et non sur le support.
+/// Vide le cache avant la relecture du formatage. Un échec n'arrête pas l'opération et n'est que
+/// journalisé : la relecture pourrait alors porter sur le cache du système et non sur le support.
 pub(super) fn drop_cache_before_verify(device: &mut dyn BlockDevice) {
     if let Err(e) = device.drop_cache() {
         log::warn!(target: "bonk::write", error = e.to_string().as_str(); "cache not dropped: the verification may read cached data");
+    }
+}
+
+/// La relecture dit dans son rapport si le cache a été vidé ; le journal le signale en plus.
+pub(super) fn warn_if_cache_kept(report: &engine::VerifyReport) {
+    if !report.cache_dropped {
+        log::warn!(target: "bonk::write", "cache not dropped: the verification may have read cached data");
     }
 }
 

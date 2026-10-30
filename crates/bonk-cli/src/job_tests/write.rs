@@ -503,8 +503,8 @@ fn sans_reparation_demandee_le_gpt_n_est_pas_dit_sain() {
 /// pas sur ce que le chemin désigne au moment du contrôle.
 #[test]
 fn l_empreinte_porte_sur_le_fichier_ecrit_meme_remplace_entre_temps() {
-    let ecrit = TempSource::from_bytes("remplace", &[0xAB; 1 << 20]);
-    let attendu = TempSource::new("attendu", 1 << 20);
+    let ecrit = TempSource::from_bytes("piege-empreinte", &[0xAB; 1 << 20]);
+    let attendu = TempSource::new("attendu-empreinte", 1 << 20);
     let mut lecteur = std::fs::File::open(&attendu.0).unwrap();
     let empreinte = bonk_core::write::hash_stream(
         &mut lecteur,

@@ -16,7 +16,7 @@ use super::types::{
     Deps, JobError, Plan, SCHEMA_VERSION, SourceInfo, Target, TraceIo, WriteDone, WriteMode,
     WriteOutcome, fail,
 };
-use super::verify::drop_cache_before_verify;
+use super::verify::warn_if_cache_kept;
 use crate::errors::Code;
 
 pub struct WriteJob {
@@ -317,10 +317,8 @@ pub fn write(
     check_complete(&image, write.bytes, job.mode)?;
 
     let verify = if job.verify {
-        // Sans cela, la relecture lirait le cache du noyau (ce que Bonk vient d'écrire) et non le support.
-        drop_cache_before_verify(&mut *device);
         let report = engine::verify(
-            &*device,
+            &mut *device,
             write.bytes,
             &write.sha256,
             DEFAULT_CHUNK,
@@ -328,6 +326,7 @@ pub fn write(
         )
         .map_err(|e| map_verify_error(e, source_info.format))?;
         log::info!(target: "bonk::write", bytes = report.bytes; "verification passed");
+        warn_if_cache_kept(&report);
         Some(report)
     } else {
         None
