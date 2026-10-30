@@ -261,9 +261,10 @@ pub const CATALOG: &[Entry] = &[
         exit: EXIT_RUNTIME_ERROR,
         title: "Ouverture du disque refusée",
         causes: &[
-            "droits insuffisants : l'écriture brute exige des privilèges (l'interface ne tourne jamais en administrateur)",
+            "autorisation du système refusée ou annulée",
+            "pas d'agent polkit dans la session, ou service UDisks2 absent",
         ],
-        remedy: "Lancer la ligne de commande avec les droits nécessaires (par exemple `sudo bonk ...`), ou attendre l'ouverture par le service du système (décision D-03).",
+        remedy: "Accepter l'autorisation du système quand elle apparaît. Sans agent polkit (SSH) ou sans UDisks2 : relancer la ligne de commande avec `sudo`.",
     },
     Entry {
         code: Code::GptRepairFailed,
@@ -275,29 +276,6 @@ pub const CATALOG: &[Entry] = &[
             "le support est trop petit pour la table",
         ],
         remedy: "Inspecter le support avec `bonk debug layout` et réécrire l'image si besoin.",
-    },
-    Entry {
-        code: Code::FormatFailed,
-        id: "E4006",
-        exit: EXIT_RUNTIME_ERROR,
-        title: "Formatage impossible",
-        causes: &[
-            "support trop petit ou trop grand pour la table ou le système de fichiers demandés",
-            "erreur d'écriture, ou relecture différente de ce qui a été écrit",
-            "échec de l'outil du système",
-        ],
-        remedy: "Voir `bonk format --dry-run` : il dit ce qui serait fait, sans rien écrire. Un autre `--fs` ou `--table` peut convenir.",
-    },
-    Entry {
-        code: Code::FilesystemUnavailable,
-        id: "E4007",
-        exit: EXIT_RUNTIME_ERROR,
-        title: "Système de fichiers indisponible sur cet hôte",
-        causes: &[
-            "exFAT, NTFS et ext4 passent par les outils du système : l'outil ou le service manque",
-            "`--simulate` : seul FAT32 s'écrit sur un fichier image",
-        ],
-        remedy: "Voir `bonk capabilities`. Installer l'outil nommé, ou choisir `--fs fat32`, écrit par Bonk lui-même.",
     },
     Entry {
         code: Code::LogSettingInvalid,
@@ -359,6 +337,29 @@ pub const CATALOG: &[Entry] = &[
         title: "Requête du service invalide",
         causes: &["ligne qui n'est pas du JSON, méthode inconnue ou paramètres invalides"],
         remedy: "Voir `bonk schema serve` pour le format des requêtes et des réponses.",
+    },
+    Entry {
+        code: Code::FormatFailed,
+        id: "E7001",
+        exit: EXIT_RUNTIME_ERROR,
+        title: "Formatage impossible",
+        causes: &[
+            "support trop petit ou trop grand pour la table ou le système de fichiers demandés",
+            "erreur d'écriture, ou relecture différente de ce qui a été écrit",
+            "échec de l'outil du système",
+        ],
+        remedy: "Voir `bonk format --dry-run` : il dit ce qui serait fait, sans rien écrire. Un autre `--fs` ou `--table` peut convenir.",
+    },
+    Entry {
+        code: Code::FilesystemUnavailable,
+        id: "E7002",
+        exit: EXIT_RUNTIME_ERROR,
+        title: "Système de fichiers indisponible sur cet hôte",
+        causes: &[
+            "exFAT, NTFS et ext4 passent par les outils du système : l'outil ou le service manque",
+            "`--simulate` : seul FAT32 s'écrit sur un fichier image",
+        ],
+        remedy: "Voir `bonk capabilities`. Installer l'outil nommé, ou choisir `--fs fat32`, écrit par Bonk lui-même.",
     },
 ];
 

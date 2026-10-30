@@ -1033,7 +1033,7 @@ fn un_outil_absent_refuse_exfat_sans_toucher_au_disque() {
     scenario.capabilities = vec![exfat_capability(false)];
     let (code, _, err) = scenario.run(&["format", "usb-a", "--fs", "exfat", "--yes"]);
     assert_eq!(code, 1, "{err}");
-    assert!(err.contains("E4007"), "{err}");
+    assert!(err.contains("E7002"), "{err}");
     assert!(err.contains("mkfs.exfat"), "{err}");
     assert!(scenario.log().is_empty());
 }
@@ -1070,7 +1070,7 @@ fn exfat_sans_nouvelle_partition_ne_formate_rien() {
     scenario.capabilities = vec![exfat_capability(true)];
     let (code, _, err) = scenario.run(&["format", "usb-a", "--fs", "exfat", "--yes"]);
     assert_eq!(code, 1, "{err}");
-    assert!(err.contains("E4006"), "{err}");
+    assert!(err.contains("E7001"), "{err}");
     assert!(!scenario.log().iter().any(|l| l.starts_with("format:")));
 }
 

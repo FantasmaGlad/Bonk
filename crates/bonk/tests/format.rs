@@ -124,7 +124,7 @@ fn trop_petit_pour_fat32_ne_cree_pas_de_fichier_ecrit() {
     ]);
     assert_code(&sortie, 1);
     assert!(
-        String::from_utf8_lossy(&sortie.stderr).contains("E4006"),
+        String::from_utf8_lossy(&sortie.stderr).contains("E7001"),
         "{}",
         diagnostic(&sortie)
     );
@@ -146,7 +146,7 @@ fn les_autres_systemes_ne_s_ecrivent_pas_sur_un_fichier_image() {
     ]);
     assert_code(&sortie, 1);
     assert!(
-        String::from_utf8_lossy(&sortie.stderr).contains("E4007"),
+        String::from_utf8_lossy(&sortie.stderr).contains("E7002"),
         "{}",
         diagnostic(&sortie)
     );
