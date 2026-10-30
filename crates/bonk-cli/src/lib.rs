@@ -275,10 +275,7 @@ impl Env {
             vars: std::env::vars()
                 .filter(|(name, _)| name.starts_with("BONK_"))
                 .collect(),
-            io: job::Io {
-                ask_internal: Box::new(transfer::ask_internal_on_terminal),
-                ..job::Io::default()
-            },
+            io: job::Io::default(),
             privileged: bonk_hal::platform::current().is_privileged(),
         }
     }
@@ -1060,10 +1057,7 @@ mod tests {
                 .iter()
                 .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
                 .collect(),
-            io: job::Io {
-                ask_internal: Box::new(transfer::ask_internal_on_terminal),
-                ..job::Io::default()
-            },
+            io: job::Io::default(),
             privileged: bonk_hal::platform::current().is_privileged(),
         };
         let code = execute(

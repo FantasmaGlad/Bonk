@@ -10,7 +10,6 @@ use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-use bonk_hal::INTERNAL_CONFIRMATION;
 use iced::futures::channel::mpsc::{UnboundedReceiver, unbounded};
 use serde_json::Value;
 
@@ -61,12 +60,9 @@ pub(crate) fn write_args(
     if options.allow_virtual {
         args.push("--allow-virtual".to_owned());
     }
-    // La personne a confirmé dans la fenêtre : le sous-processus n'a pas de terminal pour le demander.
+    // La personne a confirmé dans la fenêtre : `bonk write` exige alors `--force`.
     if internal_confirmed {
-        args.extend([
-            "--confirm-internal".to_owned(),
-            INTERNAL_CONFIRMATION.to_owned(),
-        ]);
+        args.push("--force".to_owned());
     }
     args
 }
@@ -218,7 +214,7 @@ mod tests {
             args.contains(&"--show-internal".to_owned())
                 && args.contains(&"--allow-virtual".to_owned())
         );
-        assert!(args.ends_with(&["--confirm-internal".to_owned(), "confirme".to_owned()]));
+        assert!(args.contains(&"--force".to_owned()));
         // `--all` n'a pas de sens pour une écriture.
         assert!(!args.contains(&"--all".to_owned()));
     }

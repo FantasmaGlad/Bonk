@@ -152,19 +152,16 @@ pub const CATALOG: &[Entry] = &[
         id: "E2004",
         exit: EXIT_USAGE,
         title: "Confirmation requise",
-        causes: &["une écriture sans `--yes` : Bonk ne pose jamais de question hors terminal"],
-        remedy: "Décrire d'abord l'opération avec `--dry-run`, puis relancer avec `--yes`.",
+        causes: &["une écriture sans `--yes` ni `--force` : Bonk ne pose jamais de question"],
+        remedy: "Décrire d'abord l'opération avec `--dry-run`, puis relancer avec `--yes` ou `--force`.",
     },
     Entry {
         code: Code::InternalConfirmationRequired,
         id: "E2005",
         exit: EXIT_USAGE,
         title: "Confirmation requise pour un disque interne",
-        causes: &[
-            "écriture sur un disque interne sans avoir tapé le mot demandé",
-            "aucun terminal pour le demander, et `--confirm-internal` absent",
-        ],
-        remedy: "Vérifier la cible avec `bonk info <disque>` : toutes ses données seront perdues. Taper `confirme` quand Bonk le demande ; dans un script, ajouter `--confirm-internal confirme`.",
+        causes: &["écriture sur un disque interne sans `--force` : `--yes` ne suffit pas"],
+        remedy: "Vérifier la cible avec `bonk info <disque>` : toutes ses données seront perdues. Relancer avec `--force` pour le confirmer.",
     },
     Entry {
         code: Code::SourceUnreadable,

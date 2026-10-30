@@ -37,9 +37,6 @@ const AGGREGATE_SIGNATURES: [&str; 7] = [
 /// Signatures d'espace d'échange ou de reprise de mise en veille (CDC §3.1 point 1).
 const SWAP_SIGNATURES: [&str; 2] = ["swap", "swsuspend"];
 
-/// Mot à taper pour écrire sur un disque interne (CDC §3.2) : `--yes` ne suffit pas à un geste aussi grave.
-pub const INTERNAL_CONFIRMATION: &str = "confirme";
-
 /// Réglages explicites de l'utilisateur ; tout est refusé par défaut.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, default)]
