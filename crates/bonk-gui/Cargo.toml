@@ -18,7 +18,6 @@ iced.workspace = true
 log.workspace = true
 
 [target.'cfg(unix)'.dependencies]
-libc.workspace = true
 
 [dev-dependencies]
 iced_test.workspace = true

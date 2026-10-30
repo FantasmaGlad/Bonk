@@ -11,6 +11,7 @@ publish.workspace = true
 [dependencies]
 bonk-core.workspace = true
 bonk-hal.workspace = true
+bonk-ops.workspace = true
 bonk-customizer.workspace = true
 bonk-catalog.workspace = true
 clap.workspace = true

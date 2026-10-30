@@ -79,7 +79,7 @@ jobs:
           cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-gnu -- -D warnings
           cargo clippy --workspace --all-targets --locked --target x86_64-apple-darwin -- -D warnings
           # Android (D-44) : le cœur pur et la ligne de commande doivent rester compilables ; la fenêtre et l'accès USB viendront avec l'application.
-          cargo clippy -p bonk-core -p bonk-cli --all-targets --locked --target aarch64-linux-android -- -D warnings
+          cargo clippy -p bonk-core -p bonk-ops -p bonk-cli --all-targets --locked --target aarch64-linux-android -- -D warnings
       - name: Tests
         run: cargo test --workspace --locked
       # Le build release n'est vérifié qu'après fusion : il est plus long et la PR a déjà prouvé le reste.

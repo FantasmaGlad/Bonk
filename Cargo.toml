@@ -17,6 +17,7 @@ bonk-core = { path = "crates/bonk-core" }
 bonk-hal = { path = "crates/bonk-hal" }
 bonk-customizer = { path = "crates/bonk-customizer" }
 bonk-catalog = { path = "crates/bonk-catalog" }
+bonk-ops = { path = "crates/bonk-ops" }
 bonk-cli = { path = "crates/bonk-cli" }
 bonk-gui = { path = "crates/bonk-gui" }
 clap = { version = "4.6", features = ["derive"] }

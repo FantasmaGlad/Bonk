@@ -57,16 +57,7 @@ impl Error for EnumerateError {
 /// [`EnumerateError`] si une source nécessaire à la sécurité est illisible, ou si le système n'est
 /// pas encore pris en charge.
 pub fn enumerate_disks() -> Result<Vec<Disk>, EnumerateError> {
-    #[cfg(target_os = "linux")]
-    {
-        crate::linux::enumerate(&crate::linux::LinuxRoots::system())
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        Err(EnumerateError::Unsupported {
-            os: std::env::consts::OS,
-        })
-    }
+    crate::platform::current().enumerate()
 }
 
 /// Une lecture d'une source système, telle qu'elle s'est passée.
@@ -87,19 +78,7 @@ pub struct SourceRead {
 /// Comme [`enumerate_disks`], et rend aussi chaque lecture de source système avec son contenu, pour
 /// `bonk debug sources`. Hors Linux, aucune lecture n'est enregistrée (pas encore d'énumération).
 pub fn enumerate_disks_recorded() -> (Result<Vec<Disk>, EnumerateError>, Vec<SourceRead>) {
-    #[cfg(target_os = "linux")]
-    {
-        crate::linux::enumerate_recorded(&crate::linux::LinuxRoots::system())
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        (
-            Err(EnumerateError::Unsupported {
-                os: std::env::consts::OS,
-            }),
-            Vec::new(),
-        )
-    }
+    crate::platform::current().enumerate_recorded()
 }
 
 /// Énumère les disques à partir d'une capture de sources (`bonk diagnose --capture`), sans toucher au
@@ -109,15 +88,5 @@ pub fn enumerate_disks_recorded() -> (Result<Vec<Disk>, EnumerateError>, Vec<Sou
 /// # Errors
 /// [`EnumerateError`] comme [`enumerate_disks`] ; `Unsupported` hors Linux.
 pub fn enumerate_disks_from_capture(reads: &[SourceRead]) -> Result<Vec<Disk>, EnumerateError> {
-    #[cfg(target_os = "linux")]
-    {
-        crate::linux::enumerate_from_reads(reads)
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        let _ = reads;
-        Err(EnumerateError::Unsupported {
-            os: std::env::consts::OS,
-        })
-    }
+    crate::platform::current().enumerate_from_capture(reads)
 }

@@ -1,28 +1,31 @@
 # Architecture de Bonk
 
-> Statut : ce document décrit l'architecture visée. Au jalon J0, les crates ne contiennent pas encore de logique : les règles de sécurité, les tests et les mécanismes décrits ci-dessous sont à venir.
+> Statut : `bonk-catalog` et `bonk-customizer` sont encore vides ; seul Linux a un accès aux disques ; l'élévation des privilèges (section Privilèges) reste à faire.
 
 ## Vue d'ensemble
 
 ```
-            ┌──────────── crates/bonk (binaire unique) ────────────┐
-            │  sans argument → bonk-gui      avec arguments → bonk-cli │
-            └───────────────┬───────────────────────┬──────────────┘
-                            │                       │
-        ┌───────────────────┼───────────┬───────────┴──────┐
-        ▼                   ▼           ▼                  ▼
-   bonk-core           bonk-hal   bonk-customizer     bonk-catalog
- (pur, testable)    (code par OS)  (fichiers réponse,  (manifeste signé,
- MBR/GPT, écriture  disques, filtre  persistance)       téléchargements)
- brute, vérification de sécurité,
-                    privilèges
+              crates/bonk (binaire unique : fenêtre sans argument, ligne de commande sinon)
+                 │                                  │
+             bonk-gui                           bonk-cli
+        (lance `bonk write`)          (arguments, texte et JSON, service)
+                 │                                  │
+                 │                              bonk-ops
+                 │                  (porte d'écriture unique, codes d'erreur)
+                 │                                  │
+                 └──────────► bonk-hal ◄────────────┤
+                       (filtre, trait Platform)     │
+                                 │                  │
+                                 └─► bonk-core ◄────┘
+                             (pur : MBR/GPT, écriture, vérification)
 ```
 
 | Crate | Rôle |
 |---|---|
 | `bonk` | Seul binaire. Choisit l'interface ; sous-mode `--helper` pour les opérations disque élevées. |
 | `bonk-core` | Partitionnement MBR/GPT, écriture brute, décompression, vérification, réparation GPT. N'opère que sur une abstraction de périphérique bloc : aucune API d'OS. |
-| `bonk-hal` | Énumération des disques, filtre de sécurité, accès brut, démontage, privilèges, formatage via l'OS. Seul crate contenant du code spécifique à un OS. |
+| `bonk-hal` | Filtre de sécurité et trait `Platform` : énumération, accès brut, démontage, par système. Seul crate contenant du code spécifique à un OS. |
+| `bonk-ops` | Porte d'écriture unique (filtre, identité, démontage, vérification) et codes d'erreur stables. Sans interface : ni clap, ni Iced. |
 | `bonk-customizer` | Fichiers de réponse Windows, persistance des systèmes Live Linux. |
 | `bonk-catalog` | Manifeste signé, bibliothèque locale, téléchargements reprenables, empreintes. |
 | `bonk-cli` | Commandes, sortie texte et JSON, codes de sortie stables. |
@@ -30,8 +33,11 @@
 
 ## Règles de dépendance
 - `bonk-core` ne dépend d'aucun autre crate du workspace ni d'aucune API système.
+- `bonk-ops` ne dépend d'aucune interface.
 - `bonk-cli` et `bonk-gui` ne dépendent pas l'un de l'autre.
-- Le code propre à un OS est isolé dans `bonk-hal` derrière `cfg(target_os)` et une interface commune.
+- Le code propre à un OS est isolé dans `bonk-hal` derrière le trait `Platform`.
+
+Ces règles sont vérifiées par `crates/bonk/tests/architecture.rs`.
 
 ## Sécurité des disques
 1. Les disques système de l'hôte (racine, démarrage, ESP active, volumes montés par le système, membres RAID/LVM, volumes chiffrés) ne sont jamais listés.

@@ -10,7 +10,6 @@ mod diagnose;
 mod errors;
 mod fixture;
 mod info;
-mod job;
 mod list;
 mod logging;
 mod schema;
@@ -27,6 +26,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use bonk_hal::{Disk, EnumerateError, enumerate_disks};
+use bonk_ops::job;
 use clap::{CommandFactory, Parser, Subcommand};
 
 use crate::config::ConfigAction;
@@ -117,7 +117,8 @@ enum DiskAction {
 }
 
 /// Ce qu'une commande a d'incompatible avec `--fixture`, le cas échéant : tout ce qui lirait le système
-/// réel ou ouvrirait un vrai disque.
+/// réel ou ouvrirait un vrai disque. Aucun cas par défaut : une nouvelle commande ne compile pas tant que
+/// sa réponse n'est pas écrite ici, car l'oubli laisserait écrire sur un vrai disque sous `--fixture`.
 fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
     const DISK: &str = "--fixture simule l'énumération seulement : l'écriture et la lecture brute d'un disque sont refusées (utiliser --simulate ou --dry-run)";
     match command.as_ref()? {
@@ -139,7 +140,32 @@ fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
         Command::Diagnose(a) if a.capture() => {
             Some("--capture lit le système réel : incompatible avec --fixture")
         }
-        _ => None,
+        Command::Write(_)
+        | Command::Verify(_)
+        | Command::RepairGpt(_)
+        | Command::Disk {
+            action:
+                DiskAction::Write(_)
+                | DiskAction::Verify(_)
+                | DiskAction::RepairGpt(_)
+                | DiskAction::List(_)
+                | DiskAction::Info(_),
+        }
+        | Command::List(_)
+        | Command::Info(_)
+        | Command::Diagnose(_)
+        | Command::Debug {
+            action:
+                debug::DebugAction::Filter(_)
+                | debug::DebugAction::Layout(_)
+                | debug::DebugAction::Hexdump(_),
+        }
+        | Command::Explain(_)
+        | Command::Config { .. }
+        | Command::Schema(_)
+        | Command::Completions { .. }
+        | Command::Serve
+        | Command::Gui => None,
     }
 }
 

@@ -377,6 +377,7 @@ dependencies = [
  "bonk-core",
  "bonk-customizer",
  "bonk-hal",
+ "bonk-ops",
  "clap",
  "clap_complete",
  "log",
@@ -415,7 +416,6 @@ dependencies = [
  "bonk-hal",
  "iced",
  "iced_test",
- "libc",
  "log",
  "serde_json",
 ]
@@ -430,6 +430,17 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "bonk-ops"
+version = "0.0.1"
+dependencies = [
+ "bonk-core",
+ "bonk-hal",
+ "log",
+ "schemars",
+ "serde",
 ]
 
 [[package]]
