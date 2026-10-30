@@ -110,7 +110,8 @@ const WRITE_DELAY: Duration = Duration::from_secs(3);
 
 /// Secondes affichées dans le décompte du délai de réflexion, selon le temps écoulé depuis l'ouverture.
 fn secondes_restantes(elapsed: Duration) -> u64 {
-    WRITE_DELAY.saturating_sub(elapsed).as_secs() + 1
+    let reste = WRITE_DELAY.saturating_sub(elapsed);
+    reste.as_secs() + u64::from(reste.subsec_nanos() > 0)
 }
 
 /// Où en est l'écriture d'une image depuis la fenêtre.
@@ -1414,6 +1415,12 @@ mod tests {
         }
     }
 
+    fn figer_le_decompte(app: &mut App) {
+        if let WriteState::Draft { opened, .. } = &mut app.write {
+            *opened = Instant::now() + Duration::from_secs(60);
+        }
+    }
+
     fn app_avec_panneau() -> App {
         let mut app = loaded(sample());
         // Jamais le vrai binaire : le lancement échoue tout de suite, sans rien écrire.
@@ -1451,6 +1458,7 @@ mod tests {
     #[test]
     fn l_ecriture_exige_une_image_et_trois_secondes() {
         let mut app = app_avec_panneau();
+        figer_le_decompte(&mut app);
         // Immédiatement : refusé, même avec une image.
         let _ = app.update(Message::ImageInput("/tmp/x.img".to_owned()));
         let _ = app.update(Message::StartWrite);
@@ -1558,12 +1566,11 @@ mod tests {
             &app,
             "Cle de test  série 4C530001  16,0 Go  1 partition(s)  étiquettes : CLE"
         ));
-        // La valeur exacte dépend de l'horloge (un exécuteur lent peut avoir écoulé plus d'une seconde
-        // pendant le rendu) : on vérifie la présence du décompte ; les valeurs sont éprouvées plus bas.
-        assert!(
-            (1..=3).any(|n| contient(&app, &format!("Écrire et effacer ce disque (dans {n} s)"))),
-            "décompte absent"
-        );
+        // Horloge figée : un instant d'ouverture dans le futur donne un temps écoulé nul, quelle que soit la
+        // lenteur du rendu (un exécuteur lent a déjà dépassé 3 s avant la première vérification).
+        let mut figee = app_avec_panneau();
+        figer_le_decompte(&mut figee);
+        assert!(contient(&figee, "Écrire et effacer ce disque (dans 3 s)"));
         let mut vieux = app_avec_panneau();
         vieillir_le_panneau(&mut vieux);
         assert!(contient(
@@ -1576,11 +1583,13 @@ mod tests {
 
     #[test]
     fn le_decompte_diminue_avec_le_temps_ecoule() {
+        assert_eq!(secondes_restantes(Duration::ZERO), 3);
         assert_eq!(secondes_restantes(Duration::from_millis(1)), 3);
+        assert_eq!(secondes_restantes(Duration::from_secs(1)), 2);
         assert_eq!(secondes_restantes(Duration::from_millis(1500)), 2);
-        assert_eq!(secondes_restantes(Duration::from_millis(2500)), 1);
-        // Une fois le délai passé, le bouton n'affiche plus de décompte ; la fonction reste bornée à 1.
-        assert_eq!(secondes_restantes(Duration::from_secs(10)), 1);
+        assert_eq!(secondes_restantes(Duration::from_millis(2999)), 1);
+        // Une fois le délai passé, le bouton n'affiche plus de décompte.
+        assert_eq!(secondes_restantes(Duration::from_secs(10)), 0);
     }
 
     #[test]
