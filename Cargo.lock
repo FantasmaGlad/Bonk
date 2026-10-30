@@ -354,7 +354,7 @@ dependencies = [
 
 [[package]]
 name = "bonk"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "bonk-catalog",
  "bonk-cli",
@@ -367,11 +367,11 @@ dependencies = [
 
 [[package]]
 name = "bonk-catalog"
-version = "0.1.0"
+version = "0.0.1"
 
 [[package]]
 name = "bonk-cli"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "bonk-catalog",
  "bonk-core",
@@ -387,7 +387,7 @@ dependencies = [
 
 [[package]]
 name = "bonk-core"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "flate2",
  "log",
@@ -400,14 +400,14 @@ dependencies = [
 
 [[package]]
 name = "bonk-customizer"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "bonk-core",
 ]
 
 [[package]]
 name = "bonk-gui"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "bonk-catalog",
  "bonk-core",
@@ -422,7 +422,7 @@ dependencies = [
 
 [[package]]
 name = "bonk-hal"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "bonk-core",
  "libc",
