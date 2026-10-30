@@ -193,13 +193,18 @@ fn sous_affichage_virtuel_le_rendu_bascule_en_logiciel() -> Resultat {
         .env_remove("ICED_BACKEND")
         .env_remove("BONK_RENDER_FALLBACK")
         .output()?;
-    let journal = String::from_utf8_lossy(&sortie.stderr);
+    // Selon la distribution, `xvfb-run` renvoie la sortie d'erreur de la commande sur sa sortie standard
+    // (`2>&1` du script Debian) : le journal se lit donc dans les deux flux.
+    let journal = format!(
+        "{}{}",
+        String::from_utf8_lossy(&sortie.stdout),
+        String::from_utf8_lossy(&sortie.stderr)
+    );
     assert_eq!(
         sortie.status.code(),
         Some(124),
-        "statut : {:?}\nstdout : {}\nstderr : {journal}",
+        "statut : {:?}\n{journal}",
         sortie.status,
-        String::from_utf8_lossy(&sortie.stdout),
     );
     // Le message par défaut d'une panique (« thread 'main' panicked ») ne doit pas atteindre l'utilisateur ;
     // le journal verbeux, lui, raconte le repli.
