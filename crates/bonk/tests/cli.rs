@@ -194,7 +194,13 @@ fn sous_affichage_virtuel_le_rendu_bascule_en_logiciel() -> Resultat {
         .env_remove("BONK_RENDER_FALLBACK")
         .output()?;
     let journal = String::from_utf8_lossy(&sortie.stderr);
-    assert_eq!(sortie.status.code(), Some(124), "{journal}");
+    assert_eq!(
+        sortie.status.code(),
+        Some(124),
+        "statut : {:?}\nstdout : {}\nstderr : {journal}",
+        sortie.status,
+        String::from_utf8_lossy(&sortie.stdout),
+    );
     // Le message par défaut d'une panique (« thread 'main' panicked ») ne doit pas atteindre l'utilisateur ;
     // le journal verbeux, lui, raconte le repli.
     assert!(!journal.contains("thread 'main' panicked"), "{journal}");
