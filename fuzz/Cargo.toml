@@ -1,0 +1,30 @@
+[package]
+name = "bonk-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+bonk-core = { path = "../crates/bonk-core" }
+
+# Hors du workspace : libfuzzer-sys exige nightly, le reste du dépôt reste sur la chaîne stable.
+[workspace]
+
+[[bin]]
+name = "partition_inspect"
+path = "fuzz_targets/partition_inspect.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "codec_open"
+path = "fuzz_targets/codec_open.rs"
+test = false
+doc = false
+bench = false

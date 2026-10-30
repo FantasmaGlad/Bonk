@@ -1,0 +1,6 @@
+# Empreintes relevées sur PyPI : une par plateforme Linux, les exécuteurs du workflow binaires en utilisent deux.
+ziglang==0.17.0 \
+    --hash=sha256:81e3057db80fb459d1ab13c3db13dbcb1e99e91c36281661831d1916eba924de \
+    --hash=sha256:97079827064a7492cce5541ceb438ae8003ce1e54e399676da2d62fb7a5dc08b \
+    --hash=sha256:d2804f94f54f7fcf8169f4b212a619ad688a4e2e6592e976f0cf2e58e2cd8af3 \
+    --hash=sha256:2f1506fbd4080ae55c7f3c5abe99cce226e563827f50e8f143e36decc615310f

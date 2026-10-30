@@ -519,8 +519,14 @@ mod tests {
         let report = build_with_capture(&args(false), &env(), &Ok(vec![disk()]), Some(&reads))?;
         let text = report.to_string();
         // Rien d'identifiant n'a survécu.
-        for secret in ["4C530001", "0x5000cca", "1DCD-D51A", "MA_CLE", "alice"] {
-            assert!(!text.contains(secret), "{secret} présent dans la capture");
+        for (champ, valeur) in [
+            ("numéro de série", "4C530001"),
+            ("WWN", "0x5000cca"),
+            ("UUID du système de fichiers", "1DCD-D51A"),
+            ("étiquette", "MA_CLE"),
+            ("nom d'utilisateur", "alice"),
+        ] {
+            assert!(!text.contains(valeur), "{champ} présent dans la capture");
         }
         let udev_out = report["capture"]["reads"][0]["content"]
             .as_str()
