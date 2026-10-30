@@ -1,0 +1,50 @@
+# Santé du catalogue de systèmes (CDC §7, jalon J5) : les liens des images officielles répondent encore.
+# Sans manifeste (`catalogue/manifeste.json`, pas encore écrit), le workflow le dit et ne vérifie rien.
+# En cas de lien cassé : une issue est ouverte (ou mise à jour). Aucune image n'est hébergée ni téléchargée.
+name: catalogue
+
+on:
+  schedule:
+    - cron: "11 6 * * 1"
+  pull_request:
+    paths: ["catalogue/**", ".github/scripts/catalogue-liens.py", ".github/workflows/catalogue.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  liens:
+    name: liens du catalogue
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Manifeste présent ?
+        id: manifeste
+        run: |
+          if [ -f catalogue/manifeste.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "Non applicable : catalogue/manifeste.json n'existe pas encore (jalon J5)." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Vérifier les liens
+        id: liens
+        if: steps.manifeste.outputs.present == 'true'
+        run: python3 .github/scripts/catalogue-liens.py catalogue/manifeste.json "$RUNNER_TEMP/rapport.md"
+      - name: Résumé
+        if: always() && steps.manifeste.outputs.present == 'true'
+        run: cat "$RUNNER_TEMP/rapport.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Ouvrir une issue
+        if: failure() && steps.liens.outcome == 'failure' && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "Catalogue : liens cassés" --body-file "$RUNNER_TEMP/rapport.md"
