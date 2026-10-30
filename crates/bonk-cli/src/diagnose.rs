@@ -125,7 +125,7 @@ impl Environment {
     pub(crate) fn system() -> Self {
         Self {
             now: SystemTime::now(),
-            kernel: kernel_release(),
+            kernel: bonk_hal::platform::current().kernel_release(),
             user: std::env::var("USER")
                 .or_else(|_| std::env::var("LOGNAME"))
                 .or_else(|_| std::env::var("USERNAME"))
@@ -133,18 +133,6 @@ impl Environment {
             has: |name| std::env::var_os(name).is_some_and(|v| !v.is_empty()),
         }
     }
-}
-
-#[cfg(target_os = "linux")]
-fn kernel_release() -> Option<String> {
-    std::fs::read_to_string("/proc/sys/kernel/osrelease")
-        .ok()
-        .map(|text| text.trim().to_owned())
-}
-
-#[cfg(not(target_os = "linux"))]
-fn kernel_release() -> Option<String> {
-    None
 }
 
 /// Construit le rapport. Un échec d'énumération n'est pas un échec du diagnostic : il y figure.

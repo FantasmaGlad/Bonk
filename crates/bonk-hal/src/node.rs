@@ -19,13 +19,10 @@ use crate::image::Access;
 /// Disque entier ouvert en accès brut.
 #[derive(Debug)]
 pub struct BlockNode {
-    #[cfg(target_os = "linux")]
     file: std::fs::File,
     path: PathBuf,
     size: u64,
     block_size: u32,
-    /// Lu seulement par l'implémentation Linux : hors Linux, la structure n'est jamais construite.
-    #[cfg(target_os = "linux")]
     read_only: bool,
 }
 
@@ -37,7 +34,6 @@ impl BlockNode {
     }
 }
 
-#[cfg(target_os = "linux")]
 mod imp {
     use std::fs::{self, OpenOptions};
     use std::io::{self, Seek, SeekFrom};
@@ -161,48 +157,7 @@ mod imp {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
-mod imp {
-    use super::*;
-
-    impl BlockNode {
-        /// L'accès brut aux disques n'est pas encore disponible hors Linux.
-        ///
-        /// # Errors
-        /// Toujours [`BlockError::Io`] (`Unsupported`).
-        pub fn open(_path: &Path, _access: Access) -> Result<Self, BlockError> {
-            Err(BlockError::Io(std::io::Error::new(
-                std::io::ErrorKind::Unsupported,
-                "accès brut aux disques non disponible sur ce système",
-            )))
-        }
-    }
-
-    impl BlockDevice for BlockNode {
-        fn size(&self) -> u64 {
-            self.size
-        }
-
-        fn block_size(&self) -> u32 {
-            self.block_size
-        }
-
-        fn read_at(&self, _offset: u64, _buf: &mut [u8]) -> Result<(), BlockError> {
-            Err(BlockError::ReadOnly)
-        }
-
-        fn write_at(&mut self, _offset: u64, _data: &[u8]) -> Result<(), BlockError> {
-            Err(BlockError::ReadOnly)
-        }
-
-        fn flush(&mut self) -> Result<(), BlockError> {
-            Ok(())
-        }
-    }
-}
-
-// Le seul test vise l'implémentation Linux : ailleurs, le module serait vide.
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(test)]
 mod tests {
     use super::*;
 

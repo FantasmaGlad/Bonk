@@ -29,6 +29,29 @@ pub fn install() {
     }
 }
 
+/// Demande à un autre processus de s'arrêter proprement : il traite la demande entre deux blocs.
+///
+/// # Errors
+/// Hors Unix : `Unsupported`, pour que l'interface le dise au lieu de sembler annuler. Sous Unix : le
+/// processus n'existe plus ou n'appartient pas à l'utilisateur.
+pub fn stop_process(pid: u32) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        let pid = i32::try_from(pid).map_err(|_| std::io::ErrorKind::InvalidInput)?;
+        // SAFETY : on n'envoie que SIGTERM, sans toucher à la mémoire.
+        if unsafe { libc::kill(pid, libc::SIGTERM) } == 0 {
+            Ok(())
+        } else {
+            Err(std::io::Error::last_os_error())
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = pid;
+        Err(std::io::ErrorKind::Unsupported.into())
+    }
+}
+
 /// Une annulation a-t-elle été demandée depuis [`install`] ?
 #[must_use]
 pub fn requested() -> bool {

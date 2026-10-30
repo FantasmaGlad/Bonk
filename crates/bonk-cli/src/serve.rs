@@ -29,9 +29,9 @@ use serde_json::{Value, json};
 
 use crate::config::{self, ConfigAction, ConfigError, ViewDefaults};
 use crate::errors::{self, Code};
-use crate::job::{self, Deps, Io, RepairJob, Target, TraceIo, VerifyJob, WriteJob};
 use crate::slot::JobSlot;
 use crate::{debug, diagnose, info, list, schema};
+use bonk_ops::job::{self, Deps, Io, RepairJob, Target, TraceIo, VerifyJob, WriteJob};
 
 /// Version du protocole, incrémentée à chaque changement incompatible.
 pub(crate) const PROTOCOL: u32 = 1;

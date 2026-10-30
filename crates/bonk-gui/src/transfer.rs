@@ -167,17 +167,9 @@ pub(crate) fn spawn(program: &Path, args: &[String]) -> UnboundedReceiver<Event>
 
 /// Demande l'arrêt propre du processus d'écriture (il s'arrête entre deux blocs).
 pub(crate) fn cancel(pid: u32) {
-    #[cfg(unix)]
-    {
-        if let Ok(pid) = i32::try_from(pid) {
-            // SAFETY : on n'envoie que SIGTERM, que `bonk write` traite par un arrêt entre deux blocs.
-            unsafe {
-                libc::kill(pid, libc::SIGTERM);
-            }
-        }
+    if let Err(error) = bonk_hal::interrupt::stop_process(pid) {
+        log::warn!(target: "bonk::gui", pid = pid, error = error.to_string().as_str(); "write process not stopped");
     }
-    #[cfg(not(unix))]
-    let _ = pid;
 }
 
 #[cfg(test)]

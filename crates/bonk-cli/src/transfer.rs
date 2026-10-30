@@ -16,10 +16,28 @@ use serde::Serialize;
 
 use crate::config::ViewDefaults;
 use crate::errors::{Code, report};
-use crate::job::{
+use bonk_ops::job::{
     self, Deps, JobError, RepairDone, RepairJob, Target, TraceIo, VerifyDone, VerifyJob, WriteDone,
     WriteJob, WriteOutcome,
 };
+
+/// Niveau de `--trace-io` (voir [`TraceIo`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub(crate) enum TraceIoArg {
+    /// Décalage, longueur, durée et somme de contrôle de chaque accès
+    Metadata,
+    /// Avec les 16 premiers octets : réservé aux fichiers image
+    Data,
+}
+
+impl From<TraceIoArg> for TraceIo {
+    fn from(arg: TraceIoArg) -> Self {
+        match arg {
+            TraceIoArg::Metadata => Self::Metadata,
+            TraceIoArg::Data => Self::Data,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum ProgressMode {
@@ -58,7 +76,7 @@ pub(crate) struct CommonArgs {
     /// Journalise chaque accès bloc (décalage, durée, somme de contrôle) ; `=data` ajoute les
     /// premiers octets, pour un fichier image seulement
     #[arg(long, value_enum, num_args = 0..=1, default_missing_value = "metadata", require_equals = true)]
-    trace_io: Option<TraceIo>,
+    trace_io: Option<TraceIoArg>,
 
     /// Progression : auto, json (un événement par ligne) ou none
     #[arg(long, value_enum, default_value_t = ProgressMode::Auto)]
@@ -311,7 +329,7 @@ pub(crate) fn run_write(
         options: args.common.options(view),
         verify: !args.no_verify,
         repair_gpt: !args.no_repair_gpt,
-        trace_io: args.common.trace_io,
+        trace_io: args.common.trace_io.map(TraceIo::from),
         dry_run: args.dry_run,
         yes: args.yes,
     };
@@ -388,7 +406,7 @@ pub(crate) fn run_verify(
         target: args.common.target(),
         source: args.source.clone(),
         options: args.common.options(view),
-        trace_io: args.common.trace_io,
+        trace_io: args.common.trace_io.map(TraceIo::from),
     };
     let result = {
         let mut progress = sink(args.common.progress, &mut *out, &mut *err);
@@ -423,7 +441,7 @@ pub(crate) fn run_repair(
     let job = RepairJob {
         target: args.common.target(),
         options: args.common.options(view),
-        trace_io: args.common.trace_io,
+        trace_io: args.common.trace_io.map(TraceIo::from),
         dry_run: args.dry_run,
         yes: args.yes,
     };

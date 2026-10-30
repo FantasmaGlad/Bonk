@@ -1,7 +1,7 @@
 //! Les opérations d'écriture : écrire, vérifier, réparer le GPT (CDC §3, §4, J1).
 //!
-//! Ce module est partagé par la ligne de commande, le service (`bonk serve`) et, plus tard, tout autre
-//! front : il enchaîne les garde-fous dans l'ordre voulu et ne parle jamais à l'utilisateur. Il rend
+//! Ce module est la porte d'écriture unique, partagée par la ligne de commande, le service
+//! (`bonk serve`) et tout autre front : il enchaîne les garde-fous dans l'ordre voulu et ne parle jamais à l'utilisateur. Il rend
 //! des résultats typés (et sérialisables, d'où `bonk schema`) ou une [`JobError`] qui porte son code.
 //!
 //! Ordre d'une écriture sur un disque : le filtre juge la cible ; sans `--yes` rien ne bouge ; les
@@ -26,18 +26,17 @@ use bonk_hal::{
     Access, Disk, EnumerateError, FileDevice, FilterOptions, OpenTargetError, TargetIdentity,
     mount_points, reverify,
 };
-use clap::ValueEnum;
 use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::errors::Code;
 
 /// Version des formats de résultat, incrémentée à chaque changement incompatible.
-pub(crate) const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 1;
 
 /// Niveau de détail de `--trace-io`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub(crate) enum TraceIo {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TraceIo {
     /// Décalage, longueur, durée et somme de contrôle de chaque accès.
     Metadata,
     /// Avec les 16 premiers octets : réservé aux fichiers image.
@@ -46,9 +45,9 @@ pub(crate) enum TraceIo {
 
 /// Une erreur d'opération, avec son code stable.
 #[derive(Debug)]
-pub(crate) struct JobError {
-    pub(crate) code: Code,
-    pub(crate) message: String,
+pub struct JobError {
+    pub code: Code,
+    pub message: String,
 }
 
 fn fail(code: Code, message: impl Display) -> JobError {
@@ -59,17 +58,17 @@ fn fail(code: Code, message: impl Display) -> JobError {
 }
 
 /// Démontage des partitions d'un disque : rend les points démontés.
-pub(crate) type UnmountFn = Box<dyn Fn(&Disk) -> Result<Vec<String>, OpenTargetError>>;
+pub type UnmountFn = Box<dyn Fn(&Disk) -> Result<Vec<String>, OpenTargetError>>;
 /// Ouverture d'un disque entier en accès brut.
-pub(crate) type OpenNodeFn = Box<dyn Fn(&Path, Access) -> Result<Box<dyn BlockDevice>, BlockError>>;
+pub type OpenNodeFn = Box<dyn Fn(&Path, Access) -> Result<Box<dyn BlockDevice>, BlockError>>;
 /// Cible ouverte : périphérique, informations et points démontés.
 type OpenedTarget = (Box<dyn BlockDevice>, TargetInfo, Vec<String>);
 
 /// Ce que les opérations demandent au système : injectable pour les tests.
-pub(crate) struct Io {
-    pub(crate) unmount: UnmountFn,
-    pub(crate) open_node: OpenNodeFn,
-    pub(crate) cancelled: Box<dyn Fn() -> bool>,
+pub struct Io {
+    pub unmount: UnmountFn,
+    pub open_node: OpenNodeFn,
+    pub cancelled: Box<dyn Fn() -> bool>,
 }
 
 impl Default for Io {
@@ -81,14 +80,11 @@ impl Default for Io {
 impl Io {
     /// Accès système réels. `cancel` est un drapeau d'annulation propre à l'opération (le service en
     /// donne un par opération) ; Ctrl+C annule dans tous les cas.
-    pub(crate) fn with_cancel(
-        cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
-    ) -> Self {
+    pub fn with_cancel(cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>) -> Self {
         Self {
-            unmount: Box::new(bonk_hal::unmount_all),
+            unmount: Box::new(|disk| bonk_hal::platform::current().unmount(disk)),
             open_node: Box::new(|path, access| {
-                bonk_hal::BlockNode::open(path, access)
-                    .map(|node| Box::new(node) as Box<dyn BlockDevice>)
+                bonk_hal::platform::current().open_disk(path, access)
             }),
             cancelled: Box::new(move || {
                 bonk_hal::interrupt::requested()
@@ -101,14 +97,14 @@ impl Io {
 }
 
 /// Dépendances d'une opération : énumération des disques et accès système.
-pub(crate) struct Deps<'a> {
-    pub(crate) enumerate: &'a dyn Fn() -> Result<Vec<Disk>, EnumerateError>,
-    pub(crate) io: &'a Io,
+pub struct Deps<'a> {
+    pub enumerate: &'a dyn Fn() -> Result<Vec<Disk>, EnumerateError>,
+    pub io: &'a Io,
 }
 
 /// Où écrire.
 #[derive(Debug, Clone)]
-pub(crate) enum Target {
+pub enum Target {
     /// Un disque, par son identifiant stable (jamais `/dev/sdX`).
     Disk(String),
     /// Un fichier image (mode `--simulate`), créé à `size` octets s'il n'existe pas.
@@ -116,88 +112,88 @@ pub(crate) enum Target {
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
-pub(crate) struct TargetInfo {
+pub struct TargetInfo {
     /// `disk` ou `image`.
-    pub(crate) kind: &'static str,
-    pub(crate) id: Option<String>,
-    pub(crate) path: String,
-    pub(crate) size_bytes: Option<u64>,
+    pub kind: &'static str,
+    pub id: Option<String>,
+    pub path: String,
+    pub size_bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
-pub(crate) struct SourceInfo {
-    pub(crate) path: String,
-    pub(crate) format: Format,
+pub struct SourceInfo {
+    pub path: String,
+    pub format: Format,
     /// Taille connue d'avance (image brute seulement).
-    pub(crate) size_bytes: Option<u64>,
+    pub size_bytes: Option<u64>,
 }
 
 /// Ce que fera une écriture, sans rien faire (`--dry-run`).
 #[derive(Debug, Serialize, JsonSchema)]
-pub(crate) struct Plan {
-    pub(crate) schema_version: u32,
-    pub(crate) event: &'static str,
-    pub(crate) dry_run: bool,
-    pub(crate) target: TargetInfo,
-    pub(crate) source: SourceInfo,
+pub struct Plan {
+    pub schema_version: u32,
+    pub event: &'static str,
+    pub dry_run: bool,
+    pub target: TargetInfo,
+    pub source: SourceInfo,
     /// Points de montage qui seront démontés.
-    pub(crate) unmount: Vec<String>,
-    pub(crate) steps: Vec<&'static str>,
+    pub unmount: Vec<String>,
+    pub steps: Vec<&'static str>,
 }
 
 /// Résultat d'une écriture.
 #[derive(Debug, Serialize, JsonSchema)]
-pub(crate) struct WriteDone {
-    pub(crate) schema_version: u32,
-    pub(crate) event: &'static str,
-    pub(crate) target: TargetInfo,
-    pub(crate) source: SourceInfo,
-    pub(crate) unmounted: Vec<String>,
-    pub(crate) write: WriteReport,
-    pub(crate) verify: Option<VerifyReport>,
-    pub(crate) gpt_repair: Option<RepairReport>,
+pub struct WriteDone {
+    pub schema_version: u32,
+    pub event: &'static str,
+    pub target: TargetInfo,
+    pub source: SourceInfo,
+    pub unmounted: Vec<String>,
+    pub write: WriteReport,
+    pub verify: Option<VerifyReport>,
+    pub gpt_repair: Option<RepairReport>,
 }
 
 /// Résultat d'une vérification sans écriture.
 #[derive(Debug, Serialize, JsonSchema)]
-pub(crate) struct VerifyDone {
-    pub(crate) schema_version: u32,
-    pub(crate) event: &'static str,
-    pub(crate) target: TargetInfo,
-    pub(crate) source: SourceInfo,
-    pub(crate) verify: VerifyReport,
+pub struct VerifyDone {
+    pub schema_version: u32,
+    pub event: &'static str,
+    pub target: TargetInfo,
+    pub source: SourceInfo,
+    pub verify: VerifyReport,
     /// Octets exclus de la comparaison (`sha256` est alors l'empreinte de l'image avec ces octets remis
     /// à zéro). Vide pour une image sans GPT ou aussi grande que le support.
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub(crate) ignored_ranges: Vec<IgnoredRange>,
+    pub ignored_ranges: Vec<IgnoredRange>,
 }
 
 /// Plage d'octets exclue d'une comparaison, avec la raison.
 #[derive(Debug, Serialize, JsonSchema)]
-pub(crate) struct IgnoredRange {
-    pub(crate) offset: u64,
-    pub(crate) length: u64,
+pub struct IgnoredRange {
+    pub offset: u64,
+    pub length: u64,
     /// `gpt_repair` : champs que la réparation du GPT réécrit sur un support plus grand que l'image.
-    pub(crate) reason: &'static str,
+    pub reason: &'static str,
 }
 
 /// Résultat (ou plan) d'une réparation du GPT.
 #[derive(Debug, Serialize, JsonSchema)]
-pub(crate) struct RepairDone {
-    pub(crate) schema_version: u32,
-    pub(crate) event: &'static str,
-    pub(crate) dry_run: bool,
-    pub(crate) target: TargetInfo,
-    pub(crate) needs_repair: bool,
+pub struct RepairDone {
+    pub schema_version: u32,
+    pub event: &'static str,
+    pub dry_run: bool,
+    pub target: TargetInfo,
+    pub needs_repair: bool,
     /// Codes des constats avant et après.
-    pub(crate) findings_before: Vec<String>,
-    pub(crate) repair: Option<RepairReport>,
-    pub(crate) findings_after: Option<Vec<String>>,
+    pub findings_before: Vec<String>,
+    pub repair: Option<RepairReport>,
+    pub findings_after: Option<Vec<String>>,
 }
 
 #[derive(Serialize)]
 #[serde(untagged)]
-pub(crate) enum WriteOutcome {
+pub enum WriteOutcome {
     Plan(Box<Plan>),
     Done(Box<WriteDone>),
 }
@@ -206,7 +202,7 @@ pub(crate) enum WriteOutcome {
 // Source
 // ---------------------------------------------------------------------------------------------
 
-pub(crate) fn open_source(path: &Path) -> Result<(Source, SourceInfo), JobError> {
+pub fn open_source(path: &Path) -> Result<(Source, SourceInfo), JobError> {
     let metadata = fs::metadata(path)
         .map_err(|e| fail(Code::SourceUnreadable, format!("{} : {e}", path.display())))?;
     if !metadata.is_file() {
@@ -439,18 +435,18 @@ fn guarded<'a>(
 // Écrire
 // ---------------------------------------------------------------------------------------------
 
-pub(crate) struct WriteJob {
-    pub(crate) target: Target,
-    pub(crate) source: PathBuf,
-    pub(crate) options: FilterOptions,
-    pub(crate) verify: bool,
-    pub(crate) repair_gpt: bool,
-    pub(crate) trace_io: Option<TraceIo>,
-    pub(crate) dry_run: bool,
-    pub(crate) yes: bool,
+pub struct WriteJob {
+    pub target: Target,
+    pub source: PathBuf,
+    pub options: FilterOptions,
+    pub verify: bool,
+    pub repair_gpt: bool,
+    pub trace_io: Option<TraceIo>,
+    pub dry_run: bool,
+    pub yes: bool,
 }
 
-pub(crate) fn write(
+pub fn write(
     job: &WriteJob,
     deps: &Deps<'_>,
     progress: &mut dyn FnMut(&Progress) -> Control,
@@ -567,14 +563,14 @@ pub(crate) fn write(
 // Vérifier
 // ---------------------------------------------------------------------------------------------
 
-pub(crate) struct VerifyJob {
-    pub(crate) target: Target,
-    pub(crate) source: PathBuf,
-    pub(crate) options: FilterOptions,
-    pub(crate) trace_io: Option<TraceIo>,
+pub struct VerifyJob {
+    pub target: Target,
+    pub source: PathBuf,
+    pub options: FilterOptions,
+    pub trace_io: Option<TraceIo>,
 }
 
-pub(crate) fn verify(
+pub fn verify(
     job: &VerifyJob,
     deps: &Deps<'_>,
     progress: &mut dyn FnMut(&Progress) -> Control,
@@ -670,15 +666,15 @@ fn repair_ranges(path: &Path) -> Vec<std::ops::Range<u64>> {
 // Réparer le GPT
 // ---------------------------------------------------------------------------------------------
 
-pub(crate) struct RepairJob {
-    pub(crate) target: Target,
-    pub(crate) options: FilterOptions,
-    pub(crate) trace_io: Option<TraceIo>,
-    pub(crate) dry_run: bool,
-    pub(crate) yes: bool,
+pub struct RepairJob {
+    pub target: Target,
+    pub options: FilterOptions,
+    pub trace_io: Option<TraceIo>,
+    pub dry_run: bool,
+    pub yes: bool,
 }
 
-pub(crate) fn repair(job: &RepairJob, deps: &Deps<'_>) -> Result<RepairDone, JobError> {
+pub fn repair(job: &RepairJob, deps: &Deps<'_>) -> Result<RepairDone, JobError> {
     let codes = |layout: &bonk_core::partition::Layout| -> Vec<String> {
         layout.findings.iter().map(|f| f.code.to_owned()).collect()
     };

@@ -15,8 +15,8 @@ use bonk_hal::{Bus, Disk, DiskKind, OpenTargetError, Partition};
 use crate::errors::{
     EXIT_CANCELLED, EXIT_SOURCE, EXIT_TARGET_REFUSED, EXIT_USAGE, EXIT_VERIFY_FAILED,
 };
-use crate::job::Io;
 use crate::{Env, execute};
+use bonk_ops::job::Io;
 
 const DISK_SIZE: usize = 8 << 20;
 
