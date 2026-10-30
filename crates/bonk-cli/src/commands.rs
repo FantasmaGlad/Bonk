@@ -95,8 +95,14 @@ pub(crate) fn run_serve(fixture_reads: Option<&[SourceRead]>, env: &Env, view: V
         config_path: env.config_path.clone(),
         vars: env.vars.clone(),
         view,
+        interrupted: Arc::new(bonk_hal::interrupt::requested),
     };
-    serve::serve(io::stdin().lock(), Box::new(io::stdout()), &cfg)
+    bonk_hal::interrupt::install();
+    serve::serve(
+        io::BufReader::new(io::stdin()),
+        Box::new(io::stdout()),
+        &cfg,
+    )
 }
 
 pub(crate) fn run_explain<O: Write, E: Write>(args: &ExplainArgs, out: &mut O, err: &mut E) -> u8 {

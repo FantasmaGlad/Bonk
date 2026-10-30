@@ -123,7 +123,8 @@ fn has_partition_table(layout: &Layout) -> bool {
 }
 
 /// Fin du contenu d'après les tables : le GPT annonce où est son en-tête de secours, le MBR où finissent
-/// ses partitions. Le MBR de protection d'un GPT est ignoré : il couvre tout un disque, pas l'image.
+/// ses partitions, en secteurs de la taille que révèle le GPT (512 octets sans GPT : le MBR seul ne la
+/// dit pas). Le MBR de protection d'un GPT est ignoré : il couvre tout un disque, pas l'image.
 fn declared_by_tables(layout: &Layout) -> Option<u64> {
     let block = u64::from(layout.logical_block_size);
     let by_gpt = layout
@@ -141,7 +142,7 @@ fn declared_by_tables(layout: &Layout) -> Option<u64> {
             m.entries
                 .iter()
                 .filter(|e| e.kind != MBR_PROTECTIVE && e.sectors > 0)
-                .map(|e| (u64::from(e.start_lba) + u64::from(e.sectors)) * 512)
+                .map(|e| (u64::from(e.start_lba) + u64::from(e.sectors)) * block)
                 .max()
         });
     by_gpt.or(by_mbr)
@@ -323,6 +324,18 @@ mod tests {
         let crc = crate::partition::crc32(&h);
         h[16..20].copy_from_slice(&crc.to_le_bytes());
         image[512..604].copy_from_slice(&h);
+    }
+
+    /// Image à secteurs de 4 Kio dont l'en-tête GPT est invalide : seul le MBR hybride donne la taille,
+    /// et ses entrées se comptent en secteurs de 4 Kio, pas de 512 octets.
+    #[test]
+    fn le_mbr_d_une_image_a_secteurs_de_4_kio_se_compte_en_4_kio() {
+        let mut image = blank();
+        image[4096..4104].copy_from_slice(b"EFI PART");
+        with_mbr_entry(&mut image, 0x0C, 256, 768);
+        let report = analyze(&image, Some(1 << 20));
+        assert_eq!(report.declared_bytes, Some(4 << 20));
+        assert_eq!(report.truncated, Some(true));
     }
 
     #[test]

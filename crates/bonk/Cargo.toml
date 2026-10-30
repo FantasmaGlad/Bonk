@@ -28,6 +28,9 @@ maintainer = "FantasmaGlad <193235053+FantasmaGlad@users.noreply.github.com>"
 section = "utils"
 priority = "optional"
 depends = "libc6"
+# Écriture sans sudo : UDisks2 ouvre le disque, polkit demande l'autorisation. `policykit-1` est l'ancien
+# nom du paquet de polkit.
+recommends = "udisks2, polkitd | policykit-1"
 extended-description = "Création de supports d'amorçage (clés USB et disques externes), interface graphique et ligne de commande."
 assets = [
     ["target/release/bonk", "usr/bin/", "755"],
@@ -39,3 +42,7 @@ assets = [
     { source = "target/release/bonk", dest = "/usr/bin/bonk", mode = "755" },
     { source = "../../LICENSE", dest = "/usr/share/licenses/bonk/LICENSE", mode = "644", doc = true },
 ]
+
+[package.metadata.generate-rpm.recommends]
+udisks2 = ""
+polkit = ""
