@@ -1,0 +1,39 @@
+# Manifestes de distribution (Scoop, Homebrew, AUR, winget) générés à partir des empreintes d'une release
+# publiée, puis joints à cette release. Rien n'est soumis aux canaux : c'est une décision du mainteneur
+# (comptes et dépôts tiers à créer).
+name: distribution
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag de la release (vX.Y.Z)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  manifestes:
+    name: manifestes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Récupérer les empreintes de la release
+        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS
+      - name: Générer les manifestes
+        run: python3 .github/scripts/manifestes.py SHA256SUMS "$TAG" manifestes
+      - name: Joindre à la release
+        run: gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber manifestes/*
