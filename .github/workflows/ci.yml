@@ -1,6 +1,7 @@
 # Validation de la compilation.
 # Linux d'abord, car c'est le moins cher : formatage, lint, tests, version minimale de Rust. Windows et macOS
 # ne démarrent que si ces deux jobs Linux réussissent.
+# L'image des exécuteurs Linux est figée (ubuntu-24.04, pas ubuntu-latest) : l'image change par un commit.
 # Aucun job pour une PR en brouillon ; aucune exécution pour un changement qui ne touche ni le code, ni la
 # chaîne Rust, ni ce fichier (le modifier relance la CI, pour le valider).
 name: ci
@@ -14,6 +15,7 @@ on:
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - ".github/workflows/ci.yml"
+      - ".github/paquets-linux.txt"
   push:
     branches: [main]
     paths:
@@ -22,6 +24,7 @@ on:
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - ".github/workflows/ci.yml"
+      - ".github/paquets-linux.txt"
   workflow_dispatch:
 
 # Droits minimaux : la CI ne fait que lire le dépôt.
@@ -45,7 +48,7 @@ jobs:
   qualite:
     name: qualité (Linux)
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Récupérer le code
@@ -57,10 +60,12 @@ jobs:
         run: rustup toolchain install
       - name: Restaurer le cache de compilation
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      # Le test de la fenêtre sous affichage virtuel (Xvfb) charge libxkbcommon-x11 à l'exécution ; l'image
-      # de l'exécuteur ne la fournit pas (Xvfb, lui, y est).
-      - name: Bibliothèque système de la fenêtre
-        run: sudo apt-get install -y --no-install-recommends libxkbcommon-x11-0
+      # Paquets listés dans .github/paquets-linux.txt (un seul endroit, cité par PROJET.md) : l'image est figée,
+      # un changement de paquet est donc un commit.
+      - name: Paquets système
+        run: |
+          sudo apt-get update
+          grep -vE '^[[:space:]]*(#|$)' .github/paquets-linux.txt | xargs sudo apt-get install -y --no-install-recommends
       - name: Formatage
         run: cargo fmt --all --check
       - name: Lint
@@ -83,7 +88,7 @@ jobs:
   msrv:
     name: version minimale de Rust (Linux)
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Récupérer le code
