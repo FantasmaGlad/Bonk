@@ -1,5 +1,4 @@
-# Fuzzing hebdomadaire des analyseurs et décodeurs (MBR, GPT, formats d'image) avec cargo-fuzz.
-# Sans cibles (`fuzz/Cargo.toml`, pas encore écrites), le workflow le dit et ne fait rien.
+# Fuzzing hebdomadaire des analyseurs et décodeurs (MBR, GPT, formats d'image) avec cargo-fuzz (cibles : fuzz/).
 # Un plantage est conservé en artefact pour être transformé en test de non-régression.
 name: fuzz
 
@@ -23,29 +22,18 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Cibles présentes ?
-        id: cibles
-        run: |
-          if [ -f fuzz/Cargo.toml ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "Non applicable : fuzz/Cargo.toml n'existe pas encore." | tee -a "$GITHUB_STEP_SUMMARY"
-          fi
       # cargo-fuzz exige la chaîne nightly.
       - name: Installer nightly et cargo-fuzz
-        if: steps.cibles.outputs.present == 'true'
         run: |
           rustup toolchain install nightly --profile minimal
           cargo +nightly install --locked cargo-fuzz
       - name: Fuzzer chaque cible
-        if: steps.cibles.outputs.present == 'true'
         run: |
           for cible in $(cargo +nightly fuzz list); do
             cargo +nightly fuzz run "$cible" -- -max_total_time=300
           done
       - name: Conserver les plantages
-        if: failure() && steps.cibles.outputs.present == 'true'
+        if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: plantages-fuzz
