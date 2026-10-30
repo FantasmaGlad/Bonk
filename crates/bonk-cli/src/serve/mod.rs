@@ -10,8 +10,9 @@
 //!
 //! Les méthodes portent le nom de la commande : `disk.list` est `bonk disk list`. Une seule opération
 //! d'écriture à la fois ; `cancel` l'arrête entre deux blocs. À la fermeture de l'entrée, l'opération
-//! en cours est annulée et le service s'arrête. Les mêmes garde-fous que la CLI s'appliquent : rien
-//! ne s'écrit sans `"yes": true` ou `"force": true`, ni sur un disque que le filtre interdit.
+//! en cours est annulée et le service s'arrête ; sous Unix, Ctrl+C et SIGTERM font de même et le
+//! service rend le code 5. Les mêmes garde-fous que la CLI s'appliquent : rien ne s'écrit sans
+//! `"yes": true` ou `"force": true`, ni sur un disque que le filtre interdit.
 
 mod jobs;
 mod methods;
@@ -23,13 +24,15 @@ mod tests;
 use std::io::{BufRead, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use bonk_hal::{Disk, EnumerateError};
 use serde_json::{Value, json};
 
 use crate::config::ViewDefaults;
-use crate::errors::Code;
+use crate::errors::{Code, EXIT_CANCELLED};
 use crate::slot::JobSlot;
 use bonk_ops::job::Io;
 
@@ -53,6 +56,8 @@ pub(crate) struct Config {
     pub(crate) config_path: Option<PathBuf>,
     pub(crate) vars: Vec<(String, String)>,
     pub(crate) view: ViewDefaults,
+    /// Ctrl+C ou SIGTERM reçu : le service annule l'opération en cours et s'arrête.
+    pub(crate) interrupted: Arc<dyn Fn() -> bool + Send + Sync>,
 }
 
 /// Méthodes du service : le nom et la description vivent ici, et `handle` doit traiter chaque variante.
@@ -142,24 +147,53 @@ fn handle(line: &str, cfg: &Config, out: &Out, state: &mut State) {
 
 /// Boucle du service : lit les requêtes jusqu'à la fin de l'entrée, puis annule l'opération en cours
 /// et s'arrête. Rend le code de sortie.
-pub(crate) fn serve(input: impl BufRead, output: Box<dyn Write + Send>, cfg: &Config) -> u8 {
+pub(crate) fn serve(
+    input: impl BufRead + Send + 'static,
+    output: Box<dyn Write + Send>,
+    cfg: &Config,
+) -> u8 {
     let out = Out(Arc::new(Mutex::new(output)));
     out.send(&json!({"event": "ready", "protocol": PROTOCOL, "version": env!("CARGO_PKG_VERSION"), "os": std::env::consts::OS}));
     let mut state = State::default();
-    for line in input.lines() {
-        let Ok(line) = line else { break };
-        if line.trim().is_empty() {
-            continue;
+    let lines = read_lines(input);
+    let mut interrupted = false;
+    loop {
+        if (cfg.interrupted)() {
+            interrupted = true;
+            break;
         }
-        handle(&line, cfg, &out, &mut state);
+        match lines.recv_timeout(INTERRUPT_POLL) {
+            Ok(line) if line.trim().is_empty() => {}
+            Ok(line) => handle(&line, cfg, &out, &mut state),
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => break,
+        }
     }
-    // Fin de l'entrée : le client est parti, on ne laisse rien tourner derrière lui.
+    // Client parti ou arrêt demandé : l'opération en cours s'arrête entre deux blocs et répond.
     if let Some(job) = state.job.take() {
         job.cancel.store(true, Ordering::SeqCst);
         let _ = job.thread.join();
     }
     stop_watch(&mut state);
-    0
+    if interrupted { EXIT_CANCELLED } else { 0 }
+}
+
+/// Fréquence à laquelle la boucle regarde si un arrêt a été demandé pendant qu'elle attend une requête.
+const INTERRUPT_POLL: Duration = Duration::from_millis(100);
+
+/// Lit l'entrée sur un fil à part : la boucle du service ne reste jamais bloquée sur une lecture et
+/// voit un arrêt demandé même quand le client se tait.
+fn read_lines(input: impl BufRead + Send + 'static) -> Receiver<String> {
+    let (sender, receiver) = mpsc::channel();
+    std::thread::spawn(move || {
+        for line in input.lines() {
+            let Ok(line) = line else { break };
+            if sender.send(line).is_err() {
+                break;
+            }
+        }
+    });
+    receiver
 }
 
 impl Method {

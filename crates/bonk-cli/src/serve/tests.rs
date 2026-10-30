@@ -114,6 +114,7 @@ fn fake(slow: bool, enumerate: EnumerateFn) -> Fake {
             config_path: None,
             vars: vec![],
             view: ViewDefaults::default(),
+            interrupted: Arc::new(|| false),
         },
     }
 }
@@ -511,6 +512,70 @@ fn annulation_et_une_seule_operation_a_la_fois() {
     // Sans opération en cours, cancel répond qu'il n'y a rien à annuler.
     let idle = quick_session(&[r#"{"id":1,"method":"cancel"}"#]);
     assert_eq!(response(&idle, 1)["result"]["cancelling"], false);
+}
+
+/// Entrée que le client garde ouverte : rien n'arrive après les requêtes. Elle se ferme d'elle-même
+/// au bout de `deadline`, pour qu'un service qui ne s'arrêterait pas fasse échouer le test au lieu
+/// de le bloquer.
+struct KeptOpen {
+    inner: Cursor<Vec<u8>>,
+    deadline: std::time::Instant,
+}
+
+impl Read for KeptOpen {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        if n == 0 {
+            while std::time::Instant::now() < self.deadline {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+        Ok(n)
+    }
+}
+
+impl BufRead for KeptOpen {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        if self.inner.fill_buf()?.is_empty() {
+            while std::time::Instant::now() < self.deadline {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+        self.inner.fill_buf()
+    }
+    fn consume(&mut self, amt: usize) {
+        self.inner.consume(amt);
+    }
+}
+
+/// Ctrl+C ou SIGTERM : l'opération en cours est annulée entre deux blocs, sa réponse part, et le
+/// service rend le code d'annulation sans attendre que le client ferme l'entrée.
+#[test]
+fn un_signal_d_arret_annule_l_operation_et_rend_la_main() {
+    let source = TempImage::new("signal", 7 << 20);
+    let path = source.0.display().to_string();
+    let write = format!(
+        r#"{{"id":1,"method":"disk.write","params":{{"mode":"raw","target":"usb-a","source":{path:?},"yes":true,"no_verify":true}}}}"#
+    );
+    let mut f = fake(true, fixed());
+    let buffer = Buffer(Arc::new(Mutex::new(Vec::new())));
+    let seen = buffer.clone();
+    f.cfg.interrupted =
+        Arc::new(move || String::from_utf8_lossy(&seen.0.lock().unwrap()).contains("job_started"));
+    let input = KeptOpen {
+        inner: Cursor::new((write + "\n").into_bytes()),
+        deadline: std::time::Instant::now() + Duration::from_secs(20),
+    };
+    let started = std::time::Instant::now();
+    let code = serve(input, Box::new(buffer.clone()), &f.cfg);
+    assert_eq!(code, crate::errors::EXIT_CANCELLED);
+    assert!(started.elapsed() < Duration::from_secs(10));
+    let text = String::from_utf8(buffer.0.lock().unwrap().clone()).unwrap();
+    let out: Vec<Value> = text
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    assert_eq!(response(&out, 1)["error"]["code"], "E4003");
 }
 
 #[test]

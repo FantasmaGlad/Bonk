@@ -89,7 +89,8 @@ impl Default for Io {
 
 impl Io {
     /// Accès système réels. `cancel` est un drapeau d'annulation propre à l'opération (le service en
-    /// donne un par opération) ; Ctrl+C annule aussi les commandes, qui appellent `interrupt::install`.
+    /// donne un par opération) ; sous Unix, Ctrl+C et SIGTERM annulent aussi les commandes et le
+    /// service, qui appellent `interrupt::install`.
     pub fn with_cancel(cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>) -> Self {
         Self {
             prepare: Box::new(|path, access, elevation| {
