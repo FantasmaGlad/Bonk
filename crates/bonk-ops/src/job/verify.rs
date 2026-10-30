@@ -1,12 +1,12 @@
 //! Comparer un support à une image, sans écrire.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use bonk_core::BlockDevice;
 use bonk_core::write::{self as engine, Control, DEFAULT_CHUNK, Progress};
 use bonk_hal::{Access, Elevation, FilterOptions};
 
-use super::source::open_source;
+use super::source::ImageFile;
 use super::target::{OpenRequest, choose, open_target};
 use super::translate::{guarded, map_verify_error};
 use super::types::{
@@ -27,7 +27,8 @@ pub fn verify(
     deps: &Deps<'_>,
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<VerifyDone, JobError> {
-    let (mut source, source_info) = open_source(&job.source)?;
+    let file = ImageFile::open(&job.source)?;
+    let (mut source, source_info) = file.decoded()?;
     let chosen = choose(&job.target, job.options, deps)?;
     let (mut device, info, _) = open_target(
         chosen,
@@ -46,7 +47,7 @@ pub fn verify(
     // Une image GPT posée sur un support plus grand a vu quelques champs réécrits par la réparation du
     // GPT (MBR de protection, positions de l'en-tête) : les comparer à l'image donnerait un faux échec.
     let ignore = if source_info.size_bytes.is_none_or(|n| n < device.size()) {
-        repair_ranges(&job.source)
+        repair_ranges(&file)
     } else {
         Vec::new()
     };
@@ -104,10 +105,10 @@ pub(super) fn drop_cache_before_verify(device: &mut dyn BlockDevice) {
 /// Plages d'une image GPT que la réparation du GPT peut réécrire (début de l'image relu à part, car le
 /// flux principal est consommé par le calcul de l'empreinte). Vide si l'image est illisible : l'erreur
 /// sera remontée par la lecture principale.
-fn repair_ranges(path: &Path) -> Vec<std::ops::Range<u64>> {
+fn repair_ranges(image: &ImageFile) -> Vec<std::ops::Range<u64>> {
     use std::io::Read;
 
-    let Ok((source, _)) = open_source(path) else {
+    let Ok((source, _)) = image.decoded() else {
         return Vec::new();
     };
     let mut head = Vec::new();

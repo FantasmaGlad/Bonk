@@ -206,6 +206,8 @@ struct Scenario {
     /// Annulation demandée pendant l'attente de l'autorisation.
     cancel_on_prepare: bool,
     seen_elevation: Rc<Cell<Option<Elevation>>>,
+    /// Appelé à la première énumération, entre l'ouverture de l'image et son contrôle.
+    on_first_enumeration: Option<Rc<dyn Fn()>>,
     vars: Vec<(String, String)>,
     capabilities: Vec<Capability>,
 }
@@ -223,6 +225,7 @@ impl Scenario {
             cancel: false,
             cancel_on_prepare: false,
             seen_elevation: Rc::new(Cell::new(None)),
+            on_first_enumeration: None,
             vars: Vec::new(),
             capabilities: Vec::new(),
         }
@@ -231,9 +234,13 @@ impl Scenario {
     fn run(&self, args: &[&str]) -> (u8, String, String) {
         let calls = Cell::new(0usize);
         let enumerations = self.enumerations.clone();
+        let hook = self.on_first_enumeration.clone();
         let enumerate = move || {
             let n = calls.get();
             calls.set(n + 1);
+            if let (0, Some(hook)) = (n, &hook) {
+                hook();
+            }
             Ok(enumerations[n.min(enumerations.len() - 1)].clone())
         };
         let log = Rc::clone(&self.log);

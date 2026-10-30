@@ -21,7 +21,7 @@ mod write;
 
 pub use format::{FormatJob, default_filesystem, format};
 pub use repair::{RepairJob, repair};
-pub use source::open_source;
+pub use source::{FileReader, ImageFile};
 pub use types::*;
 pub use verify::{VerifyJob, verify};
 pub use write::{WriteJob, write};
