@@ -8,6 +8,7 @@ use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+use bonk_core::analysis::{ImageKind, ImageReport};
 use bonk_core::write::{Control, Phase, Progress};
 use bonk_hal::{FilterOptions, format_size};
 use clap::{Args, ValueEnum};
@@ -18,7 +19,7 @@ use crate::config::ViewDefaults;
 use crate::errors::{Code, report};
 use bonk_ops::job::{
     self, Deps, JobError, RepairDone, RepairJob, Target, TraceIo, VerifyDone, VerifyJob, WriteDone,
-    WriteJob, WriteOutcome,
+    WriteJob, WriteMode, WriteOutcome,
 };
 
 /// Niveau de `--trace-io` (voir [`TraceIo`]).
@@ -35,6 +36,24 @@ impl From<TraceIoArg> for TraceIo {
         match arg {
             TraceIoArg::Metadata => Self::Metadata,
             TraceIoArg::Data => Self::Data,
+        }
+    }
+}
+
+/// Mode de `--mode` (voir [`WriteMode`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub(crate) enum ModeArg {
+    /// Refuse une image tronquée ou qui ne démarrerait pas écrite telle quelle
+    Auto,
+    /// Écrit les octets tels quels, quelle que soit l'analyse
+    Raw,
+}
+
+impl From<ModeArg> for WriteMode {
+    fn from(arg: ModeArg) -> Self {
+        match arg {
+            ModeArg::Auto => Self::Auto,
+            ModeArg::Raw => Self::Raw,
         }
     }
 }
@@ -124,6 +143,14 @@ pub(crate) struct WriteArgs {
     /// Décrit ce qui serait fait sans rien écrire
     #[arg(long)]
     dry_run: bool,
+
+    /// Empreinte SHA-256 publiée pour ce fichier : contrôlée avant tout geste sur le support
+    #[arg(long, value_name = "HEX")]
+    sha256: Option<String>,
+
+    /// auto : analyse l'image et refuse ce qui ne démarrerait pas ; raw : écrit les octets tels quels
+    #[arg(long, value_enum, default_value_t = ModeArg::Auto)]
+    mode: ModeArg,
 
     /// Ne relit pas le support après l'écriture
     #[arg(long)]
@@ -237,6 +264,7 @@ fn sink<'a>(
                 if boundary || last.elapsed() >= Duration::from_millis(250) {
                     last = Instant::now();
                     let step = match p.phase {
+                        Phase::Source => "contrôle de l'empreinte",
                         Phase::Write => "écriture",
                         Phase::Flush => "vidage des tampons",
                         Phase::Verify => "vérification",
@@ -282,6 +310,25 @@ fn target_line(info: &job::TargetInfo) -> String {
     match &info.id {
         Some(id) => format!("disque {id} ({})", info.path),
         None => format!("image {}", info.path),
+    }
+}
+
+fn image_line(report: &ImageReport) -> String {
+    let kind = match report.kind {
+        ImageKind::HybridIso => "ISO hybride",
+        ImageKind::BootableDisk => "image de disque amorçable",
+        ImageKind::DataDisk => "image sans amorçage de PC (carte ARM ou données)",
+        ImageKind::PlainIso => "ISO sans amorçage de disque",
+        ImageKind::Unknown => "non reconnue",
+    };
+    let boot: Vec<&str> = [(report.bios, "BIOS"), (report.uefi, "UEFI")]
+        .into_iter()
+        .filter_map(|(present, name)| present.then_some(name))
+        .collect();
+    if boot.is_empty() {
+        kind.to_owned()
+    } else {
+        format!("{kind} ({})", boot.join(", "))
     }
 }
 
@@ -332,6 +379,8 @@ pub(crate) fn run_write(
         trace_io: args.common.trace_io.map(TraceIo::from),
         dry_run: args.dry_run,
         yes: args.yes,
+        expected_sha256: args.sha256.clone(),
+        mode: args.mode.into(),
     };
     log::debug!(target: "bonk::cli", target_kind = if args.common.simulate { "image" } else { "disk" }, dry_run = args.dry_run; "command write");
     let result = {
@@ -356,6 +405,10 @@ pub(crate) fn run_write(
                         .size_bytes
                         .map_or_else(String::new, |s| format!(", {}", format_size(s)))
                 )?;
+                writeln!(out, "  Image  : {}", image_line(&plan.image))?;
+                if plan.sha256_checked {
+                    writeln!(out, "  Empreinte du fichier : conforme")?;
+                }
                 if !plan.unmount.is_empty() {
                     writeln!(out, "  Démontage : {}", plan.unmount.join(", "))?;
                 }
@@ -375,6 +428,10 @@ pub(crate) fn run_write(
                     "  Source : {} ({})",
                     done.source.path, done.source.format
                 )?;
+                writeln!(out, "  Image  : {}", image_line(&done.image))?;
+                if done.sha256_checked {
+                    writeln!(out, "  Empreinte du fichier : conforme")?;
+                }
                 if !done.unmounted.is_empty() {
                     writeln!(out, "  Démonté : {}", done.unmounted.join(", "))?;
                 }

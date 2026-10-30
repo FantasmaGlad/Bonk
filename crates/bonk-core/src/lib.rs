@@ -5,6 +5,7 @@
 //! aucune API d'OS, aucune dépendance vers un autre crate du workspace. Il reste ainsi entièrement
 //! testable sur des fichiers image, sans matériel ni privilèges.
 
+pub mod analysis;
 pub mod block;
 pub mod codec;
 pub mod partition;

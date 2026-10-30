@@ -31,7 +31,7 @@ use crate::config::{self, ConfigAction, ConfigError, ViewDefaults};
 use crate::errors::{self, Code};
 use crate::slot::JobSlot;
 use crate::{debug, diagnose, info, list, schema};
-use bonk_ops::job::{self, Deps, Io, RepairJob, Target, TraceIo, VerifyJob, WriteJob};
+use bonk_ops::job::{self, Deps, Io, RepairJob, Target, TraceIo, VerifyJob, WriteJob, WriteMode};
 
 /// Version du protocole, incrémentée à chaque changement incompatible.
 pub(crate) const PROTOCOL: u32 = 1;
@@ -218,6 +218,10 @@ struct TransferParams {
     allow_virtual: bool,
     /// `metadata` ou `data`.
     trace_io: Option<String>,
+    /// Empreinte SHA-256 publiée pour le fichier source.
+    sha256: Option<String>,
+    /// `auto` (par défaut) ou `raw`.
+    mode: Option<String>,
 }
 
 fn parse<T: DeserializeOwned>(params: &Value) -> Result<T, Failure> {
@@ -260,6 +264,17 @@ impl TransferParams {
             Some(autre) => Err(failure(
                 Code::ProtocolError,
                 format!("trace_io inconnu : « {autre} » (metadata ou data)"),
+            )),
+        }
+    }
+
+    fn mode(&self) -> Result<WriteMode, Failure> {
+        match self.mode.as_deref() {
+            None | Some("auto") => Ok(WriteMode::Auto),
+            Some("raw") => Ok(WriteMode::Raw),
+            Some(autre) => Err(failure(
+                Code::ProtocolError,
+                format!("mode inconnu : « {autre} » (auto ou raw)"),
             )),
         }
     }
@@ -461,6 +476,7 @@ fn start_job(
     // Les paramètres sont validés tout de suite : une erreur de requête répond sans démarrer.
     let p: TransferParams = parse(params)?;
     let (target, options, trace) = (p.target()?, p.options(&cfg.view), p.trace()?);
+    let mode = p.mode()?;
     let source = match kind {
         Kind::Repair => PathBuf::new(),
         _ => p.source()?,
@@ -491,6 +507,8 @@ fn start_job(
                     trace_io: trace,
                     dry_run: p.dry_run,
                     yes: p.yes,
+                    expected_sha256: p.sha256.clone(),
+                    mode,
                 },
                 &deps,
                 &mut progress,
@@ -1056,11 +1074,11 @@ mod tests {
         // Image de 9 Mio sur un disque de 8 Mio : trop grande ; on en prend une qui tient.
         let small = TempImage::new("petite", 6 << 20);
         let request = format!(
-            r#"{{"id":7,"method":"disk.write","params":{{"target":"usb-a","source":{:?},"yes":true}}}}"#,
+            r#"{{"id":7,"method":"disk.write","params":{{"mode":"raw","target":"usb-a","source":{:?},"yes":true}}}}"#,
             small.0.display().to_string()
         );
         let too_big = format!(
-            r#"{{"id":8,"method":"disk.write","params":{{"target":"usb-a","source":{:?},"yes":true}}}}"#,
+            r#"{{"id":8,"method":"disk.write","params":{{"mode":"raw","target":"usb-a","source":{:?},"yes":true}}}}"#,
             source.0.display().to_string()
         );
         let out = session_until(&[&request], &cfg, r#""id":7"#);
@@ -1086,16 +1104,16 @@ mod tests {
         let source = TempImage::new("garde", 1 << 20);
         let path = source.0.display().to_string();
         let sans_yes = format!(
-            r#"{{"id":1,"method":"disk.write","params":{{"target":"usb-a","source":{path:?}}}}}"#
+            r#"{{"id":1,"method":"disk.write","params":{{"mode":"raw","target":"usb-a","source":{path:?}}}}}"#
         );
         let interdit = format!(
-            r#"{{"id":2,"method":"disk.write","params":{{"target":"nvme-sys","source":{path:?},"yes":true,"show_internal":true}}}}"#
+            r#"{{"id":2,"method":"disk.write","params":{{"mode":"raw","target":"nvme-sys","source":{path:?},"yes":true,"show_internal":true}}}}"#
         );
         let plan = format!(
-            r#"{{"id":3,"method":"disk.write","params":{{"target":"usb-a","source":{path:?},"dry_run":true}}}}"#
+            r#"{{"id":3,"method":"disk.write","params":{{"mode":"raw","target":"usb-a","source":{path:?},"dry_run":true}}}}"#
         );
         let par_chemin = format!(
-            r#"{{"id":4,"method":"disk.write","params":{{"target":"/dev/usb-a","source":{path:?},"yes":true}}}}"#
+            r#"{{"id":4,"method":"disk.write","params":{{"mode":"raw","target":"/dev/usb-a","source":{path:?},"yes":true}}}}"#
         );
         let sans_source =
             r#"{"id":5,"method":"disk.write","params":{"target":"usb-a","yes":true}}"#.to_owned();
@@ -1130,7 +1148,7 @@ mod tests {
         let path = source.0.display().to_string();
         let write = |id: u64| {
             format!(
-                r#"{{"id":{id},"method":"disk.write","params":{{"target":"usb-a","source":{path:?},"yes":true,"no_verify":true}}}}"#
+                r#"{{"id":{id},"method":"disk.write","params":{{"mode":"raw","target":"usb-a","source":{path:?},"yes":true,"no_verify":true}}}}"#
             )
         };
         let Fake { device, cfg } = fake(true, fixed());
@@ -1171,7 +1189,7 @@ mod tests {
         let source = TempImage::new("eof", 7 << 20);
         let path = source.0.display().to_string();
         let write = format!(
-            r#"{{"id":1,"method":"disk.write","params":{{"target":"usb-a","source":{path:?},"yes":true,"no_verify":true}}}}"#
+            r#"{{"id":1,"method":"disk.write","params":{{"mode":"raw","target":"usb-a","source":{path:?},"yes":true,"no_verify":true}}}}"#
         );
         let f = fake(true, fixed());
         let started = std::time::Instant::now();

@@ -37,8 +37,15 @@ fn bonk(args: &[&str]) -> Result<Output, std::io::Error> {
     Command::new(env!("CARGO_BIN_EXE_bonk")).args(args).output()
 }
 
+/// Motif reconnaissable, avec une signature d'amorçage : l'analyse y voit une image de disque.
 fn image(len: usize) -> Vec<u8> {
-    (0..len).map(|i| (i * 7 % 253) as u8).collect()
+    let mut data: Vec<u8> = (0..len).map(|i| (i * 7 % 253) as u8).collect();
+    if len >= 512 {
+        data[446..510].fill(0);
+        data[510] = 0x55;
+        data[511] = 0xAA;
+    }
+    data
 }
 
 fn texte(octets: &[u8]) -> String {
@@ -426,5 +433,148 @@ fn les_schemas_decrivent_les_resultats_d_ecriture() -> Resultat {
         let schema: serde_json::Value = serde_json::from_slice(&sortie.stdout)?;
         assert_eq!(schema["type"], "object", "{nom}");
     }
+    Ok(())
+}
+
+#[test]
+fn une_empreinte_fausse_refuse_l_image_avant_de_creer_la_cible() -> Resultat {
+    let dossier = Dossier::new("empreinte-fausse")?;
+    let source = dossier.file("image.img");
+    std::fs::write(&source, image(1 << 20))?;
+    let cible = dossier.file("cle.img");
+    let fausse = "0".repeat(64);
+    let sortie = bonk(&[
+        "write",
+        "--simulate",
+        &chemin(&cible),
+        &chemin(&source),
+        "--sha256",
+        &fausse,
+        "--yes",
+        "--progress",
+        "none",
+    ])?;
+    assert_eq!(sortie.status.code(), Some(6));
+    assert!(texte(&sortie.stderr).contains("[E3005]"), "{sortie:?}");
+    assert!(!cible.exists(), "rien ne doit avoir été touché");
+    Ok(())
+}
+
+#[test]
+fn une_empreinte_juste_est_acceptee_et_annoncee() -> Resultat {
+    let dossier = Dossier::new("empreinte-juste")?;
+    let source = dossier.file("image.img");
+    std::fs::write(&source, image(1 << 20))?;
+    // Empreinte donnée par une première écriture sans contrôle : le chemin testé est celui du contrôle.
+    let premiere = bonk(&[
+        "write",
+        "--simulate",
+        &chemin(&dossier.file("premiere.img")),
+        &chemin(&source),
+        "--yes",
+        "--json",
+        "--progress",
+        "none",
+    ])?;
+    let resultat: serde_json::Value = serde_json::from_slice(&premiere.stdout)?;
+    let empreinte = resultat["write"]["sha256"]
+        .as_str()
+        .ok_or("empreinte absente")?
+        .to_owned();
+    let cible = dossier.file("cle.img");
+    let sortie = bonk(&[
+        "write",
+        "--simulate",
+        &chemin(&cible),
+        &chemin(&source),
+        "--sha256",
+        &empreinte.to_uppercase(),
+        "--yes",
+        "--progress",
+        "none",
+    ])?;
+    assert!(sortie.status.success(), "{sortie:?}");
+    assert!(texte(&sortie.stdout).contains("Empreinte du fichier : conforme"));
+    Ok(())
+}
+
+#[test]
+fn une_empreinte_mal_formee_est_une_erreur_d_usage() -> Resultat {
+    let dossier = Dossier::new("empreinte-forme")?;
+    let source = dossier.file("image.img");
+    std::fs::write(&source, image(4096))?;
+    let sortie = bonk(&[
+        "write",
+        "--simulate",
+        &chemin(&dossier.file("cle.img")),
+        &chemin(&source),
+        "--sha256",
+        "abc",
+        "--yes",
+    ])?;
+    assert_eq!(sortie.status.code(), Some(2));
+    Ok(())
+}
+
+/// Des données sans structure : ce que produit un mauvais téléchargement.
+fn donnees() -> Vec<u8> {
+    vec![0x5A; 1 << 16]
+}
+
+#[test]
+fn des_donnees_sans_amorcage_sont_refusees_sauf_en_mode_brut() -> Resultat {
+    let dossier = Dossier::new("sans-amorcage")?;
+    let source = dossier.file("image.iso");
+    std::fs::write(&source, donnees())?;
+    let cible = dossier.file("cle.img");
+    let lancer = |mode: &str| {
+        bonk(&[
+            "write",
+            "--simulate",
+            &chemin(&cible),
+            &chemin(&source),
+            "--mode",
+            mode,
+            "--yes",
+            "--progress",
+            "none",
+        ])
+    };
+    let refus = lancer("auto")?;
+    assert_eq!(refus.status.code(), Some(6));
+    assert!(texte(&refus.stderr).contains("[E3006]"), "{refus:?}");
+    assert!(!cible.exists());
+    assert!(lancer("raw")?.status.success());
+    assert_eq!(std::fs::read(&cible)?, donnees());
+    Ok(())
+}
+
+#[test]
+fn une_image_tronquee_est_refusee_meme_avec_un_support_plus_grand() -> Resultat {
+    let dossier = Dossier::new("tronquee")?;
+    // Une ISO hybride de 16 Mio annoncés, dont il ne reste que 1 Mio.
+    let mut data = image(1 << 20);
+    let primaire = 16 * 2048;
+    data[primaire] = 1;
+    data[primaire + 1..primaire + 6].copy_from_slice(b"CD001");
+    data[primaire + 80..primaire + 84].copy_from_slice(&8192u32.to_le_bytes());
+    data[primaire + 128..primaire + 130].copy_from_slice(&2048u16.to_le_bytes());
+    let source = dossier.file("coupee.iso");
+    std::fs::write(&source, &data)?;
+    let cible = dossier.file("cle.img");
+    let sortie = bonk(&[
+        "write",
+        "--simulate",
+        &chemin(&cible),
+        &chemin(&source),
+        "--size",
+        "67108864",
+        "--yes",
+        "--progress",
+        "none",
+    ])?;
+    assert_eq!(sortie.status.code(), Some(6));
+    assert!(texte(&sortie.stderr).contains("[E3007]"), "{sortie:?}");
+    assert!(!cible.exists());
     Ok(())
 }

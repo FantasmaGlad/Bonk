@@ -107,7 +107,7 @@ fn ecriture_simulee_par_le_service() -> Resultat {
     client.next()?; // ready
     let params = json!({
         "target": cible.display().to_string(), "simulate": true, "size": 6 << 20,
-        "source": source.display().to_string(), "yes": true,
+        "source": source.display().to_string(), "yes": true, "mode": "raw",
     });
     let messages = client.call(10, "disk.write", &params)?;
     let (reponse, evenements) = messages.split_last().ok_or("messages")?;
@@ -159,7 +159,7 @@ fn des_operations_enchainees_sans_attente_ne_sont_jamais_refusees() -> Resultat 
     fs::write(&source, vec![7u8; 4096])?;
     let params = json!({
         "target": cible.display().to_string(), "simulate": true, "size": 8192,
-        "source": source.display().to_string(), "yes": true,
+        "source": source.display().to_string(), "yes": true, "mode": "raw",
     });
     let mut client = Client::start()?;
     client.next()?; // ready

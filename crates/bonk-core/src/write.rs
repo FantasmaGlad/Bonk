@@ -23,6 +23,8 @@ pub const DEFAULT_CHUNK: usize = 4 << 20;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Phase {
+    /// Contrôle de l'empreinte de l'image, avant tout geste sur le support.
+    Source,
     /// Écriture de l'image.
     Write,
     /// Vidage des tampons jusqu'au support.
@@ -380,6 +382,42 @@ pub fn hash_source_ignoring(
         }
     }
     Ok((total, hex(&hasher.finalize())))
+}
+
+/// SHA-256 d'un flux tel quel (le fichier téléchargé, compressé ou non : c'est sur lui que les éditeurs
+/// publient leur empreinte, CDC §4.2).
+///
+/// # Errors
+/// [`VerifyError::Source`] si le flux est illisible, [`VerifyError::Cancelled`] sur annulation.
+pub fn hash_stream(
+    src: &mut dyn Read,
+    total: Option<u64>,
+    chunk: usize,
+    progress: &mut dyn FnMut(&Progress) -> Control,
+) -> Result<String, VerifyError> {
+    let mut buf = vec![0u8; chunk.max(4096)];
+    let mut hasher = Sha256::new();
+    let started = Instant::now();
+    let mut done = 0u64;
+    loop {
+        let n = read_full(src, &mut buf).map_err(VerifyError::Source)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+        done += n as u64;
+        let current = Progress {
+            phase: Phase::Source,
+            bytes_done: done,
+            bytes_total: total,
+            bytes_per_second: rate(done, started),
+            elapsed_ms: millis(started),
+        };
+        if progress(&current) == Control::Cancel {
+            return Err(VerifyError::Cancelled);
+        }
+    }
+    Ok(hex(&hasher.finalize()))
 }
 
 #[cfg(test)]
