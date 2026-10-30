@@ -65,6 +65,14 @@ jobs:
         run: cargo fmt --all --check
       - name: Lint
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      # Le code cfg(target_os) d'un autre système n'est pas compilé ci-dessus : clippy le vérifie ici, sans
+      # édition de liens ni exécution, pour que le code mort ou l'import inutilisé échoue avant les runners
+      # Windows et macOS, plus chers (workflow.md, « Coût »). Ne dit rien du comportement à l'exécution.
+      - name: Lint croisé (Windows et macOS, compilation seulement)
+        run: |
+          rustup target add x86_64-pc-windows-gnu x86_64-apple-darwin
+          cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-gnu -- -D warnings
+          cargo clippy --workspace --all-targets --locked --target x86_64-apple-darwin -- -D warnings
       - name: Tests
         run: cargo test --workspace --locked
       # Le build release n'est vérifié qu'après fusion : il est plus long et la PR a déjà prouvé le reste.
