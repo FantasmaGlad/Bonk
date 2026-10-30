@@ -23,6 +23,8 @@ pub const DEFAULT_CHUNK: usize = 4 << 20;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Phase {
+    /// En attente de l'autorisation du système.
+    Authorize,
     /// Contrôle de l'empreinte de l'image, avant tout geste sur le support.
     Source,
     /// Écriture de l'image.

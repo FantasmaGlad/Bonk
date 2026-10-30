@@ -262,6 +262,8 @@ struct Env {
     vars: Vec<(String, String)>,
     /// Accès aux disques et au signal d'annulation.
     io: job::Io,
+    /// Le processus tourne en administrateur : la fenêtre refuse de s'ouvrir (invariant 2).
+    privileged: bool,
 }
 
 impl Env {
@@ -274,6 +276,7 @@ impl Env {
                 .filter(|(name, _)| name.starts_with("BONK_"))
                 .collect(),
             io: job::Io::default(),
+            privileged: bonk_hal::platform::current().is_privileged(),
         }
     }
 }
@@ -364,6 +367,12 @@ where
         io: &env.io,
     };
     match cli.command {
+        None | Some(Command::Gui) if env.privileged => report(
+            err,
+            Code::WindowUnavailable,
+            "la fenêtre ne s'ouvre pas en administrateur : relancer sans sudo, elle demandera \
+             l'autorisation au moment d'écrire ; ou utiliser la ligne de commande (bonk --help)",
+        ),
         None | Some(Command::Gui) => {
             log::debug!(target: "bonk::cli", "opening the window");
             match gui(view) {
@@ -1049,6 +1058,7 @@ mod tests {
                 .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
                 .collect(),
             io: job::Io::default(),
+            privileged: bonk_hal::platform::current().is_privileged(),
         };
         let code = execute(
             std::iter::once("bonk").chain(args.iter().copied()),

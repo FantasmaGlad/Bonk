@@ -6,6 +6,8 @@
 
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(target_os = "linux")]
+mod udisks;
 mod unsupported;
 
 use std::path::{Path, PathBuf};
@@ -18,6 +20,16 @@ use crate::disk::Disk;
 use crate::enumerate::{EnumerateError, SourceRead};
 use crate::image::Access;
 use crate::target::OpenTargetError;
+
+/// Faut-il demander au système les droits qui manquent ?
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Elevation {
+    /// Oui : l'autorisation du système apparaît au moment voulu.
+    #[default]
+    Auto,
+    /// Non : droits de l'appelant seulement. Pour un service sans personne devant l'écran.
+    Never,
+}
 
 /// Accès d'un système d'exploitation aux disques.
 pub trait Platform: Send + Sync {
@@ -43,11 +55,31 @@ pub trait Platform: Send + Sync {
     /// [`OpenTargetError::Unmount`] au premier démontage qui échoue.
     fn unmount(&self, disk: &Disk) -> Result<Vec<String>, OpenTargetError>;
 
+    /// Obtient le droit d'ouvrir le disque, sans le garder ouvert. **Appelé avant tout démontage** : un
+    /// refus ne doit laisser aucune trace sur la clé.
+    ///
+    /// # Errors
+    /// [`BlockError`], `PermissionDenied` si le droit n'est pas obtenu.
+    fn prepare_access(
+        &self,
+        path: &Path,
+        access: Access,
+        elevation: Elevation,
+    ) -> Result<(), BlockError>;
+
     /// Ouvre un disque entier en accès brut. N'est appelé qu'après les garde-fous de `bonk-ops`.
     ///
     /// # Errors
     /// [`BlockError`] : chemin qui n'est pas un disque entier, droits insuffisants, disque utilisé.
-    fn open_disk(&self, path: &Path, access: Access) -> Result<Box<dyn BlockDevice>, BlockError>;
+    fn open_disk(
+        &self,
+        path: &Path,
+        access: Access,
+        elevation: Elevation,
+    ) -> Result<Box<dyn BlockDevice>, BlockError>;
+
+    /// Le processus tourne-t-il en administrateur ? La fenêtre refuse alors de s'ouvrir (invariant 2).
+    fn is_privileged(&self) -> bool;
 
     /// Version du noyau, pour le rapport de diagnostic, quand le système la donne.
     fn kernel_release(&self) -> Option<String>;

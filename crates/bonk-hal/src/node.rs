@@ -6,8 +6,8 @@
 //! démontage). À l'ouverture en écriture, `O_EXCL` fait refuser par le noyau un disque encore utilisé
 //! (monté, ou ouvert par un autre programme) : dernier garde-fou, indépendant de nos propres contrôles.
 //!
-//! L'ouverture exige des droits : l'interface ne tourne jamais en administrateur, la ligne de commande
-//! lancée par un administrateur le peut (D-03 : l'ouverture par le service du système viendra après).
+//! L'ouverture exige des droits : soit ceux de l'appelant, soit un descripteur remis par le service du
+//! système ([`BlockNode::from_fd`], D-36) ; l'interface ne tourne jamais en administrateur.
 //! Les tests n'ouvrent jamais de périphérique réel (invariant 3).
 
 use std::path::{Path, PathBuf};
@@ -37,7 +37,8 @@ impl BlockNode {
 mod imp {
     use std::fs::{self, OpenOptions};
     use std::io::{self, Seek, SeekFrom};
-    use std::os::unix::fs::{FileExt, FileTypeExt, OpenOptionsExt};
+    use std::os::fd::OwnedFd;
+    use std::os::unix::fs::{FileExt, FileTypeExt, MetadataExt, OpenOptionsExt};
 
     use super::*;
     use bonk_core::{check_access, check_geometry};
@@ -57,6 +58,23 @@ mod imp {
             .unwrap_or(512)
     }
 
+    /// Le nom noyau du périphérique, s'il s'agit d'un disque entier : jamais une partition ni un fichier.
+    fn whole_disk_name(resolved: &Path) -> Result<String, BlockError> {
+        if !fs::metadata(resolved)?.file_type().is_block_device() {
+            return Err(invalid("le chemin n'est pas un périphérique bloc"));
+        }
+        let name = resolved
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| invalid("nom de périphérique illisible"))?
+            .to_owned();
+        // Une partition porte un fichier `partition` dans sysfs : on n'écrit que des disques entiers.
+        if Path::new(&format!("/sys/class/block/{name}/partition")).exists() {
+            return Err(invalid("le chemin est une partition, pas un disque entier"));
+        }
+        Ok(name)
+    }
+
     impl BlockNode {
         /// Ouvre un disque entier. `O_EXCL` en écriture : le noyau refuse un disque déjà utilisé.
         ///
@@ -66,26 +84,39 @@ mod imp {
         /// est utilisé.
         pub fn open(path: &Path, access: Access) -> Result<Self, BlockError> {
             let resolved = fs::canonicalize(path)?;
-            let metadata = fs::metadata(&resolved)?;
-            if !metadata.file_type().is_block_device() {
-                return Err(invalid("le chemin n'est pas un périphérique bloc"));
-            }
-            let name = resolved
-                .file_name()
-                .and_then(|n| n.to_str())
-                .ok_or_else(|| invalid("nom de périphérique illisible"))?
-                .to_owned();
-            // Une partition porte un fichier `partition` dans sysfs : on n'écrit que des disques entiers.
-            if Path::new(&format!("/sys/class/block/{name}/partition")).exists() {
-                return Err(invalid("le chemin est une partition, pas un disque entier"));
-            }
+            let name = whole_disk_name(&resolved)?;
             let read_only = access == Access::ReadOnly;
             let mut options = OpenOptions::new();
             options.read(true).write(!read_only);
             if !read_only {
                 options.custom_flags(libc::O_EXCL);
             }
-            let mut file = options.open(&resolved)?;
+            Self::finish(options.open(&resolved)?, resolved, name, read_only)
+        }
+
+        /// Reprend un descripteur ouvert par le service du système. Il n'est cru sur rien : c'est bien un
+        /// disque entier, et le même périphérique que `path`. Supprime la course entre la revérification
+        /// de l'identité et l'ouverture.
+        ///
+        /// # Errors
+        /// [`BlockError::Io`] : `InvalidInput` si le descripteur n'est pas ce disque.
+        pub fn from_fd(fd: OwnedFd, path: &Path, access: Access) -> Result<Self, BlockError> {
+            let resolved = fs::canonicalize(path)?;
+            let name = whole_disk_name(&resolved)?;
+            let file = fs::File::from(fd);
+            let (held, expected) = (file.metadata()?, fs::metadata(&resolved)?);
+            if !held.file_type().is_block_device() || held.rdev() != expected.rdev() {
+                return Err(invalid("le descripteur reçu n'est pas ce disque"));
+            }
+            Self::finish(file, resolved, name, access == Access::ReadOnly)
+        }
+
+        fn finish(
+            mut file: fs::File,
+            resolved: PathBuf,
+            name: String,
+            read_only: bool,
+        ) -> Result<Self, BlockError> {
             // La taille d'un périphérique bloc ne se lit pas dans ses métadonnées.
             let size = file.seek(SeekFrom::End(0))?;
             let block_size = logical_block_size(&name);
@@ -159,7 +190,26 @@ mod imp {
 
 #[cfg(test)]
 mod tests {
+    use std::os::fd::OwnedFd;
+
     use super::*;
+
+    /// Un descripteur qui n'est pas un disque est refusé, quoi qu'en dise le chemin.
+    #[test]
+    fn un_descripteur_recu_n_est_pas_cru_sur_parole() {
+        let fd = |path: &str| -> OwnedFd {
+            std::fs::File::open(path)
+                .map(OwnedFd::from)
+                .unwrap_or_else(|e| panic!("{path} : {e}"))
+        };
+        for path in ["/dev/null", "/proc/self/mountinfo"] {
+            let refus = BlockNode::from_fd(fd(path), Path::new(path), Access::ReadOnly);
+            assert!(
+                matches!(refus, Err(BlockError::Io(ref e)) if e.kind() == std::io::ErrorKind::InvalidInput),
+                "{path}"
+            );
+        }
+    }
 
     /// Aucun test n'ouvre de vrai disque : on vérifie seulement ce que `BlockNode` refuse.
     #[test]

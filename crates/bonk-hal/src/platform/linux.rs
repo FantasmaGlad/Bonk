@@ -6,8 +6,8 @@ use std::process::Command;
 
 use bonk_core::{BlockDevice, BlockError};
 
-use super::Platform;
-use crate::disk::Disk;
+use super::{Elevation, Platform, udisks};
+use crate::disk::{Disk, Partition};
 use crate::enumerate::{EnumerateError, SourceRead};
 use crate::image::Access;
 use crate::linux::{self, LinuxRoots};
@@ -35,8 +35,48 @@ impl Platform for Linux {
         unmount_all(disk)
     }
 
-    fn open_disk(&self, path: &Path, access: Access) -> Result<Box<dyn BlockDevice>, BlockError> {
-        BlockNode::open(path, access).map(|node| Box::new(node) as Box<dyn BlockDevice>)
+    fn prepare_access(
+        &self,
+        path: &Path,
+        access: Access,
+        elevation: Elevation,
+    ) -> Result<(), BlockError> {
+        if has_access(path, access) {
+            return Ok(());
+        }
+        if elevation == Elevation::Never {
+            return Err(denied(path));
+        }
+        // Lecture seule, quel que soit le besoin : c'est la même action polkit, mémorisée quelques
+        // minutes, et fermer un descripteur en écriture ferait relire le disque par le noyau.
+        udisks::open(path, "r", libc::O_CLOEXEC).map(drop)
+    }
+
+    fn open_disk(
+        &self,
+        path: &Path,
+        access: Access,
+        elevation: Elevation,
+    ) -> Result<Box<dyn BlockDevice>, BlockError> {
+        let node = match BlockNode::open(path, access) {
+            Err(BlockError::Io(error))
+                if error.kind() == io::ErrorKind::PermissionDenied
+                    && elevation == Elevation::Auto =>
+            {
+                let (mode, flags) = match access {
+                    Access::ReadOnly => ("r", libc::O_CLOEXEC),
+                    Access::ReadWrite => ("rw", libc::O_CLOEXEC | libc::O_EXCL),
+                };
+                BlockNode::from_fd(udisks::open(path, mode, flags)?, path, access)
+            }
+            other => other,
+        }?;
+        Ok(Box::new(node))
+    }
+
+    fn is_privileged(&self) -> bool {
+        // SAFETY : aucun argument, aucune erreur possible.
+        unsafe { libc::geteuid() == 0 }
     }
 
     fn kernel_release(&self) -> Option<String> {
@@ -52,9 +92,60 @@ impl Platform for Linux {
 /// # Errors
 /// [`OpenTargetError::Unmount`] au premier démontage qui échoue ; les suivants ne sont pas tentés.
 fn unmount_all(disk: &Disk) -> Result<Vec<String>, OpenTargetError> {
-    unmount_with(&mount_points(disk), &|mount| {
+    let mounts = mount_points(disk);
+    let error = match unmount_with(&mounts, &|mount| {
         Command::new("umount").arg("--").arg(mount).output()
-    })
+    }) {
+        Ok(done) => return Ok(done),
+        Err(error) => error,
+    };
+    // `umount` n'a pas le droit de tout démonter pour un utilisateur ordinaire : le service, si.
+    for partition in disk
+        .partitions
+        .iter()
+        .filter(|p| !p.mount_points.is_empty())
+    {
+        if !still_mounted(partition) {
+            continue;
+        }
+        if udisks::unmount(Path::new(&partition.path)).is_err() {
+            return Err(error);
+        }
+    }
+    Ok(mounts)
+}
+
+/// Un point de la partition est-il encore monté ? `umount` a pu en démonter une partie avant d'échouer.
+fn still_mounted(partition: &Partition) -> bool {
+    let table = std::fs::read_to_string("/proc/self/mounts").unwrap_or_default();
+    table
+        .lines()
+        .any(|line| line.split_whitespace().next() == Some(partition.path.as_str()))
+}
+
+fn denied(path: &Path) -> BlockError {
+    BlockError::Io(io::Error::new(
+        io::ErrorKind::PermissionDenied,
+        format!(
+            "{} : droits insuffisants, élévation désactivée",
+            path.display()
+        ),
+    ))
+}
+
+/// Les droits de l'appelant suffisent-ils ? `access(2)` ne touche pas au disque.
+fn has_access(path: &Path, access: Access) -> bool {
+    use std::os::unix::ffi::OsStrExt;
+
+    let Ok(name) = std::ffi::CString::new(path.as_os_str().as_bytes()) else {
+        return false;
+    };
+    let mode = match access {
+        Access::ReadOnly => libc::R_OK,
+        Access::ReadWrite => libc::R_OK | libc::W_OK,
+    };
+    // SAFETY : `name` est une chaîne C valide pendant tout l'appel.
+    unsafe { libc::access(name.as_ptr(), mode) == 0 }
 }
 
 fn unmount_with(
