@@ -24,8 +24,9 @@ use bonk_core::write::{
 };
 use bonk_core::{BlockDevice, BlockError};
 use bonk_hal::{
-    Access, Disk, Elevation, EnumerateError, FileDevice, FilterOptions, OpenTargetError,
-    TargetIdentity, mount_points, reverify,
+    Access, Disk, Elevation, Eligibility, EnumerateError, FileDevice, FilterOptions,
+    INTERNAL_CONFIRMATION, OpenTargetError, TargetIdentity, Warning, evaluate, mount_points,
+    reverify,
 };
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -69,12 +70,14 @@ fn fail(code: Code, message: impl Display) -> JobError {
 }
 
 /// Démontage des partitions d'un disque : rend les points démontés.
-pub type UnmountFn = Box<dyn Fn(&Disk) -> Result<Vec<String>, OpenTargetError>>;
+pub type UnmountFn = Box<dyn Fn(&Disk, Elevation) -> Result<Vec<String>, OpenTargetError>>;
 /// Ouverture d'un disque entier en accès brut.
 pub type OpenNodeFn =
     Box<dyn Fn(&Path, Access, Elevation) -> Result<Box<dyn BlockDevice>, BlockError>>;
 /// Obtention du droit d'ouvrir un disque, avant tout geste sur lui.
 pub type PrepareFn = Box<dyn Fn(&Path, Access, Elevation) -> Result<(), BlockError>>;
+/// Demande à une personne le mot de confirmation d'un disque interne ; `None` s'il n'y a personne.
+pub type AskInternalFn = Box<dyn Fn(&Disk) -> Option<String>>;
 /// Cible ouverte : périphérique, informations et points démontés.
 type OpenedTarget = (Box<dyn BlockDevice>, TargetInfo, Vec<String>);
 
@@ -84,6 +87,7 @@ pub struct Io {
     pub unmount: UnmountFn,
     pub open_node: OpenNodeFn,
     pub cancelled: Box<dyn Fn() -> bool>,
+    pub ask_internal: AskInternalFn,
 }
 
 impl Default for Io {
@@ -100,7 +104,9 @@ impl Io {
             prepare: Box::new(|path, access, elevation| {
                 bonk_hal::platform::current().prepare_access(path, access, elevation)
             }),
-            unmount: Box::new(|disk| bonk_hal::platform::current().unmount(disk)),
+            unmount: Box::new(|disk, elevation| {
+                bonk_hal::platform::current().unmount(disk, elevation)
+            }),
             open_node: Box::new(|path, access, elevation| {
                 bonk_hal::platform::current().open_disk(path, access, elevation)
             }),
@@ -110,6 +116,8 @@ impl Io {
                         .as_ref()
                         .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::SeqCst))
             }),
+            // Sans interface ici : c'est au front qui a quelqu'un devant lui de le remplacer.
+            ask_internal: Box::new(|_| None),
         }
     }
 }
@@ -360,9 +368,13 @@ fn open_target(
             let identity = TargetIdentity::from(disk);
             // Le droit d'abord : un refus ne doit laisser la clé ni démontée ni touchée.
             (deps.io.prepare)(Path::new(&disk.path), access, elevation).map_err(open_error)?;
+            // Annulé pendant l'attente de l'autorisation : la clé reste montée, intacte.
+            if (deps.io.cancelled)() {
+                return Err(fail(Code::Cancelled, "annulée avant l'ouverture du disque"));
+            }
             // Démonter seulement pour écrire : relire un volume monté ne le perturbe pas.
             let unmounted = if writing {
-                (deps.io.unmount)(disk).map_err(map_open_target)?
+                (deps.io.unmount)(disk, elevation).map_err(map_open_target)?
             } else {
                 Vec::new()
             };
@@ -488,6 +500,8 @@ pub struct WriteJob {
     pub expected_sha256: Option<String>,
     pub mode: WriteMode,
     pub elevation: Elevation,
+    /// Mot de confirmation donné d'avance pour un disque interne (scripts, service, fenêtre).
+    pub confirm_internal: Option<String>,
 }
 
 /// Contrôle le fichier source contre l'empreinte attendue. Avant tout geste : un fichier faux ne doit
@@ -541,6 +555,13 @@ fn analyze_source(path: &Path, real_len: Option<u64>) -> Result<ImageReport, Job
                 format!("{} : {e}", path.display()),
             )
         })?;
+    // Quel que soit le mode : ne rien écrire et annoncer un succès serait un mensonge.
+    if head.is_empty() {
+        return Err(fail(
+            Code::SourceUnreadable,
+            format!("{} : image vide", path.display()),
+        ));
+    }
     Ok(analysis::analyze(&head, real_len))
 }
 
@@ -582,6 +603,65 @@ fn judge_image(report: &ImageReport, mode: WriteMode) -> Result<(), JobError> {
     }
 }
 
+/// Taille que l'image occupera sur la cible, quand on la connaît avant de la lire en entier : une image
+/// compressée ne donne que ce que sa structure annonce, écarté en mode `Raw` qui ne croit pas l'analyse.
+fn needed_bytes(source: &SourceInfo, image: &ImageReport, mode: WriteMode) -> Option<u64> {
+    source
+        .size_bytes
+        .or(image.declared_bytes.filter(|_| mode == WriteMode::Auto))
+}
+
+/// Une image compressée ne dit sa taille réelle qu'une fois lue : la relecture compare au flux, et ne voit
+/// donc pas un flux complet dont le contenu est coupé. Contrôlé après coup, faute de mieux.
+fn check_complete(image: &ImageReport, written: u64, mode: WriteMode) -> Result<(), JobError> {
+    let Some(declared) = image.declared_bytes.filter(|declared| written < *declared) else {
+        return Ok(());
+    };
+    let message = format!(
+        "l'image décompressée fait {written} octets et en annonce {declared} : le support est incomplet"
+    );
+    match mode {
+        WriteMode::Auto => Err(fail(Code::ImageTruncated, message)),
+        WriteMode::Raw => {
+            log::warn!(target: "bonk::write", reason = message.as_str(); "written anyway: raw mode");
+            Ok(())
+        }
+    }
+}
+
+/// Un disque interne proposé exige le mot de confirmation, donné d'avance ou demandé à la personne. Rien
+/// n'a encore bougé : c'est le dernier contrôle avant le premier geste.
+fn confirm_internal(
+    chosen: &Chosen,
+    options: FilterOptions,
+    given: Option<&str>,
+    deps: &Deps<'_>,
+) -> Result<(), JobError> {
+    let Some(disk) = &chosen.disk else {
+        return Ok(());
+    };
+    let internal = evaluate(disk, options)
+        == (Eligibility::Offered {
+            warning: Warning::InternalDisk,
+        });
+    if !internal {
+        return Ok(());
+    }
+    let word = given
+        .map(str::to_owned)
+        .or_else(|| (deps.io.ask_internal)(disk));
+    if word.as_deref().map(str::trim) == Some(INTERNAL_CONFIRMATION) {
+        return Ok(());
+    }
+    Err(fail(
+        Code::InternalConfirmationRequired,
+        format!(
+            "{} est un disque interne : écriture refusée sans le mot « {INTERNAL_CONFIRMATION} »",
+            disk.path
+        ),
+    ))
+}
+
 pub fn write(
     job: &WriteJob,
     deps: &Deps<'_>,
@@ -592,8 +672,10 @@ pub fn write(
     let image = analyze_source(&job.source, source_info.size_bytes)?;
     judge_image(&image, job.mode)?;
     // Refus avant tout geste quand la taille de l'image est connue et dépasse la cible.
-    if let (Some(needed), Some(available)) = (source_info.size_bytes, chosen.info.size_bytes)
-        && needed > available
+    if let (Some(needed), Some(available)) = (
+        needed_bytes(&source_info, &image, job.mode),
+        chosen.info.size_bytes,
+    ) && needed > available
     {
         return Err(fail(
             Code::SourceTooLarge,
@@ -636,6 +718,7 @@ pub fn write(
             "écriture sans confirmation : ajouter --yes (ou décrire l'opération avec --dry-run)",
         ));
     }
+    confirm_internal(&chosen, job.options, job.confirm_internal.as_deref(), deps)?;
 
     log::info!(
         target: "bonk::write",
@@ -677,6 +760,7 @@ pub fn write(
     )
     .map_err(|e| map_write_error(e, source_info.format))?;
     log::info!(target: "bonk::write", bytes = write.bytes, millis = write.elapsed_ms; "write finished");
+    check_complete(&image, write.bytes, job.mode)?;
 
     let verify = if job.verify {
         // Sans cela, la relecture lirait le cache du noyau (ce que Bonk vient d'écrire) et non le support.
@@ -839,6 +923,8 @@ pub struct RepairJob {
     pub dry_run: bool,
     pub yes: bool,
     pub elevation: Elevation,
+    /// Mot de confirmation donné d'avance pour un disque interne (scripts, service, fenêtre).
+    pub confirm_internal: Option<String>,
 }
 
 pub fn repair(job: &RepairJob, deps: &Deps<'_>) -> Result<RepairDone, JobError> {
@@ -878,6 +964,7 @@ pub fn repair(job: &RepairJob, deps: &Deps<'_>) -> Result<RepairDone, JobError> 
         });
     }
     let chosen = choose(&job.target, job.options, deps)?;
+    confirm_internal(&chosen, job.options, job.confirm_internal.as_deref(), deps)?;
     let (mut device, info, _) = open_target(
         chosen,
         &job.target,

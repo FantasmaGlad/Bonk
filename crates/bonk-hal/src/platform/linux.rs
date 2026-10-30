@@ -31,8 +31,8 @@ impl Platform for Linux {
         linux::enumerate_from_reads(reads)
     }
 
-    fn unmount(&self, disk: &Disk) -> Result<Vec<String>, OpenTargetError> {
-        unmount_all(disk)
+    fn unmount(&self, disk: &Disk, elevation: Elevation) -> Result<Vec<String>, OpenTargetError> {
+        unmount_all(disk, elevation)
     }
 
     fn prepare_access(
@@ -91,7 +91,7 @@ impl Platform for Linux {
 ///
 /// # Errors
 /// [`OpenTargetError::Unmount`] au premier démontage qui échoue ; les suivants ne sont pas tentés.
-fn unmount_all(disk: &Disk) -> Result<Vec<String>, OpenTargetError> {
+fn unmount_all(disk: &Disk, elevation: Elevation) -> Result<Vec<String>, OpenTargetError> {
     let mounts = mount_points(disk);
     let error = match unmount_with(&mounts, &|mount| {
         Command::new("umount").arg("--").arg(mount).output()
@@ -99,6 +99,10 @@ fn unmount_all(disk: &Disk) -> Result<Vec<String>, OpenTargetError> {
         Ok(done) => return Ok(done),
         Err(error) => error,
     };
+    // Le service du système peut ouvrir une demande d'autorisation : jamais sans personne devant l'écran.
+    if elevation == Elevation::Never {
+        return Err(error);
+    }
     // `umount` n'a pas le droit de tout démonter pour un utilisateur ordinaire : le service, si.
     for partition in disk
         .partitions
@@ -211,6 +215,38 @@ mod tests {
         assert_eq!(*called.borrow(), ["/a/b"]);
         // Un disque sans montage n'a rien à démonter.
         assert_eq!(unmount_with(&[], &ok).ok(), Some(vec![]));
+    }
+
+    /// Sans élévation, l'échec d'`umount` est final : le service du système n'est pas sollicité. Le point
+    /// n'existe pas : `umount` échoue sans rien toucher.
+    #[test]
+    fn sans_elevation_le_repli_par_le_service_n_a_pas_lieu() {
+        let disk = Disk {
+            id: "usb-a".to_owned(),
+            path: "/dev/bonk-inexistant".to_owned(),
+            model: "Cle".to_owned(),
+            serial: None,
+            size_bytes: 1 << 20,
+            bus: crate::disk::Bus::Usb,
+            kind: crate::disk::DiskKind::Physical,
+            removable_flag: true,
+            fs_type: None,
+            holders: vec![],
+            partitions: vec![Partition {
+                path: "/dev/bonk-inexistant1".to_owned(),
+                label: None,
+                fs_type: None,
+                size_bytes: 1 << 20,
+                mount_points: vec!["/bonk-point-inexistant".to_owned()],
+                holders: vec![],
+                is_system_volume: false,
+                is_active_esp: false,
+            }],
+        };
+        assert!(matches!(
+            unmount_all(&disk, Elevation::Never),
+            Err(OpenTargetError::Unmount(_))
+        ));
     }
 
     #[test]

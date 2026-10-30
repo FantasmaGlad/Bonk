@@ -9,6 +9,8 @@ use std::io::{self, BufRead, BufReader, Read};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use ruzstd::decoding::errors::{FrameDecoderError, ReadFrameHeaderError};
+use ruzstd::decoding::{BlockDecodingStrategy, FrameDecoder};
 use schemars::JsonSchema;
 use serde::Serialize;
 
@@ -120,6 +122,91 @@ impl<R: Read> Read for Counting<R> {
     }
 }
 
+fn zstd_error(err: impl fmt::Display) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, format!("zstd : {err}"))
+}
+
+/// Toutes les trames d'un flux zstd. `ruzstd::StreamingDecoder` s'arrête à la première et rend une fin de
+/// flux normale : un fichier de `pzstd` serait écrit à moitié, avec une relecture conforme. Contrôle aussi
+/// la somme de chaque trame, que ce décodeur ne compare pas.
+struct ZstdFrames<R> {
+    source: R,
+    decoder: FrameDecoder,
+    done: bool,
+}
+
+impl<R: BufRead> ZstdFrames<R> {
+    fn new(source: R) -> io::Result<Self> {
+        let mut frames = Self {
+            source,
+            decoder: FrameDecoder::new(),
+            done: false,
+        };
+        frames.done = !frames.next_frame()?;
+        Ok(frames)
+    }
+
+    /// Passe à la trame suivante, en sautant les trames ignorables ; faux à la fin du flux. Des octets
+    /// qui ne sont pas une trame sont une erreur, comme pour gzip et xz.
+    fn next_frame(&mut self) -> io::Result<bool> {
+        loop {
+            if self.source.fill_buf()?.is_empty() {
+                return Ok(false);
+            }
+            match self.decoder.init(&mut self.source) {
+                Ok(()) => return Ok(true),
+                Err(FrameDecoderError::ReadFrameHeaderError(ReadFrameHeaderError::SkipFrame {
+                    length,
+                    ..
+                })) => {
+                    let wanted = u64::from(length);
+                    let mut skipped = (&mut self.source).take(wanted);
+                    if io::copy(&mut skipped, &mut io::sink())? != wanted {
+                        return Err(io::ErrorKind::UnexpectedEof.into());
+                    }
+                }
+                Err(err) => return Err(zstd_error(err)),
+            }
+        }
+    }
+
+    fn check_sum(&self) -> io::Result<()> {
+        match (
+            self.decoder.get_checksum_from_data(),
+            self.decoder.get_calculated_checksum(),
+        ) {
+            (Some(read), Some(computed)) if read != computed => {
+                Err(zstd_error("somme de contrôle de la trame incorrecte"))
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
+impl<R: BufRead> Read for ZstdFrames<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
+        loop {
+            if self.decoder.can_collect() > 0 {
+                return self.decoder.read(buf);
+            }
+            if self.done {
+                return Ok(0);
+            }
+            if self.decoder.is_finished() {
+                self.check_sum()?;
+                self.done = !self.next_frame()?;
+            } else {
+                self.decoder
+                    .decode_blocks(&mut self.source, BlockDecodingStrategy::UptoBlocks(1))
+                    .map_err(zstd_error)?;
+            }
+        }
+    }
+}
+
 /// Une image ouverte, prête à être lue décompressée.
 pub struct Source {
     pub reader: Box<dyn Read + Send>,
@@ -154,12 +241,7 @@ pub fn open(
         // Flux xz bloc par bloc, `lzma-rust2` : `lzma-rs` décompresse un bloc entier en mémoire avant de
         // le rendre, ce qui exigerait toute l'image en RAM pour un `.img.xz` à bloc unique.
         Format::Xz => (Box::new(lzma_rust2::XzReader::new(buffered, true)), None),
-        Format::Zstd => {
-            let decoder = ruzstd::decoding::StreamingDecoder::new(buffered).map_err(|err| {
-                io::Error::new(io::ErrorKind::InvalidData, format!("zstd : {err}"))
-            })?;
-            (Box::new(decoder), None)
-        }
+        Format::Zstd => (Box::new(ZstdFrames::new(buffered)?), None),
         Format::Bzip2 | Format::Zip => return Err(CodecError::Unsupported(format)),
     };
     Ok(Source {
@@ -184,7 +266,7 @@ pub(crate) mod testing {
     }
 
     /// Image xz minimale valide : en-tête, bloc LZMA2 non compressé, index, pied. Écrite à la main
-    /// d'après la spécification du format xz : `lzma-rs` ne sait que décompresser.
+    /// d'après la spécification du format xz : `lzma-rust2` n'est utilisé ici que pour décompresser.
     pub(crate) fn xz_stored(data: &[u8]) -> Vec<u8> {
         fn crc32(bytes: &[u8]) -> u32 {
             crate::partition::crc32(bytes)
@@ -373,6 +455,70 @@ mod tests {
             assert!(matches!(error, Some(CodecError::Unsupported(f)) if f == format));
             assert!(error.is_some_and(|e| e.to_string().contains("décompresser l'image")));
         }
+    }
+
+    fn zstd(data: &[u8]) -> Vec<u8> {
+        ruzstd::encoding::compress_to_vec(data, ruzstd::encoding::CompressionLevel::Fastest)
+    }
+
+    /// Fichier produit par `pzstd`, ou `cat a.zst b.zst` : toutes les trames font partie de l'image.
+    #[test]
+    fn zstd_a_plusieurs_trames_est_lu_en_entier() -> Result<(), Box<dyn std::error::Error>> {
+        let (a, b) = (sample(100_000), sample(70_000));
+        let mut packed = zstd(&a);
+        packed.extend(zstd(&b));
+        let mut source = open(Cursor::new(packed), None)?;
+        let mut expected = a;
+        expected.extend(b);
+        assert_eq!(read_all(&mut source)?, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn zstd_saute_une_trame_ignorable() -> Result<(), Box<dyn std::error::Error>> {
+        let (a, b) = (sample(1000), sample(2000));
+        let mut packed = zstd(&a);
+        packed.extend(0x184D_2A50u32.to_le_bytes());
+        packed.extend(5u32.to_le_bytes());
+        packed.extend(b"xxxxx");
+        packed.extend(zstd(&b));
+        let mut source = open(Cursor::new(packed), None)?;
+        let mut expected = a;
+        expected.extend(b);
+        assert_eq!(read_all(&mut source)?, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn zstd_suivi_de_donnees_est_une_erreur_comme_gzip_et_xz()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut packed = zstd(&sample(1000));
+        packed.extend(b"GARBAGE-GARBAGE");
+        let mut source = open(Cursor::new(packed), None)?;
+        assert!(read_all(&mut source).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn zstd_a_somme_fausse_est_une_erreur() -> Result<(), Box<dyn std::error::Error>> {
+        // Trame écrite à la main : bloc brut, somme présente et fausse.
+        let data = b"bonk";
+        let mut packed = vec![0x28, 0xB5, 0x2F, 0xFD, 0x24, data.len() as u8];
+        packed.extend([(data.len() as u8) << 3 | 1, 0, 0]);
+        packed.extend(data);
+        packed.extend([0, 0, 0, 0]);
+        let mut source = open(Cursor::new(packed), None)?;
+        assert!(read_all(&mut source).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn zstd_tronque_est_une_erreur() -> Result<(), Box<dyn std::error::Error>> {
+        let mut packed = zstd(&sample(300_000));
+        packed.truncate(packed.len() * 3 / 4);
+        let mut source = open(Cursor::new(packed), None)?;
+        assert!(read_all(&mut source).is_err());
+        Ok(())
     }
 
     #[test]

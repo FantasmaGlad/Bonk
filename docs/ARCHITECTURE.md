@@ -1,6 +1,6 @@
 # Architecture de Bonk
 
-> Statut : `bonk-catalog` et `bonk-customizer` sont encore vides ; seul Linux a un accès aux disques ; l'élévation des privilèges (section Privilèges) reste à faire.
+> Statut : `bonk-catalog` et `bonk-customizer` sont encore vides ; seul Linux a un accès aux disques, et l'élévation des privilèges n'y est faite que pour lui.
 
 ## Vue d'ensemble
 
@@ -22,7 +22,7 @@
 
 | Crate | Rôle |
 |---|---|
-| `bonk` | Seul binaire. Choisit l'interface ; sous-mode `--helper` pour les opérations disque élevées. |
+| `bonk` | Seul binaire. Choisit l'interface. |
 | `bonk-core` | Partitionnement MBR/GPT, écriture brute, décompression, vérification, réparation GPT. N'opère que sur une abstraction de périphérique bloc : aucune API d'OS. |
 | `bonk-hal` | Filtre de sécurité et trait `Platform` : énumération, accès brut, démontage, par système. Seul crate contenant du code spécifique à un OS. |
 | `bonk-ops` | Porte d'écriture unique (filtre, identité, démontage, vérification) et codes d'erreur stables. Sans interface : ni clap, ni Iced. |
@@ -44,6 +44,7 @@ Ces règles sont vérifiées par `crates/bonk/tests/architecture.rs`.
 2. Par défaut, seuls les disques sur bus amovible (USB, SD, Thunderbolt externe) sont proposés ; le filtrage se fait sur le bus, pas sur le drapeau « amovible ».
 3. L'identité du disque (numéro de série et taille) est revérifiée juste avant l'écriture.
 4. En ligne de commande : cible désignée par un identifiant stable, `--yes` obligatoire, `--dry-run` disponible.
+5. Un disque interne non système exige une option explicite et une confirmation de plus : le mot `confirme` en ligne de commande (`--confirm-internal` dans un script), une fenêtre de confirmation dans l'interface. Un réglage ou une variable d'environnement n'autorisent jamais une écriture.
 
 ## Privilèges
 L'interface ne s'exécute jamais avec des droits élevés. Seules les opérations disque le sont :
@@ -51,8 +52,8 @@ L'interface ne s'exécute jamais avec des droits élevés. Seules les opération
 | OS | Mécanisme |
 |---|---|
 | Linux | UDisks2 et polkit |
-| Windows | sous-processus `bonk --helper` élevé par UAC |
-| macOS | `authopen` et DiskArbitration |
+| Windows | prévu : sous-processus élevé par UAC |
+| macOS | prévu : `authopen` et DiskArbitration |
 
 ## Tests
 - `bonk-core` est testé sur des fichiers image.

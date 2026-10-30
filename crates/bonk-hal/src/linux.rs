@@ -8,8 +8,8 @@
 //!   partition (ESP) et liens `by-id`, que seul udev sait lire sans ouvrir le périphérique.
 //!
 //! Pourquoi pas UDisks2 (D-Bus) : il demanderait un service en marche et une dépendance de plus pour
-//! des informations déjà disponibles en lecture de fichiers. Les accès aux disques eux-mêmes (lot
-//! ultérieur) passeront bien par UDisks2 et polkit (D-03).
+//! des informations déjà disponibles en lecture de fichiers. Les accès aux disques eux-mêmes passent
+//! bien par UDisks2 et polkit (`platform/udisks.rs`, D-36).
 //!
 //! Tous les chemins système sont regroupés dans [`LinuxRoots`] : les tests construisent une
 //! arborescence factice et vérifient l'énumération sans toucher au vrai système.

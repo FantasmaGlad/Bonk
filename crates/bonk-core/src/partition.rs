@@ -314,10 +314,14 @@ fn read_header(
     lba: u64,
     block: u64,
 ) -> Result<Option<HeaderAndEntries>, BlockError> {
-    let offset = lba * block;
-    if offset + block > dev.size() {
+    // `lba` peut venir de l'en-tête principal : aucune hypothèse sur sa grandeur.
+    let Some(offset) = lba.checked_mul(block).filter(|offset| {
+        offset
+            .checked_add(block)
+            .is_some_and(|end| end <= dev.size())
+    }) else {
         return Ok(None);
-    }
+    };
     let sector = read_range(dev, offset, block)?;
     if sector.len() < GPT_HEADER_MIN || &sector[..8] != GPT_SIGNATURE {
         return Ok(None);
@@ -586,7 +590,9 @@ fn check_gpt(
                 ),
             );
         }
-        if !(entry.first_lba * block).is_multiple_of(ALIGNMENT_BYTES) {
+        // Valeur lue dans le support : hors de portée, elle a déjà été signalée ci-dessus.
+        let start = entry.first_lba.checked_mul(block);
+        if start.is_some_and(|start| !start.is_multiple_of(ALIGNMENT_BYTES)) {
             note(
                 Severity::Info,
                 "gpt_entry_unaligned",
@@ -928,6 +934,16 @@ mod tests {
         let mut img = gpt_image(4096, &[(2048, 4000, LINUX, "x")]);
         put_u64(&mut img, 512 + 72, u64::MAX / 2);
         assert!(inspect_bytes(img).is_ok());
+        Ok(())
+    }
+
+    /// Trouvé par le fuzzeur : le début de partition vient de l'image, le multiplier peut déborder.
+    #[test]
+    fn un_debut_de_partition_demesure_ne_fait_pas_paniquer()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let huge = 1u64 << 62;
+        let img = gpt_image(4096, &[(huge, huge + 1, LINUX, "x")]);
+        assert!(codes(&inspect_bytes(img)?).contains(&"gpt_entry_out_of_range"));
         Ok(())
     }
 }

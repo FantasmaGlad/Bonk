@@ -224,6 +224,8 @@ struct TransferParams {
     mode: Option<String>,
     /// `never` (par défaut : personne devant l'écran) ou `auto`.
     elevate: Option<String>,
+    /// Disque interne : le mot `confirme`. Le service n'a personne à qui le demander.
+    confirm_internal: Option<String>,
 }
 
 fn parse<T: DeserializeOwned>(params: &Value) -> Result<T, Failure> {
@@ -241,6 +243,14 @@ impl TransferParams {
         FilterOptions {
             show_internal: self.show_internal || view.show_internal,
             allow_virtual: self.allow_virtual || view.allow_virtual,
+        }
+    }
+
+    /// Pour écrire, seule la requête compte : un réglage n'autorise jamais à effacer un disque de plus.
+    fn write_options(&self) -> FilterOptions {
+        FilterOptions {
+            show_internal: self.show_internal,
+            allow_virtual: self.allow_virtual,
         }
     }
 
@@ -488,7 +498,11 @@ fn start_job(
     };
     // Les paramètres sont validés tout de suite : une erreur de requête répond sans démarrer.
     let p: TransferParams = parse(params)?;
-    let (target, options, trace) = (p.target()?, p.options(&cfg.view), p.trace()?);
+    let options = match kind {
+        Kind::Verify => p.options(&cfg.view),
+        Kind::Write | Kind::Repair => p.write_options(),
+    };
+    let (target, trace) = (p.target()?, p.trace()?);
     let mode = p.mode()?;
     let elevation = p.elevation()?;
     let source = match kind {
@@ -524,6 +538,7 @@ fn start_job(
                     expected_sha256: p.sha256.clone(),
                     mode,
                     elevation,
+                    confirm_internal: p.confirm_internal.clone(),
                 },
                 &deps,
                 &mut progress,
@@ -559,6 +574,7 @@ fn start_job(
                     dry_run: p.dry_run,
                     yes: p.yes,
                     elevation,
+                    confirm_internal: p.confirm_internal.clone(),
                 },
                 &deps,
             )
@@ -803,7 +819,8 @@ mod tests {
                     let dev = dev.clone();
                     Io {
                         prepare: Box::new(|_, _, _| Ok(())),
-                        unmount: Box::new(|_| Ok(vec![])),
+                        unmount: Box::new(|_, _| Ok(vec![])),
+                        ask_internal: Box::new(|_| None),
                         open_node: Box::new(move |_, _, _| {
                             Ok(Box::new(dev.clone()) as Box<dyn BlockDevice>)
                         }),

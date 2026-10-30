@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use bonk_core::{BlockDevice, BlockError, MemoryDevice};
-use bonk_hal::{Bus, Disk, DiskKind, OpenTargetError, Partition};
+use bonk_hal::{Bus, Disk, DiskKind, Elevation, OpenTargetError, Partition};
 
 use crate::errors::{
     EXIT_CANCELLED, EXIT_SOURCE, EXIT_TARGET_REFUSED, EXIT_USAGE, EXIT_VERIFY_FAILED,
@@ -198,6 +198,12 @@ struct Scenario {
     open: Result<(), io::ErrorKind>,
     faulty_reads: bool,
     cancel: bool,
+    /// Annulation demandée pendant l'attente de l'autorisation.
+    cancel_on_prepare: bool,
+    seen_elevation: Rc<Cell<Option<Elevation>>>,
+    /// Ce que répondrait la personne au terminal ; `None` : personne.
+    answer: Option<String>,
+    vars: Vec<(String, String)>,
 }
 
 impl Scenario {
@@ -211,6 +217,10 @@ impl Scenario {
             open: Ok(()),
             faulty_reads: false,
             cancel: false,
+            cancel_on_prepare: false,
+            seen_elevation: Rc::new(Cell::new(None)),
+            answer: None,
+            vars: Vec::new(),
         }
     }
 
@@ -228,10 +238,16 @@ impl Scenario {
         let device = self.device.clone();
         let (open, faulty) = (self.open, self.faulty_reads);
         let cancel = self.cancel;
+        let cancel_on_prepare = self.cancel_on_prepare;
+        let cancelled = Rc::new(Cell::new(false));
+        let cancel_flag = Rc::clone(&cancelled);
+        let seen_elevation = Rc::clone(&self.seen_elevation);
+        let (log_ask, answer) = (Rc::clone(&self.log), self.answer.clone());
         let log_prepare = self.log.clone();
         let prepare = self.prepare.clone();
         let io = Io {
             prepare: Box::new(move |path, _, _| {
+                cancel_flag.set(cancel_flag.get() || cancel_on_prepare);
                 log_prepare
                     .borrow_mut()
                     .push(format!("prepare:{}", path.display()));
@@ -239,7 +255,8 @@ impl Scenario {
                     .clone()
                     .map_err(|m| BlockError::Io(io::Error::new(io::ErrorKind::PermissionDenied, m)))
             }),
-            unmount: Box::new(move |disk: &Disk| {
+            unmount: Box::new(move |disk: &Disk, elevation| {
+                seen_elevation.set(Some(elevation));
                 log_unmount
                     .borrow_mut()
                     .push(format!("unmount:{}", disk.id));
@@ -264,10 +281,15 @@ impl Scenario {
                     }
                 }
             }),
-            cancelled: Box::new(move || cancel),
+            cancelled: Box::new(move || cancel || cancelled.get()),
+            ask_internal: Box::new(move |disk| {
+                log_ask.borrow_mut().push(format!("ask:{}", disk.id));
+                answer.clone()
+            }),
         };
         let env = Env {
             io,
+            vars: self.vars.clone(),
             ..Env::default()
         };
         let (mut out, mut err) = (Vec::new(), Vec::new());
@@ -687,4 +709,214 @@ fn un_refus_d_autorisation_ne_demonte_rien() {
     assert!(err.contains("autorisation annulée"), "{err}");
     let log = scenario.log.borrow();
     assert_eq!(*log, ["prepare:/dev/sdb"], "ni démontage ni ouverture");
+}
+
+/// Gzip fait à la main, blocs non compressés : le contenu est connu sans outil externe.
+fn gzip_stored(data: &[u8]) -> Vec<u8> {
+    let mut out = vec![0x1F, 0x8B, 8, 0, 0, 0, 0, 0, 0, 0xFF];
+    let mut chunks = data.chunks(0xFFFF).peekable();
+    while let Some(chunk) = chunks.next() {
+        out.push(u8::from(chunks.peek().is_none()));
+        let len = chunk.len() as u16;
+        out.extend(len.to_le_bytes());
+        out.extend((!len).to_le_bytes());
+        out.extend(chunk);
+    }
+    out.extend(bonk_core::partition::crc32(data).to_le_bytes());
+    out.extend((data.len() as u32).to_le_bytes());
+    out
+}
+
+/// ISO hybride qui annonce `sectors` secteurs de 2 Kio, dans une image de 1 Mio.
+fn cut_iso(sectors: u32) -> Vec<u8> {
+    let mut image: Vec<u8> = (0..1usize << 20).map(|i| (i % 251) as u8).collect();
+    image[446..510].fill(0);
+    image[510] = 0x55;
+    image[511] = 0xAA;
+    let primary = 16 * 2048;
+    image[primary] = 1;
+    image[primary + 1..primary + 6].copy_from_slice(b"CD001");
+    image[primary + 80..primary + 84].copy_from_slice(&sectors.to_le_bytes());
+    image[primary + 128..primary + 130].copy_from_slice(&2048u16.to_le_bytes());
+    image
+}
+
+#[test]
+fn image_compressee_coupee_a_l_interieur_n_aboutit_pas_a_un_succes() {
+    // Annonce 4 Mio pour 1 Mio réel : tient sur la cible, flux gzip complet.
+    let source = TempSource::from_bytes("coupee-gz", &gzip_stored(&cut_iso(2048)));
+    let scenario = Scenario::new();
+    let (code, _, err) = scenario.run(&["write", "usb-a", &source.arg(), "--yes"]);
+    assert_eq!(code, EXIT_SOURCE, "{err}");
+    assert!(err.contains("E3007"), "{err}");
+    // Le mode brut écrit ce qu'on lui donne, en le journalisant.
+    let scenario = Scenario::new();
+    let (code, _, err) = scenario.run(&["write", "usb-a", &source.arg(), "--yes", "--mode", "raw"]);
+    assert_eq!(code, 0, "{err}");
+}
+
+#[test]
+fn image_compressee_annoncee_plus_grande_que_la_cible_ne_touche_a_rien() {
+    let source = TempSource::from_bytes("grande-gz", &gzip_stored(&cut_iso(100_000)));
+    let scenario = Scenario::new();
+    let (code, _, err) = scenario.run(&["write", "usb-a", &source.arg(), "--yes"]);
+    assert_eq!(code, EXIT_SOURCE, "{err}");
+    assert!(err.contains("E3003"), "{err}");
+    assert!(scenario.log().is_empty(), "{:?}", scenario.log());
+    let (code, _, _) = scenario.run(&["write", "usb-a", &source.arg(), "--dry-run"]);
+    assert_eq!(code, EXIT_SOURCE);
+}
+
+#[test]
+fn image_vide_refusee_meme_en_mode_brut() {
+    for source in [
+        TempSource::from_bytes("vide", &[]),
+        TempSource::from_bytes("vide-gz", &gzip_stored(&[])),
+    ] {
+        let scenario = Scenario::new();
+        let (code, _, err) =
+            scenario.run(&["write", "usb-a", &source.arg(), "--yes", "--mode", "raw"]);
+        assert_eq!(code, EXIT_SOURCE, "{err}");
+        assert!(scenario.log().is_empty());
+    }
+}
+
+#[test]
+fn annuler_pendant_l_autorisation_laisse_la_cle_montee() {
+    let source = TempSource::new("annule-autorisation", 4096);
+    let mut scenario = Scenario::new();
+    scenario.cancel_on_prepare = true;
+    let (code, _, _) = scenario.run(&["write", "usb-a", &source.arg(), "--yes"]);
+    assert_eq!(code, EXIT_CANCELLED);
+    assert_eq!(scenario.log(), ["prepare:/dev/sdb"]);
+}
+
+#[test]
+fn le_refus_d_elever_va_jusqu_au_demontage() {
+    let source = TempSource::new("sans-elevation", 4096);
+    let scenario = Scenario::new();
+    let (code, _, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &source.arg(),
+        "--yes",
+        "--elevate",
+        "never",
+    ]);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(scenario.seen_elevation.get(), Some(Elevation::Never));
+}
+
+#[test]
+fn sans_reparation_demandee_le_gpt_n_est_pas_dit_sain() {
+    let source = TempSource::new("sans-gpt", 4096);
+    let (code, out, err) =
+        Scenario::new().run(&["write", "usb-a", &source.arg(), "--yes", "--no-repair-gpt"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(out.contains("GPT : contrôle non demandé"), "{out}");
+    assert!(!out.contains("rien à réparer"), "{out}");
+}
+
+fn internal() -> Disk {
+    Disk {
+        id: "sata-x".to_owned(),
+        path: "/dev/sda".to_owned(),
+        bus: Bus::Sata,
+        removable_flag: false,
+        partitions: vec![],
+        ..usb("I1")
+    }
+}
+
+fn with_internal() -> Scenario {
+    let mut scenario = Scenario::new();
+    scenario.enumerations = vec![vec![usb("S1"), internal()]];
+    scenario
+}
+
+const CONFIRMATION_REQUIRED: &str = "E2005";
+
+#[test]
+fn disque_interne_refuse_sans_le_mot_meme_avec_yes() {
+    let source = TempSource::new("interne-sans-mot", 4096);
+    let scenario = with_internal();
+    let (code, _, err) =
+        scenario.run(&["write", "sata-x", &source.arg(), "--yes", "--show-internal"]);
+    assert_eq!(code, EXIT_USAGE, "{err}");
+    assert!(err.contains(CONFIRMATION_REQUIRED), "{err}");
+    // La question a été posée (personne n'a répondu), rien n'a bougé.
+    assert_eq!(scenario.log(), ["ask:sata-x"]);
+}
+
+#[test]
+fn disque_interne_ecrit_avec_le_mot_tape_au_terminal() {
+    let source = TempSource::new("interne-tape", 4096);
+    let mut scenario = with_internal();
+    scenario.answer = Some("confirme\n".to_owned());
+    let (code, _, err) =
+        scenario.run(&["write", "sata-x", &source.arg(), "--yes", "--show-internal"]);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(scenario.log()[0], "ask:sata-x");
+    scenario.answer = Some("oui\n".to_owned());
+    let (code, _, err) =
+        scenario.run(&["write", "sata-x", &source.arg(), "--yes", "--show-internal"]);
+    assert_eq!(code, EXIT_USAGE, "{err}");
+}
+
+#[test]
+fn disque_interne_ecrit_avec_le_mot_donne_d_avance_sans_question() {
+    let source = TempSource::new("interne-avance", 4096);
+    let scenario = with_internal();
+    let (code, _, err) = scenario.run(&[
+        "write",
+        "sata-x",
+        &source.arg(),
+        "--yes",
+        "--show-internal",
+        "--confirm-internal",
+        "confirme",
+    ]);
+    assert_eq!(code, 0, "{err}");
+    assert!(!scenario.log().iter().any(|l| l.starts_with("ask:")));
+    let (code, _, _) = scenario.run(&[
+        "write",
+        "sata-x",
+        &source.arg(),
+        "--yes",
+        "--show-internal",
+        "--confirm-internal",
+        "oui",
+    ]);
+    assert_eq!(code, EXIT_USAGE);
+}
+
+#[test]
+fn un_reglage_n_autorise_pas_a_ecrire_sur_un_disque_interne() {
+    let source = TempSource::new("interne-reglage", 4096);
+    let mut scenario = with_internal();
+    scenario.vars = vec![("BONK_VIEW_SHOW_INTERNAL".to_owned(), "1".to_owned())];
+    scenario.answer = Some("confirme\n".to_owned());
+    let (code, _, err) = scenario.run(&[
+        "write",
+        "sata-x",
+        &source.arg(),
+        "--yes",
+        "--confirm-internal",
+        "confirme",
+    ]);
+    assert_eq!(code, EXIT_TARGET_REFUSED, "{err}");
+    assert!(err.contains("E2001"), "{err}");
+    assert!(scenario.log().is_empty());
+    // Le réglage garde son rôle d'affichage.
+    let (code, out, _) = scenario.run(&["list"]);
+    assert_eq!(code, 0);
+    assert!(out.contains("sata-x"), "{out}");
+}
+
+#[test]
+fn reparer_un_disque_interne_exige_aussi_le_mot() {
+    let scenario = with_internal();
+    let (code, _, err) = scenario.run(&["repair-gpt", "sata-x", "--yes", "--show-internal"]);
+    assert_eq!(code, EXIT_USAGE, "{err}");
+    assert!(err.contains(CONFIRMATION_REQUIRED), "{err}");
 }

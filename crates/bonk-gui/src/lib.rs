@@ -1,5 +1,5 @@
-//! Interface graphique de Bonk (Iced) : pour l'instant, une fenêtre de détection des disques en
-//! lecture seule.
+//! Interface graphique de Bonk (Iced) : détection des disques et écriture d'une image, confiée au
+//! sous-processus `bonk write` (voir `transfer`).
 //!
 //! Ce crate et `bonk-cli` ne se connaissent pas : tous deux s'appuient sur les mêmes crates de base.
 //! Le rendu utilise wgpu et bascule sur le moteur logiciel tiny-skia quand aucun pilote graphique
