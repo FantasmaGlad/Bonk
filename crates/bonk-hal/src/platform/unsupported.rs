@@ -3,9 +3,10 @@
 
 use std::path::Path;
 
+use bonk_core::format::Filesystem;
 use bonk_core::{BlockDevice, BlockError};
 
-use super::{Elevation, Platform};
+use super::{Capability, Elevation, Missing, Platform, format_capability};
 use crate::disk::Disk;
 use crate::enumerate::{EnumerateError, SourceRead};
 use crate::image::Access;
@@ -46,6 +47,32 @@ impl Platform for Unsupported {
             "démontage non disponible sous {}",
             std::env::consts::OS
         )))
+    }
+
+    fn capabilities(&self) -> Vec<Capability> {
+        let no = |name: &str| {
+            Capability::no(
+                name,
+                Missing::OsUnsupported,
+                format!(
+                    "accès aux disques non disponible sous {}",
+                    std::env::consts::OS
+                ),
+            )
+        };
+        let mut all = vec![no("write"), no("elevate"), no("eject"), no("cancel")];
+        all.extend(Filesystem::ALL.map(|fs| no(&format_capability(fs))));
+        all
+    }
+
+    fn format_partition(
+        &self,
+        _partition: &Path,
+        _fs: Filesystem,
+        _label: Option<&str>,
+        _elevation: Elevation,
+    ) -> Result<(), BlockError> {
+        Err(no_raw_access())
     }
 
     fn prepare_access(

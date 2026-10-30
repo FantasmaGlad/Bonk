@@ -4,9 +4,10 @@ use std::io;
 use std::path::Path;
 use std::process::Command;
 
+use bonk_core::format::Filesystem;
 use bonk_core::{BlockDevice, BlockError};
 
-use super::{Elevation, Platform, udisks};
+use super::{Capability, Elevation, Missing, Platform, format_capability, udisks};
 use crate::disk::{Disk, Partition};
 use crate::enumerate::{EnumerateError, SourceRead};
 use crate::image::Access;
@@ -74,6 +75,46 @@ impl Platform for Linux {
         Ok(Box::new(node))
     }
 
+    fn capabilities(&self) -> Vec<Capability> {
+        let elevate = match udisks::reachable() {
+            Ok(()) => Capability::yes("elevate"),
+            Err(detail) => Capability::no("elevate", Missing::MissingTool, detail),
+        };
+        let mut all = vec![
+            Capability::yes("write"),
+            elevate,
+            Capability::no("eject", Missing::OsUnsupported, "pas encore dans Bonk"),
+            Capability::yes("cancel"),
+        ];
+        all.extend(Filesystem::ALL.map(|fs| {
+            let name = format_capability(fs);
+            if fs.is_native() {
+                return Capability::yes(&name);
+            }
+            match udisks::can_format(udisks_type(fs)) {
+                Ok(()) => Capability::yes(&name),
+                Err(detail) => Capability::no(&name, Missing::MissingTool, detail),
+            }
+        }));
+        all
+    }
+
+    fn format_partition(
+        &self,
+        partition: &Path,
+        fs: Filesystem,
+        label: Option<&str>,
+        elevation: Elevation,
+    ) -> Result<(), BlockError> {
+        udisks::format(
+            partition,
+            udisks_type(fs),
+            label,
+            fs == Filesystem::Ext4,
+            elevation == Elevation::Auto,
+        )
+    }
+
     fn is_privileged(&self) -> bool {
         // SAFETY : aucun argument, aucune erreur possible.
         unsafe { libc::geteuid() == 0 }
@@ -83,6 +124,16 @@ impl Platform for Linux {
         std::fs::read_to_string("/proc/sys/kernel/osrelease")
             .ok()
             .map(|text| text.trim().to_owned())
+    }
+}
+
+/// Nom du système de fichiers pour UDisks2.
+fn udisks_type(fs: Filesystem) -> &'static str {
+    match fs {
+        Filesystem::Fat32 => "vfat",
+        Filesystem::Exfat => "exfat",
+        Filesystem::Ntfs => "ntfs",
+        Filesystem::Ext4 => "ext4",
     }
 }
 

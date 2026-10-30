@@ -5,9 +5,12 @@ use std::path::{Path, PathBuf};
 
 use bonk_core::analysis::ImageReport;
 use bonk_core::codec::Format;
+use bonk_core::format::Filesystem;
+use bonk_core::format::table::{PartitionPlan, TableKind};
 use bonk_core::repair::RepairReport;
 use bonk_core::write::{VerifyReport, WriteReport};
 use bonk_core::{BlockDevice, BlockError};
+use bonk_hal::platform::Capability;
 use bonk_hal::{Access, Disk, Elevation, EnumerateError, OpenTargetError};
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -58,12 +61,20 @@ pub type OpenNodeFn =
 /// Obtention du droit d'ouvrir un disque, avant tout geste sur lui.
 pub type PrepareFn = Box<dyn Fn(&Path, Access, Elevation) -> Result<(), BlockError>>;
 
+/// Formatage d'une partition par les outils de l'hôte.
+pub type FormatPartitionFn =
+    Box<dyn Fn(&Path, Filesystem, Option<&str>, Elevation) -> Result<(), BlockError>>;
+
 /// Ce que les opérations demandent au système : injectable pour les tests.
 pub struct Io {
     pub prepare: PrepareFn,
     pub unmount: UnmountFn,
     pub open_node: OpenNodeFn,
     pub cancelled: Box<dyn Fn() -> bool>,
+    pub capabilities: Box<dyn Fn() -> Vec<Capability>>,
+    pub format_partition: FormatPartitionFn,
+    /// Attente courte entre deux regards sur une partition que le système n'a pas encore créée.
+    pub pause: Box<dyn Fn()>,
 }
 
 impl Default for Io {
@@ -86,6 +97,11 @@ impl Io {
             open_node: Box::new(|path, access, elevation| {
                 bonk_hal::platform::current().open_disk(path, access, elevation)
             }),
+            capabilities: Box::new(|| bonk_hal::platform::current().capabilities()),
+            format_partition: Box::new(|path, fs, label, elevation| {
+                bonk_hal::platform::current().format_partition(path, fs, label, elevation)
+            }),
+            pause: Box::new(|| std::thread::sleep(std::time::Duration::from_millis(250))),
             cancelled: Box::new(move || {
                 bonk_hal::interrupt::requested()
                     || cancel
@@ -195,6 +211,29 @@ pub struct RepairDone {
     pub findings_before: Vec<String>,
     pub repair: Option<RepairReport>,
     pub findings_after: Option<Vec<String>>,
+}
+
+/// Ce que fera un formatage, sans rien faire (`--dry-run`), ou ce qu'il a fait.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct FormatDone {
+    pub schema_version: u32,
+    /// `plan` ou `result`.
+    pub event: &'static str,
+    pub dry_run: bool,
+    pub target: TargetInfo,
+    pub table: TableKind,
+    pub filesystem: Filesystem,
+    /// Le système de fichiers a été choisi par défaut, d'après la taille du support.
+    pub filesystem_defaulted: bool,
+    pub label: Option<String>,
+    pub partition: PartitionPlan,
+    /// Écrit par Bonk (`bonk`) ou par les outils de l'hôte (`system`).
+    pub written_by: &'static str,
+    pub cluster_bytes: Option<u32>,
+    /// Points de montage démontés, ou qui le seraient.
+    pub unmounted: Vec<String>,
+    /// Table et structures relues après écriture.
+    pub verified: bool,
 }
 
 #[derive(Serialize)]

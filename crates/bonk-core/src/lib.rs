@@ -8,6 +8,7 @@
 pub mod analysis;
 pub mod block;
 pub mod codec;
+pub mod format;
 pub mod partition;
 pub mod repair;
 pub mod trace;

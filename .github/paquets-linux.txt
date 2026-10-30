@@ -12,3 +12,6 @@ libxkbcommon-x11-0
 gzip
 xz-utils
 zstd
+# Outils de référence qui relisent ce que `bonk format` écrit : table et système de fichiers.
+gdisk
+dosfstools

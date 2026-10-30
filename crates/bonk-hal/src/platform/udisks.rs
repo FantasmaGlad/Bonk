@@ -102,6 +102,86 @@ pub(super) fn open(device: &Path, mode: &str, flags: i32) -> Result<OwnedFd, Blo
     Ok(fd.into())
 }
 
+/// Le service répond-il ?
+///
+/// # Errors
+/// Le message dit ce qui manque.
+pub(super) fn reachable() -> Result<(), String> {
+    connect()
+        .and_then(|connection| {
+            block_on(connection.call_method(
+                Some(SERVICE),
+                MANAGER_PATH,
+                Some("org.freedesktop.DBus.Peer"),
+                "Ping",
+                &(),
+            ))
+            .map_err(from_zbus)
+        })
+        .map(drop)
+        .map_err(|error| error.to_string())
+}
+
+/// Le service sait-il formater ce type ? Il répond sans rien demander à polkit.
+///
+/// # Errors
+/// Le message nomme l'outil qui manque, ou dit que le service n'est pas joignable.
+pub(super) fn can_format(kind: &str) -> Result<(), String> {
+    let connection = connect().map_err(|error| error.to_string())?;
+    let reply = block_on(connection.call_method(
+        Some(SERVICE),
+        MANAGER_PATH,
+        Some(MANAGER),
+        "CanFormat",
+        &(kind,),
+    ))
+    .map_err(|error| from_zbus(error).to_string())?;
+    let (available, tool): (bool, String) = reply
+        .body()
+        .deserialize()
+        .map_err(|error| from_zbus(error).to_string())?;
+    if available {
+        Ok(())
+    } else {
+        Err(format!("outil absent : {tool}"))
+    }
+}
+
+/// Formate une partition par le service, qui appelle `mkfs.*`. `take_ownership` : le système de fichiers
+/// appartiendra à l'appelant, sans quoi une partition ext4 ne serait écrivable que par root.
+///
+/// # Errors
+/// `PermissionDenied` avec le remède, si le service refuse, échoue ou n'est pas joignable.
+pub(super) fn format(
+    partition: &Path,
+    kind: &str,
+    label: Option<&str>,
+    take_ownership: bool,
+    interactive: bool,
+) -> Result<(), BlockError> {
+    let connection = connect()?;
+    let object = resolve(&connection, partition)?;
+    let mut options: Options<'_> = HashMap::new();
+    if let Some(label) = label {
+        options.insert("label", Variant::from(label));
+    }
+    if take_ownership {
+        options.insert("take-ownership", Variant::from(true));
+    }
+    if !interactive {
+        options.insert("auth.no_user_interaction", Variant::from(true));
+    }
+    block_on(connection.call_method(
+        Some(SERVICE),
+        object.as_str(),
+        Some(BLOCK),
+        "Format",
+        &(kind, options),
+    ))
+    .map_err(from_zbus)?;
+    Ok(())
+}
+
 /// Démonte une partition par le service, quand `umount` n'en a pas le droit.
 ///
 /// # Errors
