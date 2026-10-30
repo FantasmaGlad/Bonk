@@ -126,11 +126,12 @@ pub(super) fn open_target(
         (Some(disk), _) => {
             let identity = TargetIdentity::from(disk);
             // Le droit d'abord : un refus ne doit laisser la clé ni démontée ni touchée.
-            (deps.io.prepare)(Path::new(&disk.path), access, elevation).map_err(open_error)?;
+            let prepared = (deps.io.prepare)(Path::new(&disk.path), access, elevation);
             // Annulé pendant l'attente de l'autorisation : la clé reste montée, intacte.
             if (deps.io.cancelled)() {
                 return Err(fail(Code::Cancelled, "annulée avant l'ouverture du disque"));
             }
+            prepared.map_err(open_error)?;
             // Démonter seulement pour écrire : relire un volume monté ne le perturbe pas.
             let unmounted = if writing {
                 (deps.io.unmount)(disk, elevation).map_err(map_open_target)?
@@ -140,8 +141,11 @@ pub(super) fn open_target(
             // Identité revérifiée immédiatement avant d'ouvrir.
             let fresh = enumerate(deps)?;
             let again = reverify(&identity, &fresh, options).map_err(map_open_target)?;
-            let node = (deps.io.open_node)(Path::new(&again.path), access, elevation)
-                .map_err(open_error)?;
+            let opened = (deps.io.open_node)(Path::new(&again.path), access, elevation);
+            if (deps.io.cancelled)() {
+                return Err(fail(Code::Cancelled, "annulée avant l'ouverture du disque"));
+            }
+            let node = opened.map_err(open_error)?;
             if node.size() != identity.size_bytes {
                 return Err(map_open_target(OpenTargetError::IdentityChanged {
                     expected: identity.clone(),

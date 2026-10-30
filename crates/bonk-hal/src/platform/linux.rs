@@ -40,6 +40,7 @@ impl Platform for Linux {
         path: &Path,
         access: Access,
         elevation: Elevation,
+        cancelled: &dyn Fn() -> bool,
     ) -> Result<(), BlockError> {
         if has_access(path, access) {
             return Ok(());
@@ -49,7 +50,7 @@ impl Platform for Linux {
         }
         // Lecture seule, quel que soit le besoin : c'est la même action polkit, mémorisée quelques
         // minutes, et fermer un descripteur en écriture ferait relire le disque par le noyau.
-        udisks::open(path, "r", libc::O_CLOEXEC).map(drop)
+        udisks::open(path, "r", libc::O_CLOEXEC, cancelled).map(drop)
     }
 
     fn open_disk(
@@ -57,6 +58,7 @@ impl Platform for Linux {
         path: &Path,
         access: Access,
         elevation: Elevation,
+        cancelled: &dyn Fn() -> bool,
     ) -> Result<Box<dyn BlockDevice>, BlockError> {
         let node = match BlockNode::open(path, access) {
             Err(BlockError::Io(error))
@@ -67,7 +69,7 @@ impl Platform for Linux {
                     Access::ReadOnly => ("r", libc::O_CLOEXEC),
                     Access::ReadWrite => ("rw", libc::O_CLOEXEC | libc::O_EXCL),
                 };
-                BlockNode::from_fd(udisks::open(path, mode, flags)?, path, access)
+                BlockNode::from_fd(udisks::open(path, mode, flags, cancelled)?, path, access)
             }
             other => other,
         }?;

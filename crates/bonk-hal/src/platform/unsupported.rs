@@ -84,6 +84,7 @@ impl Platform for Unsupported {
         _path: &Path,
         _access: Access,
         _elevation: Elevation,
+        _cancelled: &dyn Fn() -> bool,
     ) -> Result<(), BlockError> {
         Err(no_raw_access())
     }
@@ -93,6 +94,7 @@ impl Platform for Unsupported {
         _path: &Path,
         _access: Access,
         _elevation: Elevation,
+        _cancelled: &dyn Fn() -> bool,
     ) -> Result<Box<dyn BlockDevice>, BlockError> {
         Err(no_raw_access())
     }
@@ -122,7 +124,7 @@ mod tests {
         assert!(reads.is_empty());
         assert!(platform.enumerate_from_capture(&[]).is_err());
         assert!(matches!(
-            platform.open_disk(Path::new("disque"), Access::ReadOnly, Elevation::Auto),
+            platform.open_disk(Path::new("disque"), Access::ReadOnly, Elevation::Auto, &|| false),
             Err(BlockError::Io(err)) if err.kind() == std::io::ErrorKind::Unsupported
         ));
         assert_eq!(platform.kernel_release(), None);
