@@ -60,7 +60,6 @@ pub(crate) struct Entry<'a> {
     pub(crate) eligibility: Eligibility,
 }
 
-/// Écrit le résultat de `bonk list` sur `out`.
 pub(crate) fn schema() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(Report)).unwrap_or_default()
 }

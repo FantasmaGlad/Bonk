@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Démarrage d'une clé écrite par Bonk, sous QEMU et OVMF (CDC §12.4). La clé est un fichier image : aucun
+# Démarrage d'une clé écrite par Bonk, sous QEMU et OVMF. La clé est un fichier image : aucun
 # périphérique réel n'est touché.
 # Usage : demarrage-qemu.sh <bonk> <image.iso> <uefi|secureboot> <dossier de travail>
 # Niveau de preuve : le micrologiciel UEFI trouve la clé, charge son chargeur d'amorçage et le lance

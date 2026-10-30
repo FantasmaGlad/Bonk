@@ -1,14 +1,12 @@
-//! Trace des accès bloc (`--trace-io`, CDC §9.4) : chaque lecture et écriture est journalisée avec son
-//! décalage, sa longueur, sa durée et une somme de contrôle, **jamais les données** : un disque réel
-//! peut porter des données personnelles. Le début des données n'est joint que si on le demande
-//! explicitement, pour un fichier image.
+//! Trace des accès bloc (`--trace-io`) : décalage, longueur, durée et somme de contrôle de chaque
+//! accès, **jamais les données**, qu'un disque réel peut porter de personnelles. Le début des données
+//! n'est joint que sur demande explicite, pour un fichier image.
 
 use std::time::Instant;
 
 use crate::block::{BlockDevice, BlockError};
 use crate::partition::crc32;
 
-/// Enveloppe qui journalise les accès à un autre périphérique.
 pub struct TracedDevice {
     inner: Box<dyn BlockDevice>,
     include_head: bool,
@@ -100,7 +98,6 @@ mod tests {
         dev.read_at(512, &mut back)?;
         assert_eq!(back, [7; 512]);
         dev.flush()?;
-        // Les refus du périphérique sous-jacent sont rendus tels quels.
         assert!(matches!(
             dev.write_at(7, &[0; 512]),
             Err(BlockError::Unaligned { .. })

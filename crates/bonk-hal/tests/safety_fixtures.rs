@@ -2,8 +2,8 @@
 //!
 //! Chaque fichier décrit des disques et, pour chaque jeu de réglages, le verdict attendu de **chacun**
 //! : un disque sans verdict attendu fait échouer le test, pour qu'aucun cas ne soit ajouté sans être
-//! vérifié. Le verdict réel est comparé en JSON, donc ce test fige aussi le format de sortie
-//! (`bonk list --json` s'appuiera dessus).
+//! vérifié. Le verdict réel est comparé en JSON, donc ce test fige aussi le format des verdicts que
+//! rend `bonk list --json`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
@@ -103,7 +103,6 @@ fn check_fixture(path: &PathBuf) -> Result<Vec<String>, Box<dyn Error>> {
                 ));
             }
             let actual = serde_json::to_value(verdict)?;
-            // Pas de `if let ... &&` : les chaînes de `let` exigent Rust 1.88, la version minimale est 1.85.
             match expected.get(&disk.id) {
                 Some(want) if want != &actual => {
                     failures.push(format!(

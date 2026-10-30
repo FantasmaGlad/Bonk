@@ -1,8 +1,7 @@
 //! Charte graphique : thème clair par défaut, noir sur blanc, contraste maximal, angles vifs.
 //!
-//! Choix du mainteneur (2026-10-29) : thème clair, à la place du thème sombre du CDC §8 ; la règle
-//! d'accessibilité du CDC est tenue avec de la marge (contours de composants à 21:1 pour 3:1 exigés).
-//! Les états ne reposent jamais sur la couleur : ils sont écrits en toutes lettres.
+//! Contours de composants à 21:1, pour 3:1 exigés par le WCAG 1.4.11. Les états ne reposent jamais
+//! sur la couleur : ils sont écrits en toutes lettres.
 
 use iced::theme::Palette;
 use iced::widget::{button, checkbox, container, text_input};
@@ -19,7 +18,7 @@ pub(crate) const CONTROL_BORDER: Color = Color::BLACK;
 /// Fond d'un composant survolé `#E5E5E5` (texte noir dessus : 16,7:1).
 pub(crate) const HOVER: Color = Color::from_rgb(0.898, 0.898, 0.898);
 
-/// Rayon maximal de la charte : 4 px.
+/// Angles vifs : 2 px, sous le plafond de 4 px de la charte.
 const RADIUS: f32 = 2.0;
 
 pub(crate) fn bonk() -> Theme {

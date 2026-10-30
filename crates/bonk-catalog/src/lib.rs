@@ -1,3 +1,2 @@
-//! Catalogue et bibliothèque locale : manifeste signé, téléchargements reprenables, empreintes.
-//!
-//! Ce crate ne dépend d'aucun autre crate du workspace.
+//! Réservé au catalogue et à la bibliothèque locale (manifeste signé, téléchargements reprenables,
+//! empreintes) : vide pour l'instant. Ne dépend d'aucun autre crate du workspace.

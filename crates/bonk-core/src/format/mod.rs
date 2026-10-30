@@ -1,9 +1,9 @@
-//! Formatage : table de partitions et système de fichiers, écrits sur [`BlockDevice`] (D-51).
+//! Formatage : une partition unique alignée sur 1 Mio et son système de fichiers, écrits sur
+//! [`crate::BlockDevice`].
 //!
-//! Une partition unique, alignée sur 1 Mio, qui remet un support en état de stockage. FAT32 est écrit ici
-//! (résultat identique sur chaque hôte, sans outil externe) ; exFAT, NTFS et ext4 restent aux outils de
-//! l'hôte (D-04) : ce module leur prépare seulement la table. Rien ne dépend de l'horloge ni du hasard :
-//! les identifiants sont dérivés d'une graine donnée par l'appelant.
+//! FAT32 est écrit ici, à l'identique sur chaque hôte et sans outil externe ; exFAT, NTFS et ext4
+//! restent aux outils de l'hôte, qui ne reçoivent d'ici que la table. Rien ne dépend de l'horloge ni
+//! du hasard : les identifiants dérivent d'une graine donnée par l'appelant.
 
 pub mod fat32;
 pub mod table;
@@ -65,9 +65,6 @@ impl fmt::Display for Filesystem {
 }
 
 /// Valide une étiquette pour ce système de fichiers et la met sous sa forme écrite (FAT32 : majuscules).
-///
-/// # Errors
-/// Le message dit ce qui ne va pas.
 pub fn normalize_label(fs: Filesystem, label: &str) -> Result<String, String> {
     let limit = fs.label_limit();
     let length = match fs {
@@ -130,9 +127,7 @@ impl Ids {
 #[derive(Debug)]
 pub enum FormatError {
     Device(BlockError),
-    /// Le support ou la partition est trop petit pour ce format.
     TooSmall(String),
-    /// Le support ou la partition dépasse ce que ce format adresse.
     TooLarge(String),
     /// La relecture ne donne pas ce qui a été écrit.
     Mismatch(String),

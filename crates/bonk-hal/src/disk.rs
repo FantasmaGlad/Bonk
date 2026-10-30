@@ -1,9 +1,8 @@
-//! Modèle de disque commun aux trois systèmes.
+//! Modèle de disque commun aux systèmes.
 //!
-//! Chaque adaptateur d'OS (UDisks2/sysfs, SetupAPI, DiskArbitration) remplit ces structures avec des
-//! **faits bruts** : ce que le système rapporte, sans interprétation. La décision « ce disque est-il
-//! proposé, caché ou interdit » est prise ailleurs, par la fonction pure de [`crate::safety`], pour
-//! qu'elle soit testable sur des jeux de données sans matériel et identique sur tous les systèmes.
+//! Les adaptateurs d'OS le remplissent de **faits bruts**, sans interprétation. La décision de
+//! proposer, cacher ou interdire un disque revient à la fonction pure de [`crate::safety`], testable
+//! sans matériel et identique sur tous les systèmes.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -11,7 +10,7 @@ use serde::{Deserialize, Serialize};
 /// Bus par lequel le disque est relié à l'hôte.
 ///
 /// La sécurité se fonde sur le bus et non sur le drapeau « amovible » : sous Windows, un disque dur
-/// USB est souvent signalé « fixe » (CDC §3.2).
+/// USB est souvent signalé « fixe ».
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Bus {
@@ -31,7 +30,7 @@ pub enum Bus {
 }
 
 impl Bus {
-    /// Les bus sur lesquels un disque est proposé par défaut (CDC §3.2).
+    /// Les bus sur lesquels un disque est proposé par défaut.
     #[must_use]
     pub fn is_removable(self) -> bool {
         matches!(self, Self::Usb | Self::Sd | Self::Thunderbolt)
@@ -82,7 +81,7 @@ pub struct Partition {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Disk {
-    /// Identifiant stable entre deux branchements : numéro de série ou chemin `by-id` (CDC §3.3).
+    /// Identifiant stable entre deux branchements : numéro de série ou chemin `by-id`.
     /// Jamais `/dev/sdX` seul, qui change d'un branchement à l'autre.
     pub id: String,
     /// Chemin système courant, pour l'affichage et l'ouverture.

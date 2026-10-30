@@ -3,7 +3,7 @@
 //!
 //! Ce crate et `bonk-cli` ne se connaissent pas : tous deux s'appuient sur les mêmes crates de base.
 //! Le rendu utilise wgpu et bascule sur le moteur logiciel tiny-skia quand aucun pilote graphique
-//! n'est utilisable (CDC §8).
+//! n'est utilisable.
 
 mod app;
 mod command;
@@ -18,9 +18,6 @@ use crate::app::App;
 
 /// Ouvre la fenêtre, avec les réglages d'affichage de départ (`bonk config`), et rend la main à la
 /// fermeture.
-///
-/// # Errors
-/// Texte de l'erreur d'Iced quand la fenêtre ne peut pas s'ouvrir (pas d'affichage, pas de rendu).
 pub fn run(initial: ViewOptions) -> Result<(), String> {
     // Iced ne renvoie pas d'erreur sans affichage : il panique. Détection de la fonctionnalité en
     // amont, pour que Bonk redirige proprement vers la ligne de commande (SSH, serveur).
@@ -68,7 +65,7 @@ fn fallback_allowed(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> bool {
 /// Ouvre la fenêtre en transformant une panique du rendu en erreur. wgpu traite certaines erreurs de
 /// pilote comme fatales (panique sur le fil principal) au lieu de laisser Iced basculer sur le rendu
 /// logiciel : sous un affichage virtuel, sur certaines machines virtuelles ou avec un pilote incomplet,
-/// la surface ne peut pas être configurée (CDC §8 : le repli logiciel est obligatoire).
+/// la surface ne peut pas être configurée.
 fn catching_panics(
     open: impl FnOnce() -> Result<(), String> + std::panic::UnwindSafe,
 ) -> Result<Result<(), String>, String> {

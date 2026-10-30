@@ -6,9 +6,9 @@
 //! démontage). À l'ouverture en écriture, `O_EXCL` fait refuser par le noyau un disque encore utilisé
 //! (monté, ou ouvert par un autre programme) : dernier garde-fou, indépendant de nos propres contrôles.
 //!
-//! L'ouverture exige des droits : soit ceux de l'appelant, soit un descripteur remis par le service du
-//! système ([`BlockNode::from_fd`], D-36) ; l'interface ne tourne jamais en administrateur.
-//! Les tests n'ouvrent jamais de périphérique réel (invariant 3).
+//! L'ouverture exige des droits : ceux de l'appelant, ou un descripteur remis par le service du
+//! système ([`BlockNode::from_fd`]) ; l'interface ne tourne jamais en administrateur. Les tests
+//! n'ouvrent jamais de périphérique réel.
 
 use std::path::{Path, PathBuf};
 
@@ -96,7 +96,7 @@ mod imp {
 
         /// Reprend un descripteur ouvert par le service du système. Il n'est cru sur rien : c'est bien un
         /// disque entier, et le même périphérique que `path`. Ne prouve pas que ce soit celui qui a été
-        /// choisi : `path` a pu changer de disque après la revérification (audit, B7).
+        /// choisi : `path` a pu changer de disque après la revérification.
         ///
         /// # Errors
         /// [`BlockError::Io`] : `InvalidInput` si le descripteur n'est pas ce disque.

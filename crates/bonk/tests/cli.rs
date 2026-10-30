@@ -32,7 +32,7 @@ fn help_reussit_et_commence_par_la_description_de_l_outil() -> Resultat {
     Ok(())
 }
 
-/// Sans argument, Bonk ouvre la fenêtre (CDC §1). Sans affichage graphique (SSH, serveur), il échoue
+/// Sans argument, Bonk ouvre la fenêtre. Sans affichage graphique (SSH, serveur), il échoue
 /// proprement et renvoie vers la ligne de commande, sans panique. Le test retire les variables
 /// d'affichage : aucune fenêtre ne s'ouvre, même sur un poste de bureau.
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -158,11 +158,11 @@ fn le_journal_va_sur_stderr_et_la_sortie_reste_du_json() -> Resultat {
     Ok(())
 }
 
-/// Régression : sous un affichage virtuel (Xvfb), wgpu paniquait (« incompatible window kind ») au lieu
-/// de basculer sur le rendu logiciel (CDC §8). Maintenant Bonk se relance en `tiny-skia` et la fenêtre
-/// reste ouverte jusqu'à l'arrêt par `timeout` (code 124), sans panique. Quand wgpu réussit (pilote
-/// logiciel présent), le test vérifie seulement l'ouverture sans panique. Ignoré hors CI si `xvfb-run`
-/// ou `timeout` manque ; en CI, leur absence fait échouer le test.
+/// Sous un affichage virtuel (Xvfb), wgpu peut paniquer (« incompatible window kind ») au lieu de
+/// basculer sur le rendu logiciel : Bonk se relance alors en `tiny-skia`, et la fenêtre reste ouverte
+/// jusqu'à l'arrêt par `timeout` (code 124), sans panique. Quand wgpu réussit (pilote logiciel
+/// présent), seule l'ouverture sans panique est vérifiée. Ignoré hors CI si `xvfb-run` ou `timeout`
+/// manque ; en CI, leur absence fait échouer le test.
 #[cfg(all(unix, not(target_os = "macos")))]
 #[test]
 fn sous_affichage_virtuel_le_rendu_bascule_en_logiciel() -> Resultat {

@@ -1,4 +1,4 @@
-//! Commande équivalente d'une vue de la fenêtre (CDC §9.1) : la fenêtre n'ayant aucun pouvoir que la
+//! Commande équivalente d'une vue de la fenêtre : la fenêtre n'ayant aucun pouvoir que la
 //! ligne de commande n'ait, chaque vue se traduit en commandes exactes. Le binaire vérifie par un test
 //! que la CLI accepte bien celles que la fenêtre affiche.
 

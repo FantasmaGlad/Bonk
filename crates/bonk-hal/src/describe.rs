@@ -1,8 +1,7 @@
 //! Libellés lisibles des faits et des verdicts sur les disques.
 //!
-//! La ligne de commande et l'interface graphique affichent les mêmes choses (taille, bus, état, motifs
-//! d'exclusion) : les écrire une seule fois garantit qu'elles disent la même chose. Les textes sont en
-//! français ; l'externalisation FR/EN exigée par le CDC §8 passera par ce module.
+//! La ligne de commande et la fenêtre affichent les mêmes libellés : écrits une seule fois, ils ne
+//! peuvent pas diverger. Leur traduction passera par ce module.
 
 use crate::disk::{Bus, DiskKind};
 use crate::safety::{Eligibility, Exclusion, HiddenReason, Warning};
@@ -72,7 +71,7 @@ pub fn state_label(eligibility: &Eligibility) -> String {
     }
 }
 
-/// Mot d'état court, en majuscules : le verdict ne repose jamais sur la couleur seule (CDC §8).
+/// Mot d'état court, en majuscules : le verdict ne repose jamais sur la couleur seule.
 #[must_use]
 pub fn verdict_badge(eligibility: &Eligibility) -> &'static str {
     match eligibility {

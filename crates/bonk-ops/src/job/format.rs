@@ -1,4 +1,4 @@
-//! Formater un support : une table, une partition, un système de fichiers (lot 5, D-51, D-04).
+//! Formater un support : une table, une partition, un système de fichiers.
 //!
 //! Mêmes garde-fous que l'écriture : filtre, identité revérifiée, démontage, `O_EXCL`, `yes`, `force` pour
 //! un disque interne. FAT32 est écrit ici et relu ; exFAT, NTFS et ext4 passent par l'hôte une fois la
@@ -158,7 +158,7 @@ fn wait_for_partition(
     Ok(None)
 }
 
-/// L'outil de l'hôte ne se relit pas ici octet par octet : sa sortie n'est pas interprétée (D-04). Le système
+/// L'outil de l'hôte ne se relit pas ici octet par octet : sa sortie n'est pas interprétée. Le système
 /// doit au moins reconnaître le résultat.
 fn wait_for_filesystem(id: &str, fs: Filesystem, deps: &Deps<'_>) -> Result<(), JobError> {
     for _ in 0..PARTITION_LOOKS {

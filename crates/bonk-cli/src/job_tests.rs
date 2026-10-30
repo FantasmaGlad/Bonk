@@ -645,9 +645,8 @@ fn verify_json_et_progression_json() {
     assert!(done.windows(2).all(|w| w[0] <= w[1]), "{done:?}");
 }
 
-/// Régression constatée sur une vraie clé : après `write`, la réparation du GPT modifie le MBR de
-/// protection et l'en-tête principal ; un `verify` de la même image échouait donc (E4002) alors que le
-/// contenu était intact.
+/// La réparation du GPT modifie le MBR de protection et l'en-tête principal : `verify` de la même image
+/// doit pourtant réussir, et non rendre `E4002`, quand le contenu est intact.
 #[test]
 fn verify_d_une_image_gpt_reussit_apres_la_reparation_du_gpt() {
     use bonk_core::partition::testing::{LINUX, gpt_image};
@@ -679,9 +678,8 @@ fn verify_d_une_image_gpt_reussit_apres_la_reparation_du_gpt() {
     assert!(err.trim_end().ends_with("[E4002]"), "{err}");
 }
 
-/// Régression constatée sur une vraie clé : la relecture de contrôle qui suit l'écriture lisait le cache
-/// du noyau (2 193 Mo/s sur une clé USB 2.0), pas le support ; une écriture perdue par la clé n'aurait
-/// pas été vue. Le cache doit être vidé avant toute relecture, à l'écriture comme à la vérification.
+/// Sans vidage du cache avant la relecture, le contrôle lit le noyau et non le support (2 193 Mo/s
+/// mesurés sur une clé USB 2.0) : une écriture perdue par la clé passerait inaperçue.
 #[test]
 fn la_relecture_de_controle_ne_lit_jamais_le_cache() {
     let source = TempSource::new("cache", 1 << 20);

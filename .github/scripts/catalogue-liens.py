@@ -2,7 +2,7 @@
 """Vérifie que chaque URL du manifeste du catalogue répond (HEAD, sans téléchargement) et écrit un rapport.
 
 Usage : catalogue-liens.py <manifeste.json> <rapport.md>
-Format attendu (J5, à confirmer) : {"entries": [{"id": "...", "url": "https://...", "sha256": "..."}]}
+Format attendu (à confirmer) : {"entries": [{"id": "...", "url": "https://...", "sha256": "..."}]}
 Code de sortie 1 si au moins un lien est cassé. Les empreintes ne sont pas recalculées ici (images de
 plusieurs Go) : elles le sont à la demande, voir le workflow.
 """

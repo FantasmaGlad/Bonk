@@ -42,7 +42,7 @@ jobs:
         with:
           name: binaire-${{ matrix.nom }}
           path: archive
-      # Les outils sont installés à des versions fixes (éprouvées en local le 2026-10-30).
+      # Les outils sont installés à des versions fixes (éprouvées en local).
       - name: Installer cargo-deb et cargo-generate-rpm
         run: cargo install --locked --version 3.8.0 cargo-deb && cargo install --locked --version 0.21.1 cargo-generate-rpm
       - name: Placer le binaire où les outils l'attendent

@@ -15,7 +15,6 @@ use crate::linux::{self, LinuxRoots};
 use crate::node::BlockNode;
 use crate::target::{OpenTargetError, mount_points};
 
-/// Implémentation Linux.
 #[derive(Debug, Clone, Copy, Default)]
 pub(super) struct Linux;
 
@@ -141,11 +140,8 @@ fn udisks_type(fs: Filesystem) -> &'static str {
     }
 }
 
-/// Démonte tout ce que porte le disque avec `umount` (outil fourni par le système : le démontage est
-/// l'affaire de l'OS, pas de Bonk). Rend les points démontés.
-///
-/// # Errors
-/// [`OpenTargetError::Unmount`] au premier démontage qui échoue ; les suivants ne sont pas tentés.
+/// Démonte tout ce que porte le disque et rend les points démontés ; les suivants ne sont pas tentés
+/// après un échec.
 fn unmount_all(disk: &Disk, elevation: Elevation) -> Result<Vec<String>, OpenTargetError> {
     let mounts = mount_points(disk);
     let error = match unmount_with(&mounts, &|mount| {

@@ -1,9 +1,8 @@
-//! Cœur pur de Bonk : partitionnement MBR/GPT, écriture brute, décompression, vérification et
-//! réparation du GPT de secours.
+//! Cœur pur de Bonk : tables de partitions, formatage FAT32, écriture brute, décompression,
+//! vérification, réparation du GPT et analyse d'image.
 //!
-//! Ce crate n'opère que sur une abstraction de périphérique bloc : aucune entrée-sortie système,
-//! aucune API d'OS, aucune dépendance vers un autre crate du workspace. Il reste ainsi entièrement
-//! testable sur des fichiers image, sans matériel ni privilèges.
+//! Aucune entrée-sortie système, aucune API d'OS, aucun autre crate du workspace : tout se teste sur
+//! des fichiers image, sans matériel ni privilèges.
 
 pub mod analysis;
 pub mod block;

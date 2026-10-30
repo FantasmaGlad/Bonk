@@ -1,4 +1,4 @@
-//! `--fixture <fichier>` : rejouer une capture d'énumération (CDC §9.4).
+//! `--fixture <fichier>` : rejouer une capture d'énumération.
 //!
 //! La capture est produite par `bonk diagnose --capture` sur la machine à analyser ; elle se rejoue sur
 //! une autre, qui ne touche alors à aucun disque. Pour que rejouer ne puisse jamais écrire sur un vrai

@@ -149,8 +149,8 @@ fn ecriture_simulee_par_le_service() -> Resultat {
     Ok(())
 }
 
-/// Régression : le service répondait avant de libérer l'emplacement de l'opération, donc une requête
-/// envoyée dès la réponse reçue pouvait être refusée (« déjà en cours »). Constaté sous Windows en CI.
+/// Une requête envoyée dès la réponse reçue ne trouve jamais l'emplacement de l'opération encore pris
+/// (« déjà en cours ») : le service le libère avant de répondre.
 #[test]
 fn des_operations_enchainees_sans_attente_ne_sont_jamais_refusees() -> Resultat {
     let dir = std::env::temp_dir().join(format!("bonk-serve-chain-{}", std::process::id()));

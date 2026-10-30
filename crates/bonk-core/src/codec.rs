@@ -1,8 +1,8 @@
-//! Formats d'image et décompression à la volée (CDC §4, J1).
+//! Formats d'image et décompression à la volée.
 //!
-//! Le format se reconnaît à ses premiers octets, jamais à l'extension : une image renommée reste lue
-//! pour ce qu'elle est. Gzip, xz et zstd sont décompressés en flux, sans jamais tenir l'image entière
-//! en mémoire ni sur le disque : le flux xz est lu bloc par bloc. Tout est en Rust pur : rien à installer, aucune bibliothèque C à lier.
+//! Le format se reconnaît à ses premiers octets, jamais à l'extension. Gzip, xz et zstd sont
+//! décompressés en flux, sans tenir l'image entière en mémoire, et en Rust pur : rien à installer,
+//! aucune bibliothèque C à lier.
 
 use std::fmt;
 use std::io::{self, BufRead, BufReader, Read};
@@ -35,7 +35,7 @@ pub enum Format {
 }
 
 impl Format {
-    /// Reconnaît le format. Un contenu plus court que toute signature est brut.
+    /// Un contenu plus court que toute signature est brut.
     #[must_use]
     pub fn detect(head: &[u8]) -> Self {
         if head.starts_with(&XZ) {
@@ -77,10 +77,8 @@ impl fmt::Display for Format {
     }
 }
 
-/// Échec d'ouverture d'une image.
 #[derive(Debug)]
 pub enum CodecError {
-    /// Format reconnu mais non pris en charge.
     Unsupported(Format),
     /// Lecture ou en-tête de compression illisible.
     Io(io::Error),
@@ -219,11 +217,10 @@ pub struct Source {
     pub input_consumed: Arc<AtomicU64>,
 }
 
-/// Ouvre une image : reconnaît son format et rend un lecteur d'octets décompressés. `input_len` est la
-/// taille du fichier d'entrée, quand on la connaît.
+/// Ouvre une image et rend un lecteur de ses octets décompressés.
 ///
 /// # Errors
-/// [`CodecError::Unsupported`] pour bzip2 et zip ; [`CodecError::Io`] si l'en-tête est illisible.
+/// [`CodecError::Unsupported`] pour bzip2 et zip.
 pub fn open(
     input: impl Read + Send + 'static,
     input_len: Option<u64>,

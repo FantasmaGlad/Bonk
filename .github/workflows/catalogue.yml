@@ -1,4 +1,4 @@
-# Santé du catalogue de systèmes (CDC §7, jalon J5) : les liens des images officielles répondent encore.
+# Santé du catalogue de systèmes : les liens des images officielles répondent encore.
 # Sans manifeste (`catalogue/manifeste.json`, pas encore écrit), le workflow le dit et ne vérifie rien.
 # En cas de lien cassé : une issue est ouverte (ou mise à jour). Aucune image n'est hébergée ni téléchargée.
 name: catalogue
@@ -33,7 +33,7 @@ jobs:
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "Non applicable : catalogue/manifeste.json n'existe pas encore (jalon J5)." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Non applicable : catalogue/manifeste.json n'existe pas encore." | tee -a "$GITHUB_STEP_SUMMARY"
           fi
       - name: Vérifier les liens
         id: liens

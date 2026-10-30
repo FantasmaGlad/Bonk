@@ -1,9 +1,7 @@
-//! Lecture de la structure d'un disque : MBR, GPT principal et GPT de secours (CDC §9.4).
+//! Lecture de la structure d'un disque, sans jamais écrire : MBR, GPT principal et GPT de secours.
 //!
-//! C'est de l'**inspection** : rien n'est jamais écrit. Le résultat décrit ce qui est lu et liste les
-//! constats (somme de contrôle fausse, secours absent ou mal placé, partitions qui se chevauchent...)
-//! avec des codes stables, pour qu'un diagnostic puisse dire précisément ce qui ne va pas. La réparation
-//! du GPT (J1) s'appuiera sur ces mêmes constats.
+//! Un contenu illisible ou incohérent n'est pas une erreur mais un constat à code stable, pour qu'un
+//! diagnostic dise précisément ce qui ne va pas ; la réparation du GPT s'appuie sur ces constats.
 
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -117,11 +115,7 @@ pub struct Layout {
     pub findings: Vec<Finding>,
 }
 
-/// Lit la structure du disque ou de l'image `dev` (lecture seule).
-///
-/// # Errors
-/// [`BlockError`] si une lecture échoue ; un contenu illisible ou incohérent n'est pas une erreur, il
-/// devient un constat.
+/// Lit la structure de `dev`. Un contenu illisible ou incohérent devient un constat, pas une erreur.
 pub fn inspect(dev: &dyn BlockDevice) -> Result<Layout, BlockError> {
     let size = dev.size();
     let mut findings = Vec::new();
@@ -192,7 +186,6 @@ pub fn inspect(dev: &dyn BlockDevice) -> Result<Layout, BlockError> {
         None
     };
 
-    // --- constats
     match (&mbr, &gpt) {
         (None, None) => note(
             Severity::Info,
@@ -231,9 +224,6 @@ pub fn inspect(dev: &dyn BlockDevice) -> Result<Layout, BlockError> {
 
 /// Lit `len` octets à `offset` en arrondissant la lecture au bloc du périphérique, et rend exactement
 /// ce qui a été demandé : le contrat du trait n'accepte que des accès alignés, pas les outils de lecture.
-///
-/// # Errors
-/// [`BlockError`] si la plage dépasse le périphérique ou si la lecture échoue.
 pub fn read_range(dev: &dyn BlockDevice, offset: u64, len: u64) -> Result<Vec<u8>, BlockError> {
     let block = u64::from(dev.block_size());
     let start = offset - offset % block;
@@ -937,7 +927,7 @@ mod tests {
         Ok(())
     }
 
-    /// Trouvé par le fuzzeur : le début de partition vient de l'image, le multiplier peut déborder.
+    /// Le début de partition vient de l'image : le multiplier par la taille de bloc peut déborder.
     #[test]
     fn un_debut_de_partition_demesure_ne_fait_pas_paniquer()
     -> Result<(), Box<dyn std::error::Error>> {

@@ -167,7 +167,7 @@ pub(crate) struct WriteArgs {
     /// Image à écrire : .img, .iso, .gz, .xz ou .zst (le format se reconnaît à son contenu)
     source: PathBuf,
 
-    /// Confirme l'écriture : sans --yes, Bonk ne fait rien (il ne pose jamais de question hors terminal)
+    /// Confirme l'écriture : sans --yes ni --force, Bonk ne fait rien (il ne pose jamais de question)
     #[arg(long)]
     yes: bool,
 

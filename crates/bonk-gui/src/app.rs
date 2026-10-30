@@ -4,7 +4,7 @@
 //! Elle ne contient aucune règle de sécurité ni aucune logique d'écriture : comme `bonk list`, elle
 //! présente le verdict de `bonk_hal::evaluate`, et l'écriture lance `bonk write` dans un processus
 //! séparé (voir `transfer`), avec tous ses garde-fous. Le disque doit être proposé, un récapitulatif est
-//! affiché et le bouton ne s'active qu'après trois secondes (CDC §3.3).
+//! affiché et le bouton ne s'active qu'après trois secondes.
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -29,7 +29,7 @@ use crate::transfer::{self, Outcome};
 /// Intervalle d'actualisation automatique : un disque branché apparaît sans geste de l'utilisateur.
 const REFRESH_EVERY: Duration = Duration::from_secs(2);
 
-/// Demande de confirmation avant d'effacer un disque interne (CDC §3.2).
+/// Demande de confirmation avant d'effacer un disque interne.
 fn internal_dialog(disk: &Disk) -> Element<'_, Message> {
     container(
         column![
@@ -73,9 +73,9 @@ pub(crate) enum Message {
     ToggleAll(bool),
     /// Sélectionne (ou désélectionne) un disque, par identifiant.
     Select(String),
-    /// Action au clavier (CDC §8).
+    /// Action au clavier.
     Nav(Nav),
-    /// Copie dans le presse-papiers la commande équivalente à la vue (CDC §9.1).
+    /// Copie dans le presse-papiers la commande équivalente à la vue.
     Copy,
     /// Saisie du chemin de l'image à écrire.
     ImageInput(String),
@@ -143,7 +143,7 @@ pub(crate) fn map_key(key: &Key, modifiers: keyboard::Modifiers, repeat: bool) -
     Some(Message::Nav(nav))
 }
 
-/// Délai de réflexion avant que « Écrire » ne s'active (CDC §3.3).
+/// Délai de réflexion avant que « Écrire » ne s'active.
 const WRITE_DELAY: Duration = Duration::from_secs(3);
 
 /// Secondes affichées dans le décompte du délai de réflexion, selon le temps écoulé depuis l'ouverture.
@@ -226,7 +226,7 @@ impl App {
         )
     }
 
-    /// Applique un message et journalise l'événement (CDC §9.2) : ce que l'utilisateur a fait, ce que
+    /// Applique un message et journalise l'événement : ce que l'utilisateur a fait, ce que
     /// la fenêtre en a tiré, et la commande équivalente à la vue qui en résulte.
     pub(crate) fn update(&mut self, message: Message) -> Task<Message> {
         let event = ui_event(&message);
@@ -877,7 +877,7 @@ impl App {
         }
     }
 
-    /// Panneau d'écriture du disque sélectionné : récapitulatif (CDC §3.3), saisie de l'image, bouton
+    /// Panneau d'écriture du disque sélectionné : récapitulatif, saisie de l'image, bouton
     /// désactivé pendant 3 secondes, progression, annulation, résultat.
     fn write_panel<'a>(&'a self, disk: &'a Disk) -> Option<Element<'a, Message>> {
         if self.write.disk_id() != Some(disk.id.as_str()) {
@@ -1044,7 +1044,7 @@ fn ui_event(message: &Message) -> Option<(&'static str, String)> {
         Message::Select(id) => ("select_disk", id.clone()),
         Message::Nav(nav) => ("key", format!("{nav:?}")),
         Message::Copy => ("click_copy", String::new()),
-        // Le chemin saisi n'est jamais journalisé (CDC §9.2) : seulement le fait qu'on saisit.
+        // Le chemin saisi n'est jamais journalisé : seulement le fait qu'on saisit.
         Message::ImageInput(text) => (
             "type_image_path",
             format!("{} caractères", text.chars().count()),
@@ -1066,7 +1066,7 @@ fn ring<'a>(content: impl Into<Element<'a, Message>>, focused: bool) -> Element<
         .into()
 }
 
-/// Récapitulatif d'un disque (CDC §3.3) : série, nature, partitions, étiquettes, montages.
+/// Récapitulatif d'un disque : série, nature, partitions, étiquettes, montages.
 fn detail(disk: &Disk) -> Element<'_, Message> {
     let mut lines = column![
         text(format!(

@@ -1,4 +1,4 @@
-//! UDisks2 : obtenir un disque sans lancer Bonk en administrateur (D-36).
+//! UDisks2 : obtenir un disque sans lancer Bonk en administrateur.
 //!
 //! Le service du système ouvre le périphérique et nous rend un descripteur ; l'autorisation passe par
 //! polkit, au moment où on en a besoin. Tout échec devient `PermissionDenied` avec une phrase qui dit
@@ -100,9 +100,6 @@ fn resolve_new(connection: &Connection, device: &Path) -> Result<OwnedObjectPath
 }
 
 /// Demande au service d'ouvrir `device`. `mode` : `r` ou `rw` ; `flags` : ceux d'`open(2)`, hors mode.
-///
-/// # Errors
-/// `PermissionDenied` avec le remède, si le service refuse ou n'est pas joignable.
 pub(super) fn open(device: &Path, mode: &str, flags: i32) -> Result<OwnedFd, BlockError> {
     let connection = connect()?;
     let object = resolve(&connection, device)?;
@@ -119,10 +116,7 @@ pub(super) fn open(device: &Path, mode: &str, flags: i32) -> Result<OwnedFd, Blo
     Ok(fd.into())
 }
 
-/// Le service répond-il ?
-///
-/// # Errors
-/// Le message dit ce qui manque.
+/// Le service répond-il ? Sinon, le message dit ce qui manque.
 pub(super) fn reachable() -> Result<(), String> {
     connect()
         .and_then(|connection| {
@@ -140,9 +134,6 @@ pub(super) fn reachable() -> Result<(), String> {
 }
 
 /// Le service sait-il formater ce type ? Il répond sans rien demander à polkit.
-///
-/// # Errors
-/// Le message nomme l'outil qui manque, ou dit que le service n'est pas joignable.
 pub(super) fn can_format(kind: &str) -> Result<(), String> {
     let connection = connect().map_err(|error| error.to_string())?;
     let reply = block_on(connection.call_method(
@@ -166,9 +157,6 @@ pub(super) fn can_format(kind: &str) -> Result<(), String> {
 
 /// Formate une partition par le service, qui appelle `mkfs.*`. `take_ownership` : le système de fichiers
 /// appartiendra à l'appelant, sans quoi une partition ext4 ne serait écrivable que par root.
-///
-/// # Errors
-/// `PermissionDenied` avec le remède, si le service refuse, échoue ou n'est pas joignable.
 pub(super) fn format(
     partition: &Path,
     kind: &str,
@@ -201,9 +189,6 @@ pub(super) fn format(
 
 /// Fait relire la table de partitions par le service : l'appel système exige des droits que l'appelant n'a
 /// pas, et le noyau ne le fait de lui-même qu'en tâche de fond, après un délai sans borne connue.
-///
-/// # Errors
-/// `PermissionDenied` avec le remède, si le service refuse ou n'est pas joignable.
 pub(super) fn rescan(disk: &Path, interactive: bool) -> Result<(), BlockError> {
     let connection = connect()?;
     let object = resolve(&connection, disk)?;
@@ -223,9 +208,6 @@ pub(super) fn rescan(disk: &Path, interactive: bool) -> Result<(), BlockError> {
 }
 
 /// Démonte une partition par le service, quand `umount` n'en a pas le droit.
-///
-/// # Errors
-/// `PermissionDenied` avec le remède, si le service refuse ou n'est pas joignable.
 pub(super) fn unmount(partition: &Path) -> Result<(), BlockError> {
     let connection = connect()?;
     let object = resolve(&connection, partition)?;

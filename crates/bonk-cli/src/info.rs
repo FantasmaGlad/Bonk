@@ -1,5 +1,5 @@
 //! Sous-commande `bonk info <disque>` : le détail d'un disque (série, nature, partitions, étiquettes,
-//! montages), équivalent de ce que la fenêtre montre au clic sur un disque (CDC §3.3 et §9.1).
+//! montages), comme la fenêtre le montre au clic sur un disque.
 
 use std::io::{self, Write};
 
@@ -47,8 +47,8 @@ struct Report<'a> {
     disk: Entry<'a>,
 }
 
-/// Le disque désigné : l'identifiant stable d'abord, le chemin en repli (pratique en lecture seule ;
-/// les commandes d'écriture n'accepteront que l'identifiant, CDC §3.3).
+/// Le disque désigné : l'identifiant stable d'abord, le chemin en repli, admis en lecture seule ; les
+/// commandes d'écriture n'acceptent que l'identifiant.
 pub(crate) fn find<'a>(disks: &'a [Disk], target: &str) -> Option<&'a Disk> {
     disks
         .iter()
@@ -56,7 +56,6 @@ pub(crate) fn find<'a>(disks: &'a [Disk], target: &str) -> Option<&'a Disk> {
         .or_else(|| disks.iter().find(|disk| disk.path == target))
 }
 
-/// Écrit le détail du disque sur `out`. Renvoie `false` si le disque n'existe pas (rien n'est écrit).
 pub(crate) fn schema() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(Report)).unwrap_or_default()
 }

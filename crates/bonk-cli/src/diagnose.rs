@@ -1,4 +1,4 @@
-//! Sous-commande `bonk diagnose` : un rapport de support unique, en lecture seule (CDC §9.3).
+//! Sous-commande `bonk diagnose` : un rapport de support unique, en lecture seule.
 //!
 //! Il est fait pour être lu par des outils autant que par des personnes : JSON versionné, champs
 //! explicites, motifs identifiés par des codes stables. Numéros de série et nom d'utilisateur sont

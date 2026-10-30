@@ -25,7 +25,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 # Façade de journal : nos crates, Iced, wgpu et winit émettent par elle ; `kv` pour les champs structurés, `std` pour installer le puits.
 log = { version = "0.4", features = ["kv", "std"] }
-# Rendu wgpu avec repli logiciel tiny-skia obligatoire (CDC §8). `linux-theme-detection` est écarté :
+# Rendu wgpu avec repli logiciel tiny-skia obligatoire ; `linux-theme-detection` est écarté :
 # le thème de Bonk est fixe (charte monochrome), la détection ne ferait qu'ajouter des dépendances.
 # `smol` plutôt que `thread-pool` : seul un exécuteur (tokio ou smol) fournit `iced::time::every`, utilisé pour
 # l'actualisation automatique de la liste des disques ; smol est le plus léger des deux.
@@ -35,11 +35,11 @@ iced_test = "0.14"
 schemars = "1"
 # Complétions de shell générées depuis la définition clap (`bonk completions`).
 clap_complete = "4"
-# Empreinte SHA-256 de l'image écrite et relue (vérification, CDC §4).
+# Empreinte SHA-256 de l'image écrite et relue.
 sha2 = "0.11"
-# Décompression à la volée en Rust pur (CDC §1 : rien à installer, pas de bibliothèque C à lier).
+# Décompression à la volée en Rust pur : rien à installer, pas de bibliothèque C à lier.
 flate2 = "1"
-# Service du système pour ouvrir un disque sans droits d'administrateur (D-36) .
+# Service du système pour ouvrir un disque sans droits d'administrateur.
 zbus = "6"
 # Constantes d'ouverture des périphériques (O_EXCL : refuse un disque déjà utilisé).
 libc = "0.2"
