@@ -16,5 +16,9 @@ bonk-catalog.workspace = true
 bonk-cli.workspace = true
 bonk-gui.workspace = true
 
+[dev-dependencies]
+bonk-core = { workspace = true, features = ["testing"] }
+serde_json.workspace = true
+
 [lints]
 workspace = true

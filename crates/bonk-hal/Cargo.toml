@@ -10,6 +10,15 @@ publish.workspace = true
 
 [dependencies]
 bonk-core.workspace = true
+serde.workspace = true
+schemars.workspace = true
+log.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
 
 [lints]
 workspace = true

@@ -1,0 +1,112 @@
+{
+  "description": "Disques sur bus USB, donc éligibles par leur bus, que seuls les pièges de l'énumération doivent écarter : agrégats, volumes empilés, échange, système démarré depuis la clé, montages détournés. Jeu écrit à la main, pas une capture.",
+  "disks": [
+    {
+      "id": "usb-lvm",
+      "path": "/dev/sdb", "model": "Cle LVM", "size_bytes": 16008609792, "bus": "usb", "kind": "physical",
+      "partitions": [{ "path": "/dev/sdb1", "fs_type": "LVM2_member", "size_bytes": 16007561216 }]
+    },
+    {
+      "id": "usb-raid",
+      "path": "/dev/sdc", "model": "Cle RAID", "size_bytes": 16008609792, "bus": "usb", "kind": "physical",
+      "partitions": [{ "path": "/dev/sdc1", "fs_type": "linux_raid_member", "size_bytes": 16007561216 }]
+    },
+    {
+      "id": "usb-luks-ouvert",
+      "path": "/dev/sdd", "model": "Cle LUKS ouverte", "size_bytes": 16008609792, "bus": "usb", "kind": "physical",
+      "partitions": [{ "path": "/dev/sdd1", "fs_type": "crypto_LUKS", "size_bytes": 16007561216, "holders": ["dm-0"] }]
+    },
+    {
+      "id": "usb-luks-ferme",
+      "path": "/dev/sde", "model": "Cle LUKS fermee", "size_bytes": 16008609792, "bus": "usb", "kind": "physical",
+      "partitions": [{ "path": "/dev/sde1", "fs_type": "crypto_LUKS", "size_bytes": 16007561216 }]
+    },
+    {
+      "id": "usb-zfs-nu",
+      "path": "/dev/sdf", "model": "Cle ZFS", "size_bytes": 16008609792, "bus": "usb", "kind": "physical",
+      "fs_type": "zfs_member"
+    },
+    {
+      "id": "usb-md-actif",
+      "path": "/dev/sdg", "model": "Cle md", "size_bytes": 16008609792, "bus": "usb", "kind": "physical",
+      "holders": ["md127"]
+    },
+    {
+      "id": "usb-echange",
+      "path": "/dev/sdh", "model": "Cle swap", "size_bytes": 16008609792, "bus": "usb", "kind": "physical",
+      "partitions": [
+        { "path": "/dev/sdh1", "fs_type": "swap", "size_bytes": 2147483648 },
+        { "path": "/dev/sdh2", "fs_type": "ext4", "size_bytes": 13000000000 }
+      ]
+    },
+    {
+      "id": "usb-echange-disque-entier",
+      "path": "/dev/sdn", "model": "Cle swap nue", "size_bytes": 8053063680, "bus": "usb", "kind": "physical",
+      "fs_type": "swap"
+    },
+    {
+      "id": "usb-reprise-veille",
+      "path": "/dev/sdi", "model": "Cle hibernation", "size_bytes": 16008609792, "bus": "usb", "kind": "physical",
+      "partitions": [{ "path": "/dev/sdi1", "fs_type": "swsuspend", "size_bytes": 16007561216 }]
+    },
+    {
+      "id": "usb-systeme-live",
+      "path": "/dev/sdj", "model": "Cle live", "size_bytes": 32015679488, "bus": "usb", "kind": "physical",
+      "partitions": [
+        { "path": "/dev/sdj1", "fs_type": "vfat", "size_bytes": 536870912, "mount_points": ["/boot/efi"], "is_active_esp": true },
+        { "path": "/dev/sdj2", "fs_type": "ext4", "size_bytes": 31000000000, "mount_points": ["/"], "is_system_volume": true }
+      ]
+    },
+    {
+      "id": "usb-montage-detourne",
+      "path": "/dev/sdk", "model": "Cle chemin piege", "size_bytes": 16008609792, "bus": "usb", "kind": "physical",
+      "partitions": [{ "path": "/dev/sdk1", "fs_type": "vfat", "size_bytes": 16007561216, "mount_points": ["/media/../boot"] }]
+    },
+    {
+      "id": "usb-prefixe-voisin",
+      "path": "/dev/sdl", "model": "Cle prefixe", "size_bytes": 16008609792, "bus": "usb", "kind": "physical",
+      "partitions": [{ "path": "/dev/sdl1", "fs_type": "vfat", "size_bytes": 16007561216, "mount_points": ["/mediafoo/cle"] }]
+    },
+    {
+      "id": "usb-une-partition-saine-une-systeme",
+      "path": "/dev/sdm", "model": "Cle mixte", "size_bytes": 32015679488, "bus": "usb", "kind": "physical",
+      "partitions": [
+        { "path": "/dev/sdm1", "fs_type": "vfat", "size_bytes": 1073741824, "mount_points": ["/run/media/alice/A"] },
+        { "path": "/dev/sdm2", "fs_type": "ext4", "size_bytes": 30000000000, "mount_points": ["/home"] }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "defaut",
+      "expected": {
+        "usb-lvm": { "verdict": "excluded", "reasons": [{ "reason": "aggregate_member", "device": "/dev/sdb1", "signature": "LVM2_member" }] },
+        "usb-raid": { "verdict": "excluded", "reasons": [{ "reason": "aggregate_member", "device": "/dev/sdc1", "signature": "linux_raid_member" }] },
+        "usb-luks-ouvert": { "verdict": "excluded", "reasons": [{ "reason": "stacked", "device": "/dev/sdd1", "holders": ["dm-0"] }] },
+        "usb-luks-ferme": { "verdict": "offered", "warning": "none" },
+        "usb-zfs-nu": { "verdict": "excluded", "reasons": [{ "reason": "aggregate_member", "device": "/dev/sdf", "signature": "zfs_member" }] },
+        "usb-md-actif": { "verdict": "excluded", "reasons": [{ "reason": "stacked", "device": "/dev/sdg", "holders": ["md127"] }] },
+        "usb-echange": { "verdict": "excluded", "reasons": [{ "reason": "swap", "partition": "/dev/sdh1" }] },
+        "usb-echange-disque-entier": { "verdict": "excluded", "reasons": [{ "reason": "swap", "partition": "/dev/sdn" }] },
+        "usb-reprise-veille": { "verdict": "excluded", "reasons": [{ "reason": "swap", "partition": "/dev/sdi1" }] },
+        "usb-systeme-live": {
+          "verdict": "excluded",
+          "reasons": [
+            { "reason": "active_esp", "partition": "/dev/sdj1" },
+            { "reason": "mounted_outside_user_paths", "partition": "/dev/sdj1", "mount": "/boot/efi" },
+            { "reason": "system_volume", "partition": "/dev/sdj2" },
+            { "reason": "mounted_outside_user_paths", "partition": "/dev/sdj2", "mount": "/" }
+          ]
+        },
+        "usb-montage-detourne": { "verdict": "excluded", "reasons": [{ "reason": "mounted_outside_user_paths", "partition": "/dev/sdk1", "mount": "/media/../boot" }] },
+        "usb-prefixe-voisin": { "verdict": "excluded", "reasons": [{ "reason": "mounted_outside_user_paths", "partition": "/dev/sdl1", "mount": "/mediafoo/cle" }] },
+        "usb-une-partition-saine-une-systeme": { "verdict": "excluded", "reasons": [{ "reason": "mounted_outside_user_paths", "partition": "/dev/sdm2", "mount": "/home" }] }
+      }
+    },
+    {
+      "name": "toutes-options-ouvertes",
+      "options": { "show_internal": true, "allow_virtual": true },
+      "same_as": "defaut"
+    }
+  ]
+}

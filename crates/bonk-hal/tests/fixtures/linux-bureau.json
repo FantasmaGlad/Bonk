@@ -1,0 +1,159 @@
+{
+  "description": "Poste Linux de bureau : NVMe système, deux disques SATA, clés USB, carte SD. Jeu écrit à la main d'après la structure de lsblk, pas une capture.",
+  "disks": [
+    {
+      "id": "nvme-systeme",
+      "path": "/dev/nvme0n1",
+      "model": "Samsung SSD 980",
+      "serial": "S6B0NX0T",
+      "size_bytes": 500107862016,
+      "bus": "nvme",
+      "kind": "physical",
+      "partitions": [
+        { "path": "/dev/nvme0n1p1", "fs_type": "vfat", "size_bytes": 536870912, "mount_points": ["/boot/efi"], "is_active_esp": true },
+        { "path": "/dev/nvme0n1p2", "fs_type": "ext4", "size_bytes": 480000000000, "mount_points": ["/"], "is_system_volume": true },
+        { "path": "/dev/nvme0n1p3", "fs_type": "swap", "size_bytes": 8589934592 }
+      ]
+    },
+    {
+      "id": "sata-donnees",
+      "path": "/dev/sda",
+      "model": "WDC WD10EZEX",
+      "serial": "WD-WCC6Y1",
+      "size_bytes": 1000204886016,
+      "bus": "sata",
+      "kind": "physical",
+      "partitions": [
+        { "path": "/dev/sda1", "fs_type": "ext4", "size_bytes": 1000204886016, "mount_points": ["/home/alice/donnees"] }
+      ]
+    },
+    {
+      "id": "sata-libre",
+      "path": "/dev/sde",
+      "model": "ST2000DM008",
+      "serial": "ZFL7K2",
+      "size_bytes": 2000398934016,
+      "bus": "sata",
+      "kind": "physical",
+      "partitions": [
+        { "path": "/dev/sde1", "fs_type": "ntfs", "size_bytes": 2000398934016 }
+      ]
+    },
+    {
+      "id": "usb-cle-montee",
+      "path": "/dev/sdb",
+      "model": "Cruzer Blade",
+      "serial": "4C530001",
+      "size_bytes": 16008609792,
+      "bus": "usb",
+      "kind": "physical",
+      "removable_flag": true,
+      "partitions": [
+        { "path": "/dev/sdb1", "label": "CLE", "fs_type": "vfat", "size_bytes": 16007561216, "mount_points": ["/run/media/alice/CLE"] }
+      ]
+    },
+    {
+      "id": "usb-cle-libre",
+      "path": "/dev/sdc",
+      "model": "DataTraveler 3.0",
+      "serial": "0019E0",
+      "size_bytes": 31457280000,
+      "bus": "usb",
+      "kind": "physical",
+      "removable_flag": true,
+      "partitions": [
+        { "path": "/dev/sdc1", "fs_type": "exfat", "size_bytes": 31456231424 }
+      ]
+    },
+    {
+      "id": "sd-carte",
+      "path": "/dev/mmcblk0",
+      "model": "SD SU32G",
+      "size_bytes": 31914983424,
+      "bus": "sd",
+      "kind": "physical",
+      "removable_flag": true,
+      "partitions": [
+        { "path": "/dev/mmcblk0p1", "fs_type": "vfat", "size_bytes": 31913934848, "mount_points": ["/media/alice/SDCARD"] }
+      ]
+    },
+    {
+      "id": "usb-monte-a-la-main",
+      "path": "/dev/sdd",
+      "model": "Ultra Fit",
+      "serial": "4C531001",
+      "size_bytes": 32015679488,
+      "bus": "usb",
+      "kind": "physical",
+      "removable_flag": true,
+      "partitions": [
+        { "path": "/dev/sdd1", "fs_type": "ext4", "size_bytes": 32014630912, "mount_points": ["/mnt/cle"] }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "defaut",
+      "expected": {
+        "nvme-systeme": {
+          "verdict": "excluded",
+          "reasons": [
+            { "reason": "active_esp", "partition": "/dev/nvme0n1p1" },
+            { "reason": "mounted_outside_user_paths", "partition": "/dev/nvme0n1p1", "mount": "/boot/efi" },
+            { "reason": "system_volume", "partition": "/dev/nvme0n1p2" },
+            { "reason": "mounted_outside_user_paths", "partition": "/dev/nvme0n1p2", "mount": "/" },
+            { "reason": "swap", "partition": "/dev/nvme0n1p3" }
+          ]
+        },
+        "sata-donnees": {
+          "verdict": "excluded",
+          "reasons": [
+            { "reason": "mounted_outside_user_paths", "partition": "/dev/sda1", "mount": "/home/alice/donnees" }
+          ]
+        },
+        "sata-libre": { "verdict": "hidden", "reason": "internal_bus" },
+        "usb-cle-montee": { "verdict": "offered", "warning": "none" },
+        "usb-cle-libre": { "verdict": "offered", "warning": "none" },
+        "sd-carte": { "verdict": "offered", "warning": "none" },
+        "usb-monte-a-la-main": {
+          "verdict": "excluded",
+          "reasons": [
+            { "reason": "mounted_outside_user_paths", "partition": "/dev/sdd1", "mount": "/mnt/cle" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "disques-internes-affiches",
+      "options": { "show_internal": true },
+      "expected": {
+        "nvme-systeme": {
+          "verdict": "excluded",
+          "reasons": [
+            { "reason": "active_esp", "partition": "/dev/nvme0n1p1" },
+            { "reason": "mounted_outside_user_paths", "partition": "/dev/nvme0n1p1", "mount": "/boot/efi" },
+            { "reason": "system_volume", "partition": "/dev/nvme0n1p2" },
+            { "reason": "mounted_outside_user_paths", "partition": "/dev/nvme0n1p2", "mount": "/" },
+            { "reason": "swap", "partition": "/dev/nvme0n1p3" }
+          ]
+        },
+        "sata-donnees": {
+          "verdict": "excluded",
+          "reasons": [
+            { "reason": "mounted_outside_user_paths", "partition": "/dev/sda1", "mount": "/home/alice/donnees" }
+          ]
+        },
+        "sata-libre": { "verdict": "offered", "warning": "internal_disk" },
+        "usb-cle-montee": { "verdict": "offered", "warning": "none" },
+        "usb-cle-libre": { "verdict": "offered", "warning": "none" },
+        "sd-carte": { "verdict": "offered", "warning": "none" },
+        "usb-monte-a-la-main": {
+          "verdict": "excluded",
+          "reasons": [
+            { "reason": "mounted_outside_user_paths", "partition": "/dev/sdd1", "mount": "/mnt/cle" }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "description": "Mac Intel ou Apple Silicon utilisé comme hôte : SSD interne, clé USB, SSD Thunderbolt externe. Jeu écrit à la main, pas une capture.",
+  "disks": [
+    {
+      "id": "apple-ssd-interne",
+      "path": "/dev/disk0",
+      "model": "APPLE SSD AP0512Q",
+      "serial": "0ba0185a",
+      "size_bytes": 500277790720,
+      "bus": "nvme",
+      "kind": "physical",
+      "partitions": [
+        { "path": "/dev/disk0s1", "label": "EFI", "fs_type": "vfat", "size_bytes": 314572800 },
+        { "path": "/dev/disk0s2", "label": "Macintosh HD", "fs_type": "apfs", "size_bytes": 499000000000, "mount_points": ["/", "/System/Volumes/Data"], "is_system_volume": true }
+      ]
+    },
+    {
+      "id": "usb-cle-exfat",
+      "path": "/dev/disk4",
+      "model": "SanDisk Ultra",
+      "serial": "4C530001",
+      "size_bytes": 31457280000,
+      "bus": "usb",
+      "kind": "physical",
+      "removable_flag": true,
+      "partitions": [
+        { "path": "/dev/disk4s1", "label": "CLE", "fs_type": "exfat", "size_bytes": 31456231424, "mount_points": ["/Volumes/CLE"] }
+      ]
+    },
+    {
+      "id": "thunderbolt-ssd-externe",
+      "path": "/dev/disk5",
+      "model": "Samsung Portable SSD X5",
+      "serial": "S4U1NS0K",
+      "size_bytes": 500107862016,
+      "bus": "thunderbolt",
+      "kind": "physical",
+      "partitions": [
+        { "path": "/dev/disk5s1", "label": "Externe", "fs_type": "apfs", "size_bytes": 500000000000, "mount_points": ["/Volumes/Externe"] }
+      ]
+    },
+    {
+      "id": "usb-volumes-sans-nom",
+      "path": "/dev/disk6",
+      "model": "Generic Flash Disk",
+      "size_bytes": 8053063680,
+      "bus": "usb",
+      "kind": "physical",
+      "partitions": [
+        { "path": "/dev/disk6s1", "fs_type": "msdos", "size_bytes": 8052015104, "mount_points": ["/Volumes"] }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "defaut",
+      "expected": {
+        "apple-ssd-interne": {
+          "verdict": "excluded",
+          "reasons": [
+            { "reason": "system_volume", "partition": "/dev/disk0s2" },
+            { "reason": "mounted_outside_user_paths", "partition": "/dev/disk0s2", "mount": "/" },
+            { "reason": "mounted_outside_user_paths", "partition": "/dev/disk0s2", "mount": "/System/Volumes/Data" }
+          ]
+        },
+        "usb-cle-exfat": { "verdict": "offered", "warning": "none" },
+        "thunderbolt-ssd-externe": { "verdict": "offered", "warning": "none" },
+        "usb-volumes-sans-nom": {
+          "verdict": "excluded",
+          "reasons": [
+            { "reason": "mounted_outside_user_paths", "partition": "/dev/disk6s1", "mount": "/Volumes" }
+          ]
+        }
+      }
+    }
+  ]
+}

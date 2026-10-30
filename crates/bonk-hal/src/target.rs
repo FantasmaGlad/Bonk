@@ -1,0 +1,319 @@
+//! Choix et préparation d'une cible d'écriture (CDC §3.3 et §3.4).
+//!
+//! Trois garde-fous, dans cet ordre : le filtre de sécurité décide que la cible est écrivable ;
+//! les partitions montées sont démontées ; **juste avant** l'ouverture, on ré-énumère et on vérifie que
+//! c'est bien le même disque (identifiant, numéro de série, taille), pour qu'un disque débranché puis
+//! remplacé entre-temps ne soit jamais écrit à la place de l'autre.
+
+use std::fmt;
+use std::io;
+use std::process::Command;
+
+use crate::disk::Disk;
+use crate::safety::{Eligibility, FilterOptions, evaluate};
+
+/// Ce qui identifie un disque d'un branchement à l'autre.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TargetIdentity {
+    pub id: String,
+    pub serial: Option<String>,
+    pub size_bytes: u64,
+}
+
+impl From<&Disk> for TargetIdentity {
+    fn from(disk: &Disk) -> Self {
+        Self {
+            id: disk.id.clone(),
+            serial: disk.serial.clone(),
+            size_bytes: disk.size_bytes,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum OpenTargetError {
+    /// Aucun disque ne porte cet identifiant.
+    NotFound(String),
+    /// Le filtre de sécurité refuse ou masque la cible.
+    Refused(Eligibility),
+    /// Ce n'est plus le même disque que celui qui a été choisi.
+    IdentityChanged {
+        expected: TargetIdentity,
+        actual: TargetIdentity,
+    },
+    Unmount(String),
+}
+
+impl fmt::Display for OpenTargetError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NotFound(id) => write!(f, "disque introuvable : « {id} »"),
+            Self::Refused(verdict) => write!(f, "{}", crate::describe::state_label(verdict)),
+            Self::IdentityChanged { expected, actual } => write!(
+                f,
+                "le disque a changé : attendu {} (série {:?}, {} octets), trouvé {} (série {:?}, {} octets)",
+                expected.id,
+                expected.serial,
+                expected.size_bytes,
+                actual.id,
+                actual.serial,
+                actual.size_bytes
+            ),
+            Self::Unmount(message) => write!(f, "{message}"),
+        }
+    }
+}
+
+impl std::error::Error for OpenTargetError {}
+
+/// Retrouve la cible dans une énumération fraîche, la fait juger par le filtre et vérifie son
+/// identité. Ne touche à rien : fonction pure, appelée au choix puis **de nouveau** juste avant
+/// l'ouverture.
+///
+/// Seul l'identifiant stable désigne une cible ici : jamais `/dev/sdX`, qui change d'un branchement
+/// à l'autre (CDC §3.3).
+///
+/// # Errors
+/// [`OpenTargetError`] ; la cible n'est autorisée que si le verdict est « proposé ».
+pub fn reverify<'a>(
+    expected: &TargetIdentity,
+    disks: &'a [Disk],
+    options: FilterOptions,
+) -> Result<&'a Disk, OpenTargetError> {
+    let disk = disks
+        .iter()
+        .find(|disk| disk.id == expected.id)
+        .ok_or_else(|| OpenTargetError::NotFound(expected.id.clone()))?;
+    let verdict = evaluate(disk, options);
+    if !verdict.is_writable() {
+        return Err(OpenTargetError::Refused(verdict));
+    }
+    let actual = TargetIdentity::from(disk);
+    if actual != *expected {
+        return Err(OpenTargetError::IdentityChanged {
+            expected: expected.clone(),
+            actual,
+        });
+    }
+    Ok(disk)
+}
+
+/// Points de montage de tout ce que porte le disque, du plus profond au moins profond.
+#[must_use]
+pub fn mount_points(disk: &Disk) -> Vec<String> {
+    let mut mounts: Vec<String> = disk
+        .partitions
+        .iter()
+        .flat_map(|partition| partition.mount_points.iter().cloned())
+        .collect();
+    mounts.sort_by_key(|mount| std::cmp::Reverse(mount.len()));
+    mounts.dedup();
+    mounts
+}
+
+/// Démonte tout ce que porte le disque avec `umount` (outil fourni par le système : le démontage est
+/// l'affaire de l'OS, pas de Bonk). Rend les points démontés.
+///
+/// # Errors
+/// [`OpenTargetError::Unmount`] au premier démontage qui échoue ; les suivants ne sont pas tentés.
+pub fn unmount_all(disk: &Disk) -> Result<Vec<String>, OpenTargetError> {
+    unmount_with(&mount_points(disk), &|mount| {
+        Command::new("umount").arg("--").arg(mount).output()
+    })
+}
+
+fn unmount_with(
+    mounts: &[String],
+    run: &dyn Fn(&str) -> io::Result<std::process::Output>,
+) -> Result<Vec<String>, OpenTargetError> {
+    let mut done = Vec::new();
+    for mount in mounts {
+        log::debug!(target: "bonk_hal::target", mount = mount.as_str(); "unmounting");
+        match run(mount) {
+            Ok(output) if output.status.success() => done.push(mount.clone()),
+            Ok(output) => {
+                return Err(OpenTargetError::Unmount(format!(
+                    "démontage de {mount} impossible : {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                )));
+            }
+            Err(err) => {
+                return Err(OpenTargetError::Unmount(format!(
+                    "démontage de {mount} impossible : {err}"
+                )));
+            }
+        }
+    }
+    Ok(done)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::disk::{Bus, DiskKind, Partition};
+
+    fn part(path: &str, mounts: &[&str], system: bool) -> Partition {
+        Partition {
+            path: path.to_owned(),
+            label: None,
+            fs_type: Some("vfat".to_owned()),
+            size_bytes: 1 << 30,
+            mount_points: mounts.iter().map(|m| (*m).to_owned()).collect(),
+            holders: vec![],
+            is_system_volume: system,
+            is_active_esp: false,
+        }
+    }
+
+    fn disk(id: &str, serial: &str, size: u64, bus: Bus, partitions: Vec<Partition>) -> Disk {
+        Disk {
+            id: id.to_owned(),
+            path: "/dev/sdb".to_owned(),
+            model: "Cle".to_owned(),
+            serial: Some(serial.to_owned()),
+            size_bytes: size,
+            bus,
+            kind: DiskKind::Physical,
+            removable_flag: true,
+            fs_type: None,
+            holders: vec![],
+            partitions,
+        }
+    }
+
+    fn usb() -> Disk {
+        disk(
+            "usb-a",
+            "S1",
+            1 << 33,
+            Bus::Usb,
+            vec![part("/dev/sdb1", &["/run/media/u/A"], false)],
+        )
+    }
+
+    #[test]
+    fn une_cible_proposee_et_inchangee_passe() -> Result<(), OpenTargetError> {
+        let disks = vec![usb()];
+        let found = reverify(
+            &TargetIdentity::from(&disks[0]),
+            &disks,
+            FilterOptions::default(),
+        )?;
+        assert_eq!(found.id, "usb-a");
+        Ok(())
+    }
+
+    #[test]
+    fn un_disque_debranche_est_introuvable() {
+        let expected = TargetIdentity::from(&usb());
+        let error = reverify(&expected, &[], FilterOptions::default()).err();
+        assert!(matches!(error, Some(OpenTargetError::NotFound(id)) if id == "usb-a"));
+    }
+
+    #[test]
+    fn un_disque_remplace_par_un_autre_au_meme_identifiant_est_refuse() {
+        let expected = TargetIdentity::from(&usb());
+        for replaced in [
+            disk("usb-a", "S2", 1 << 33, Bus::Usb, vec![]),
+            disk("usb-a", "S1", 1 << 34, Bus::Usb, vec![]),
+        ] {
+            let disks = vec![replaced];
+            let error = reverify(&expected, &disks, FilterOptions::default()).err();
+            assert!(
+                matches!(error, Some(OpenTargetError::IdentityChanged { .. })),
+                "{error:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn un_disque_devenu_interdit_est_refuse_meme_si_l_identite_est_la_meme() {
+        let expected = TargetIdentity::from(&usb());
+        // La clé est maintenant montée comme système (ou hors des chemins utilisateur).
+        let mut now = usb();
+        now.partitions = vec![part("/dev/sdb1", &["/mnt/cle"], false)];
+        let disks = vec![now];
+        assert!(matches!(
+            reverify(&expected, &disks, FilterOptions::default()),
+            Err(OpenTargetError::Refused(Eligibility::Excluded { .. }))
+        ));
+        // Un disque interne n'est écrivable que si l'option l'autorise.
+        let internal = disk("sata-x", "S9", 1 << 33, Bus::Sata, vec![]);
+        let expected = TargetIdentity::from(&internal);
+        let disks = vec![internal];
+        assert!(matches!(
+            reverify(&expected, &disks, FilterOptions::default()),
+            Err(OpenTargetError::Refused(Eligibility::Hidden { .. }))
+        ));
+        let with_internal = FilterOptions {
+            show_internal: true,
+            ..FilterOptions::default()
+        };
+        assert!(reverify(&expected, &disks, with_internal).is_ok());
+    }
+
+    #[test]
+    fn points_de_montage_du_plus_profond_au_moins_profond() {
+        let mut d = usb();
+        d.partitions = vec![
+            part("/dev/sdb1", &["/run/media/u/A"], false),
+            part("/dev/sdb2", &["/run/media/u/A/sous", "/media/x"], false),
+        ];
+        assert_eq!(
+            mount_points(&d),
+            ["/run/media/u/A/sous", "/run/media/u/A", "/media/x"]
+        );
+    }
+
+    #[cfg(unix)]
+    fn output(code: i32, stderr: &str) -> io::Result<std::process::Output> {
+        use std::os::unix::process::ExitStatusExt;
+        Ok(std::process::Output {
+            status: std::process::ExitStatus::from_raw(code << 8),
+            stdout: Vec::new(),
+            stderr: stderr.as_bytes().to_vec(),
+        })
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn demontage_dans_l_ordre_et_arret_au_premier_echec() {
+        use std::cell::RefCell;
+        let called = RefCell::new(Vec::new());
+        let ok = |mount: &str| {
+            called.borrow_mut().push(mount.to_owned());
+            output(0, "")
+        };
+        let mounts = vec!["/a/b".to_owned(), "/a".to_owned()];
+        assert_eq!(unmount_with(&mounts, &ok).ok(), Some(mounts.clone()));
+        assert_eq!(*called.borrow(), ["/a/b", "/a"]);
+
+        let called = RefCell::new(Vec::new());
+        let fail_on_first = |mount: &str| {
+            called.borrow_mut().push(mount.to_owned());
+            output(32, "umount: /a/b: target is busy.\n")
+        };
+        let error = unmount_with(&mounts, &fail_on_first).err();
+        assert!(
+            matches!(error, Some(OpenTargetError::Unmount(ref m)) if m.contains("busy") && m.contains("/a/b"))
+        );
+        // Le second point n'est pas tenté après l'échec du premier.
+        assert_eq!(*called.borrow(), ["/a/b"]);
+        // Un disque sans montage n'a rien à démonter.
+        assert_eq!(unmount_with(&[], &ok).ok(), Some(vec![]));
+    }
+
+    #[test]
+    fn un_outil_de_demontage_introuvable_est_une_erreur_claire() {
+        let missing = |_: &str| {
+            Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "umount introuvable",
+            ))
+        };
+        let error = unmount_with(&["/a".to_owned()], &missing).err();
+        assert!(
+            matches!(error, Some(OpenTargetError::Unmount(ref m)) if m.contains("introuvable"))
+        );
+    }
+}

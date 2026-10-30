@@ -8,5 +8,18 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[features]
+# Fabrique d'images GPT pour les tests des autres crates.
+testing = []
+
+[dependencies]
+serde.workspace = true
+schemars.workspace = true
+sha2.workspace = true
+log.workspace = true
+flate2.workspace = true
+lzma-rust2.workspace = true
+ruzstd.workspace = true
+
 [lints]
 workspace = true

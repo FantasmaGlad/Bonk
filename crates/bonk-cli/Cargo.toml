@@ -14,6 +14,11 @@ bonk-hal.workspace = true
 bonk-customizer.workspace = true
 bonk-catalog.workspace = true
 clap.workspace = true
+serde.workspace = true
+schemars.workspace = true
+clap_complete.workspace = true
+serde_json.workspace = true
+log.workspace = true
 
 [lints]
 workspace = true
