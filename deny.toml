@@ -5,11 +5,15 @@
 # Une vulnérabilité connue fait toujours échouer le contrôle ; les paquets non maintenus
 # et les versions retirées du registre sont signalés par défaut.
 # Exceptions : deux paquets déclarés non maintenus par leur auteur (aucune faille connue), tirés par
-# Iced 0.14 via wgpu et cosmic-text, sans version corrigée à adopter. À retirer dès qu'Iced les remplace.
+# Iced 0.14 via wgpu et cosmic-text, sans version corrigée à adopter. Chaque exception porte sa raison et
+# son critère de retrait ; à relire à chaque montée de version d'Iced (D-34).
 ignore = [
-    { id = "RUSTSEC-2024-0436", reason = "paste non maintenu ; dépendance de metal, via wgpu-hal (Iced 0.14)" },
-    { id = "RUSTSEC-2026-0192", reason = "ttf-parser non maintenu ; dépendance de la pile de texte d'Iced 0.14" },
+    { id = "RUSTSEC-2024-0436", reason = "paste non maintenu ; dépendance de metal, via wgpu-hal (Iced 0.14). Retrait : une version d'Iced ou de wgpu qui ne tire plus paste" },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser non maintenu ; dépendance de la pile de texte d'Iced 0.14. Retrait : une version d'Iced ou de cosmic-text qui ne tire plus ttf-parser" },
 ]
+# Une exception que plus aucune dépendance ne déclenche fait échouer le contrôle (défaut : avertissement) :
+# elle doit être retirée le jour où son critère est rempli, pas rester en silence.
+unused-ignored-advisory = "deny"
 
 [licenses]
 # Licences permissives, plus MPL-2.0 (copyleft faible : le partage n'est exigé que pour ses propres fichiers
