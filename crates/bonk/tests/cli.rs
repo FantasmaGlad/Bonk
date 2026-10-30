@@ -14,7 +14,7 @@ fn bonk() -> Command {
 #[test]
 fn version_affiche_le_numero_du_paquet() -> Resultat {
     let sortie = bonk().arg("--version").output()?;
-    assert!(sortie.status.success());
+    common::assert_code(&sortie, 0);
     let texte = String::from_utf8(sortie.stdout)?;
     assert_eq!(texte.trim(), format!("bonk {}", env!("CARGO_PKG_VERSION")));
     Ok(())
@@ -23,7 +23,7 @@ fn version_affiche_le_numero_du_paquet() -> Resultat {
 #[test]
 fn help_reussit_et_commence_par_la_description_de_l_outil() -> Resultat {
     let sortie = bonk().arg("--help").output()?;
-    assert!(sortie.status.success());
+    common::assert_code(&sortie, 0);
     let texte = String::from_utf8(sortie.stdout)?;
     assert_eq!(
         texte.lines().next(),
@@ -43,7 +43,7 @@ fn sans_argument_et_sans_affichage_renvoie_vers_la_ligne_de_commande() -> Result
         .env_remove("WAYLAND_DISPLAY")
         .env_remove("WAYLAND_SOCKET")
         .output()?;
-    assert_eq!(sortie.status.code(), Some(1));
+    common::assert_code(&sortie, 1);
     let erreur = String::from_utf8(sortie.stderr)?;
     assert!(
         erreur.starts_with("bonk : erreur : impossible d'ouvrir l'interface graphique"),
@@ -57,14 +57,14 @@ fn sans_argument_et_sans_affichage_renvoie_vers_la_ligne_de_commande() -> Result
 #[test]
 fn option_inconnue_est_une_erreur_d_usage() -> Resultat {
     let sortie = bonk().arg("--inconnue").output()?;
-    assert_eq!(sortie.status.code(), Some(2));
+    common::assert_code(&sortie, 2);
     Ok(())
 }
 
 #[test]
 fn list_aide_decrit_les_options() -> Resultat {
     let sortie = bonk().args(["list", "--help"]).output()?;
-    assert!(sortie.status.success());
+    common::assert_code(&sortie, 0);
     let texte = String::from_utf8(sortie.stdout)?;
     for option in ["--json", "--all", "--show-internal", "--allow-virtual"] {
         assert!(
@@ -104,7 +104,7 @@ fn list_json_reussit_ou_echoue_proprement() -> Resultat {
 #[test]
 fn list_hors_linux_echoue_avec_un_message_clair() -> Resultat {
     let sortie = bonk().arg("list").output()?;
-    assert_eq!(sortie.status.code(), Some(1));
+    common::assert_code(&sortie, 1);
     let erreur = String::from_utf8(sortie.stderr)?;
     assert!(erreur.contains("pas encore disponible"), "{erreur}");
     Ok(())
@@ -135,7 +135,7 @@ fn le_journal_va_sur_stderr_et_la_sortie_reste_du_json() -> Resultat {
     let sortie = bonk()
         .args(["-vv", "--log-format", "json", "diagnose"])
         .output()?;
-    assert_eq!(sortie.status.code(), Some(0));
+    common::assert_code(&sortie, 0);
     let rapport = String::from_utf8(sortie.stdout)?;
     assert!(
         rapport.trim_start().starts_with('{') && rapport.contains("\"schema_version\""),
@@ -290,7 +290,7 @@ fn une_capture_rejouee_donne_les_memes_verdicts() -> Resultat {
         .arg(&capture)
         .args(["write", &id, "/dev/null", "--yes"])
         .output()?;
-    assert_eq!(refus.status.code(), Some(2));
+    common::assert_code(&refus, 2);
     assert!(
         String::from_utf8_lossy(&refus.stderr)
             .trim_end()
@@ -301,12 +301,12 @@ fn une_capture_rejouee_donne_les_memes_verdicts() -> Resultat {
         .arg(&capture)
         .args(["debug", "sources"])
         .output()?;
-    assert_eq!(sources.status.code(), Some(2));
+    common::assert_code(&sources, 2);
     // Un fichier qui n'est pas une capture est refusé clairement.
     let faux = dossier.join("faux.json");
     std::fs::write(&faux, "{}")?;
     let invalide = bonk().arg("--fixture").arg(&faux).arg("list").output()?;
-    assert_eq!(invalide.status.code(), Some(2));
+    common::assert_code(&invalide, 2);
     std::fs::remove_dir_all(&dossier)?;
     Ok(())
 }

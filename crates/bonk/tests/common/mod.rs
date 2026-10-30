@@ -48,3 +48,25 @@ pub fn affichage_virtuel_disponible() -> bool {
         .is_ok_and(|s| s.status.success());
     decider("un serveur X sous xvfb-run", demarre, en_ci())
 }
+
+/// Statut, sortie standard et sortie d'erreur d'un processus terminé, pour les messages d'assertion : un
+/// échec en CI doit se lire sans relancer le test.
+pub fn diagnostic(sortie: &std::process::Output) -> String {
+    format!(
+        "statut : {:?}\n--- stdout ---\n{}\n--- stderr ---\n{}",
+        sortie.status,
+        String::from_utf8_lossy(&sortie.stdout),
+        String::from_utf8_lossy(&sortie.stderr)
+    )
+}
+
+/// Vérifie le code de sortie ; l'échec affiche le diagnostic complet.
+#[track_caller]
+pub fn assert_code(sortie: &std::process::Output, attendu: i32) {
+    assert_eq!(
+        sortie.status.code(),
+        Some(attendu),
+        "{}",
+        diagnostic(sortie)
+    );
+}

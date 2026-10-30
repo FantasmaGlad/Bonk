@@ -7,6 +7,8 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 
 use serde_json::{Value, json};
 
+mod common;
+
 type Resultat = Result<(), Box<dyn std::error::Error>>;
 
 struct Client {
@@ -182,7 +184,7 @@ fn le_service_decrit_ses_messages_par_des_schemas() -> Resultat {
         let sortie = Command::new(env!("CARGO_BIN_EXE_bonk"))
             .args(["schema", nom])
             .output()?;
-        assert_eq!(sortie.status.code(), Some(0), "{nom}");
+        common::assert_code(&sortie, 0);
         let schema: Value = serde_json::from_slice(&sortie.stdout)?;
         assert_eq!(schema["type"], "object", "{nom}");
     }
