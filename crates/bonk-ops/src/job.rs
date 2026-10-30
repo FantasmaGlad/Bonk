@@ -25,8 +25,7 @@ use bonk_core::write::{
 use bonk_core::{BlockDevice, BlockError};
 use bonk_hal::{
     Access, Disk, Elevation, Eligibility, EnumerateError, FileDevice, FilterOptions,
-    INTERNAL_CONFIRMATION, OpenTargetError, TargetIdentity, Warning, evaluate, mount_points,
-    reverify,
+    OpenTargetError, TargetIdentity, Warning, evaluate, mount_points, reverify,
 };
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -76,8 +75,6 @@ pub type OpenNodeFn =
     Box<dyn Fn(&Path, Access, Elevation) -> Result<Box<dyn BlockDevice>, BlockError>>;
 /// Obtention du droit d'ouvrir un disque, avant tout geste sur lui.
 pub type PrepareFn = Box<dyn Fn(&Path, Access, Elevation) -> Result<(), BlockError>>;
-/// Demande à une personne le mot de confirmation d'un disque interne ; `None` s'il n'y a personne.
-pub type AskInternalFn = Box<dyn Fn(&Disk) -> Option<String>>;
 /// Cible ouverte : périphérique, informations et points démontés.
 type OpenedTarget = (Box<dyn BlockDevice>, TargetInfo, Vec<String>);
 
@@ -87,7 +84,6 @@ pub struct Io {
     pub unmount: UnmountFn,
     pub open_node: OpenNodeFn,
     pub cancelled: Box<dyn Fn() -> bool>,
-    pub ask_internal: AskInternalFn,
 }
 
 impl Default for Io {
@@ -116,8 +112,6 @@ impl Io {
                         .as_ref()
                         .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::SeqCst))
             }),
-            // Sans interface ici : c'est au front qui a quelqu'un devant lui de le remplacer.
-            ask_internal: Box::new(|_| None),
         }
     }
 }
@@ -500,8 +494,9 @@ pub struct WriteJob {
     pub expected_sha256: Option<String>,
     pub mode: WriteMode,
     pub elevation: Elevation,
-    /// Mot de confirmation donné d'avance pour un disque interne (scripts, service, fenêtre).
-    pub confirm_internal: Option<String>,
+    /// Tient lieu de `yes` et autorise un disque interne déjà admis par les options du filtre. Sans
+    /// aucune question : une commande doit pouvoir tourner sans personne devant l'écran.
+    pub force: bool,
 }
 
 /// Contrôle le fichier source contre l'empreinte attendue. Avant tout geste : un fichier faux ne doit
@@ -629,14 +624,9 @@ fn check_complete(image: &ImageReport, written: u64, mode: WriteMode) -> Result<
     }
 }
 
-/// Un disque interne proposé exige le mot de confirmation, donné d'avance ou demandé à la personne. Rien
-/// n'a encore bougé : c'est le dernier contrôle avant le premier geste.
-fn confirm_internal(
-    chosen: &Chosen,
-    options: FilterOptions,
-    given: Option<&str>,
-    deps: &Deps<'_>,
-) -> Result<(), JobError> {
+/// Un disque interne proposé exige `force`, et `yes` ne suffit pas : effacer un disque de la machine ne doit
+/// pas partir d'une habitude de frappe. Rien n'a encore bougé : dernier contrôle avant le premier geste.
+fn confirm_internal(chosen: &Chosen, options: FilterOptions, force: bool) -> Result<(), JobError> {
     let Some(disk) = &chosen.disk else {
         return Ok(());
     };
@@ -647,17 +637,15 @@ fn confirm_internal(
     if !internal {
         return Ok(());
     }
-    let word = given
-        .map(str::to_owned)
-        .or_else(|| (deps.io.ask_internal)(disk));
-    if word.as_deref().map(str::trim) == Some(INTERNAL_CONFIRMATION) {
+    if force {
+        log::warn!(target: "bonk::write", path = disk.path.as_str(), model = disk.model.as_str(); "internal disk: all its data will be erased, --force given");
         return Ok(());
     }
     Err(fail(
         Code::InternalConfirmationRequired,
         format!(
-            "{} est un disque interne : écriture refusée sans le mot « {INTERNAL_CONFIRMATION} »",
-            disk.path
+            "{} ({}) est un disque interne : toutes ses données seraient effacées. Ajouter --force pour le confirmer",
+            disk.path, disk.model
         ),
     ))
 }
@@ -712,13 +700,13 @@ pub fn write(
             steps,
         })));
     }
-    if !job.yes {
+    if !job.yes && !job.force {
         return Err(fail(
             Code::ConfirmationRequired,
-            "écriture sans confirmation : ajouter --yes (ou décrire l'opération avec --dry-run)",
+            "écriture sans confirmation : ajouter --yes ou --force (ou décrire l'opération avec --dry-run)",
         ));
     }
-    confirm_internal(&chosen, job.options, job.confirm_internal.as_deref(), deps)?;
+    confirm_internal(&chosen, job.options, job.force)?;
 
     log::info!(
         target: "bonk::write",
@@ -923,19 +911,20 @@ pub struct RepairJob {
     pub dry_run: bool,
     pub yes: bool,
     pub elevation: Elevation,
-    /// Mot de confirmation donné d'avance pour un disque interne (scripts, service, fenêtre).
-    pub confirm_internal: Option<String>,
+    /// Tient lieu de `yes` et autorise un disque interne déjà admis par les options du filtre. Sans
+    /// aucune question : une commande doit pouvoir tourner sans personne devant l'écran.
+    pub force: bool,
 }
 
 pub fn repair(job: &RepairJob, deps: &Deps<'_>) -> Result<RepairDone, JobError> {
     let codes = |layout: &bonk_core::partition::Layout| -> Vec<String> {
         layout.findings.iter().map(|f| f.code.to_owned()).collect()
     };
-    if job.dry_run || !job.yes {
+    if job.dry_run || !(job.yes || job.force) {
         if !job.dry_run {
             return Err(fail(
                 Code::ConfirmationRequired,
-                "réparation sans confirmation : ajouter --yes (ou décrire avec --dry-run)",
+                "réparation sans confirmation : ajouter --yes ou --force (ou décrire avec --dry-run)",
             ));
         }
         let chosen = choose(&job.target, job.options, deps)?;
@@ -964,7 +953,7 @@ pub fn repair(job: &RepairJob, deps: &Deps<'_>) -> Result<RepairDone, JobError> 
         });
     }
     let chosen = choose(&job.target, job.options, deps)?;
-    confirm_internal(&chosen, job.options, job.confirm_internal.as_deref(), deps)?;
+    confirm_internal(&chosen, job.options, job.force)?;
     let (mut device, info, _) = open_target(
         chosen,
         &job.target,

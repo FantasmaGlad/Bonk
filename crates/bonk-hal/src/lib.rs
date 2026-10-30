@@ -30,7 +30,7 @@ pub use image::{Access, FileDevice};
 pub use node::BlockNode;
 pub use platform::{Elevation, Platform};
 pub use safety::{
-    Eligibility, Exclusion, FilterOptions, HiddenReason, INTERNAL_CONFIRMATION, RuleTrace, Warning,
-    evaluate, evaluate_traced,
+    Eligibility, Exclusion, FilterOptions, HiddenReason, RuleTrace, Warning, evaluate,
+    evaluate_traced,
 };
 pub use target::{OpenTargetError, TargetIdentity, mount_points, reverify};

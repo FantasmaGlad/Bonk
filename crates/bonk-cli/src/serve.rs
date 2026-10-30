@@ -224,8 +224,8 @@ struct TransferParams {
     mode: Option<String>,
     /// `never` (par défaut : personne devant l'écran) ou `auto`.
     elevate: Option<String>,
-    /// Disque interne : le mot `confirme`. Le service n'a personne à qui le demander.
-    confirm_internal: Option<String>,
+    /// Tient lieu de `yes` et autorise un disque interne admis par `show_internal`.
+    force: bool,
 }
 
 fn parse<T: DeserializeOwned>(params: &Value) -> Result<T, Failure> {
@@ -538,7 +538,7 @@ fn start_job(
                     expected_sha256: p.sha256.clone(),
                     mode,
                     elevation,
-                    confirm_internal: p.confirm_internal.clone(),
+                    force: p.force,
                 },
                 &deps,
                 &mut progress,
@@ -574,7 +574,7 @@ fn start_job(
                     dry_run: p.dry_run,
                     yes: p.yes,
                     elevation,
-                    confirm_internal: p.confirm_internal.clone(),
+                    force: p.force,
                 },
                 &deps,
             )
@@ -820,7 +820,6 @@ mod tests {
                     Io {
                         prepare: Box::new(|_, _, _| Ok(())),
                         unmount: Box::new(|_, _| Ok(vec![])),
-                        ask_internal: Box::new(|_| None),
                         open_node: Box::new(move |_, _, _| {
                             Ok(Box::new(dev.clone()) as Box<dyn BlockDevice>)
                         }),

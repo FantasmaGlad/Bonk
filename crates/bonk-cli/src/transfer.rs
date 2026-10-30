@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use bonk_core::analysis::{ImageKind, ImageReport};
 use bonk_core::write::{Control, Phase, Progress};
-use bonk_hal::{Disk, Elevation, FilterOptions, INTERNAL_CONFIRMATION, format_size};
+use bonk_hal::{Elevation, FilterOptions, format_size};
 use clap::{Args, ValueEnum};
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -191,9 +191,10 @@ pub(crate) struct WriteArgs {
     #[arg(long)]
     no_repair_gpt: bool,
 
-    /// Disque interne : donne d'avance le mot `confirme`, à défaut de terminal pour le taper
-    #[arg(long, value_name = "MOT")]
-    confirm_internal: Option<String>,
+    /// Confirme comme --yes, et autorise un disque interne admis par --show-internal, sans question.
+    /// Jamais un disque système : le filtre de sécurité reste souverain
+    #[arg(long)]
+    force: bool,
 }
 
 impl WriteArgs {
@@ -235,39 +236,16 @@ pub(crate) struct RepairArgs {
     #[arg(long)]
     dry_run: bool,
 
-    /// Disque interne : donne d'avance le mot `confirme`, à défaut de terminal pour le taper
-    #[arg(long, value_name = "MOT")]
-    confirm_internal: Option<String>,
+    /// Confirme comme --yes, et autorise un disque interne admis par --show-internal, sans question.
+    /// Jamais un disque système : le filtre de sécurité reste souverain
+    #[arg(long)]
+    force: bool,
 }
 
 impl RepairArgs {
     pub(crate) fn touches_real_disk(&self) -> bool {
         !self.common.simulate
     }
-}
-
-/// Prévient et demande le mot de confirmation d'un disque interne, s'il y a quelqu'un au terminal.
-pub(crate) fn ask_internal_on_terminal(disk: &Disk) -> Option<String> {
-    let stdin = io::stdin();
-    if !stdin.is_terminal() {
-        return None;
-    }
-    eprintln!("{}", internal_warning(disk));
-    eprint!("Taper « {INTERNAL_CONFIRMATION} » pour continuer : ");
-    let _ = io::stderr().flush();
-    let mut line = String::new();
-    stdin.read_line(&mut line).ok()?;
-    Some(line)
-}
-
-fn internal_warning(disk: &Disk) -> String {
-    format!(
-        "ATTENTION : {} ({}, {}) est un disque INTERNE de cette machine. Toutes ses données seront \
-         effacées, sans retour possible.",
-        disk.path,
-        disk.model,
-        format_size(disk.size_bytes)
-    )
 }
 
 /// Événement de progression, tel qu'il sort en `--progress json`.
@@ -445,7 +423,7 @@ pub(crate) fn run_write(
         expected_sha256: args.sha256.clone(),
         mode: args.mode.into(),
         elevation: args.common.elevate.into(),
-        confirm_internal: args.confirm_internal.clone(),
+        force: args.force,
     };
     log::debug!(target: "bonk::cli", target_kind = if args.common.simulate { "image" } else { "disk" }, dry_run = args.dry_run; "command write");
     let result = {
@@ -568,7 +546,7 @@ pub(crate) fn run_repair(
         dry_run: args.dry_run,
         yes: args.yes,
         elevation: args.common.elevate.into(),
-        confirm_internal: args.confirm_internal.clone(),
+        force: args.force,
     };
     let result = job::repair(&job, deps);
     finish(result, &args.common, out, err, |done, out| {

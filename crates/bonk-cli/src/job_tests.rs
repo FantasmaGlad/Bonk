@@ -201,8 +201,6 @@ struct Scenario {
     /// Annulation demandée pendant l'attente de l'autorisation.
     cancel_on_prepare: bool,
     seen_elevation: Rc<Cell<Option<Elevation>>>,
-    /// Ce que répondrait la personne au terminal ; `None` : personne.
-    answer: Option<String>,
     vars: Vec<(String, String)>,
 }
 
@@ -219,7 +217,6 @@ impl Scenario {
             cancel: false,
             cancel_on_prepare: false,
             seen_elevation: Rc::new(Cell::new(None)),
-            answer: None,
             vars: Vec::new(),
         }
     }
@@ -242,7 +239,6 @@ impl Scenario {
         let cancelled = Rc::new(Cell::new(false));
         let cancel_flag = Rc::clone(&cancelled);
         let seen_elevation = Rc::clone(&self.seen_elevation);
-        let (log_ask, answer) = (Rc::clone(&self.log), self.answer.clone());
         let log_prepare = self.log.clone();
         let prepare = self.prepare.clone();
         let io = Io {
@@ -282,10 +278,6 @@ impl Scenario {
                 }
             }),
             cancelled: Box::new(move || cancel || cancelled.get()),
-            ask_internal: Box::new(move |disk| {
-                log_ask.borrow_mut().push(format!("ask:{}", disk.id));
-                answer.clone()
-            }),
         };
         let env = Env {
             io,
@@ -837,57 +829,57 @@ fn with_internal() -> Scenario {
 const CONFIRMATION_REQUIRED: &str = "E2005";
 
 #[test]
-fn disque_interne_refuse_sans_le_mot_meme_avec_yes() {
-    let source = TempSource::new("interne-sans-mot", 4096);
+fn disque_interne_refuse_avec_yes_seul() {
+    let source = TempSource::new("interne-yes", 4096);
     let scenario = with_internal();
     let (code, _, err) =
         scenario.run(&["write", "sata-x", &source.arg(), "--yes", "--show-internal"]);
     assert_eq!(code, EXIT_USAGE, "{err}");
     assert!(err.contains(CONFIRMATION_REQUIRED), "{err}");
-    // La question a été posée (personne n'a répondu), rien n'a bougé.
-    assert_eq!(scenario.log(), ["ask:sata-x"]);
+    assert!(err.contains("--force"), "{err}");
+    assert!(scenario.log().is_empty(), "{:?}", scenario.log());
 }
 
 #[test]
-fn disque_interne_ecrit_avec_le_mot_tape_au_terminal() {
-    let source = TempSource::new("interne-tape", 4096);
-    let mut scenario = with_internal();
-    scenario.answer = Some("confirme\n".to_owned());
-    let (code, _, err) =
-        scenario.run(&["write", "sata-x", &source.arg(), "--yes", "--show-internal"]);
-    assert_eq!(code, 0, "{err}");
-    assert_eq!(scenario.log()[0], "ask:sata-x");
-    scenario.answer = Some("oui\n".to_owned());
-    let (code, _, err) =
-        scenario.run(&["write", "sata-x", &source.arg(), "--yes", "--show-internal"]);
-    assert_eq!(code, EXIT_USAGE, "{err}");
-}
-
-#[test]
-fn disque_interne_ecrit_avec_le_mot_donne_d_avance_sans_question() {
-    let source = TempSource::new("interne-avance", 4096);
+fn disque_interne_ecrit_avec_force_sans_yes_ni_question() {
+    let source = TempSource::new("interne-force", 4096);
     let scenario = with_internal();
     let (code, _, err) = scenario.run(&[
         "write",
         "sata-x",
         &source.arg(),
-        "--yes",
         "--show-internal",
-        "--confirm-internal",
-        "confirme",
+        "--force",
     ]);
     assert_eq!(code, 0, "{err}");
-    assert!(!scenario.log().iter().any(|l| l.starts_with("ask:")));
-    let (code, _, _) = scenario.run(&[
+    assert!(scenario.log().iter().any(|l| l == "unmount:sata-x"));
+}
+
+#[test]
+fn force_tient_lieu_de_yes_sur_une_cle() {
+    let source = TempSource::new("force-cle", 4096);
+    let (code, _, err) = Scenario::new().run(&["write", "usb-a", &source.arg(), "--force"]);
+    assert_eq!(code, 0, "{err}");
+}
+
+#[test]
+fn force_n_ouvre_ni_un_disque_interne_cache_ni_un_disque_systeme() {
+    let source = TempSource::new("force-interdit", 4096);
+    let scenario = with_internal();
+    let (code, _, err) = scenario.run(&["write", "sata-x", &source.arg(), "--force"]);
+    assert_eq!(code, EXIT_TARGET_REFUSED, "{err}");
+    assert!(err.contains("E2001"), "{err}");
+    let mut scenario = Scenario::new();
+    scenario.enumerations = vec![vec![usb("S1"), system_disk()]];
+    let (code, _, err) = scenario.run(&[
         "write",
-        "sata-x",
+        "nvme-sys",
         &source.arg(),
-        "--yes",
+        "--force",
         "--show-internal",
-        "--confirm-internal",
-        "oui",
     ]);
-    assert_eq!(code, EXIT_USAGE);
+    assert_eq!(code, EXIT_TARGET_REFUSED, "{err}");
+    assert!(scenario.log().is_empty());
 }
 
 #[test]
@@ -895,15 +887,7 @@ fn un_reglage_n_autorise_pas_a_ecrire_sur_un_disque_interne() {
     let source = TempSource::new("interne-reglage", 4096);
     let mut scenario = with_internal();
     scenario.vars = vec![("BONK_VIEW_SHOW_INTERNAL".to_owned(), "1".to_owned())];
-    scenario.answer = Some("confirme\n".to_owned());
-    let (code, _, err) = scenario.run(&[
-        "write",
-        "sata-x",
-        &source.arg(),
-        "--yes",
-        "--confirm-internal",
-        "confirme",
-    ]);
+    let (code, _, err) = scenario.run(&["write", "sata-x", &source.arg(), "--force"]);
     assert_eq!(code, EXIT_TARGET_REFUSED, "{err}");
     assert!(err.contains("E2001"), "{err}");
     assert!(scenario.log().is_empty());
@@ -914,7 +898,7 @@ fn un_reglage_n_autorise_pas_a_ecrire_sur_un_disque_interne() {
 }
 
 #[test]
-fn reparer_un_disque_interne_exige_aussi_le_mot() {
+fn reparer_un_disque_interne_exige_aussi_force() {
     let scenario = with_internal();
     let (code, _, err) = scenario.run(&["repair-gpt", "sata-x", "--yes", "--show-internal"]);
     assert_eq!(code, EXIT_USAGE, "{err}");
