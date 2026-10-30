@@ -1,0 +1,47 @@
+# Inventaire des composants (SBOM CycloneDX) du binaire, attesté et joint à la release (CDC §11).
+# Appelé par `binaires` ; lançable seul.
+name: sbom
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sbom:
+    name: sbom (CycloneDX)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Installer la chaîne Rust du dépôt
+        run: rustup toolchain install
+      - name: Installer cargo-cyclonedx
+        run: cargo install --locked --version 0.5.9 cargo-cyclonedx
+      - name: Générer le SBOM
+        run: |
+          cargo cyclonedx --format json --spec-version 1.5 --override-filename bonk.cdx
+          mkdir sbom
+          cp crates/bonk/bonk.cdx.json sbom/bonk.cdx.json
+      - name: Attestation de provenance
+        if: github.event_name != 'pull_request' && !github.event.repository.private
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: sbom/bonk.cdx.json
+      - name: Conserver le SBOM
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: sbom/bonk.cdx.json
+          if-no-files-found: error
+          retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}

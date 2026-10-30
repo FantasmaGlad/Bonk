@@ -1,0 +1,4 @@
+rules:
+  # La syntaxe `$/...` des workflows réutilisables n'est pas prise en charge par actionlint : `./...` reste.
+  self-repository:
+    disable: true

@@ -15,6 +15,7 @@ mod list;
 mod logging;
 mod schema;
 mod serve;
+mod slot;
 mod transfer;
 
 pub use config::ViewDefaults;

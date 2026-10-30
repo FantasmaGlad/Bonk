@@ -1,0 +1,121 @@
+# Paquets natifs construits à partir des binaires de `binaires` (appelé par lui, même exécution).
+# Faits : .deb et .rpm (Linux x86_64 et aarch64), binaire macOS universel (lipo).
+# Pas encore : AppImage, MSI, .dmg (choix de format et outils à valider).
+name: paquets
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    name: ${{ matrix.nom }} (deb, rpm)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { nom: linux-x86_64, os: ubuntu-24.04, target: x86_64-unknown-linux-gnu }
+          - { nom: linux-aarch64, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
+    env:
+      TARGET: ${{ matrix.target }}
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Installer la chaîne Rust du dépôt
+        run: rustup toolchain install
+      - name: Récupérer le binaire
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: binaire-${{ matrix.nom }}
+          path: archive
+      # Les outils sont installés à des versions fixes (éprouvées en local le 2026-10-30).
+      - name: Installer cargo-deb et cargo-generate-rpm
+        run: cargo install --locked --version 3.8.0 cargo-deb && cargo install --locked --version 0.21.1 cargo-generate-rpm
+      - name: Placer le binaire où les outils l'attendent
+        run: |
+          mkdir -p "target/$TARGET/release"
+          tar -xzf archive/bonk-*.tar.gz -C archive
+          cp archive/bonk-*/bonk "target/$TARGET/release/bonk"
+      - name: Construire les paquets
+        run: |
+          cargo deb -p bonk --no-build --target "$TARGET" --locked --output dist/
+          cargo generate-rpm -p crates/bonk --target "$TARGET" --output dist/
+          cd dist
+          sha256sum -- *.deb *.rpm > "paquets-$TARGET.sha256"
+          cat "paquets-$TARGET.sha256"
+      - name: Attestation de provenance
+        if: github.event_name != 'pull_request' && !github.event.repository.private
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.deb
+            dist/*.rpm
+      - name: Conserver les paquets
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: paquet-${{ matrix.nom }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
+
+  macos-universel:
+    name: macos-universel
+    runs-on: macos-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - name: Récupérer les deux binaires
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: binaire-macos-*
+          path: archives
+      - name: Assembler le binaire universel
+        id: universel
+        run: |
+          set -e
+          arm=$(ls archives/binaire-macos-aarch64/bonk-*-macos-aarch64.tar.gz)
+          intel=$(ls archives/binaire-macos-x86_64/bonk-*-macos-x86_64.tar.gz)
+          v=${arm##*/bonk-}; v=${v%-macos-aarch64.tar.gz}
+          mkdir arm intel
+          tar -xzf "$arm" -C arm
+          tar -xzf "$intel" -C intel
+          dossier="bonk-$v-macos-universal"
+          mkdir -p "dist/$dossier"
+          lipo -create -output "dist/$dossier/bonk" arm/bonk-*/bonk intel/bonk-*/bonk
+          cp arm/bonk-*/LICENSE "dist/$dossier/"
+          lipo -info "dist/$dossier/bonk"
+          "dist/$dossier/bonk" --version
+          tar -C dist -czf "dist/$dossier.tar.gz" "$dossier"
+          rm -r "dist/$dossier"
+          (cd dist && shasum -a 256 "$dossier.tar.gz" | tee "$dossier.tar.gz.sha256")
+          echo "archive=$dossier.tar.gz" >> "$GITHUB_OUTPUT"
+      - name: Attestation de provenance
+        if: github.event_name != 'pull_request' && !github.event.repository.private
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/${{ steps.universel.outputs.archive }}
+      - name: Conserver l'archive
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: binaire-macos-universal
+          path: dist/*
+          if-no-files-found: error
+          retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}

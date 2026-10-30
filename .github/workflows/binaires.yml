@@ -1,0 +1,303 @@
+# Binaires de Bonk pour chaque système hôte (CDC §11), construits en continu pour que les cibles
+# d'exécution soient exercées en permanence, pas seulement à la release.
+#   - push sur main, lundi (dérive des images d'exécuteur), lancement manuel : construction, essai de
+#     démarrage, archive, empreinte, attestation de provenance (artefact conservé 14 jours) ;
+#   - tag vX.Y.Z : mêmes étapes, puis publication d'une release en BROUILLON (le mainteneur la publie).
+# Signature : attestation de provenance Sigstore (vérifiable par `gh attestation verify`), sans secret ni
+# certificat. La signature Authenticode (Windows) et la notarisation Apple exigent des certificats payants,
+# non provisionnés (en attente, CDC §11.1).
+name: binaires
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/binaires.yml"
+    tags: ["v*.*.*"]
+  # Une modification du workflow est validée par sa propre PR (construction sans attestation).
+  pull_request:
+    paths: [".github/workflows/binaires.yml"]
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  CARGO_NET_RETRY: "10"
+  RUST_BACKTRACE: "1"
+
+jobs:
+  construire:
+    name: ${{ matrix.nom }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    # Droits d'attestation limités à ce job ; les autres étapes ne lisent que le dépôt.
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # outil/suffixe : `zigbuild` fixe la version minimale de la glibc (2.17, CDC §11) pour que le binaire
+        # tourne sur les distributions anciennes ; musl = binaire statique, destiné à la ligne de commande
+        # (la fenêtre charge les bibliothèques graphiques du système, impossible en statique).
+        # fumee : le binaire s'exécute sur l'exécuteur qui l'a construit.
+        include:
+          - { nom: linux-x86_64, os: ubuntu-24.04, target: x86_64-unknown-linux-gnu, outil: zigbuild, suffixe: ".2.17", fumee: true, glibc: true }
+          - { nom: linux-aarch64, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, outil: zigbuild, suffixe: ".2.17", fumee: true, glibc: true }
+          - { nom: linux-i686, os: ubuntu-24.04, target: i686-unknown-linux-gnu, outil: zigbuild, suffixe: ".2.17", fumee: false, glibc: true }
+          - { nom: linux-x86_64-musl, os: ubuntu-24.04, target: x86_64-unknown-linux-musl, outil: zigbuild, suffixe: "", fumee: true, glibc: false }
+          - { nom: linux-aarch64-musl, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl, outil: zigbuild, suffixe: "", fumee: true, glibc: false }
+          - { nom: windows-x86_64, os: windows-2025, target: x86_64-pc-windows-msvc, outil: build, suffixe: "", fumee: true, glibc: false, exe: ".exe" }
+          - { nom: windows-aarch64, os: windows-11-arm, target: aarch64-pc-windows-msvc, outil: build, suffixe: "", fumee: true, glibc: false, exe: ".exe" }
+          - { nom: windows-i686, os: windows-2025, target: i686-pc-windows-msvc, outil: build, suffixe: "", fumee: true, glibc: false, exe: ".exe" }
+          - { nom: macos-aarch64, os: macos-latest, target: aarch64-apple-darwin, outil: build, suffixe: "", fumee: true, glibc: false, deploiement: "12.0" }
+          - { nom: macos-x86_64, os: macos-15-intel, target: x86_64-apple-darwin, outil: build, suffixe: "", fumee: true, glibc: false, deploiement: "12.0" }
+    env:
+      TARGET: ${{ matrix.target }}
+      NOM: ${{ matrix.nom }}
+      EXE: ${{ matrix.exe }}
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Installer la chaîne Rust du dépôt et la cible
+        run: |
+          rustup toolchain install
+          rustup target add "$TARGET"
+        shell: bash
+      # Pas de cache de compilation : ces binaires entrent dans les releases, un cache empoisonné n'y a pas sa place.
+      # Versions identiques à celles éprouvées en local (2026-10-30).
+      - name: Installer zig et cargo-zigbuild
+        if: matrix.outil == 'zigbuild'
+        run: |
+          python3 -m venv "$RUNNER_TEMP/zig"
+          "$RUNNER_TEMP/zig/bin/pip" install --quiet ziglang==0.17.0
+          echo "$RUNNER_TEMP/zig/bin" >> "$GITHUB_PATH"
+          cargo install --locked --version 0.24.0 cargo-zigbuild
+      - name: Construire
+        env:
+          OUTIL: ${{ matrix.outil }}
+          SUFFIXE: ${{ matrix.suffixe }}
+          DEPLOIEMENT: ${{ matrix.deploiement }}
+        run: |
+          if [ -n "$DEPLOIEMENT" ]; then export MACOSX_DEPLOYMENT_TARGET="$DEPLOIEMENT"; fi
+          cargo "$OUTIL" --release --locked -p bonk --target "$TARGET$SUFFIXE"
+        shell: bash
+      # Un symbole de glibc plus récent que 2.17 ferait échouer le binaire sur les distributions anciennes.
+      - name: Vérifier la version minimale de la glibc
+        if: matrix.glibc
+        run: |
+          max=$(objdump -T "target/$TARGET/release/bonk" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -n 1)
+          echo "glibc maximale exigée : $max"
+          test "$(printf '%s\n2.17\n' "$max" | sort -V | tail -n 1)" = "2.17"
+      # Signature : sans les secrets, ces deux étapes ne font rien (message d'information). Jamais éprouvées
+      # faute de certificats : à valider à la première signature réelle.
+      - name: Signer (Authenticode, Windows)
+        if: runner.os == 'Windows'
+        env:
+          WIN_CERT_PFX_BASE64: ${{ secrets.WIN_CERT_PFX_BASE64 }}
+          WIN_CERT_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
+        shell: pwsh
+        run: |
+          if (-not $env:WIN_CERT_PFX_BASE64) { Write-Output "::notice::Authenticode : certificat absent, binaire non signé"; exit 0 }
+          $pfx = Join-Path $env:RUNNER_TEMP 'cert.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WIN_CERT_PFX_BASE64))
+          $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1).FullName
+          $exe = "target\$env:TARGET\release\bonk.exe"
+          & $signtool sign /f $pfx /p $env:WIN_CERT_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $exe
+          & $signtool verify /pa $exe
+          Remove-Item $pfx
+      - name: Signer et notariser (Developer ID, macOS)
+        if: runner.os == 'macOS'
+        env:
+          MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
+          MAC_NOTARY_KEY_BASE64: ${{ secrets.MAC_NOTARY_KEY_BASE64 }}
+          MAC_NOTARY_KEY_ID: ${{ secrets.MAC_NOTARY_KEY_ID }}
+          MAC_NOTARY_ISSUER: ${{ secrets.MAC_NOTARY_ISSUER }}
+        run: |
+          if [ -z "$MAC_CERT_P12_BASE64" ]; then echo "::notice::Developer ID : certificat absent, binaire non signé"; exit 0; fi
+          bin="target/$TARGET/release/bonk"
+          trousseau="$RUNNER_TEMP/bonk.keychain-db"
+          mot_de_passe=$(uuidgen)
+          security create-keychain -p "$mot_de_passe" "$trousseau"
+          security set-keychain-settings -lut 21600 "$trousseau"
+          security unlock-keychain -p "$mot_de_passe" "$trousseau"
+          echo "$MAC_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$trousseau" -P "$MAC_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$mot_de_passe" "$trousseau"
+          security list-keychains -d user -s "$trousseau"
+          codesign --force --options runtime --timestamp --sign "$MAC_SIGN_IDENTITY" --keychain "$trousseau" "$bin"
+          codesign --verify --strict --verbose=2 "$bin"
+          # Un exécutable nu ne s'agrafe pas (stapler) : la notarisation est vérifiée en ligne par Gatekeeper.
+          echo "$MAC_NOTARY_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          ditto -c -k --keepParent "$bin" "$RUNNER_TEMP/bonk-notarisation.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/bonk-notarisation.zip" --key "$RUNNER_TEMP/notary.p8" --key-id "$MAC_NOTARY_KEY_ID" --issuer "$MAC_NOTARY_ISSUER" --wait
+          security delete-keychain "$trousseau"
+          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/notary.p8"
+      - name: Essai de démarrage
+        if: matrix.fumee
+        run: |
+          "target/$TARGET/release/bonk$EXE" --version
+          "target/$TARGET/release/bonk$EXE" explain E2001
+        shell: bash
+      - name: Nom de l'archive
+        id: nom
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          cargo_v=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+          if [ "$REF_TYPE" = tag ]; then
+            test "$REF_NAME" = "v$cargo_v" || { echo "le tag $REF_NAME ne correspond pas à la version $cargo_v de Cargo.toml"; exit 1; }
+            v="$cargo_v"
+          else
+            v="$cargo_v-${SHA::8}"
+          fi
+          if [ -n "$EXE" ]; then ext=zip; else ext=tar.gz; fi
+          echo "dossier=bonk-$v-$NOM" >> "$GITHUB_OUTPUT"
+          echo "archive=bonk-$v-$NOM.$ext" >> "$GITHUB_OUTPUT"
+        shell: bash
+      - name: Archive
+        env:
+          DOSSIER: ${{ steps.nom.outputs.dossier }}
+          ARCHIVE: ${{ steps.nom.outputs.archive }}
+        run: |
+          mkdir -p "dist/$DOSSIER"
+          cp "target/$TARGET/release/bonk$EXE" LICENSE "dist/$DOSSIER/"
+          if [ -n "$EXE" ]; then
+            (cd dist && 7z a -tzip "$ARCHIVE" "$DOSSIER" > /dev/null)
+          else
+            tar -C dist -czf "dist/$ARCHIVE" "$DOSSIER"
+          fi
+          rm -r "dist/$DOSSIER"
+          cd dist
+          if command -v sha256sum > /dev/null; then sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"; else shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"; fi
+          cat "$ARCHIVE.sha256"
+        shell: bash
+      # Dépôt public seulement (les attestations sont réservées aux dépôts publics hors offre Enterprise) ;
+      # jamais sur une PR.
+      - name: Attestation de provenance
+        if: github.event_name != 'pull_request' && !github.event.repository.private
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/${{ steps.nom.outputs.archive }}
+      - name: Conserver l'archive
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: binaire-${{ matrix.nom }}
+          path: dist/${{ steps.nom.outputs.archive }}*
+          if-no-files-found: error
+          retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
+
+  # Le binaire démarre-t-il sur les distributions que visent les utilisateurs ? centos:7 est le plancher réel
+  # (glibc 2.17) ; Alpine exécute la version musl. Ne dit rien de la fenêtre ni de l'accès aux disques
+  # (pas d'affichage ni de périphérique dans un conteneur).
+  compatibilite:
+    name: ${{ matrix.image }} (${{ matrix.nom }})
+    needs: construire
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: "centos:7", nom: linux-x86_64, os: ubuntu-24.04 }
+          - { image: "rockylinux:8", nom: linux-x86_64, os: ubuntu-24.04 }
+          - { image: "debian:11", nom: linux-x86_64, os: ubuntu-24.04 }
+          - { image: "debian:13", nom: linux-x86_64, os: ubuntu-24.04 }
+          - { image: "ubuntu:22.04", nom: linux-x86_64, os: ubuntu-24.04 }
+          - { image: "ubuntu:24.04", nom: linux-x86_64, os: ubuntu-24.04 }
+          - { image: "fedora:latest", nom: linux-x86_64, os: ubuntu-24.04 }
+          - { image: "archlinux:latest", nom: linux-x86_64, os: ubuntu-24.04 }
+          - { image: "opensuse/tumbleweed:latest", nom: linux-x86_64, os: ubuntu-24.04 }
+          - { image: "alpine:3", nom: linux-x86_64-musl, os: ubuntu-24.04 }
+          - { image: "debian:13", nom: linux-aarch64, os: ubuntu-24.04-arm }
+          - { image: "ubuntu:24.04", nom: linux-aarch64, os: ubuntu-24.04-arm }
+          - { image: "alpine:3", nom: linux-aarch64-musl, os: ubuntu-24.04-arm }
+    steps:
+      - name: Récupérer l'archive
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: binaire-${{ matrix.nom }}
+          path: dist
+      - name: Démarrer dans la distribution
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          docker run --rm --volume "$PWD/dist:/dist:ro" "$IMAGE" sh -c \
+            'mkdir /tmp/bonk && tar -xzf /dist/bonk-*.tar.gz -C /tmp/bonk && /tmp/bonk/bonk-*/bonk --version && /tmp/bonk/bonk-*/bonk explain E2001 > /dev/null'
+
+  # Paquets natifs (deb, rpm, macOS universel) à partir des binaires ci-dessus.
+  paquets:
+    name: paquets
+    needs: construire
+    uses: ./.github/workflows/paquets.yml
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+
+  sbom:
+    name: sbom
+    uses: ./.github/workflows/sbom.yml
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+
+  # Release en brouillon : la publication reste une décision du mainteneur.
+  publication:
+    name: release (brouillon)
+    if: github.ref_type == 'tag'
+    needs: [construire, compatibilite, paquets, sbom]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Récupérer les archives, paquets et SBOM
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: "{binaire,paquet,sbom}*"
+          merge-multiple: true
+          path: dist
+      - name: Empreintes réunies
+        working-directory: dist
+        run: |
+          for f in *.sha256; do sha256sum --check "$f"; done
+          sha256sum -- *.tar.gz *.zip *.deb *.rpm *.json > SHA256SUMS
+          cat SHA256SUMS
+      - name: Créer la release en brouillon
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          {
+            echo "Binaires construits par la CI, attestés (provenance Sigstore)."
+            echo
+            echo "Vérifier une archive : gh attestation verify <archive> --repo $GITHUB_REPOSITORY"
+            echo "Empreintes : SHA256SUMS. SBOM : bonk.cdx.json."
+          } > notes.md
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "$TAG" --notes-file notes.md \
+            dist/*.tar.gz dist/*.zip dist/*.deb dist/*.rpm dist/bonk.cdx.json dist/SHA256SUMS

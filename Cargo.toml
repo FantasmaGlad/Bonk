@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
 # Plancher imposé par Iced 0.14 (le plancher de l'édition 2024 seule serait 1.85) ; le job « msrv » de la CI
 # le vérifie à chaque changement du code.

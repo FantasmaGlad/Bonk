@@ -30,6 +30,7 @@ use serde_json::{Value, json};
 use crate::config::{self, ConfigAction, ConfigError, ViewDefaults};
 use crate::errors::{self, Code};
 use crate::job::{self, Deps, Io, RepairJob, Target, TraceIo, VerifyJob, WriteJob};
+use crate::slot::JobSlot;
 use crate::{debug, diagnose, info, list, schema};
 
 /// Version du protocole, incrémentée à chaque changement incompatible.
@@ -409,17 +410,7 @@ fn config_method(method: &str, params: &Value, cfg: &Config) -> Result<Value, Fa
 
 struct JobHandle {
     cancel: Arc<AtomicBool>,
-    /// Vrai tant que l'opération n'a pas rendu son emplacement. Libéré **avant** d'envoyer la réponse :
-    /// `thread.is_finished()` ne devient vrai qu'après, et une requête envoyée dès la réponse reçue
-    /// serait refusée à tort.
-    busy: Arc<AtomicBool>,
     thread: JoinHandle<()>,
-}
-
-impl JobHandle {
-    fn is_busy(&self) -> bool {
-        self.busy.load(Ordering::SeqCst)
-    }
 }
 
 struct WatchHandle {
@@ -429,6 +420,9 @@ struct WatchHandle {
 
 #[derive(Default)]
 struct State {
+    /// Emplacement de l'opération longue : rendu avant la réponse (`slot.rs`), alors que
+    /// `thread.is_finished()` ne devient vrai qu'après et ferait refuser à tort la requête suivante.
+    slot: JobSlot,
     job: Option<JobHandle>,
     watch: Option<WatchHandle>,
 }
@@ -458,12 +452,12 @@ fn start_job(
     out: &Out,
     state: &mut State,
 ) -> Result<(), Failure> {
-    if state.job.as_ref().is_some_and(JobHandle::is_busy) {
+    let Some(guard) = state.slot.try_acquire() else {
         return Err(failure(
             Code::ProtocolError,
             "une opération d'écriture est déjà en cours (voir « cancel »)",
         ));
-    }
+    };
     // Les paramètres sont validés tout de suite : une erreur de requête répond sans démarrer.
     let p: TransferParams = parse(params)?;
     let (target, options, trace) = (p.target()?, p.options(&cfg.view), p.trace()?);
@@ -472,8 +466,6 @@ fn start_job(
         _ => p.source()?,
     };
     let cancel = Arc::new(AtomicBool::new(false));
-    let busy = Arc::new(AtomicBool::new(true));
-    let release = Arc::clone(&busy);
     let (enumerate_fn, make_io) = (Arc::clone(&cfg.enumerate), Arc::clone(&cfg.make_io));
     let (out, id, flag) = (out.clone(), id.clone(), Arc::clone(&cancel));
     out.send(&json!({"event": "job_started", "request_id": id}));
@@ -542,20 +534,17 @@ fn start_job(
                 })
             }),
         };
-        release.store(false, Ordering::SeqCst);
-        out.respond(
-            &id,
-            outcome.map_err(|e| Failure {
-                code: e.code,
-                message: e.message,
-            }),
-        );
+        guard.release_then(|| {
+            out.respond(
+                &id,
+                outcome.map_err(|e| Failure {
+                    code: e.code,
+                    message: e.message,
+                }),
+            );
+        });
     });
-    state.job = Some(JobHandle {
-        cancel,
-        busy,
-        thread,
-    });
+    state.job = Some(JobHandle { cancel, thread });
     Ok(())
 }
 
@@ -635,7 +624,7 @@ fn handle(line: &str, cfg: &Config, out: &Out, state: &mut State) {
         "disk.verify" => start_or_fail(Kind::Verify, &request, cfg, out, state),
         "disk.repair_gpt" => start_or_fail(Kind::Repair, &request, cfg, out, state),
         "cancel" => {
-            let running = state.job.as_ref().is_some_and(JobHandle::is_busy);
+            let running = state.slot.is_busy();
             if let (true, Some(job)) = (running, &state.job) {
                 job.cancel.store(true, Ordering::SeqCst);
             }
@@ -1205,10 +1194,12 @@ mod tests {
             }
         });
         let f = fake(false, enumerate);
-        let out = session(
+        // On attend le second événement au lieu de deviner une durée : sur un exécuteur chargé (macOS en CI),
+        // l'intervalle de 100 ms s'allonge et une attente fixe de 700 ms ne voyait que l'événement initial.
+        let out = session_until(
             &[r#"{"id":1,"method":"watch.start","params":{"interval_ms":100}}"#],
             &f.cfg,
-            Duration::from_millis(700),
+            r#""initial":false"#,
         );
         assert_eq!(response(&out, 1)["result"]["watching"], true);
         let events: Vec<&Value> = out

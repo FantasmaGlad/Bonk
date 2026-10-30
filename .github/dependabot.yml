@@ -1,0 +1,29 @@
+# Mises à jour automatisées, une PR par groupe et par semaine pour limiter le coût de la CI
+# (workflow.md, « Coût »). Les actions sont épinglées par empreinte : seul Dependabot les fait bouger.
+# Les images d'exécuteur (ubuntu-24.04) ne sont pas suivies : leur changement est décidé à la main.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # Une version toute fraîche n'est proposée qu'après 7 jours (retrait possible en cas de compromission).
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 2
+    groups:
+      cargo:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # Une version toute fraîche n'est proposée qu'après 7 jours (retrait possible en cas de compromission).
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 1
+    groups:
+      actions:
+        patterns: ["*"]
