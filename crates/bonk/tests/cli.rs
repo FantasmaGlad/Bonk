@@ -3,6 +3,8 @@
 
 use std::process::Command;
 
+mod common;
+
 type Resultat = Result<(), Box<dyn std::error::Error>>;
 
 fn bonk() -> Command {
@@ -159,29 +161,14 @@ fn le_journal_va_sur_stderr_et_la_sortie_reste_du_json() -> Resultat {
 /// Régression : sous un affichage virtuel (Xvfb), wgpu paniquait (« incompatible window kind ») au lieu
 /// de basculer sur le rendu logiciel (CDC §8). Maintenant Bonk se relance en `tiny-skia` et la fenêtre
 /// reste ouverte jusqu'à l'arrêt par `timeout` (code 124), sans panique. Quand wgpu réussit (pilote
-/// logiciel présent), le test vérifie seulement l'ouverture sans panique. Ignoré si `xvfb-run` ou
-/// `timeout` n'est pas installé.
+/// logiciel présent), le test vérifie seulement l'ouverture sans panique. Ignoré hors CI si `xvfb-run`
+/// ou `timeout` manque ; en CI, leur absence fait échouer le test.
 #[cfg(all(unix, not(target_os = "macos")))]
 #[test]
 fn sous_affichage_virtuel_le_rendu_bascule_en_logiciel() -> Resultat {
-    let present = |outil: &str| {
-        Command::new("sh")
-            .args(["-c", &format!("command -v {outil}")])
-            .output()
-            .is_ok_and(|s| s.status.success())
-    };
-    if !present("xvfb-run") || !present("timeout") {
-        eprintln!("xvfb-run ou timeout absent : test ignoré");
-        return Ok(());
-    }
-    // Un `xvfb-run` installé ne prouve pas qu'un serveur X démarre (poste sans `Xvfb` ou sans `xauth`,
-    // exécuteur de CI) : sans cela, `bonk` ne se lance même pas et le test ne dirait rien du repli.
-    let serveur_x = Command::new("xvfb-run")
-        .args(["-a", "true"])
-        .output()
-        .is_ok_and(|s| s.status.success());
-    if !serveur_x {
-        eprintln!("xvfb-run ne parvient pas à démarrer un serveur X : test ignoré");
+    // Sans serveur X, `bonk` ne se lance même pas et le test ne dirait rien du repli : saut hors CI,
+    // échec en CI (`common::decider`).
+    if !common::affichage_virtuel_disponible() {
         return Ok(());
     }
     let sortie = Command::new("xvfb-run")

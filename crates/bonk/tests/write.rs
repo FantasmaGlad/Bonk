@@ -1,12 +1,15 @@
 //! Écriture, vérification et réparation du GPT de bout en bout, par le binaire, sur des fichiers image
 //! (`--simulate`) : aucun disque n'est touché. Les formats compressés sont produits par les outils du
-//! système (`gzip`, `xz`, `zstd`) quand ils sont installés ; sinon ces cas sont ignorés.
+//! système (`gzip`, `xz`, `zstd`) quand ils sont installés ; sinon ces cas sont ignorés hors CI et
+//! échouent en CI.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use bonk_core::partition::testing::{ESP, LINUX, gpt_image};
+
+mod common;
 
 type Resultat = Result<(), Box<dyn std::error::Error>>;
 
@@ -36,13 +39,6 @@ fn bonk(args: &[&str]) -> Result<Output, std::io::Error> {
 
 fn image(len: usize) -> Vec<u8> {
     (0..len).map(|i| (i * 7 % 253) as u8).collect()
-}
-
-fn outil(nom: &str) -> bool {
-    Command::new("sh")
-        .args(["-c", &format!("command -v {nom}")])
-        .output()
-        .is_ok_and(|s| s.status.success())
 }
 
 fn texte(octets: &[u8]) -> String {
@@ -116,8 +112,7 @@ fn formats_compresses_produits_par_les_outils_du_systeme() -> Resultat {
     fs::write(&source, &data)?;
     let mut testes = 0;
     for (outil_nom, extension) in [("gzip", "gz"), ("xz", "xz"), ("zstd", "zst")] {
-        if !outil(outil_nom) {
-            eprintln!("{outil_nom} absent : format ignoré");
+        if !common::outil_disponible(outil_nom) {
             continue;
         }
         let packed = dir.file(&format!("src.img.{extension}"));
