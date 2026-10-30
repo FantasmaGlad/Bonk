@@ -77,6 +77,13 @@ impl BlockDevice for TracedDevice {
         self.note("flush", 0, &[], started, result.is_ok());
         result
     }
+
+    fn drop_cache(&mut self) -> Result<(), BlockError> {
+        let started = Instant::now();
+        let result = self.inner.drop_cache();
+        self.note("drop_cache", 0, &[], started, result.is_ok());
+        result
+    }
 }
 
 #[cfg(test)]

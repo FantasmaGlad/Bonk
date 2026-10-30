@@ -140,6 +140,24 @@ mod imp {
             }
             Ok(())
         }
+
+        /// `posix_fadvise(DONTNEED)` sur tout le périphérique : le noyau abandonne ses pages propres
+        /// (celles que `flush` vient d'écrire), donc la relecture qui suit lit le support. Constaté sur
+        /// une clé USB 2.0 : sans cela, la relecture de contrôle tournait à 2 193 Mo/s, c'est-à-dire
+        /// dans le cache. Ne demande aucun privilège, contrairement à `BLKFLSBUF`.
+        fn drop_cache(&mut self) -> Result<(), BlockError> {
+            use std::os::fd::AsRawFd;
+
+            // SAFETY : le descripteur appartient à `self.file`, ouvert pour toute la durée de l'appel.
+            let code = unsafe {
+                libc::posix_fadvise(self.file.as_raw_fd(), 0, 0, libc::POSIX_FADV_DONTNEED)
+            };
+            if code == 0 {
+                Ok(())
+            } else {
+                Err(BlockError::Io(std::io::Error::from_raw_os_error(code)))
+            }
+        }
     }
 }
 

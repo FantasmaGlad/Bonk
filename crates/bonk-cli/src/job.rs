@@ -523,6 +523,8 @@ pub(crate) fn write(
     log::info!(target: "bonk::write", bytes = write.bytes, millis = write.elapsed_ms; "write finished");
 
     let verify = if job.verify {
+        // Sans cela, la relecture lirait le cache du noyau (ce que Bonk vient d'écrire) et non le support.
+        drop_cache_before_verify(&mut *device);
         let report = engine::verify(
             &*device,
             write.bytes,
@@ -579,7 +581,7 @@ pub(crate) fn verify(
 ) -> Result<VerifyDone, JobError> {
     let (mut source, source_info) = open_source(&job.source)?;
     let chosen = choose(&job.target, job.options, deps)?;
-    let (device, info, _) = open_target(
+    let (mut device, info, _) = open_target(
         chosen,
         &job.target,
         job.options,
@@ -589,6 +591,7 @@ pub(crate) fn verify(
         deps,
     )?;
     let mut report_progress = guarded(deps, progress);
+    drop_cache_before_verify(&mut *device);
     // Une image GPT posée sur un support plus grand a vu quelques champs réécrits par la réparation du
     // GPT (MBR de protection, positions de l'en-tête) : les comparer à l'image donnerait un faux échec.
     let ignore = if source_info.size_bytes.is_none_or(|n| n < device.size()) {
@@ -637,6 +640,14 @@ pub(crate) fn verify(
             })
             .collect(),
     })
+}
+
+/// Vide le cache avant une relecture de contrôle. Un échec n'arrête pas l'opération mais est signalé :
+/// la comparaison pourrait alors porter sur le cache du système et non sur le support.
+fn drop_cache_before_verify(device: &mut dyn BlockDevice) {
+    if let Err(e) = device.drop_cache() {
+        log::warn!(target: "bonk::write", error = e.to_string().as_str(); "cache not dropped: the verification may read cached data");
+    }
 }
 
 /// Plages d'une image GPT que la réparation du GPT peut réécrire (début de l'image relu à part, car le

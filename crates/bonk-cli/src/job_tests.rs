@@ -49,6 +49,43 @@ impl BlockDevice for Shared {
     }
 }
 
+/// Périphérique qui journalise le vidage du cache et signale toute relecture faite avant lui : sur un
+/// vrai disque, une relecture de contrôle qui précède le vidage lit le cache du noyau, pas le support.
+struct Logged {
+    inner: Box<dyn BlockDevice>,
+    log: Log,
+    cache_clean: Cell<bool>,
+}
+
+impl BlockDevice for Logged {
+    fn size(&self) -> u64 {
+        self.inner.size()
+    }
+    fn block_size(&self) -> u32 {
+        self.inner.block_size()
+    }
+    fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), BlockError> {
+        if !self.cache_clean.get() {
+            self.log
+                .borrow_mut()
+                .push("lecture_avant_vidage_du_cache".to_owned());
+        }
+        self.inner.read_at(offset, buf)
+    }
+    fn write_at(&mut self, offset: u64, data: &[u8]) -> Result<(), BlockError> {
+        self.cache_clean.set(false);
+        self.inner.write_at(offset, data)
+    }
+    fn flush(&mut self) -> Result<(), BlockError> {
+        self.inner.flush()
+    }
+    fn drop_cache(&mut self) -> Result<(), BlockError> {
+        self.cache_clean.set(true);
+        self.log.borrow_mut().push("drop_cache".to_owned());
+        self.inner.drop_cache()
+    }
+}
+
 /// Périphérique dont les relectures sont fausses : simule un support défectueux.
 struct Faulty(Shared);
 
@@ -195,10 +232,18 @@ impl Scenario {
                     .push(format!("open:{}:{access:?}", path.display()));
                 match open {
                     Err(kind) => Err(BlockError::Io(io::Error::new(kind, "refusé"))),
-                    Ok(()) if faulty => {
-                        Ok(Box::new(Faulty(device.clone())) as Box<dyn BlockDevice>)
+                    Ok(()) => {
+                        let inner: Box<dyn BlockDevice> = if faulty {
+                            Box::new(Faulty(device.clone()))
+                        } else {
+                            Box::new(device.clone())
+                        };
+                        Ok(Box::new(Logged {
+                            inner,
+                            log: Rc::clone(&log),
+                            cache_clean: Cell::new(false),
+                        }) as Box<dyn BlockDevice>)
                     }
-                    Ok(()) => Ok(Box::new(device.clone()) as Box<dyn BlockDevice>),
                 }
             }),
             cancelled: Box::new(move || cancel),
@@ -247,7 +292,10 @@ fn ecriture_complete_dans_l_ordre_des_garde_fous() {
     ]);
     assert_eq!((code, err.as_str()), (0, ""), "{out}");
     // Démontage d'abord, ouverture en écriture ensuite, jamais l'inverse.
-    assert_eq!(scenario.log(), ["unmount:usb-a", "open:/dev/sdb:ReadWrite"]);
+    assert_eq!(
+        scenario.log(),
+        ["unmount:usb-a", "open:/dev/sdb:ReadWrite", "drop_cache"]
+    );
     assert_eq!(scenario.written(1 << 20), source.bytes());
     assert!(out.contains("Démonté : /run/media/u/A"), "{out}");
     assert!(out.contains("Vérification : réussie"), "{out}");
@@ -486,7 +534,7 @@ fn la_commande_verify_compare_sans_ecrire() {
     assert_eq!((code, err.as_str()), (0, ""));
     assert!(out.contains("Vérification réussie"), "{out}");
     // Relecture seule : pas de démontage, ouverture en lecture.
-    assert_eq!(scenario.log(), ["open:/dev/sdb:ReadOnly"]);
+    assert_eq!(scenario.log(), ["open:/dev/sdb:ReadOnly", "drop_cache"]);
     // Un octet qui change : la comparaison échoue avec le code dédié.
     scenario
         .device
@@ -567,4 +615,34 @@ fn verify_d_une_image_gpt_reussit_apres_la_reparation_du_gpt() {
     let (code, _, err) = scenario.run(&["verify", "usb-a", &source.arg(), "--progress", "none"]);
     assert_eq!(code, EXIT_VERIFY_FAILED);
     assert!(err.trim_end().ends_with("[E4002]"), "{err}");
+}
+
+/// Régression constatée sur une vraie clé : la relecture de contrôle qui suit l'écriture lisait le cache
+/// du noyau (2 193 Mo/s sur une clé USB 2.0), pas le support ; une écriture perdue par la clé n'aurait
+/// pas été vue. Le cache doit être vidé avant toute relecture, à l'écriture comme à la vérification.
+#[test]
+fn la_relecture_de_controle_ne_lit_jamais_le_cache() {
+    let source = TempSource::new("cache", 1 << 20);
+    let scenario = Scenario::new();
+    let (code, out, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &source.arg(),
+        "--yes",
+        "--progress",
+        "none",
+        "--no-repair-gpt",
+    ]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(
+        !scenario
+            .log()
+            .contains(&"lecture_avant_vidage_du_cache".to_owned()),
+        "{:?}",
+        scenario.log()
+    );
+    scenario.log.borrow_mut().clear();
+    let (code, _, err) = scenario.run(&["verify", "usb-a", &source.arg(), "--progress", "none"]);
+    assert_eq!((code, err.as_str()), (0, ""));
+    assert_eq!(scenario.log(), ["open:/dev/sdb:ReadOnly", "drop_cache"]);
 }
