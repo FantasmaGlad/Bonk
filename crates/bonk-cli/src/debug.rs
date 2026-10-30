@@ -5,8 +5,8 @@
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use bonk_core::BlockDevice;
 use bonk_core::partition::{Layout, Severity, inspect, read_range};
+use bonk_core::{BlockDevice, DEFAULT_BLOCK_SIZE};
 use bonk_hal::{
     Access, Disk, Elevation, EnumerateError, FileDevice, FilterOptions, SourceRead,
     evaluate_traced, state_label,
@@ -304,7 +304,7 @@ fn open_read_only(target: &Path) -> Result<Box<dyn BlockDevice>, (Code, String)>
             format!("« {} » n'existe pas", target.display()),
         ));
     }
-    FileDevice::open(target, Access::ReadOnly, 512)
+    FileDevice::open(target, Access::ReadOnly, DEFAULT_BLOCK_SIZE)
         .map(|device| Box::new(device) as Box<dyn BlockDevice>)
         .map_err(|erreur| {
             (

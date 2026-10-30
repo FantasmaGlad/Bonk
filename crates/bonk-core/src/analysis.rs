@@ -8,7 +8,7 @@
 use schemars::JsonSchema;
 use serde::Serialize;
 
-use crate::block::MemoryDevice;
+use crate::block::{DEFAULT_BLOCK_SIZE, MemoryDevice};
 use crate::partition::{Layout, inspect};
 
 /// Octets du début de l'image à fournir à [`analyze`] : couvre les descripteurs ISO 9660 et les tables
@@ -151,8 +151,9 @@ fn declared_by_tables(layout: &Layout) -> Option<u64> {
 /// `real_len` : sa taille décompressée quand on la connaît.
 #[must_use]
 pub fn analyze(head: &[u8], real_len: Option<u64>) -> ImageReport {
-    let usable = head.len() - head.len() % 512;
-    let layout = MemoryDevice::from_bytes(head[..usable].to_vec(), 512)
+    let block = DEFAULT_BLOCK_SIZE as usize;
+    let usable = head.len() - head.len() % block;
+    let layout = MemoryDevice::from_bytes(head[..usable].to_vec(), DEFAULT_BLOCK_SIZE)
         .ok()
         .and_then(|dev| inspect(&dev).ok());
     let iso = read_iso(head);

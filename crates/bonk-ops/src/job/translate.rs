@@ -7,9 +7,8 @@ use bonk_core::write::{Control, Progress, VerifyError, WriteError};
 use super::types::{Deps, JobError, fail};
 use crate::errors::Code;
 
-fn source_error(format: Format, err: &std::io::Error) -> Code {
+fn source_error(format: Format) -> Code {
     if format == Format::Raw {
-        let _ = err;
         Code::SourceUnreadable
     } else {
         Code::DecompressionFailed
@@ -20,7 +19,7 @@ pub(super) fn map_write_error(err: WriteError, format: Format) -> JobError {
     let code = match &err {
         WriteError::Cancelled { .. } => Code::Cancelled,
         WriteError::TooLarge { .. } => Code::SourceTooLarge,
-        WriteError::Source(io) => source_error(format, io),
+        WriteError::Source(_) => source_error(format),
         WriteError::Device(BlockError::Io(io))
             if io.kind() == std::io::ErrorKind::PermissionDenied =>
         {
@@ -35,7 +34,7 @@ pub(super) fn map_verify_error(err: VerifyError, format: Format) -> JobError {
     let code = match &err {
         VerifyError::Mismatch { .. } => Code::VerifyMismatch,
         VerifyError::Cancelled => Code::Cancelled,
-        VerifyError::Source(io) => source_error(format, io),
+        VerifyError::Source(_) => source_error(format),
         VerifyError::Device(_) => Code::WriteFailed,
     };
     fail(code, err)
