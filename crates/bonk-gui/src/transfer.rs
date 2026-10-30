@@ -184,6 +184,8 @@ pub(crate) fn cancel(pid: u32) {
 mod tests {
     #![allow(clippy::expect_used)]
 
+    // Lu seulement par les tests qui lancent un vrai processus (Unix).
+    #[cfg(unix)]
     use iced::futures::StreamExt;
 
     use super::*;

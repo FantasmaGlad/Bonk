@@ -24,6 +24,8 @@ pub struct BlockNode {
     path: PathBuf,
     size: u64,
     block_size: u32,
+    /// Lu seulement par l'implémentation Linux : hors Linux, la structure n'est jamais construite.
+    #[cfg(target_os = "linux")]
     read_only: bool,
 }
 
@@ -181,12 +183,12 @@ mod imp {
     }
 }
 
-#[cfg(test)]
+// Le seul test vise l'implémentation Linux : ailleurs, le module serait vide.
+#[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;
 
     /// Aucun test n'ouvre de vrai disque : on vérifie seulement ce que `BlockNode` refuse.
-    #[cfg(target_os = "linux")]
     #[test]
     fn refuse_tout_ce_qui_n_est_pas_un_disque_entier() {
         let kind = |path: &str| match BlockNode::open(Path::new(path), Access::ReadOnly) {

@@ -35,11 +35,11 @@ pub fn requested() -> bool {
     REQUESTED.load(Ordering::SeqCst)
 }
 
-#[cfg(test)]
+// Le seul test envoie un signal Unix : hors Unix, le module serait vide.
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 
-    #[cfg(unix)]
     #[test]
     fn un_signal_leve_le_drapeau() {
         install();
