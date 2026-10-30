@@ -1,4 +1,4 @@
-//! Choix et préparation d'une cible d'écriture (CDC §3.3 et §3.4).
+//! Choix et préparation d'une cible d'écriture.
 //!
 //! Trois garde-fous, dans cet ordre : le filtre de sécurité décide que la cible est écrivable ;
 //! les partitions montées sont démontées ; **juste avant** l'ouverture, on ré-énumère et on vérifie que
@@ -30,7 +30,6 @@ impl From<&Disk> for TargetIdentity {
 
 #[derive(Debug)]
 pub enum OpenTargetError {
-    /// Aucun disque ne porte cet identifiant.
     NotFound(String),
     /// Le filtre de sécurité refuse ou masque la cible.
     Refused(Eligibility),
@@ -64,15 +63,9 @@ impl fmt::Display for OpenTargetError {
 
 impl std::error::Error for OpenTargetError {}
 
-/// Retrouve la cible dans une énumération fraîche, la fait juger par le filtre et vérifie son
-/// identité. Ne touche à rien : fonction pure, appelée au choix puis **de nouveau** juste avant
-/// l'ouverture.
-///
-/// Seul l'identifiant stable désigne une cible ici : jamais `/dev/sdX`, qui change d'un branchement
-/// à l'autre (CDC §3.3).
-///
-/// # Errors
-/// [`OpenTargetError`] ; la cible n'est autorisée que si le verdict est « proposé ».
+/// Retrouve la cible par son identifiant stable dans une énumération fraîche, la fait juger par le
+/// filtre et vérifie son identité, sans rien toucher : appelée au choix puis **de nouveau** juste avant
+/// l'ouverture. Seul le verdict « proposé » autorise la cible.
 pub fn reverify<'a>(
     expected: &TargetIdentity,
     disks: &'a [Disk],

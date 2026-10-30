@@ -1,4 +1,4 @@
-//! Ce que Bonk demande au système d'exploitation, derrière une seule interface (CDC §10, D-50).
+//! Ce que Bonk demande au système d'exploitation, derrière une seule interface.
 //!
 //! Tout le code propre à un OS passe par [`Platform`] ; le choix de l'implémentation n'a lieu qu'une
 //! fois, dans [`current`]. Ajouter un système revient à écrire une implémentation : les opérations et
@@ -87,33 +87,20 @@ pub fn format_capability(fs: Filesystem) -> String {
 /// Accès d'un système d'exploitation aux disques.
 pub trait Platform: Send + Sync {
     /// Énumère les disques : des faits bruts, que [`crate::safety::evaluate`] juge ensuite.
-    ///
-    /// # Errors
-    /// [`EnumerateError`] si une source nécessaire à la sécurité est illisible, ou si le système n'est
-    /// pas pris en charge.
     fn enumerate(&self) -> Result<Vec<Disk>, EnumerateError>;
 
     /// Comme [`Platform::enumerate`], et rend chaque lecture de source système avec son contenu.
     fn enumerate_recorded(&self) -> (Result<Vec<Disk>, EnumerateError>, Vec<SourceRead>);
 
     /// Énumère à partir d'une capture de sources, sans toucher au système.
-    ///
-    /// # Errors
-    /// [`EnumerateError`] comme [`Platform::enumerate`].
     fn enumerate_from_capture(&self, reads: &[SourceRead]) -> Result<Vec<Disk>, EnumerateError>;
 
-    /// Démonte tout ce que porte le disque et rend les points démontés.
-    ///
-    /// # Errors
-    /// [`OpenTargetError::Unmount`] au premier démontage qui échoue. Avec [`Elevation::Never`], aucune
-    /// autorisation n'est demandée au système.
+    /// Démonte tout ce que porte le disque et rend les points démontés ; s'arrête au premier échec.
+    /// Avec [`Elevation::Never`], aucune autorisation n'est demandée au système.
     fn unmount(&self, disk: &Disk, elevation: Elevation) -> Result<Vec<String>, OpenTargetError>;
 
     /// Obtient le droit d'ouvrir le disque, sans le garder ouvert. **Appelé avant tout démontage** : un
     /// refus ne doit laisser aucune trace sur la clé.
-    ///
-    /// # Errors
-    /// [`BlockError`], `PermissionDenied` si le droit n'est pas obtenu.
     fn prepare_access(
         &self,
         path: &Path,
@@ -122,9 +109,6 @@ pub trait Platform: Send + Sync {
     ) -> Result<(), BlockError>;
 
     /// Ouvre un disque entier en accès brut. N'est appelé qu'après les garde-fous de `bonk-ops`.
-    ///
-    /// # Errors
-    /// [`BlockError`] : chemin qui n'est pas un disque entier, droits insuffisants, disque utilisé.
     fn open_disk(
         &self,
         path: &Path,
@@ -135,11 +119,8 @@ pub trait Platform: Send + Sync {
     /// Ce que ce système permet, et pourquoi pas le reste (`bonk capabilities`).
     fn capabilities(&self) -> Vec<Capability>;
 
-    /// Formate une partition avec les outils de l'hôte (exFAT, NTFS, ext4 ; D-04). Seul le résultat de
+    /// Formate une partition avec les outils de l'hôte (exFAT, NTFS, ext4). Seul le résultat de
     /// l'outil compte, sa sortie n'est pas interprétée.
-    ///
-    /// # Errors
-    /// [`BlockError`] : outil absent, droits refusés, échec de l'outil.
     fn format_partition(
         &self,
         partition: &Path,
@@ -150,12 +131,9 @@ pub trait Platform: Send + Sync {
 
     /// Demande au système de relire la table de partitions du disque, qu'on vient de remplacer : sans
     /// cela, il peut montrer un moment les anciennes partitions, ou aucune.
-    ///
-    /// # Errors
-    /// [`BlockError`] : droits refusés, service absent.
     fn rescan(&self, disk: &Path, elevation: Elevation) -> Result<(), BlockError>;
 
-    /// Le processus tourne-t-il en administrateur ? La fenêtre refuse alors de s'ouvrir (invariant 2).
+    /// Le processus tourne-t-il en administrateur ? La fenêtre refuse alors de s'ouvrir.
     fn is_privileged(&self) -> bool;
 
     /// Version du noyau, pour le rapport de diagnostic, quand le système la donne.

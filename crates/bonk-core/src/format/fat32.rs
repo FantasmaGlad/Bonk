@@ -1,7 +1,7 @@
 //! Écriture d'un système de fichiers FAT32 vide (spécification Microsoft « FAT32 File System », fatgen103).
 //!
-//! Choix : une écriture maison plutôt que `fatfs` (D-54). Créer un volume vide ne demande que quelques
-//! structures fixes, et `BlockDevice` impose des accès alignés que `fatfs` ne connaît pas.
+//! Écriture maison plutôt que `fatfs` : un volume vide ne demande que quelques structures fixes, et
+//! `fatfs` ne connaît pas les accès alignés qu'impose `BlockDevice`.
 
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -43,8 +43,6 @@ fn cluster_bytes_for(volume_bytes: u64) -> u32 {
     }
 }
 
-/// Calcule la forme du volume.
-///
 /// # Errors
 /// [`FormatError::TooSmall`] sous 65 525 clusters, [`FormatError::TooLarge`] au-delà de ce que FAT32 adresse.
 pub fn geometry(sectors: u64, block: u32) -> Result<Geometry, FormatError> {
@@ -164,11 +162,9 @@ fn first_fat_sector(block: u32) -> Vec<u8> {
     s
 }
 
-/// Écrit le volume vide. Le secteur de démarrage vient en dernier : une coupure laisse un volume que
-/// personne ne prend pour un système de fichiers valide. Le vidage reste à l'appelant.
-///
-/// # Errors
-/// [`FormatError`] : forme refusée (rien n'est écrit) ou erreur du périphérique.
+/// Écrit le volume vide ; une forme refusée n'écrit rien. Le secteur de démarrage vient en dernier :
+/// une coupure laisse un volume que personne ne prend pour un système de fichiers valide. Le vidage
+/// reste à l'appelant.
 pub fn write(dev: &mut dyn BlockDevice, volume: &Volume<'_>) -> Result<Geometry, FormatError> {
     let block = dev.block_size();
     let block64 = u64::from(block);
@@ -206,9 +202,6 @@ pub fn write(dev: &mut dyn BlockDevice, volume: &Volume<'_>) -> Result<Geometry,
 }
 
 /// Relit ce qui définit le volume : secteur de démarrage et sa copie, début des deux tables.
-///
-/// # Errors
-/// [`FormatError::Mismatch`] si le support ne rend pas ce qui a été écrit.
 pub fn verify(dev: &dyn BlockDevice, volume: &Volume<'_>) -> Result<(), FormatError> {
     let block = dev.block_size();
     let block64 = u64::from(block);
@@ -260,7 +253,7 @@ mod tests {
             (10 * GIB, 8192),
             (20 * GIB, 16_384),
             (64 * GIB, 32_768),
-            // Au-delà de la limite de l'outil de Windows : c'est la raison d'être de D-51.
+            // Au-delà des 32 Gio auxquels l'outil de Windows limite FAT32.
             (512 * GIB, 32_768),
         ] {
             assert_eq!(

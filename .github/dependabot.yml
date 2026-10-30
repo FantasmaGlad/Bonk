@@ -1,5 +1,5 @@
-# Mises à jour automatisées, une PR par groupe et par semaine pour limiter le coût de la CI
-# (workflow.md, « Coût »). Les actions sont épinglées par empreinte : seul Dependabot les fait bouger.
+# Mises à jour automatisées, une PR par groupe et par semaine pour limiter le coût de la CI.
+# Les actions sont épinglées par empreinte : seul Dependabot les fait bouger.
 # Les images d'exécuteur (ubuntu-24.04) ne sont pas suivies : leur changement est décidé à la main.
 version: 2
 updates:

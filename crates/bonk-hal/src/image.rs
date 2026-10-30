@@ -1,10 +1,9 @@
 //! Fichier image exposé comme périphérique bloc.
 //!
-//! Seuls les fichiers ordinaires sont acceptés : un chemin vers un périphérique (`/dev/sdX`,
-//! `\\.\PhysicalDriveN`), un répertoire ou un tube est refusé **avant** toute ouverture. Ainsi, en
-//! développement et en test, une faute de frappe ne peut pas écrire sur un disque réel (invariant 3
-//! de `PROJET.md`). L'accès aux disques réels passera par un type distinct, protégé par le filtre de
-//! sécurité.
+//! Seuls les fichiers ordinaires sont acceptés : un périphérique (`/dev/sdX`, `\\.\PhysicalDriveN`), un
+//! répertoire ou un tube est refusé **avant** toute ouverture, pour qu'une faute de frappe en test ne
+//! puisse pas écrire sur un disque réel. Les disques réels passent par [`crate::BlockNode`], derrière le
+//! filtre de sécurité.
 
 use std::fs::{self, File, OpenOptions};
 use std::io;
@@ -29,13 +28,8 @@ pub struct FileDevice {
 }
 
 impl FileDevice {
-    /// Crée un nouveau fichier image de `size` octets (creux), ouvert en lecture-écriture.
-    ///
-    /// Refuse d'écraser un fichier existant (`AlreadyExists`) : supprimer l'ancien est un geste
-    /// explicite de l'appelant.
-    ///
-    /// # Errors
-    /// [`BlockError::InvalidGeometry`] ou [`BlockError::Io`].
+    /// Crée un fichier image creux de `size` octets, ouvert en lecture-écriture. Refuse d'écraser un
+    /// fichier existant : supprimer l'ancien est un geste explicite de l'appelant.
     pub fn create(path: &Path, size: u64, block_size: u32) -> Result<Self, BlockError> {
         check_geometry(size, block_size)?;
         let file = OpenOptions::new()
@@ -52,11 +46,8 @@ impl FileDevice {
         })
     }
 
-    /// Ouvre un fichier image existant. Sa taille doit être un multiple de `block_size`.
-    ///
-    /// # Errors
-    /// [`BlockError::Io`] (`InvalidInput` si le chemin n'est pas un fichier ordinaire),
-    /// [`BlockError::InvalidGeometry`].
+    /// Ouvre un fichier image existant, dont la taille doit être un multiple de `block_size`. Un chemin
+    /// qui n'est pas un fichier ordinaire est refusé (`InvalidInput`).
     pub fn open(path: &Path, access: Access, block_size: u32) -> Result<Self, BlockError> {
         // Contrôle avant ouverture : ouvrir un tube bloquerait, ouvrir un périphérique est exactement
         // ce que ce type doit empêcher.

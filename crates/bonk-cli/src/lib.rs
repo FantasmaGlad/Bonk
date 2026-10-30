@@ -1,5 +1,5 @@
 //! Ligne de commande de Bonk : analyse des arguments, sortie texte et JSON, journal, codes de sortie
-//! stables (CDC §9).
+//! stables.
 //!
 //! Ce crate ne connaît pas la fenêtre : le binaire lui passe la fonction qui l'ouvre. Ainsi `bonk` sans
 //! commande ouvre la fenêtre, et `bonk -v` l'ouvre avec le journal verbeux.
@@ -177,11 +177,8 @@ fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
     }
 }
 
-/// Vérifie qu'une ligne de commande est acceptée par la CLI, sans l'exécuter, et rend ses mots. Sert
-/// au test de parité (CDC §9.1) : chaque commande équivalente que la fenêtre affiche doit être valide.
-///
-/// # Errors
-/// Guillemets mal fermés, ou ligne que la CLI refuse (le message de clap est repris).
+/// Vérifie qu'une ligne de commande est acceptée par la CLI, sans l'exécuter, et rend ses mots : chaque
+/// commande équivalente que la fenêtre affiche doit être valide.
 pub fn check_command_line(command: &str) -> Result<Vec<String>, String> {
     let words = split_words(command)?;
     Cli::try_parse_from(&words).map_err(|erreur| erreur.to_string())?;
@@ -231,14 +228,8 @@ fn split_words(line: &str) -> Result<Vec<String>, String> {
     Ok(words)
 }
 
-/// Exécute la ligne de commande et renvoie le code de sortie du processus. `gui` ouvre la fenêtre et
-/// rend la main à sa fermeture.
-///
-/// Codes de sortie, stables d'une version à l'autre :
-/// - `0` : succès, `--help` et `--version` compris, même si aucun disque n'est proposé ;
-/// - `1` : erreur d'exécution (énumération des disques impossible ou non disponible sur ce système,
-///   fenêtre impossible à ouvrir) ;
-/// - `2` : erreur d'usage (code de clap), réglage de journal invalide compris.
+/// Exécute la ligne de commande et renvoie le code de sortie du processus (codes stables, 0 à 6 :
+/// `bonk_ops::errors`). `gui` ouvre la fenêtre et rend la main à sa fermeture.
 pub fn run<I, T, G>(args: I, gui: G) -> ExitCode
 where
     I: IntoIterator<Item = T>,
@@ -270,7 +261,7 @@ struct Env {
     vars: Vec<(String, String)>,
     /// Accès aux disques et au signal d'annulation.
     io: job::Io,
-    /// Le processus tourne en administrateur : la fenêtre refuse de s'ouvrir (invariant 2).
+    /// Le processus tourne en administrateur : la fenêtre refuse de s'ouvrir.
     privileged: bool,
 }
 
@@ -988,9 +979,8 @@ mod tests {
         );
     }
 
-    /// Régression : `run` tenait le verrou de la sortie d'erreur pendant que la fenêtre était ouverte,
-    /// donc tout événement journalisé par un autre fil (énumération des disques, minuteur) bloquait
-    /// pour toujours dès qu'on lançait `bonk -v`. Ici, un fil journalise pendant l'ouverture de la fenêtre.
+    /// Un verrou de la sortie d'erreur tenu pendant que la fenêtre est ouverte bloquerait pour toujours
+    /// tout autre fil qui journalise (énumération, minuteur) sous `bonk -v`.
     #[test]
     fn un_autre_fil_peut_journaliser_pendant_que_la_fenetre_est_ouverte() {
         let (tx, rx) = std::sync::mpsc::channel();
@@ -1115,7 +1105,7 @@ mod tests {
             "{}",
             r.out
         );
-        // Sans option, `list` montre maintenant aussi les disques écartés.
+        // Sans option, `list` suit le réglage et montre aussi les disques écartés.
         let r = lancer_config(&["list"], &file, &[], sample());
         assert!(r.out.contains("nvme-systeme"), "{}", r.out);
         // La variable d'environnement l'emporte sur le fichier.

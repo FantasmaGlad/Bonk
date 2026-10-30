@@ -1,8 +1,4 @@
-//! Abstraction de périphérique bloc.
-//!
-//! Tout le code de `bonk-core` (partitionnement, écriture, vérification) lit et écrit à travers le
-//! trait [`BlockDevice`]. Les implémentations qui touchent le système (fichier image, disque brut)
-//! vivent dans `bonk-hal` ; [`MemoryDevice`] sert aux tests purs.
+//! Abstraction de périphérique bloc : `bonk-core` ne lit et n'écrit qu'à travers [`BlockDevice`].
 //!
 //! # Contrat
 //!
@@ -16,25 +12,25 @@ use std::error::Error;
 use std::fmt;
 use std::io;
 
-/// Taille de secteur logique par défaut, en octets.
 pub const DEFAULT_BLOCK_SIZE: u32 = 512;
 
-/// Échec d'un accès à un périphérique bloc.
 #[derive(Debug)]
 pub enum BlockError {
-    /// La taille de bloc ou la taille du périphérique est invalide.
-    InvalidGeometry { size: u64, block_size: u32 },
-    /// Le décalage ou la longueur n'est pas un multiple de la taille de bloc.
+    InvalidGeometry {
+        size: u64,
+        block_size: u32,
+    },
     Unaligned {
         offset: u64,
         len: u64,
         block_size: u32,
     },
-    /// L'accès dépasse la fin du périphérique.
-    OutOfRange { offset: u64, len: u64, size: u64 },
-    /// Écriture demandée sur un périphérique ouvert en lecture seule.
+    OutOfRange {
+        offset: u64,
+        len: u64,
+        size: u64,
+    },
     ReadOnly,
-    /// Erreur d'entrée-sortie de l'implémentation sous-jacente.
     Io(io::Error),
 }
 
@@ -88,42 +84,20 @@ pub trait BlockDevice {
     /// Taille de bloc logique en octets (puissance de deux, au moins 512).
     fn block_size(&self) -> u32;
 
-    /// Remplit `buf` avec les octets à partir de `offset`.
-    ///
-    /// # Errors
-    /// [`BlockError::Unaligned`], [`BlockError::OutOfRange`] ou [`BlockError::Io`].
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), BlockError>;
 
-    /// Écrit `data` à partir de `offset`. En cas d'erreur de validation, rien n'est écrit.
-    ///
-    /// # Errors
-    /// [`BlockError::ReadOnly`], [`BlockError::Unaligned`], [`BlockError::OutOfRange`] ou
-    /// [`BlockError::Io`].
+    /// En cas d'erreur de validation, rien n'est écrit.
     fn write_at(&mut self, offset: u64, data: &[u8]) -> Result<(), BlockError>;
 
-    /// Force les écritures en attente jusqu'au support.
-    ///
-    /// # Errors
-    /// [`BlockError::Io`].
     fn flush(&mut self) -> Result<(), BlockError>;
 
-    /// Oublie les copies en cache pour que les lectures suivantes viennent du **support** et non de la
-    /// mémoire du système : sans cela, une relecture de contrôle juste après l'écriture lit ce que le
-    /// noyau garde en cache, même si le support a mal écrit. À appeler après [`Self::flush`] et avant la
-    /// relecture. Sans effet par défaut (tampon en mémoire, fichier image).
-    ///
-    /// # Errors
-    /// [`BlockError::Io`].
+    /// Oublie les copies en cache pour que la relecture de contrôle vienne du support et non de la
+    /// mémoire du noyau, qui masquerait une écriture ratée. À appeler après [`Self::flush`].
     fn drop_cache(&mut self) -> Result<(), BlockError> {
         Ok(())
     }
 }
 
-/// Vérifie qu'une géométrie est utilisable : bloc en puissance de deux d'au moins 512 octets, taille
-/// multiple du bloc.
-///
-/// # Errors
-/// [`BlockError::InvalidGeometry`].
 pub fn check_geometry(size: u64, block_size: u32) -> Result<(), BlockError> {
     let valid = block_size >= DEFAULT_BLOCK_SIZE
         && block_size.is_power_of_two()
@@ -135,14 +109,8 @@ pub fn check_geometry(size: u64, block_size: u32) -> Result<(), BlockError> {
     }
 }
 
-/// Valide un accès de `len` octets à `offset` : alignement, puis bornes.
-///
-/// Toute implémentation de [`BlockDevice`] l'appelle avant de toucher au support, pour que le contrat
-/// soit le même partout.
-///
-/// # Errors
-/// [`BlockError::Unaligned`] ou [`BlockError::OutOfRange`] (y compris en cas de dépassement
-/// arithmétique de `offset + len`).
+/// Valide l'alignement puis les bornes d'un accès, dépassement arithmétique compris. Toute
+/// implémentation de [`BlockDevice`] l'appelle avant de toucher au support.
 pub fn check_access(size: u64, block_size: u32, offset: u64, len: usize) -> Result<(), BlockError> {
     let len = len as u64;
     let block = u64::from(block_size);
@@ -167,10 +135,6 @@ pub struct MemoryDevice {
 }
 
 impl MemoryDevice {
-    /// Crée un périphérique de `size` octets remplis de zéros.
-    ///
-    /// # Errors
-    /// [`BlockError::InvalidGeometry`], y compris quand `size` ne tient pas en mémoire adressable.
     pub fn new(size: u64, block_size: u32) -> Result<Self, BlockError> {
         check_geometry(size, block_size)?;
         let len =
@@ -181,16 +145,11 @@ impl MemoryDevice {
         })
     }
 
-    /// Crée un périphérique qui contient déjà `data`.
-    ///
-    /// # Errors
-    /// [`BlockError::InvalidGeometry`].
     pub fn from_bytes(data: Vec<u8>, block_size: u32) -> Result<Self, BlockError> {
         check_geometry(data.len() as u64, block_size)?;
         Ok(Self { data, block_size })
     }
 
-    /// Contenu complet, pour les assertions des tests.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         &self.data
@@ -282,7 +241,6 @@ mod tests {
         let mut back = vec![0; 2 * 512];
         dev.read_at(3 * 512, &mut back)?;
         assert_eq!(back, data);
-        // Les blocs voisins sont intacts.
         let mut before = vec![0xFF; 512];
         dev.read_at(2 * 512, &mut before)?;
         assert!(before.iter().all(|&b| b == 0));

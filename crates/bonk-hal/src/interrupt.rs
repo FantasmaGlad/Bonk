@@ -1,9 +1,8 @@
-//! Demande d'annulation par Ctrl+C (CDC §3.4 : annulation propre possible).
+//! Demande d'annulation par Ctrl+C.
 //!
 //! Le gestionnaire de signal ne fait que lever un drapeau atomique, seule opération permise dans un
-//! gestionnaire de signal. Le moteur d'écriture le consulte entre deux blocs et s'arrête proprement :
-//! il n'est jamais interrompu au milieu d'un bloc. Sous Unix seulement ; ailleurs le drapeau n'est
-//! jamais levé (l'annulation passe alors par les autres canaux, comme le service).
+//! gestionnaire de signal. Le moteur d'écriture le consulte entre deux blocs : il n'est jamais
+//! interrompu au milieu d'un bloc. Sous Unix seulement ; ailleurs, le drapeau n'est jamais levé.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 

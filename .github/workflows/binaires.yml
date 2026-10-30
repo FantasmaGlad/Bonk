@@ -1,11 +1,11 @@
-# Binaires de Bonk pour chaque système hôte (CDC §11), construits en continu pour que les cibles
+# Binaires de Bonk pour chaque système hôte, construits en continu pour que les cibles
 # d'exécution soient exercées en permanence, pas seulement à la release.
 #   - push sur main, lundi (dérive des images d'exécuteur), lancement manuel : construction, essai de
 #     démarrage, archive, empreinte, attestation de provenance (artefact conservé 14 jours) ;
 #   - tag vX.Y.Z : mêmes étapes, puis publication d'une release en BROUILLON (le mainteneur la publie).
 # Signature : attestation de provenance Sigstore (vérifiable par `gh attestation verify`), sans secret ni
 # certificat. La signature Authenticode (Windows) et la notarisation Apple exigent des certificats payants,
-# non provisionnés (en attente, CDC §11.1).
+# non provisionnés.
 name: binaires
 
 on:
@@ -53,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # outil/suffixe : `zigbuild` fixe la version minimale de la glibc (2.17, CDC §11) pour que le binaire
+        # outil/suffixe : `zigbuild` fixe la version minimale de la glibc (2.17) pour que le binaire
         # tourne sur les distributions anciennes ; musl = binaire statique, destiné à la ligne de commande
         # (la fenêtre charge les bibliothèques graphiques du système, impossible en statique).
         # fumee : le binaire s'exécute sur l'exécuteur qui l'a construit.
@@ -83,7 +83,7 @@ jobs:
           rustup target add "$TARGET"
         shell: bash
       # Pas de cache de compilation : ces binaires entrent dans les releases, un cache empoisonné n'y a pas sa place.
-      # Versions identiques à celles éprouvées en local (2026-10-30).
+      # Versions fixes, éprouvées en local.
       - name: Installer zig et cargo-zigbuild
         if: matrix.outil == 'zigbuild'
         run: |

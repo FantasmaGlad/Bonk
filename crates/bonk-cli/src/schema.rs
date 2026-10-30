@@ -1,4 +1,4 @@
-//! `bonk schema <commande>` : le JSON Schema de la sortie `--json` d'une commande (CDC §9.1).
+//! `bonk schema <commande>` : le JSON Schema de la sortie `--json` d'une commande.
 //!
 //! Les schémas sont générés à partir des types qui produisent la sortie : ils ne peuvent pas diverger
 //! d'elle, et un test vérifie que chaque schéma existe et décrit un objet.

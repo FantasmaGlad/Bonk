@@ -93,8 +93,8 @@ pub fn verify(
     })
 }
 
-/// Vide le cache avant une relecture de contrôle. Un échec n'arrête pas l'opération mais est signalé :
-/// la comparaison pourrait alors porter sur le cache du système et non sur le support.
+/// Vide le cache avant une relecture de contrôle. Un échec n'arrête pas l'opération et n'est que
+/// journalisé : la comparaison pourrait alors porter sur le cache du système et non sur le support.
 pub(super) fn drop_cache_before_verify(device: &mut dyn BlockDevice) {
     if let Err(e) = device.drop_cache() {
         log::warn!(target: "bonk::write", error = e.to_string().as_str(); "cache not dropped: the verification may read cached data");

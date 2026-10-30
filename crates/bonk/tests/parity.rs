@@ -1,4 +1,4 @@
-//! Parité fenêtre et ligne de commande (CDC §9.1) : la fenêtre n'a aucun pouvoir que la CLI n'ait.
+//! Parité fenêtre et ligne de commande : la fenêtre n'a aucun pouvoir que la CLI n'ait.
 //! Chaque commande équivalente qu'elle affiche, pour toute combinaison de réglages et de sélection,
 //! doit être acceptée par la CLI, et la cible d'`info` doit arriver intacte, même avec des caractères
 //! que le shell interpréterait.

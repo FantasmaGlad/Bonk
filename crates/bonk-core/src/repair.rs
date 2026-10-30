@@ -1,9 +1,8 @@
-//! Réparation du GPT (CDC §2, J1) : après avoir écrit une image sur un support plus grand, l'en-tête de
-//! secours n'est plus à la fin du disque ; ou l'un des deux en-têtes est abîmé. On reconstruit ce qui
-//! manque à partir de celui qui est valide, en gardant le GUID du disque et les partitions telles
-//! quelles.
+//! Réparation du GPT : après l'écriture d'une image sur un support plus grand, l'en-tête de secours
+//! n'est plus à la fin du disque ; ou l'un des deux en-têtes est abîmé. Ce qui manque est reconstruit
+//! depuis l'en-tête valide, GUID du disque et partitions inchangés.
 //!
-//! Le support doit être inscriptible : à n'appeler que sur une cible déjà autorisée (filtre de sécurité,
+//! Écrit sur le support : à n'appeler que sur une cible déjà autorisée (filtre de sécurité,
 //! confirmation) ou sur une image.
 
 use std::fmt;
@@ -28,13 +27,9 @@ const REPAIRABLE: [&str; 8] = [
 ];
 
 /// Plages d'octets d'une image GPT que [`repair_gpt`] réécrit quand l'image est posée sur un support
-/// plus grand : la taille de l'entrée du MBR de protection et, dans l'en-tête principal, la somme de
-/// contrôle et les quatre positions (le sien, celui de secours, premier et dernier secteur utilisables).
-/// `head` contient le début de l'image (deux secteurs au moins, 8 Kio pour couvrir les secteurs de
-/// 4 Kio). Vide si ce n'est pas une image GPT.
-///
-/// Sert à comparer un support à son image après coup sans prendre pour une erreur ce que la réparation
-/// a légitimement modifié, tout en gardant le reste de ces deux secteurs (GUID du disque...) comparé.
+/// plus grand : taille de l'entrée du MBR de protection, puis somme de contrôle et quatre positions de
+/// l'en-tête principal. La vérification les ignore et compare le reste des deux secteurs. `head` est le
+/// début de l'image (8 Kio couvrent les secteurs de 4 Kio) ; vide si ce n'est pas une image GPT.
 #[must_use]
 pub fn ranges_rewritten_by_repair(head: &[u8]) -> Vec<Range<u64>> {
     for block in [512usize, 4096] {
@@ -67,7 +62,6 @@ pub fn needs_repair(layout: &Layout) -> bool {
 #[derive(Debug)]
 pub enum RepairError {
     Device(BlockError),
-    /// Pas de GPT sur ce support.
     NotGpt,
     /// Ni l'en-tête principal ni celui de secours n'est valide : rien ne peut servir de modèle.
     NoValidHeader,
@@ -113,7 +107,6 @@ fn put_u64(buf: &mut [u8], at: usize, value: u64) {
     buf[at..at + 8].copy_from_slice(&value.to_le_bytes());
 }
 
-/// Emplacements d'un en-tête et de sa table.
 struct Placement {
     my_lba: u64,
     alternate_lba: u64,
@@ -162,10 +155,8 @@ fn disk_guid_bytes(
     Ok(guid)
 }
 
-/// Reconstruit les en-têtes et la table manquants ou abîmés.
-///
-/// # Errors
-/// [`RepairError`] ; rien n'est écrit tant qu'un en-tête valide n'a pas été trouvé.
+/// Reconstruit les en-têtes et la table manquants ou abîmés ; rien n'est écrit tant qu'un en-tête
+/// valide n'a pas été trouvé.
 pub fn repair_gpt(dev: &mut dyn BlockDevice) -> Result<RepairReport, RepairError> {
     let layout = inspect(dev)?;
     let gpt = layout.gpt.as_ref().ok_or(RepairError::NotGpt)?;
@@ -467,8 +458,8 @@ mod tests {
         Ok(())
     }
 
-    /// Régression constatée sur l'ISO de Debian : la réparation réécrivait l'en-tête principal avec
-    /// « table au secteur 2 » sans y copier la table, qui reste là où l'image l'a mise.
+    /// L'en-tête principal réécrit désigne la table là où l'image l'a mise (secteur 12 sur l'ISO de
+    /// Debian), pas au secteur 2 où elle n'est pas copiée.
     #[test]
     fn la_reparation_laisse_la_table_principale_la_ou_l_image_la_met()
     -> Result<(), Box<dyn std::error::Error>> {

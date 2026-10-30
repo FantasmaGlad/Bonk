@@ -137,7 +137,7 @@ pub(super) fn open_target(
             } else {
                 Vec::new()
             };
-            // CDC §3.3 : identité revérifiée immédiatement avant d'ouvrir.
+            // Identité revérifiée immédiatement avant d'ouvrir.
             let fresh = enumerate(deps)?;
             let again = reverify(&identity, &fresh, options).map_err(map_open_target)?;
             let node = (deps.io.open_node)(Path::new(&again.path), access, elevation)

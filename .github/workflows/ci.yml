@@ -60,7 +60,7 @@ jobs:
         run: rustup toolchain install
       - name: Restaurer le cache de compilation
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      # Paquets listés dans .github/paquets-linux.txt (un seul endroit, cité par PROJET.md) : l'image est figée,
+      # Paquets listés dans .github/paquets-linux.txt (un seul endroit) : l'image est figée,
       # un changement de paquet est donc un commit.
       - name: Paquets système
         run: |
@@ -72,13 +72,13 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       # Le code cfg(target_os) d'un autre système n'est pas compilé ci-dessus : clippy le vérifie ici, sans
       # édition de liens ni exécution, pour que le code mort ou l'import inutilisé échoue avant les runners
-      # Windows et macOS, plus chers (workflow.md, « Coût »). Ne dit rien du comportement à l'exécution.
+      # Windows et macOS, plus chers. Ne dit rien du comportement à l'exécution.
       - name: Lint croisé (Windows et macOS, compilation seulement)
         run: |
           rustup target add x86_64-pc-windows-gnu x86_64-apple-darwin aarch64-linux-android
           cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-gnu -- -D warnings
           cargo clippy --workspace --all-targets --locked --target x86_64-apple-darwin -- -D warnings
-          # Android (D-44) : le cœur pur et la ligne de commande doivent rester compilables ; la fenêtre et l'accès USB viendront avec l'application.
+          # Android : le cœur pur et la ligne de commande doivent rester compilables ; la fenêtre et l'accès USB viendront avec l'application.
           cargo clippy -p bonk-core -p bonk-ops -p bonk-cli --all-targets --locked --target aarch64-linux-android -- -D warnings
       - name: Tests
         run: cargo test --workspace --locked

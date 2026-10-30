@@ -67,7 +67,7 @@ pub(crate) struct FormatArgs {
     #[arg(long, value_name = "NOM")]
     label: Option<String>,
 
-    /// Confirme le formatage : sans --yes, Bonk ne fait rien
+    /// Confirme le formatage : sans --yes ni --force, Bonk ne fait rien
     #[arg(long)]
     yes: bool,
 

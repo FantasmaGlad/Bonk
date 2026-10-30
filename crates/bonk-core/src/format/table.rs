@@ -74,10 +74,8 @@ fn gpt_table_sectors(block: u64) -> u64 {
     (u64::from(GPT_ENTRIES) * u64::from(GPT_ENTRY_SIZE)).div_ceil(block)
 }
 
-/// Où sera la partition. Ne touche à rien : sert aussi à `--dry-run`, et à refuser avant le premier geste.
-///
-/// # Errors
-/// [`FormatError::TooSmall`], ou [`FormatError::TooLarge`] pour un MBR au-delà de 2^32 secteurs.
+/// Où sera la partition, sans rien écrire : sert aussi à `--dry-run`, et à refuser avant le premier
+/// geste. Un MBR n'adresse pas au-delà de 2^32 secteurs.
 pub fn plan(size: u64, block: u32, kind: TableKind) -> Result<PartitionPlan, FormatError> {
     let block = u64::from(block);
     let sectors = size / block;
@@ -214,11 +212,8 @@ fn write_gpt(
     Ok(())
 }
 
-/// Efface les anciennes tables et le début de la nouvelle partition, puis écrit la table. Le support reste
-/// à vider par l'appelant, une fois le système de fichiers posé.
-///
-/// # Errors
-/// [`FormatError`] : géométrie refusée (rien n'est écrit), ou erreur du périphérique.
+/// Efface les anciennes tables et le début de la nouvelle partition, puis écrit la table ; une
+/// géométrie refusée n'écrit rien. Le vidage reste à l'appelant, une fois le système de fichiers posé.
 pub fn write_table(
     dev: &mut dyn BlockDevice,
     kind: TableKind,

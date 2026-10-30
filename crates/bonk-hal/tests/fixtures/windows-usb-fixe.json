@@ -1,5 +1,5 @@
 {
-  "description": "Poste Windows : disque système SATA, disque de données, disque dur USB signalé « fixe » (le piège du CDC §3.2), Windows To Go sur USB. Jeu écrit à la main, pas une capture.",
+  "description": "Poste Windows : disque système SATA, disque de données, disque dur USB signalé « fixe », Windows To Go sur USB. Jeu écrit à la main, pas une capture.",
   "disks": [
     {
       "id": "sata-systeme",

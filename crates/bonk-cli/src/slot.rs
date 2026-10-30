@@ -1,10 +1,9 @@
-//! Emplacement unique de l'opération longue du service `bonk serve` (D-31).
+//! Emplacement unique de l'opération longue du service `bonk serve`.
 //!
 //! Invariant de protocole : une opération terminée est immédiatement remplaçable. Un client qui envoie
 //! la requête suivante dès qu'il a reçu la réponse ne doit jamais être refusé. L'emplacement est donc
 //! rendu **avant** l'envoi de la réponse, et jamais plus tard que la fin du fil, panique comprise.
-//! Isolé ici pour être éprouvé sans fil ni ordonnanceur : la course vue une fois sous Windows (`E6001`)
-//! ne dépend plus de la chance.
+//! Isolé ici pour être éprouvé sans fil ni ordonnanceur.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

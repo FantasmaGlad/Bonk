@@ -1,10 +1,10 @@
 //! Écriture d'une image depuis la fenêtre, par la ligne de commande.
 //!
 //! La fenêtre ne contient aucune logique d'écriture : elle lance `bonk write ... --progress json` dans
-//! un **processus séparé** et traduit ses lignes JSON en barre de progression (CDC §9.1 : la GUI n'est
-//! qu'une présentation des mêmes commandes). Conséquence voulue : l'interface ne tourne jamais avec
-//! des droits élevés (CDC §10.2) ; seul ce processus a besoin des droits d'écriture, et tous les
-//! garde-fous (filtre, confirmation, identité, démontage, vérification) sont ceux de la CLI.
+//! un **processus séparé** et traduit ses lignes JSON en barre de progression. Conséquence voulue :
+//! l'interface ne tourne jamais avec des droits élevés ; seul ce processus a besoin des droits
+//! d'écriture, et tous les garde-fous (filtre, confirmation, identité, démontage, vérification) sont
+//! ceux de la CLI.
 
 use std::io::{BufRead, BufReader, Read};
 use std::path::Path;

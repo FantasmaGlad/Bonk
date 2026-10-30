@@ -23,8 +23,8 @@
 | Crate | Rôle |
 |---|---|
 | `bonk` | Seul binaire. Choisit l'interface. |
-| `bonk-core` | Partitionnement MBR/GPT, écriture brute, décompression, vérification, réparation GPT. N'opère que sur une abstraction de périphérique bloc : aucune API d'OS. |
-| `bonk-hal` | Filtre de sécurité et trait `Platform` : énumération, accès brut, démontage, par système. Seul crate contenant du code spécifique à un OS. |
+| `bonk-core` | Tables MBR/GPT, formatage FAT32, écriture brute, décompression, vérification, réparation GPT, analyse d'image. N'opère que sur une abstraction de périphérique bloc : aucune API d'OS. |
+| `bonk-hal` | Filtre de sécurité et trait `Platform` : énumération, accès brut, démontage, formatage par les outils de l'hôte, par système. Seul crate contenant du code spécifique à un OS. |
 | `bonk-ops` | Porte d'écriture unique (filtre, identité, démontage, vérification) et codes d'erreur stables. Sans interface : ni clap, ni Iced. |
 | `bonk-customizer` | Fichiers de réponse Windows, persistance des systèmes Live Linux. |
 | `bonk-catalog` | Manifeste signé, bibliothèque locale, téléchargements reprenables, empreintes. |
@@ -57,6 +57,6 @@ L'interface ne s'exécute jamais avec des droits élevés. Seules les opération
 
 ## Tests
 - `bonk-core` est testé sur des fichiers image.
-- Le filtre de sécurité est testé sur des jeux d'énumération capturés sur de vraies machines.
-- Les supports produits sont démarrés dans QEMU avec un micrologiciel UEFI EDK2 (OVMF pour x86_64, AAVMF pour aarch64), avec et sans Secure Boot.
+- Le filtre de sécurité est testé sur des jeux d'énumération écrits à la main d'après de vraies machines ; une capture réelle peut être rejouée (`bonk diagnose --capture`, `--fixture`).
+- En CI, une clé écrite (Debian, x86_64) est démarrée dans QEMU avec OVMF, avec et sans Secure Boot, jusqu'au lancement du chargeur d'amorçage.
 - Aucun test n'écrit sur un périphérique réel.

@@ -1,10 +1,7 @@
-//! Écriture brute d'une image sur un périphérique bloc, et vérification par relecture (CDC §4).
-//!
-//! Le moteur travaille par blocs de 4 Mio alignés sur le secteur du périphérique, calcule l'empreinte
-//! SHA-256 des octets de l'image au fil de l'écriture, puis relit le périphérique pour la comparer.
-//! Il ne sait rien du système : il opère sur [`BlockDevice`], donc sur un fichier image comme sur un
-//! disque. Il n'écrit jamais au-delà de la fin du périphérique et rend la main à chaque bloc pour
-//! la progression et l'annulation.
+//! Écriture brute d'une image sur un [`BlockDevice`] et vérification par relecture : l'empreinte
+//! SHA-256 de l'image est calculée pendant l'écriture, puis comparée à celle du support relu. Rien
+//! n'est écrit au-delà de la fin du périphérique, et la main revient à chaque bloc pour la
+//! progression et l'annulation.
 
 use std::fmt;
 use std::io::{self, Read};
@@ -17,7 +14,7 @@ use sha2::{Digest, Sha256};
 
 use crate::block::{BlockDevice, BlockError};
 
-/// Taille d'un bloc de transfert (CDC §14 : au moins 90 % du débit de `dd` avec des blocs de 4 Mio).
+/// 4 Mio, comme le `dd bs=4M` contre lequel le débit est mesuré.
 pub const DEFAULT_CHUNK: usize = 4 << 20;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
@@ -162,13 +159,11 @@ fn millis(started: Instant) -> u64 {
     u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
-/// Taille de bloc de transfert : au moins un secteur, multiple du secteur.
 fn chunk_for(chunk: usize, block: u32) -> usize {
     let block = block as usize;
     chunk.max(block).div_ceil(block) * block
 }
 
-/// Lit jusqu'à remplir `buf` ou atteindre la fin du flux.
 fn read_full(src: &mut dyn Read, buf: &mut [u8]) -> io::Result<usize> {
     let mut filled = 0;
     while filled < buf.len() {
@@ -182,14 +177,11 @@ fn read_full(src: &mut dyn Read, buf: &mut [u8]) -> io::Result<usize> {
     Ok(filled)
 }
 
-/// Écrit `src` au début de `dev`.
-///
-/// `size_hint` est la taille de l'image quand on la connaît d'avance : si elle dépasse le support,
-/// l'écriture est refusée avant d'avoir touché quoi que ce soit.
+/// Écrit `src` au début de `dev`. Si `size_hint` dépasse le support, rien n'est touché.
 ///
 /// # Errors
-/// [`WriteError`] ; sur [`WriteError::Cancelled`] et les erreurs d'entrée-sortie, le support est dans
-/// un état partiel et doit être réécrit en entier.
+/// Sur annulation ou erreur d'entrée-sortie, le support est dans un état partiel et doit être
+/// réécrit en entier.
 pub fn write_image(
     src: &mut dyn Read,
     dev: &mut dyn BlockDevice,
@@ -256,9 +248,6 @@ pub fn write_image(
 }
 
 /// Relit les `len` premiers octets de `dev` et compare leur SHA-256 à `expected`.
-///
-/// # Errors
-/// [`VerifyError::Mismatch`] si l'empreinte diffère.
 pub fn verify(
     dev: &dyn BlockDevice,
     len: u64,
@@ -269,7 +258,6 @@ pub fn verify(
     verify_ignoring(dev, len, expected_sha256, chunk, &[], progress)
 }
 
-/// Remet à zéro, dans `buf` (lu à `offset`), les octets que couvrent les plages `ignore`.
 fn zero_ignored(buf: &mut [u8], offset: u64, ignore: &[Range<u64>]) {
     let end = offset + buf.len() as u64;
     for range in ignore {
@@ -281,12 +269,8 @@ fn zero_ignored(buf: &mut [u8], offset: u64, ignore: &[Range<u64>]) {
     }
 }
 
-/// Comme [`verify`], mais les octets des plages `ignore` sont remplacés par des zéros avant l'empreinte,
-/// des deux côtés (voir [`hash_source_ignoring`]) : pour comparer un support dont la réparation du GPT a
-/// légitimement réécrit quelques champs.
-///
-/// # Errors
-/// [`VerifyError::Mismatch`] si l'empreinte diffère.
+/// Comme [`verify`], avec les octets des plages `ignore` mis à zéro des deux côtés avant l'empreinte :
+/// la réparation du GPT réécrit légitimement quelques champs.
 pub fn verify_ignoring(
     dev: &dyn BlockDevice,
     len: u64,
@@ -335,11 +319,7 @@ pub fn verify_ignoring(
     }
 }
 
-/// Lit `src` en entier et rend sa longueur et son SHA-256 (sans rien écrire) : sert à comparer un
-/// support à une image sans la réécrire.
-///
-/// # Errors
-/// [`VerifyError::Source`] si l'image est illisible, [`VerifyError::Cancelled`] sur annulation.
+/// Longueur et SHA-256 de `src`, sans rien écrire : pour comparer un support à une image.
 pub fn hash_source(
     src: &mut dyn Read,
     size_hint: Option<u64>,
@@ -349,10 +329,7 @@ pub fn hash_source(
     hash_source_ignoring(src, size_hint, chunk, &[], progress)
 }
 
-/// Comme [`hash_source`], avec les octets des plages `ignore` remplacés par des zéros avant l'empreinte.
-///
-/// # Errors
-/// [`VerifyError::Source`] si l'image est illisible, [`VerifyError::Cancelled`] sur annulation.
+/// Comme [`hash_source`], avec les octets des plages `ignore` mis à zéro avant l'empreinte.
 pub fn hash_source_ignoring(
     src: &mut dyn Read,
     size_hint: Option<u64>,
@@ -386,11 +363,8 @@ pub fn hash_source_ignoring(
     Ok((total, hex(&hasher.finalize())))
 }
 
-/// SHA-256 d'un flux tel quel (le fichier téléchargé, compressé ou non : c'est sur lui que les éditeurs
-/// publient leur empreinte, CDC §4.2).
-///
-/// # Errors
-/// [`VerifyError::Source`] si le flux est illisible, [`VerifyError::Cancelled`] sur annulation.
+/// SHA-256 du flux tel quel, compressé ou non : c'est sur le fichier téléchargé que les éditeurs
+/// publient leur empreinte.
 pub fn hash_stream(
     src: &mut dyn Read,
     total: Option<u64>,

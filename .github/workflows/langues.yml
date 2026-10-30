@@ -1,5 +1,5 @@
-# Catalogues de langues de l'interface (D-35) : mêmes clés en français et en anglais.
-# Sans catalogue (`crates/bonk-gui/locales`, chantier de langues pas encore fait), le workflow le dit.
+# Catalogues de langues de l'interface : mêmes clés en français et en anglais.
+# Sans catalogue (`crates/bonk-gui/locales`, pas encore écrits), le workflow le dit.
 name: langues
 
 on:

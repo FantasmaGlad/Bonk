@@ -1,7 +1,7 @@
 # La clé écrite par Bonk démarre-t-elle ? Image officielle Debian écrite sur un fichier image (aucun
-# périphérique réel), puis micrologiciel UEFI sous QEMU, avec et sans Secure Boot (CDC §12.4).
+# périphérique réel), puis micrologiciel UEFI sous QEMU, avec et sans Secure Boot.
 # Preuve limitée au chargement du chargeur d'amorçage par le micrologiciel (voir le script) ; Linux x86_64
-# seulement. Reste à faire : AAVMF (aarch64), Ubuntu, Fedora, Arch, Mint, Windows (liste N1, CDC §5).
+# seulement. Reste à faire : AAVMF (aarch64), Ubuntu, Fedora, Arch, Mint, Windows.
 # L'image n'est jamais hébergée ni conservée : téléchargée du site officiel, empreinte vérifiée.
 name: demarrage-qemu
 

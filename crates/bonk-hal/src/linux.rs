@@ -9,7 +9,7 @@
 //!
 //! Pourquoi pas UDisks2 (D-Bus) : il demanderait un service en marche et une dépendance de plus pour
 //! des informations déjà disponibles en lecture de fichiers. Les accès aux disques eux-mêmes passent
-//! bien par UDisks2 et polkit (`platform/udisks.rs`, D-36).
+//! bien par UDisks2 et polkit (`platform/udisks.rs`).
 //!
 //! Tous les chemins système sont regroupés dans [`LinuxRoots`] : les tests construisent une
 //! arborescence factice et vérifient l'énumération sans toucher au vrai système.
@@ -66,10 +66,6 @@ impl LinuxRoots {
 }
 
 /// Énumère les disques à partir de `roots`.
-///
-/// # Errors
-/// [`EnumerateError`] si les points de montage, `/proc/swaps`, la base udev ou la liste des disques
-/// sont illisibles : voir la documentation du module `enumerate`.
 pub fn enumerate(roots: &LinuxRoots) -> Result<Vec<Disk>, EnumerateError> {
     let mountinfo_path = roots.proc.join("self/mountinfo");
     let mounts = parse_mountinfo(&read_required(&mountinfo_path)?)?;
@@ -292,7 +288,7 @@ fn model(dir: &Path, udev: &UdevRecord, name: &str) -> String {
     }
 }
 
-/// Identifiant stable : le lien `by-id` le plus lisible, jamais `/dev/sdX` (CDC §3.3). À défaut (loop,
+/// Identifiant stable : le lien `by-id` le plus lisible, jamais `/dev/sdX`. À défaut (loop,
 /// zram, certains lecteurs de carte), `dev-<nom>` : stable seulement le temps du branchement.
 fn stable_id(udev: &UdevRecord, name: &str) -> String {
     let mut candidates: Vec<&str> = udev
@@ -485,10 +481,6 @@ fn load_udev(roots: &LinuxRoots, devnum: &str) -> Result<UdevRecord, EnumerateEr
 }
 
 // ---------------------------------------------------------------------------------------------
-// Lecture de fichiers
-// ---------------------------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------------------------
 // Trace des lectures : journal au niveau `trace` et enregistrement pour `bonk debug sources`
 // ---------------------------------------------------------------------------------------------
 
@@ -606,10 +598,6 @@ fn traced_list(path: &Path) -> io::Result<Vec<String>> {
 
 /// Rejoue une capture : reconstruit sous un dossier temporaire l'arborescence que les lectures ont
 /// vue (fichiers, liens de `/sys/block`), énumère dessus, puis la supprime.
-///
-/// # Errors
-/// [`EnumerateError`] si la capture est incomplète pour l'énumération (par exemple sans base udev) ou
-/// si le dossier temporaire ne peut pas être créé.
 pub fn enumerate_from_reads(reads: &[SourceRead]) -> Result<Vec<Disk>, EnumerateError> {
     struct Cleanup(PathBuf);
     impl Drop for Cleanup {

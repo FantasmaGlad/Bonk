@@ -7,7 +7,7 @@
 # Exceptions : deux paquets déclarés non maintenus par leur auteur (aucune faille connue), tirés par
 # Iced 0.14 via wgpu et cosmic-text, et un avis « unsound » de lru hors de portée ici ; aucun n'a de version
 # corrigée à adopter. Chaque exception porte sa raison et son critère de retrait ; à relire à chaque montée de
-# version d'Iced (D-34).
+# version d'Iced.
 ignore = [
     { id = "RUSTSEC-2026-0253", reason = "lru unsound dans LruCache::pop si le Drop d'une clé panique ; cryoglyph 0.1.0 (Iced 0.14) exige lru 0.16, corrigé en 0.18.2, et n'appelle que pop_lru avec une clé Copy, donc sans Drop. Retrait : une version de cryoglyph qui tire lru 0.18.2 ou plus" },
     { id = "RUSTSEC-2024-0436", reason = "paste non maintenu ; dépendance de metal, via wgpu-hal (Iced 0.14). Retrait : une version d'Iced ou de wgpu qui ne tire plus paste" },

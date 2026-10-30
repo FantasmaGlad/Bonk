@@ -1,6 +1,6 @@
-//! `bonk serve` : le service headless (CDC §9.5). Tout ce que fait la fenêtre, sans interface
-//! graphique : un programme (agent de support, orchestrateur, test) pilote Bonk par un protocole
-//! JSON, une ligne par message, sur l'entrée et la sortie standard.
+//! `bonk serve` : le service headless. Tout ce que fait la fenêtre, sans interface graphique : un autre
+//! programme (outil de support, orchestrateur, test) pilote Bonk par un protocole JSON, une ligne par
+//! message, sur l'entrée et la sortie standard.
 //!
 //! - **Requête** : `{"id": 1, "method": "disk.list", "params": {"all": true}}`.
 //! - **Réponse** : `{"id": 1, "result": {...}}` ou `{"id": 1, "error": {"code": "E1003", ...}}`, avec
@@ -11,7 +11,7 @@
 //! Les méthodes portent le nom de la commande : `disk.list` est `bonk disk list`. Une seule opération
 //! d'écriture à la fois ; `cancel` l'arrête entre deux blocs. À la fermeture de l'entrée, l'opération
 //! en cours est annulée et le service s'arrête. Les mêmes garde-fous que la CLI s'appliquent : rien
-//! ne s'écrit sans `"yes": true`, ni sur un disque que le filtre interdit.
+//! ne s'écrit sans `"yes": true` ou `"force": true`, ni sur un disque que le filtre interdit.
 
 use std::io::{BufRead, Write};
 use std::path::PathBuf;
@@ -88,7 +88,7 @@ pub(crate) fn schema_response() -> Value {
     serde_json::to_value(schemars::schema_for!(Response)).unwrap_or_default()
 }
 
-/// Méthodes du service : nom, la méthode lance-t-elle une opération longue ?
+/// Méthodes du service et leur description, que rend la méthode `methods`.
 const METHODS: [(&str, &str); 21] = [
     ("ping", "répond pong"),
     ("version", "version de Bonk, système, protocole"),

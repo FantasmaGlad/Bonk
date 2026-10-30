@@ -1,4 +1,4 @@
-# Inventaire des composants (SBOM CycloneDX) du binaire, attesté et joint à la release (CDC §11).
+# Inventaire des composants (SBOM CycloneDX) du binaire, attesté et joint à la release.
 # Appelé par `binaires` ; lançable seul.
 name: sbom
 

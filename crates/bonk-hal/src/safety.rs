@@ -1,10 +1,10 @@
-//! Filtre de sécurité des disques (CDC §3.1 et §3.2).
+//! Filtre de sécurité des disques.
 //!
 //! [`evaluate`] est une **fonction pure** : elle ne lit que le [`Disk`] qu'on lui donne. Elle ne
 //! touche ni le système ni le réseau, donc elle se teste sur des jeux de données capturés (voir
 //! `tests/fixtures/`) et donne le même verdict sur les trois OS. C'est la seule porte vers
 //! l'écriture : la CLI comme la GUI proposent un disque si et seulement si le verdict est
-//! [`Eligibility::Offered`], et le revérifient juste avant d'écrire (CDC §3.3).
+//! [`Eligibility::Offered`], et le revérifient juste avant d'écrire.
 //!
 //! # Parti pris : en cas de doute, exclure
 //! Un disque refusé à tort se contourne (démontage, autre outil) ; un disque effacé à tort ne se
@@ -17,11 +17,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::disk::{Bus, Disk, DiskKind, Partition};
 
-/// Chemins de montage réservés à l'utilisateur sous Unix (CDC §3.1 point 2). Le montage doit être
+/// Chemins de montage réservés à l'utilisateur sous Unix. Le montage doit être
 /// **sous** ce chemin : `/media` lui-même ne compte pas.
 const USER_MOUNT_PREFIXES: [&str; 3] = ["/media/", "/run/media/", "/Volumes/"];
 
-/// Signatures de membres de RAID, LVM, ZFS et Storage Spaces (CDC §3.1 point 3), en minuscules. Les
+/// Signatures de membres de RAID, LVM, ZFS et Storage Spaces, en minuscules. Les
 /// adaptateurs d'OS ramènent leur vocabulaire à celui de `blkid`/`lsblk` ; Storage Spaces n'en a pas,
 /// d'où `storage_spaces_member`.
 const AGGREGATE_SIGNATURES: [&str; 7] = [
@@ -34,14 +34,14 @@ const AGGREGATE_SIGNATURES: [&str; 7] = [
     "storage_spaces_member",
 ];
 
-/// Signatures d'espace d'échange ou de reprise de mise en veille (CDC §3.1 point 1).
+/// Signatures d'espace d'échange ou de reprise de mise en veille.
 const SWAP_SIGNATURES: [&str; 2] = ["swap", "swsuspend"];
 
 /// Réglages explicites de l'utilisateur ; tout est refusé par défaut.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, default)]
 pub struct FilterOptions {
-    /// Afficher aussi les disques internes non système, avec un avertissement renforcé (CDC §3.2).
+    /// Afficher aussi les disques internes non système, avec un avertissement renforcé.
     pub show_internal: bool,
     /// Mode test explicite : autoriser les disques virtuels (loop, zram, disque de VM).
     pub allow_virtual: bool,
@@ -220,7 +220,7 @@ fn decide(disk: &Disk, options: FilterOptions, tracer: &mut Tracer<'_>) -> Eligi
             reason: HiddenReason::InternalBus,
         }
     };
-    // La règle du bus ne s'applique qu'à un disque qu'aucune exclusion n'a écarté (CDC §3.2).
+    // La règle du bus ne s'applique qu'à un disque qu'aucune exclusion n'a écarté.
     let excluded = matches!(verdict, Eligibility::Excluded { .. });
     tracer.note("bus", "3.2", &disk.path, !excluded, || {
         format!(
@@ -340,7 +340,7 @@ fn is_one_of(signature: &str, list: &[&str]) -> bool {
 }
 
 /// Un point de montage est « utilisateur » s'il est sous `/media`, `/run/media` ou `/Volumes`, ou
-/// s'il est la racine d'une lettre de lecteur d'un disque à bus amovible (CDC §3.1 point 2). Une
+/// s'il est la racine d'une lettre de lecteur d'un disque à bus amovible. Une
 /// lettre sur un bus interne est un montage système : on ne distingue pas un disque de données d'un
 /// disque d'exploitation à partir de la seule lettre.
 fn is_user_mount(mount: &str, bus: Bus) -> bool {

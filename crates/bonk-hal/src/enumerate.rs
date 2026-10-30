@@ -18,7 +18,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::disk::Disk;
 
-/// Échec de l'énumération.
 #[derive(Debug)]
 pub enum EnumerateError {
     /// Une source système nécessaire est illisible.
@@ -52,10 +51,6 @@ impl Error for EnumerateError {
 }
 
 /// Énumère les disques du système en cours.
-///
-/// # Errors
-/// [`EnumerateError`] si une source nécessaire à la sécurité est illisible, ou si le système n'est
-/// pas encore pris en charge.
 pub fn enumerate_disks() -> Result<Vec<Disk>, EnumerateError> {
     crate::platform::current().enumerate()
 }
@@ -84,9 +79,6 @@ pub fn enumerate_disks_recorded() -> (Result<Vec<Disk>, EnumerateError>, Vec<Sou
 /// Énumère les disques à partir d'une capture de sources (`bonk diagnose --capture`), sans toucher au
 /// système : sert à rejouer ailleurs un cas de support (`--fixture`) et à écrire des tests sur de vraies
 /// machines. Seules les captures d'un Linux se rejouent, sur Linux.
-///
-/// # Errors
-/// [`EnumerateError`] comme [`enumerate_disks`] ; `Unsupported` hors Linux.
 pub fn enumerate_disks_from_capture(reads: &[SourceRead]) -> Result<Vec<Disk>, EnumerateError> {
     crate::platform::current().enumerate_from_capture(reads)
 }

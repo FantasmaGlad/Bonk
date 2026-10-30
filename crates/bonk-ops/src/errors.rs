@@ -1,4 +1,4 @@
-//! Codes d'erreur stables et codes de sortie (CDC §9.1, D-28).
+//! Codes d'erreur stables et codes de sortie.
 //!
 //! Chaque erreur porte un code `Exxxx` : un outil le retrouve sans interpréter le texte, et le catalogue
 //! en donne le sens, les causes probables et le remède. Les codes ne sont jamais réutilisés ni renumérotés.
