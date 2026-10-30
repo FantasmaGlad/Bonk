@@ -108,6 +108,11 @@ pub(crate) fn map_key(key: &Key, modifiers: keyboard::Modifiers, repeat: bool) -
 /// Délai de réflexion avant que « Écrire » ne s'active (CDC §3.3).
 const WRITE_DELAY: Duration = Duration::from_secs(3);
 
+/// Secondes affichées dans le décompte du délai de réflexion, selon le temps écoulé depuis l'ouverture.
+fn secondes_restantes(elapsed: Duration) -> u64 {
+    WRITE_DELAY.saturating_sub(elapsed).as_secs() + 1
+}
+
 /// Où en est l'écriture d'une image depuis la fenêtre.
 #[derive(Debug, Default)]
 enum WriteState {
@@ -791,9 +796,12 @@ impl App {
         let body: Element<'a, Message> = match &self.write {
             WriteState::Idle => return None,
             WriteState::Draft { image, opened, .. } => {
-                let remaining = WRITE_DELAY.saturating_sub(opened.elapsed()).as_secs() + 1;
-                let ready = opened.elapsed() >= WRITE_DELAY && !image.trim().is_empty();
-                let label = if opened.elapsed() < WRITE_DELAY {
+                // Une seule lecture de l'horloge par affichage : le décompte, l'état du bouton et son libellé
+                // ne peuvent pas se contredire.
+                let elapsed = opened.elapsed();
+                let ready = elapsed >= WRITE_DELAY && !image.trim().is_empty();
+                let label = if elapsed < WRITE_DELAY {
+                    let remaining = secondes_restantes(elapsed);
                     format!("Écrire et effacer ce disque (dans {remaining} s)")
                 } else if image.trim().is_empty() {
                     "Écrire et effacer ce disque (saisir une image)".to_owned()
@@ -1550,7 +1558,12 @@ mod tests {
             &app,
             "Cle de test  série 4C530001  16,0 Go  1 partition(s)  étiquettes : CLE"
         ));
-        assert!(contient(&app, "Écrire et effacer ce disque (dans 3 s)"));
+        // La valeur exacte dépend de l'horloge (un exécuteur lent peut avoir écoulé plus d'une seconde
+        // pendant le rendu) : on vérifie la présence du décompte ; les valeurs sont éprouvées plus bas.
+        assert!(
+            (1..=3).any(|n| contient(&app, &format!("Écrire et effacer ce disque (dans {n} s)"))),
+            "décompte absent"
+        );
         let mut vieux = app_avec_panneau();
         vieillir_le_panneau(&mut vieux);
         assert!(contient(
@@ -1559,6 +1572,15 @@ mod tests {
         ));
         let _ = vieux.update(Message::ImageInput("/tmp/x.img".to_owned()));
         assert!(contient(&vieux, "Écrire et effacer ce disque"));
+    }
+
+    #[test]
+    fn le_decompte_diminue_avec_le_temps_ecoule() {
+        assert_eq!(secondes_restantes(Duration::from_millis(1)), 3);
+        assert_eq!(secondes_restantes(Duration::from_millis(1500)), 2);
+        assert_eq!(secondes_restantes(Duration::from_millis(2500)), 1);
+        // Une fois le délai passé, le bouton n'affiche plus de décompte ; la fonction reste bornée à 1.
+        assert_eq!(secondes_restantes(Duration::from_secs(10)), 1);
     }
 
     #[test]
