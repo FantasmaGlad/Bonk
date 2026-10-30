@@ -159,6 +159,16 @@ fn millis(started: Instant) -> u64 {
     u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
+fn progress_at(phase: Phase, done: u64, total: Option<u64>, started: Instant) -> Progress {
+    Progress {
+        phase,
+        bytes_done: done,
+        bytes_total: total,
+        bytes_per_second: rate(done, started),
+        elapsed_ms: millis(started),
+    }
+}
+
 fn chunk_for(chunk: usize, block: u32) -> usize {
     let block = block as usize;
     chunk.max(block).div_ceil(block) * block
@@ -203,14 +213,7 @@ pub fn write_image(
     let started = Instant::now();
     let (mut written, mut offset) = (0u64, 0u64);
 
-    let report = |phase, done, total, started: Instant| Progress {
-        phase,
-        bytes_done: done,
-        bytes_total: total,
-        bytes_per_second: rate(done, started),
-        elapsed_ms: millis(started),
-    };
-    if progress(&report(Phase::Write, 0, size_hint, started)) == Control::Cancel {
+    if progress(&progress_at(Phase::Write, 0, size_hint, started)) == Control::Cancel {
         return Err(WriteError::Cancelled { bytes_written: 0 });
     }
     loop {
@@ -230,13 +233,13 @@ pub fn write_image(
         hasher.update(&buf[..n]);
         written += n as u64;
         offset += padded;
-        if progress(&report(Phase::Write, written, size_hint, started)) == Control::Cancel {
+        if progress(&progress_at(Phase::Write, written, size_hint, started)) == Control::Cancel {
             return Err(WriteError::Cancelled {
                 bytes_written: written,
             });
         }
     }
-    let _ = progress(&report(Phase::Flush, written, Some(written), started));
+    let _ = progress(&progress_at(Phase::Flush, written, Some(written), started));
     dev.flush()?;
     Ok(WriteReport {
         bytes: written,
@@ -292,14 +295,7 @@ pub fn verify_ignoring(
         zero_ignored(&mut buf[..n], done, ignore);
         hasher.update(&buf[..n]);
         done += n as u64;
-        let current = Progress {
-            phase: Phase::Verify,
-            bytes_done: done,
-            bytes_total: Some(len),
-            bytes_per_second: rate(done, started),
-            elapsed_ms: millis(started),
-        };
-        if progress(&current) == Control::Cancel {
+        if progress(&progress_at(Phase::Verify, done, Some(len), started)) == Control::Cancel {
             return Err(VerifyError::Cancelled);
         }
     }
@@ -337,6 +333,17 @@ pub fn hash_source_ignoring(
     ignore: &[Range<u64>],
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<(u64, String), VerifyError> {
+    hash_reader(src, size_hint, chunk, ignore, Phase::Verify, progress)
+}
+
+fn hash_reader(
+    src: &mut dyn Read,
+    size_hint: Option<u64>,
+    chunk: usize,
+    ignore: &[Range<u64>],
+    phase: Phase,
+    progress: &mut dyn FnMut(&Progress) -> Control,
+) -> Result<(u64, String), VerifyError> {
     let mut buf = vec![0u8; chunk.max(4096)];
     let mut hasher = Sha256::new();
     let started = Instant::now();
@@ -349,14 +356,7 @@ pub fn hash_source_ignoring(
         zero_ignored(&mut buf[..n], total, ignore);
         hasher.update(&buf[..n]);
         total += n as u64;
-        let current = Progress {
-            phase: Phase::Verify,
-            bytes_done: total,
-            bytes_total: size_hint,
-            bytes_per_second: rate(total, started),
-            elapsed_ms: millis(started),
-        };
-        if progress(&current) == Control::Cancel {
+        if progress(&progress_at(phase, total, size_hint, started)) == Control::Cancel {
             return Err(VerifyError::Cancelled);
         }
     }
@@ -371,29 +371,7 @@ pub fn hash_stream(
     chunk: usize,
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<String, VerifyError> {
-    let mut buf = vec![0u8; chunk.max(4096)];
-    let mut hasher = Sha256::new();
-    let started = Instant::now();
-    let mut done = 0u64;
-    loop {
-        let n = read_full(src, &mut buf).map_err(VerifyError::Source)?;
-        if n == 0 {
-            break;
-        }
-        hasher.update(&buf[..n]);
-        done += n as u64;
-        let current = Progress {
-            phase: Phase::Source,
-            bytes_done: done,
-            bytes_total: total,
-            bytes_per_second: rate(done, started),
-            elapsed_ms: millis(started),
-        };
-        if progress(&current) == Control::Cancel {
-            return Err(VerifyError::Cancelled);
-        }
-    }
-    Ok(hex(&hasher.finalize()))
+    hash_reader(src, total, chunk, &[], Phase::Source, progress).map(|(_, sha256)| sha256)
 }
 
 #[cfg(test)]

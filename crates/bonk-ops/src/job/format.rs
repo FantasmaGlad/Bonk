@@ -179,6 +179,75 @@ fn wait_for_filesystem(id: &str, fs: Filesystem, deps: &Deps<'_>) -> Result<(), 
     ))
 }
 
+/// Écrit la table et, pour FAT32, le système de fichiers, puis relit ce qui a été écrit.
+fn write_volume(
+    device: &mut dyn BlockDevice,
+    kind: TableKind,
+    filesystem: Filesystem,
+    label: Option<&str>,
+    ids: &Ids,
+) -> Result<(PartitionPlan, Option<u32>), JobError> {
+    let partition =
+        table::write_table(device, kind, filesystem, label, ids).map_err(format_error)?;
+    let volume = fat32::Volume {
+        first_lba: partition.first_lba,
+        sectors: partition.sectors(),
+        label,
+        volume_id: ids.volume_id,
+    };
+    let cluster_bytes = if filesystem.is_native() {
+        let geometry = fat32::write(device, &volume).map_err(format_error)?;
+        Some(geometry.cluster_bytes)
+    } else {
+        None
+    };
+    device.flush().map_err(|e| fail(Code::FormatFailed, e))?;
+    drop_cache_before_verify(device);
+    check_table(device, partition)?;
+    if filesystem.is_native() {
+        fat32::verify(device, &volume).map_err(format_error)?;
+    }
+    Ok((partition, cluster_bytes))
+}
+
+/// Le disque formaté, tel que le système le désigne.
+struct HostDisk<'a> {
+    id: &'a str,
+    path: &'a str,
+    elevation: Elevation,
+}
+
+/// Le disque est rendu au système : il relit la table, montre la partition, et y pose exFAT, NTFS ou
+/// ext4 avec ses propres outils.
+fn hand_over_to_host(
+    disk: &HostDisk<'_>,
+    partition_bytes: u64,
+    filesystem: Filesystem,
+    label: Option<&str>,
+    deps: &Deps<'_>,
+) -> Result<(), JobError> {
+    let rescanned = (deps.io.rescan)(Path::new(disk.path), disk.elevation);
+    if let Err(error) = &rescanned {
+        log::warn!(target: "bonk::write", error = error.to_string().as_str(); "partition table not reread");
+    }
+    let path = wait_for_partition(disk.id, partition_bytes, deps)?;
+    if !filesystem.is_native() {
+        let path = path.ok_or_else(|| {
+            fail(
+                Code::FormatFailed,
+                "le système ne montre pas la nouvelle partition : rien n'a été formaté dessus",
+            )
+        })?;
+        (deps.io.format_partition)(Path::new(&path), filesystem, label, disk.elevation)
+            .map_err(|e| fail(Code::FormatFailed, e))?;
+        wait_for_filesystem(disk.id, filesystem, deps)?;
+    } else if path.is_none() {
+        // FAT32 est écrit et relu : le système le verra au prochain branchement.
+        log::warn!(target: "bonk::write", "new partition not visible yet: unplug and replug the disk");
+    }
+    Ok(())
+}
+
 pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> {
     let chosen = choose(&job.target, job.options, deps)?;
     let size = chosen.info.size_bytes.ok_or_else(|| {
@@ -268,54 +337,24 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
         target_path = info.path.as_str(), table = job.table.name(), filesystem = filesystem.name();
         "format starting"
     );
-    let partition = table::write_table(&mut *device, job.table, filesystem, label.as_deref(), &ids)
-        .map_err(format_error)?;
-    let volume = fat32::Volume {
-        first_lba: partition.first_lba,
-        sectors: partition.sectors(),
-        label: label.as_deref(),
-        volume_id: ids.volume_id,
-    };
-    let cluster_bytes = if filesystem.is_native() {
-        let geometry = fat32::write(&mut *device, &volume).map_err(format_error)?;
-        Some(geometry.cluster_bytes)
-    } else {
-        None
-    };
-    device.flush().map_err(|e| fail(Code::FormatFailed, e))?;
-    drop_cache_before_verify(&mut *device);
-    check_table(&*device, partition)?;
-    if filesystem.is_native() {
-        fat32::verify(&*device, &volume).map_err(format_error)?;
-    }
+    let (partition, cluster_bytes) =
+        write_volume(&mut *device, job.table, filesystem, label.as_deref(), &ids)?;
     // Libère le disque : le service du système ne peut pas relire la table d'un disque ouvert en exclusif.
     let block = u64::from(device.block_size());
     drop(device);
     if let Some(id) = &disk_id {
-        let rescanned = (deps.io.rescan)(Path::new(&info.path), job.elevation);
-        if let Err(error) = &rescanned {
-            log::warn!(target: "bonk::write", error = error.to_string().as_str(); "partition table not reread");
-        }
-        let path = wait_for_partition(id, partition.sectors() * block, deps)?;
-        if !filesystem.is_native() {
-            let path = path.ok_or_else(|| {
-                fail(
-                    Code::FormatFailed,
-                    "le système ne montre pas la nouvelle partition : rien n'a été formaté dessus",
-                )
-            })?;
-            (deps.io.format_partition)(
-                Path::new(&path),
-                filesystem,
-                label.as_deref(),
-                job.elevation,
-            )
-            .map_err(|e| fail(Code::FormatFailed, e))?;
-            wait_for_filesystem(id, filesystem, deps)?;
-        } else if path.is_none() {
-            // FAT32 est écrit et relu : le système le verra au prochain branchement.
-            log::warn!(target: "bonk::write", "new partition not visible yet: unplug and replug the disk");
-        }
+        let disk = HostDisk {
+            id,
+            path: &info.path,
+            elevation: job.elevation,
+        };
+        hand_over_to_host(
+            &disk,
+            partition.sectors() * block,
+            filesystem,
+            label.as_deref(),
+            deps,
+        )?;
     }
     log::info!(target: "bonk::write", filesystem = filesystem.name(); "format finished");
     Ok(result(

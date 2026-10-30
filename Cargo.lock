@@ -367,10 +367,8 @@ dependencies = [
 name = "bonk"
 version = "0.0.1"
 dependencies = [
- "bonk-catalog",
  "bonk-cli",
  "bonk-core",
- "bonk-customizer",
  "bonk-gui",
  "bonk-hal",
  "serde_json",
@@ -384,9 +382,7 @@ version = "0.0.1"
 name = "bonk-cli"
 version = "0.0.1"
 dependencies = [
- "bonk-catalog",
  "bonk-core",
- "bonk-customizer",
  "bonk-hal",
  "bonk-ops",
  "clap",
@@ -421,9 +417,7 @@ dependencies = [
 name = "bonk-gui"
 version = "0.0.1"
 dependencies = [
- "bonk-catalog",
  "bonk-core",
- "bonk-customizer",
  "bonk-hal",
  "iced",
  "iced_test",

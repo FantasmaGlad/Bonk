@@ -11,13 +11,9 @@ publish.workspace = true
 [dependencies]
 bonk-core.workspace = true
 bonk-hal.workspace = true
-bonk-customizer.workspace = true
-bonk-catalog.workspace = true
 serde_json.workspace = true
 iced.workspace = true
 log.workspace = true
-
-[target.'cfg(unix)'.dependencies]
 
 [dev-dependencies]
 iced_test.workspace = true

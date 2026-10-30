@@ -3,9 +3,10 @@
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
+use bonk_core::BlockDevice;
 use bonk_core::analysis::{self, ImageKind, ImageReport};
 use bonk_core::partition::inspect;
-use bonk_core::repair::{needs_repair, repair_gpt};
+use bonk_core::repair::{RepairReport, needs_repair, repair_gpt};
 use bonk_core::write::{self as engine, Control, DEFAULT_CHUNK, Phase, Progress, VerifyError};
 use bonk_hal::{Access, Elevation, Eligibility, FilterOptions, Warning, evaluate};
 
@@ -192,6 +193,32 @@ pub(super) fn confirm_internal(
     ))
 }
 
+fn planned_steps(job: &WriteJob, chosen: &Chosen) -> Vec<&'static str> {
+    let mut steps = Vec::new();
+    if !chosen.mounts.is_empty() {
+        steps.push("unmount");
+    }
+    steps.extend(["write", "flush"]);
+    if job.verify {
+        steps.push("verify");
+    }
+    if job.repair_gpt {
+        steps.push("repair_gpt_if_needed");
+    }
+    steps
+}
+
+/// Le support est plus grand que l'image : le GPT de secours n'est plus à la fin.
+fn repair_if_needed(device: &mut dyn BlockDevice) -> Result<Option<RepairReport>, JobError> {
+    let layout = inspect(device).map_err(|e| fail(Code::GptRepairFailed, e))?;
+    if !needs_repair(&layout) {
+        return Ok(None);
+    }
+    let report = repair_gpt(device).map_err(|e| fail(Code::GptRepairFailed, e))?;
+    log::info!(target: "bonk::write", actions = report.actions.join(",").as_str(); "gpt repaired");
+    Ok(Some(report))
+}
+
 pub fn write(
     job: &WriteJob,
     deps: &Deps<'_>,
@@ -219,17 +246,7 @@ pub fn write(
     let sha256_checked = job.expected_sha256.is_some();
 
     if job.dry_run {
-        let mut steps = Vec::new();
-        if !chosen.mounts.is_empty() {
-            steps.push("unmount");
-        }
-        steps.extend(["write", "flush"]);
-        if job.verify {
-            steps.push("verify");
-        }
-        if job.repair_gpt {
-            steps.push("repair_gpt_if_needed");
-        }
+        let steps = planned_steps(job, &chosen);
         return Ok(WriteOutcome::Plan(Box::new(Plan {
             schema_version: SCHEMA_VERSION,
             event: "plan",
@@ -310,14 +327,7 @@ pub fn write(
     };
 
     let gpt_repair = if job.repair_gpt {
-        let layout = inspect(&*device).map_err(|e| fail(Code::GptRepairFailed, e))?;
-        if needs_repair(&layout) {
-            let report = repair_gpt(&mut *device).map_err(|e| fail(Code::GptRepairFailed, e))?;
-            log::info!(target: "bonk::write", actions = report.actions.join(",").as_str(); "gpt repaired");
-            Some(report)
-        } else {
-            None
-        }
+        repair_if_needed(&mut *device)?
     } else {
         None
     };
