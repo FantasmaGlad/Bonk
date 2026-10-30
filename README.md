@@ -1,13 +1,19 @@
 # Bonk
 
-Utilitaire de création de supports d'amorçage (clés USB et disques externes) pour Linux, Windows et macOS, écrit en Rust. Un seul exécutable : l'interface graphique sans argument, la ligne de commande sinon.
+Utilitaire de création de supports d'amorçage (clés USB et disques externes), écrit en Rust. Un seul exécutable : l'interface graphique sans argument, la ligne de commande sinon. Projet en développement, version 0.0.1.
 
 [![binaires](https://github.com/FantasmaGlad/Bonk/actions/workflows/binaires.yml/badge.svg)](https://github.com/FantasmaGlad/Bonk/actions/workflows/binaires.yml)
 [![ci](https://github.com/FantasmaGlad/Bonk/actions/workflows/ci.yml/badge.svg)](https://github.com/FantasmaGlad/Bonk/actions/workflows/ci.yml)
 
 ## Portée
 
-Bonk écrit des images disque (`.img`, `.iso`, `.gz`, `.xz`, `.zst`) sur une clé USB ou un disque externe, puis vérifie l'écriture. Il fonctionne sur Linux, Windows et macOS, en x86_64, x86 et ARM64 selon le système, avec une interface graphique et une ligne de commande équivalentes. Un disque système n'est jamais proposé ni écrit.
+Bonk écrit des images disque (`.img`, `.iso`, `.gz`, `.xz`, `.zst`) sur une clé USB ou un disque externe, puis vérifie l'écriture. Un disque système n'est jamais proposé ni écrit.
+
+État actuel :
+
+- **Linux** : liste des disques, écriture et vérification. L'écriture exige aujourd'hui les droits d'administrateur (`sudo`) ; la fenêtre ne peut donc pas encore écrire pour un utilisateur ordinaire.
+- **Windows et macOS** : les binaires sont construits et testés, mais l'accès aux disques n'existe pas encore (`bonk list` échoue avec le code `E1002`).
+- **Pas encore fait** : téléchargement, formatage, clé d'installation Windows, application Android.
 
 ## Télécharger
 
@@ -40,7 +46,7 @@ Les binaires ne sont pas encore signés Authenticode (Windows) ni notarisés (ma
 ## Principes
 
 - Sécurité des disques : un disque système de l'hôte n'est jamais proposé ni écrit.
-- Aucune télémétrie : le réseau ne sert qu'au catalogue et aux téléchargements demandés.
+- Aucune télémétrie : le réseau ne servira qu'au catalogue et aux téléchargements demandés.
 - Aucune dépendance à installer par l'utilisateur.
 
 ## Compiler
