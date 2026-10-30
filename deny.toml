@@ -5,12 +5,17 @@
 # Une vulnérabilité connue fait toujours échouer le contrôle ; les paquets non maintenus
 # et les versions retirées du registre sont signalés par défaut.
 # Exceptions : deux paquets déclarés non maintenus par leur auteur (aucune faille connue), tirés par
-# Iced 0.14 via wgpu et cosmic-text, sans version corrigée à adopter. Chaque exception porte sa raison et
-# son critère de retrait ; à relire à chaque montée de version d'Iced (D-34).
+# Iced 0.14 via wgpu et cosmic-text, et un avis « unsound » de lru hors de portée ici ; aucun n'a de version
+# corrigée à adopter. Chaque exception porte sa raison et son critère de retrait ; à relire à chaque montée de
+# version d'Iced (D-34).
 ignore = [
+    { id = "RUSTSEC-2026-0253", reason = "lru unsound dans LruCache::pop si le Drop d'une clé panique ; cryoglyph 0.1.0 (Iced 0.14) exige lru 0.16, corrigé en 0.18.2, et n'appelle que pop_lru avec une clé Copy, donc sans Drop. Retrait : une version de cryoglyph qui tire lru 0.18.2 ou plus" },
     { id = "RUSTSEC-2024-0436", reason = "paste non maintenu ; dépendance de metal, via wgpu-hal (Iced 0.14). Retrait : une version d'Iced ou de wgpu qui ne tire plus paste" },
     { id = "RUSTSEC-2026-0192", reason = "ttf-parser non maintenu ; dépendance de la pile de texte d'Iced 0.14. Retrait : une version d'Iced ou de cosmic-text qui ne tire plus ttf-parser" },
 ]
+# Défaut : seuls les avis « unsound » sur nos propres crates sont signalés. Scorecard les voit aussi sur les
+# dépendances transitives : ce contrôle doit au moins en dire autant.
+unsound = "all"
 # Une exception que plus aucune dépendance ne déclenche fait échouer le contrôle (défaut : avertissement) :
 # elle doit être retirée le jour où son critère est rempli, pas rester en silence.
 unused-ignored-advisory = "deny"
