@@ -1194,10 +1194,12 @@ mod tests {
             }
         });
         let f = fake(false, enumerate);
-        let out = session(
+        // On attend le second événement au lieu de deviner une durée : sur un exécuteur chargé (macOS en CI),
+        // l'intervalle de 100 ms s'allonge et une attente fixe de 700 ms ne voyait que l'événement initial.
+        let out = session_until(
             &[r#"{"id":1,"method":"watch.start","params":{"interval_ms":100}}"#],
             &f.cfg,
-            Duration::from_millis(700),
+            r#""initial":false"#,
         );
         assert_eq!(response(&out, 1)["result"]["watching"], true);
         let events: Vec<&Value> = out
