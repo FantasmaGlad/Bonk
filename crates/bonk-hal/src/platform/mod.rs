@@ -148,6 +148,13 @@ pub trait Platform: Send + Sync {
         elevation: Elevation,
     ) -> Result<(), BlockError>;
 
+    /// Demande au système de relire la table de partitions du disque, qu'on vient de remplacer : sans
+    /// cela, il peut montrer un moment les anciennes partitions, ou aucune.
+    ///
+    /// # Errors
+    /// [`BlockError`] : droits refusés, service absent.
+    fn rescan(&self, disk: &Path, elevation: Elevation) -> Result<(), BlockError>;
+
     /// Le processus tourne-t-il en administrateur ? La fenêtre refuse alors de s'ouvrir (invariant 2).
     fn is_privileged(&self) -> bool;
 

@@ -241,6 +241,7 @@ impl Scenario {
         let cancel_on_prepare = self.cancel_on_prepare;
         let capabilities = self.capabilities.clone();
         let log_format = Rc::clone(&self.log);
+        let log_rescan = Rc::clone(&self.log);
         let cancelled = Rc::new(Cell::new(false));
         let cancel_flag = Rc::clone(&cancelled);
         let seen_elevation = Rc::clone(&self.seen_elevation);
@@ -290,6 +291,12 @@ impl Scenario {
                     path.display(),
                     label.unwrap_or("")
                 ));
+                Ok(())
+            }),
+            rescan: Box::new(move |path, _| {
+                log_rescan
+                    .borrow_mut()
+                    .push(format!("rescan:{}", path.display()));
                 Ok(())
             }),
             pause: Box::new(|| {}),
@@ -920,10 +927,24 @@ fn reparer_un_disque_interne_exige_aussi_force() {
     assert!(err.contains(CONFIRMATION_REQUIRED), "{err}");
 }
 
-/// Disque vierge après démontage : l'énumération suivante voit la nouvelle partition.
-fn usb_with_new_partition() -> Disk {
+/// Taille de la partition d'un GPT sur le disque simulé.
+fn new_partition_bytes() -> u64 {
+    let plan = bonk_core::format::table::plan(
+        DISK_SIZE as u64,
+        512,
+        bonk_core::format::table::TableKind::Gpt,
+    )
+    .expect("plan");
+    plan.sectors() * 512
+}
+
+/// Le disque après formatage, avec le système de fichiers que le système y voit.
+fn usb_with_new_partition(fs: &str) -> Disk {
     let mut disk = usb("S1");
-    disk.partitions = vec![partition("/dev/sdb1", &[], false)];
+    let mut part = partition("/dev/sdb1", &[], false);
+    part.size_bytes = new_partition_bytes();
+    part.fs_type = Some(fs.to_owned());
+    disk.partitions = vec![part];
     disk
 }
 
@@ -938,7 +959,8 @@ fn formater_une_cle_passe_par_tous_les_garde_fous_puis_relit() {
             "prepare:/dev/sdb",
             "unmount:usb-a",
             "open:/dev/sdb:ReadWrite",
-            "drop_cache"
+            "drop_cache",
+            "rescan:/dev/sdb"
         ]
     );
     let value: serde_json::Value = serde_json::from_str(&out).expect("JSON");
@@ -1017,26 +1039,53 @@ fn un_outil_absent_refuse_exfat_sans_toucher_au_disque() {
 }
 
 #[test]
-fn exfat_passe_par_l_hote_une_fois_la_partition_apparue() {
+fn exfat_ne_formate_jamais_l_ancienne_partition_encore_visible() {
     let mut scenario = Scenario::new();
     scenario.capabilities = vec![exfat_capability(true)];
-    // Choix, revérification, puis une énumération sans partition, puis la partition.
-    let mut blank = usb("S1");
-    blank.partitions = vec![];
+    // L'ancienne table reste visible un moment : même chemin /dev/sdb1, autre taille. C'est ce qu'a montré
+    // l'essai sur la clé réelle.
     scenario.enumerations = vec![
         vec![usb("S1")],
-        vec![blank.clone()],
-        vec![blank],
-        vec![usb_with_new_partition()],
+        vec![usb("S1")],
+        vec![usb("S1")],
+        vec![usb("S1")],
+        vec![usb_with_new_partition("")],
+        vec![usb_with_new_partition("exfat")],
     ];
     let (code, _, err) = scenario.run(&[
         "format", "usb-a", "--fs", "exfat", "--label", "Clé", "--yes",
     ]);
     assert_eq!(code, 0, "{err}");
+    let log = scenario.log();
+    assert!(log.contains(&"rescan:/dev/sdb".to_owned()), "{log:?}");
     assert_eq!(
-        scenario.log().last().map(String::as_str),
+        log.last().map(String::as_str),
         Some("format:/dev/sdb1:exfat:Clé")
     );
+}
+
+#[test]
+fn exfat_sans_nouvelle_partition_ne_formate_rien() {
+    let mut scenario = Scenario::new();
+    scenario.capabilities = vec![exfat_capability(true)];
+    let (code, _, err) = scenario.run(&["format", "usb-a", "--fs", "exfat", "--yes"]);
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("E4006"), "{err}");
+    assert!(!scenario.log().iter().any(|l| l.starts_with("format:")));
+}
+
+#[test]
+fn exfat_que_le_systeme_ne_reconnait_pas_est_un_echec() {
+    let mut scenario = Scenario::new();
+    scenario.capabilities = vec![exfat_capability(true)];
+    scenario.enumerations = vec![
+        vec![usb("S1")],
+        vec![usb("S1")],
+        vec![usb_with_new_partition("")],
+    ];
+    let (code, _, err) = scenario.run(&["format", "usb-a", "--fs", "exfat", "--yes"]);
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("ne reconnaît pas"), "{err}");
 }
 
 #[test]

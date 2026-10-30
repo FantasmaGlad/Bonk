@@ -65,6 +65,9 @@ pub type PrepareFn = Box<dyn Fn(&Path, Access, Elevation) -> Result<(), BlockErr
 pub type FormatPartitionFn =
     Box<dyn Fn(&Path, Filesystem, Option<&str>, Elevation) -> Result<(), BlockError>>;
 
+/// Relecture de la table de partitions d'un disque par le système.
+pub type PrepareRescanFn = Box<dyn Fn(&Path, Elevation) -> Result<(), BlockError>>;
+
 /// Ce que les opérations demandent au système : injectable pour les tests.
 pub struct Io {
     pub prepare: PrepareFn,
@@ -73,6 +76,7 @@ pub struct Io {
     pub cancelled: Box<dyn Fn() -> bool>,
     pub capabilities: Box<dyn Fn() -> Vec<Capability>>,
     pub format_partition: FormatPartitionFn,
+    pub rescan: PrepareRescanFn,
     /// Attente courte entre deux regards sur une partition que le système n'a pas encore créée.
     pub pause: Box<dyn Fn()>,
 }
@@ -100,6 +104,9 @@ impl Io {
             capabilities: Box::new(|| bonk_hal::platform::current().capabilities()),
             format_partition: Box::new(|path, fs, label, elevation| {
                 bonk_hal::platform::current().format_partition(path, fs, label, elevation)
+            }),
+            rescan: Box::new(|path, elevation| {
+                bonk_hal::platform::current().rescan(path, elevation)
             }),
             pause: Box::new(|| std::thread::sleep(std::time::Duration::from_millis(250))),
             cancelled: Box::new(move || {

@@ -75,6 +75,10 @@ impl Platform for Unsupported {
         Err(no_raw_access())
     }
 
+    fn rescan(&self, _disk: &Path, _elevation: Elevation) -> Result<(), BlockError> {
+        Err(no_raw_access())
+    }
+
     fn prepare_access(
         &self,
         _path: &Path,

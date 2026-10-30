@@ -22,7 +22,8 @@ use crate::errors::Code;
 
 /// Au-delà, `exfat` plutôt que `fat32` : la limite usuelle des outils et le seuil attendu des appareils.
 const FAT32_DEFAULT_LIMIT: u64 = 32 << 30;
-/// Regards sur le système en attendant la partition : une demi-minute avec la pause de 250 ms.
+/// Regards sur le système en attendant la partition ou le système de fichiers : une demi-minute avec la
+/// pause de 250 ms.
 const PARTITION_LOOKS: u32 = 120;
 
 pub struct FormatJob {
@@ -131,26 +132,50 @@ fn check_table(dev: &dyn BlockDevice, part: PartitionPlan) -> Result<(), JobErro
     }
 }
 
-/// Attend que le système ait créé la partition de ce disque, et rend son chemin. Le noyau relit la table à
-/// la fermeture du périphérique, en tâche de fond.
-fn wait_for_partition(id: &str, deps: &Deps<'_>) -> Result<String, JobError> {
+/// Attend que le système montre **la nouvelle** partition, reconnue à sa taille : il peut garder un moment
+/// l'ancienne table, et formater une ancienne partition de la même place détruirait la mauvaise zone.
+fn wait_for_partition(
+    id: &str,
+    expected_bytes: u64,
+    deps: &Deps<'_>,
+) -> Result<Option<String>, JobError> {
     for _ in 0..PARTITION_LOOKS {
         let disks = enumerate(deps)?;
         let found = disks
             .iter()
             .find(|disk| disk.id == id)
-            .and_then(|disk| disk.partitions.first());
+            .filter(|disk| disk.partitions.len() == 1)
+            .map(|disk| &disk.partitions[0])
+            .filter(|partition| partition.size_bytes == expected_bytes);
         if let Some(partition) = found {
-            return Ok(partition.path.clone());
+            return Ok(Some(partition.path.clone()));
         }
         if (deps.io.cancelled)() {
             return Err(fail(Code::Cancelled, "annulée en attendant la partition"));
         }
         (deps.io.pause)();
     }
+    Ok(None)
+}
+
+/// L'outil de l'hôte ne se relit pas ici octet par octet : sa sortie n'est pas interprétée (D-04). Le système
+/// doit au moins reconnaître le résultat.
+fn wait_for_filesystem(id: &str, fs: Filesystem, deps: &Deps<'_>) -> Result<(), JobError> {
+    for _ in 0..PARTITION_LOOKS {
+        let disks = enumerate(deps)?;
+        let found = disks
+            .iter()
+            .find(|disk| disk.id == id)
+            .and_then(|disk| disk.partitions.first())
+            .and_then(|partition| partition.fs_type.as_deref());
+        if found == Some(fs.name()) {
+            return Ok(());
+        }
+        (deps.io.pause)();
+    }
     Err(fail(
         Code::FormatFailed,
-        "le système n'a pas fait apparaître la nouvelle partition",
+        format!("le système ne reconnaît pas {fs} sur la nouvelle partition"),
     ))
 }
 
@@ -263,17 +288,34 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
     if filesystem.is_native() {
         fat32::verify(&*device, &volume).map_err(format_error)?;
     }
-    // Libère le disque : le noyau relit la table, et l'outil de l'hôte pourra l'ouvrir.
+    // Libère le disque : le service du système ne peut pas relire la table d'un disque ouvert en exclusif.
+    let block = u64::from(device.block_size());
     drop(device);
-    if let (false, Some(id)) = (filesystem.is_native(), &disk_id) {
-        let path = wait_for_partition(id, deps)?;
-        (deps.io.format_partition)(
-            Path::new(&path),
-            filesystem,
-            label.as_deref(),
-            job.elevation,
-        )
-        .map_err(|e| fail(Code::FormatFailed, e))?;
+    if let Some(id) = &disk_id {
+        let rescanned = (deps.io.rescan)(Path::new(&info.path), job.elevation);
+        if let Err(error) = &rescanned {
+            log::warn!(target: "bonk::write", error = error.to_string().as_str(); "partition table not reread");
+        }
+        let path = wait_for_partition(id, partition.sectors() * block, deps)?;
+        if !filesystem.is_native() {
+            let path = path.ok_or_else(|| {
+                fail(
+                    Code::FormatFailed,
+                    "le système ne montre pas la nouvelle partition : rien n'a été formaté dessus",
+                )
+            })?;
+            (deps.io.format_partition)(
+                Path::new(&path),
+                filesystem,
+                label.as_deref(),
+                job.elevation,
+            )
+            .map_err(|e| fail(Code::FormatFailed, e))?;
+            wait_for_filesystem(id, filesystem, deps)?;
+        } else if path.is_none() {
+            // FAT32 est écrit et relu : le système le verra au prochain branchement.
+            log::warn!(target: "bonk::write", "new partition not visible yet: unplug and replug the disk");
+        }
     }
     log::info!(target: "bonk::write", filesystem = filesystem.name(); "format finished");
     Ok(result(

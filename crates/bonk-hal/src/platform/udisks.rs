@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::io;
 use std::os::fd::OwnedFd;
 use std::path::Path;
+use std::time::Duration;
 
 use bonk_core::BlockError;
 use zbus::{Connection, OwnedObjectPath, Variant, block_on};
@@ -80,6 +81,22 @@ fn resolve(connection: &Connection, device: &Path) -> Result<OwnedObjectPath, Bl
         .into_iter()
         .next()
         .ok_or_else(|| denied(format!("{} inconnu de UDisks2", device.display())))
+}
+
+/// Comme [`resolve`], pour une partition que le noyau vient de créer : le service la découvre après lui.
+/// Constaté sur la clé de test : sans attente, `ResolveDevice` ne la connaît pas encore.
+fn resolve_new(connection: &Connection, device: &Path) -> Result<OwnedObjectPath, BlockError> {
+    const LOOKS: u32 = 40;
+    const PAUSE: Duration = Duration::from_millis(250);
+    let mut result = resolve(connection, device);
+    for _ in 1..LOOKS {
+        if result.is_ok() {
+            break;
+        }
+        std::thread::sleep(PAUSE);
+        result = resolve(connection, device);
+    }
+    result
 }
 
 /// Demande au service d'ouvrir `device`. `mode` : `r` ou `rw` ; `flags` : ceux d'`open(2)`, hors mode.
@@ -160,7 +177,7 @@ pub(super) fn format(
     interactive: bool,
 ) -> Result<(), BlockError> {
     let connection = connect()?;
-    let object = resolve(&connection, partition)?;
+    let object = resolve_new(&connection, partition)?;
     let mut options: Options<'_> = HashMap::new();
     if let Some(label) = label {
         options.insert("label", Variant::from(label));
@@ -177,6 +194,29 @@ pub(super) fn format(
         Some(BLOCK),
         "Format",
         &(kind, options),
+    ))
+    .map_err(from_zbus)?;
+    Ok(())
+}
+
+/// Fait relire la table de partitions par le service : l'appel système exige des droits que l'appelant n'a
+/// pas, et le noyau ne le fait de lui-même qu'en tâche de fond, après un délai sans borne connue.
+///
+/// # Errors
+/// `PermissionDenied` avec le remède, si le service refuse ou n'est pas joignable.
+pub(super) fn rescan(disk: &Path, interactive: bool) -> Result<(), BlockError> {
+    let connection = connect()?;
+    let object = resolve(&connection, disk)?;
+    let mut options: Options<'_> = HashMap::new();
+    if !interactive {
+        options.insert("auth.no_user_interaction", Variant::from(true));
+    }
+    block_on(connection.call_method(
+        Some(SERVICE),
+        object.as_str(),
+        Some(BLOCK),
+        "Rescan",
+        &(options,),
     ))
     .map_err(from_zbus)?;
     Ok(())

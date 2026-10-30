@@ -895,6 +895,7 @@ mod tests {
                         unmount: Box::new(|_, _| Ok(vec![])),
                         capabilities: Box::new(Vec::new),
                         format_partition: Box::new(|_, _, _, _| Ok(())),
+                        rescan: Box::new(|_, _| Ok(())),
                         pause: Box::new(|| {}),
                         open_node: Box::new(move |_, _, _| {
                             Ok(Box::new(dev.clone()) as Box<dyn BlockDevice>)

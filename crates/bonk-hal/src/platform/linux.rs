@@ -115,6 +115,10 @@ impl Platform for Linux {
         )
     }
 
+    fn rescan(&self, disk: &Path, elevation: Elevation) -> Result<(), BlockError> {
+        udisks::rescan(disk, elevation == Elevation::Auto)
+    }
+
     fn is_privileged(&self) -> bool {
         // SAFETY : aucun argument, aucune erreur possible.
         unsafe { libc::geteuid() == 0 }
