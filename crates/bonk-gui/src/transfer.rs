@@ -137,7 +137,9 @@ pub(crate) fn spawn(program: &Path, args: &[String]) -> UnboundedReceiver<Event>
                 message,
             }));
         };
-        let mut child = match Command::new(&program)
+        let mut command = Command::new(&program);
+        bonk_hal::console::hide_child_console(&mut command);
+        let mut child = match command
             .args(&args)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
