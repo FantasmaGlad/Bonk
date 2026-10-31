@@ -9,12 +9,14 @@ license=('MIT')
 depends=('glibc')
 optdepends=('udisks2: écriture sans sudo' 'polkit: écriture sans sudo')
 options=('!strip' '!debug')
-source=('bonk' 'LICENSE' 'bonk.desktop' 'bonk.png')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+source=('bonk' 'LICENSE' 'bonk.desktop')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 bonk "$pkgdir/usr/bin/bonk"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/bonk/LICENSE"
   install -Dm644 bonk.desktop "$pkgdir/usr/share/applications/bonk.desktop"
-  install -Dm644 bonk.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/bonk.png"
+  for dossier in "$startdir"/icons/*; do
+    install -Dm644 "$dossier/bonk.png" "$pkgdir/usr/share/icons/hicolor/${dossier##*/}/apps/bonk.png"
+  done
 }

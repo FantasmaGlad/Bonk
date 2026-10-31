@@ -102,7 +102,8 @@ jobs:
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
           mkdir -p build dist
           tar -xzf archive/bonk-*.tar.gz -C archive
-          cp archive/bonk-*/bonk LICENSE crates/bonk/assets/bonk.desktop crates/bonk/assets/bonk.png build/
+          cp archive/bonk-*/bonk LICENSE crates/bonk/assets/bonk.desktop build/
+          cp -r crates/bonk/assets/icons build/icons
           sed "s/@VERSION@/$version/" .github/arch/PKGBUILD > build/PKGBUILD
           docker run --rm --volume "$PWD/build:/build" --volume "$PWD/dist:/dist" archlinux:latest sh -ec '
             pacman -Syu --noconfirm --needed base-devel > /dev/null
