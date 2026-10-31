@@ -22,9 +22,10 @@ pub(crate) use sources::{schema_sources, sources};
 
 const JSON_SCHEMA_VERSION: u32 = 1;
 
-/// Taille d'un dump par défaut, et plafond.
+/// Taille d'un dump par défaut.
 const HEXDUMP_DEFAULT: u64 = 4096;
 
+/// Plafond d'un dump.
 const HEXDUMP_MAX: u64 = 1 << 20;
 
 #[derive(Debug, Subcommand)]

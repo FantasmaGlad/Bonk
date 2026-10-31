@@ -1,8 +1,8 @@
 //! Sous-commande `bonk diagnose` : un rapport de support unique, en lecture seule.
 //!
 //! Il est fait pour être lu par des outils autant que par des personnes : JSON versionné, champs
-//! explicites, motifs identifiés par des codes stables. Numéros de série et nom d'utilisateur sont
-//! masqués par défaut, car le rapport est fait pour être envoyé.
+//! explicites, motifs identifiés par des codes stables. Numéros de série (4 caractères ou plus) et
+//! nom d'utilisateur (3 ou plus) sont masqués par défaut, car le rapport est fait pour être envoyé.
 
 use std::fs::OpenOptions;
 use std::io::{self, Write};

@@ -27,9 +27,9 @@ const GPT_HEADER_MIN: usize = 92;
 const GPT_ENTRIES_LIMIT: u64 = 1 << 20;
 
 /// Alignement recommandé du début des partitions : 1 Mio.
-const ALIGNMENT_BYTES: u64 = 1 << 20;
+pub(crate) const ALIGNMENT_BYTES: u64 = 1 << 20;
 
-const MBR_PROTECTIVE: u8 = 0xEE;
+pub(crate) const MBR_PROTECTIVE: u8 = 0xEE;
 
 /// Somme de contrôle CRC-32 (IEEE 802.3) utilisée par le GPT.
 #[must_use]

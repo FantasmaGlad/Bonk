@@ -6,8 +6,6 @@
 
 use std::fmt;
 use std::io::{self, BufRead, BufReader, Read};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use ruzstd::decoding::errors::{FrameDecoderError, ReadFrameHeaderError};
 use ruzstd::decoding::{BlockDecodingStrategy, FrameDecoder};
@@ -54,11 +52,6 @@ impl Format {
     }
 
     #[must_use]
-    pub fn is_supported(self) -> bool {
-        !matches!(self, Self::Bzip2 | Self::Zip)
-    }
-
-    #[must_use]
     pub fn name(self) -> &'static str {
         match self {
             Self::Raw => "raw",
@@ -102,21 +95,6 @@ impl std::error::Error for CodecError {}
 impl From<io::Error> for CodecError {
     fn from(err: io::Error) -> Self {
         Self::Io(err)
-    }
-}
-
-/// Compte les octets lus : sert à estimer l'avancement d'une décompression, dont la taille finale est
-/// inconnue.
-struct Counting<R> {
-    inner: R,
-    count: Arc<AtomicU64>,
-}
-
-impl<R: Read> Read for Counting<R> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let n = self.inner.read(buf)?;
-        self.count.fetch_add(n as u64, Ordering::Relaxed);
-        Ok(n)
     }
 }
 
@@ -211,10 +189,6 @@ pub struct Source {
     pub format: Format,
     /// Taille des octets lus (après décompression) quand on la connaît d'avance : image brute seulement.
     pub output_len: Option<u64>,
-    /// Taille du fichier d'entrée, pour estimer l'avancement.
-    pub input_len: Option<u64>,
-    /// Octets d'entrée consommés jusqu'ici.
-    pub input_consumed: Arc<AtomicU64>,
 }
 
 /// Ouvre une image et rend un lecteur de ses octets décompressés.
@@ -225,12 +199,7 @@ pub fn open(
     input: impl Read + Send + 'static,
     input_len: Option<u64>,
 ) -> Result<Source, CodecError> {
-    let consumed = Arc::new(AtomicU64::new(0));
-    let counted = Counting {
-        inner: input,
-        count: Arc::clone(&consumed),
-    };
-    let mut buffered = BufReader::with_capacity(64 * 1024, counted);
+    let mut buffered = BufReader::with_capacity(64 * 1024, input);
     let format = Format::detect(buffered.fill_buf()?);
     let (reader, output_len): (Box<dyn Read + Send>, Option<u64>) = match format {
         Format::Raw => (Box::new(buffered), input_len),
@@ -245,8 +214,6 @@ pub fn open(
         reader,
         format,
         output_len,
-        input_len,
-        input_consumed: consumed,
     })
 }
 
@@ -358,7 +325,6 @@ mod tests {
         assert_eq!(Format::detect(b"\xEB\x63\x90MSDOS"), Format::Raw);
         assert_eq!(Format::detect(&[]), Format::Raw);
         assert_eq!(Format::detect(&[0x1F]), Format::Raw);
-        assert!(Format::Xz.is_supported() && !Format::Bzip2.is_supported());
     }
 
     #[test]
@@ -380,7 +346,6 @@ mod tests {
         assert_eq!(source.format, Format::Gzip);
         assert_eq!(source.output_len, None);
         assert_eq!(read_all(&mut source)?, data);
-        assert_eq!(source.input_consumed.load(Ordering::Relaxed), packed_len);
         Ok(())
     }
 

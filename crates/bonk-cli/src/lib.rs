@@ -193,7 +193,7 @@ pub fn check_command_line(command: &str) -> Result<Vec<String>, String> {
 }
 
 /// Découpe une ligne en mots à la façon d'un shell POSIX : espaces, apostrophes simples, guillemets
-/// doubles. Les variables et substitutions ne sont pas interprétées (la fenêtre n'en produit pas).
+/// doubles, sans échappement par antislash. Les variables et substitutions ne sont pas interprétées (la fenêtre n'en produit pas).
 fn split_words(line: &str) -> Result<Vec<String>, String> {
     let mut words = Vec::new();
     let mut current = String::new();
@@ -264,7 +264,7 @@ struct Env {
     bonk_log: Option<String>,
     /// Fichier de configuration (`BONK_CONFIG`, sinon le dossier de configuration du système).
     config_path: Option<PathBuf>,
-    /// Variables `BONK_*` (hors `BONK_LOG` et `BONK_CONFIG`) qui surchargent les réglages.
+    /// Variables `BONK_*` : celles qui portent le nom d'un réglage le surchargent.
     vars: Vec<(String, String)>,
     /// Accès aux disques et au signal d'annulation.
     io: job::Io,

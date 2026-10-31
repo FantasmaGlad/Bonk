@@ -9,7 +9,8 @@
 //!   pendant une écriture, `disks_changed` quand la liste des disques change (`watch.start`).
 //!
 //! Les méthodes portent le nom de la commande : `disk.list` est `bonk disk list`. Une seule opération
-//! d'écriture à la fois ; `cancel` l'arrête entre deux blocs. À la fermeture de l'entrée, l'opération
+//! d'écriture à la fois ; `cancel` arrête une écriture ou une vérification entre deux blocs, un
+//! formatage ou une réparation commencés vont à leur terme. À la fermeture de l'entrée, l'opération
 //! en cours est annulée et le service s'arrête ; sous Unix, Ctrl+C et SIGTERM font de même et le
 //! service rend le code 5. Les mêmes garde-fous que la CLI s'appliquent : rien ne s'écrit sans
 //! `"yes": true` ou `"force": true`, ni sur un disque que le filtre interdit.

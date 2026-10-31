@@ -236,6 +236,8 @@ pub struct FormatDone {
     pub filesystem: Filesystem,
     /// Le système de fichiers a été choisi par défaut, d'après la taille du support.
     pub filesystem_defaulted: bool,
+    /// Taille maximale d'un fichier sur ce système, quand elle peut gêner ; `--fs exfat` la lève.
+    pub file_size_limit_bytes: Option<u64>,
     pub label: Option<String>,
     pub partition: PartitionPlan,
     /// Écrit par Bonk (`bonk`) ou par les outils de l'hôte (`system`).

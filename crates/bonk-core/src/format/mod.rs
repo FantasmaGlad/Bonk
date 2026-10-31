@@ -17,7 +17,7 @@ use sha2::{Digest, Sha256};
 use crate::block::BlockError;
 
 /// Taille d'alignement des partitions et de la zone de données.
-pub(crate) const ALIGNMENT: u64 = 1 << 20;
+pub(crate) const ALIGNMENT: u64 = crate::partition::ALIGNMENT_BYTES;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -39,6 +39,12 @@ impl Filesystem {
             Self::Ntfs => "ntfs",
             Self::Ext4 => "ext4",
         }
+    }
+
+    /// Taille maximale d'un fichier, quand elle peut gêner sur une clé : FAT32 code la taille sur 32 bits.
+    #[must_use]
+    pub fn file_size_limit(self) -> Option<u64> {
+        (self == Self::Fat32).then_some(u64::from(u32::MAX))
     }
 
     /// Bonk l'écrit-il lui-même, sans outil de l'hôte ?

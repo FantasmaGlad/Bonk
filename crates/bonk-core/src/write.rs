@@ -322,17 +322,8 @@ pub fn verify_ignoring(
     }
 }
 
-/// Longueur et SHA-256 de `src`, sans rien écrire : pour comparer un support à une image.
-pub fn hash_source(
-    src: &mut dyn Read,
-    size_hint: Option<u64>,
-    chunk: usize,
-    progress: &mut dyn FnMut(&Progress) -> Control,
-) -> Result<(u64, String), VerifyError> {
-    hash_source_ignoring(src, size_hint, chunk, &[], progress)
-}
-
-/// Comme [`hash_source`], avec les octets des plages `ignore` mis à zéro avant l'empreinte.
+/// Longueur et SHA-256 de `src`, sans rien écrire, avec les octets des plages `ignore` mis à zéro avant
+/// l'empreinte : pour comparer un support à une image.
 pub fn hash_source_ignoring(
     src: &mut dyn Read,
     size_hint: Option<u64>,
@@ -590,10 +581,11 @@ mod tests {
     #[test]
     fn hash_source_et_comparaison_sans_ecriture() -> Result<(), Box<dyn std::error::Error>> {
         let image = data(3000);
-        let (len, digest) = hash_source(
+        let (len, digest) = hash_source_ignoring(
             &mut Cursor::new(image.clone()),
             Some(3000),
             700,
+            &[],
             &mut silent(),
         )?;
         assert_eq!((len, digest.as_str()), (3000, sha(&image).as_str()));

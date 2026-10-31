@@ -37,7 +37,7 @@
 - `bonk-cli` et `bonk-gui` ne dépendent pas l'un de l'autre.
 - Le code propre à un OS est isolé dans `bonk-hal` derrière le trait `Platform`, aux exceptions près citées plus haut.
 
-`crates/bonk/tests/architecture.rs` vérifie les dépendances entre crates, et, pour le code propre à un OS, l'absence de `cfg(target_os` et de `libc::` hors de `bonk-hal`.
+`crates/bonk/tests/architecture.rs` vérifie les dépendances entre crates, et, pour le code propre à un OS, l'absence de `cfg(target_os`, de `libc::` et de `std::os::` hors de `bonk-hal`.
 
 ## Sécurité des disques
 1. Les disques système de l'hôte (racine, démarrage, ESP active, volumes montés par le système, membres RAID/LVM, volumes chiffrés) ne sont jamais proposés ni écrits ; `bonk list --all` les affiche avec le motif de leur exclusion.

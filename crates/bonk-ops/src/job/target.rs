@@ -5,7 +5,7 @@ use std::fs;
 use std::path::Path;
 
 use bonk_core::trace::TracedDevice;
-use bonk_core::{BlockDevice, BlockError};
+use bonk_core::{BlockDevice, BlockError, DEFAULT_BLOCK_SIZE};
 use bonk_hal::{
     Access, Disk, Elevation, FileDevice, FilterOptions, OpenTargetError, TargetIdentity,
     mount_points, reverify,
@@ -174,7 +174,7 @@ pub(super) fn open_target(
         }
         (None, Target::Image { path, size }) => {
             let device = if path.exists() {
-                FileDevice::open(path, access, 512).map_err(open_error)?
+                FileDevice::open(path, access, DEFAULT_BLOCK_SIZE).map_err(open_error)?
             } else if writing {
                 let wanted = size.or(size_hint).ok_or_else(|| {
                     fail(
@@ -182,7 +182,12 @@ pub(super) fn open_target(
                         "taille de l'image cible inconnue : la donner avec --size",
                     )
                 })?;
-                FileDevice::create(path, wanted.div_ceil(512) * 512, 512).map_err(open_error)?
+                FileDevice::create(
+                    path,
+                    wanted.div_ceil(u64::from(DEFAULT_BLOCK_SIZE)) * u64::from(DEFAULT_BLOCK_SIZE),
+                    DEFAULT_BLOCK_SIZE,
+                )
+                .map_err(open_error)?
             } else {
                 return Err(fail(
                     Code::SourceUnreadable,

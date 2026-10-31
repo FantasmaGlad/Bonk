@@ -11,7 +11,7 @@ use crate::info;
 
 use super::{FilterArgs, Outcome};
 
-/// `debug filter` est passé à 2 en retirant le champ `cdc` de chaque règle.
+/// Version propre au schéma de `debug filter`.
 pub(super) const FILTER_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Serialize, JsonSchema)]

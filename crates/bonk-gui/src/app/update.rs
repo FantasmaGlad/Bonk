@@ -24,7 +24,6 @@ impl App {
                 log::debug!(target: "bonk::gui", disks = disks.len(); "enumeration result received");
                 self.loading = false;
                 self.error = None;
-                // Un disque débranché ne reste pas sélectionné.
                 if self
                     .selected
                     .as_ref()

@@ -172,8 +172,7 @@ pub(crate) fn save(path: &Path, stored: &Stored) -> Result<(), String> {
 }
 
 /// Valeurs effectives : variable `BONK_*` valide, sinon fichier valide, sinon défaut. Une valeur
-/// invalide dans l'environnement ou le fichier est ignorée (et dite par `check`), jamais fatale pour
-/// une commande de lecture.
+/// invalide dans l'environnement ou le fichier est ignorée, jamais fatale pour une commande de lecture.
 pub(crate) fn effective(stored: &Stored, vars: &[(String, String)]) -> Vec<Effective> {
     KEYS.iter()
         .map(|key| {
