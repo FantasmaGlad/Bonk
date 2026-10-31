@@ -4,8 +4,8 @@
 Les images officielles ne parlent pas sur la console série : le clavier virtuel ajoute `console=ttyS0` à la
 ligne du noyau, comme le ferait une personne dans le menu de démarrage. L'image n'est pas modifiée.
 
-Usage : demarrage-qemu.py <image> <bios|uefi|secureboot> <grub|isolinux> <preuve> <dossier>
-        [--entree N] [--ligne N] [--memoire Mio] [--delai s]
+Usage : demarrage-qemu.py <image> <bios|uefi|secureboot> <grub|isolinux|systemd-boot> <preuve> <dossier>
+        [--entree N] [--ligne N] [--memoire Mio] [--delai s] [--attente s]
 Code 0 : preuve vue. 1 : absente à la fin du délai. La trace reste dans <dossier>/serie.log, l'écran dans
 <dossier>/*.png.
 """
@@ -19,7 +19,8 @@ import sys
 import time
 
 OVMF = "/usr/share/OVMF"
-# Le chargeur BIOS ne parle que sur l'écran : attente fixe ; ces menus attendent bien plus longtemps.
+# Le chargeur BIOS ne parle que sur l'écran : attente fixe, plus courte que le compte à rebours du menu quand
+# il en a un (`--attente`).
 BIOS_MENU_SECONDS = 25
 # Le menu GRUB s'affiche peu après l'annonce du micrologiciel.
 UEFI_BOOT_LIMIT_SECONDS = 180
@@ -98,8 +99,10 @@ def add_console(monitor, loader, entry, line):
         monitor.screen("edition.png")
         monitor.keys("ctrl-x")
     else:
-        monitor.keys("tab")
+        monitor.keys("e" if loader == "systemd-boot" else "tab")
         time.sleep(1)
+        if loader == "systemd-boot":
+            monitor.keys("end")
         monitor.keys(*CONSOLE_KEYS)
         monitor.screen("edition.png")
         monitor.keys("ret")
@@ -109,13 +112,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("image")
     parser.add_argument("mode", choices=["bios", "uefi", "secureboot"])
-    parser.add_argument("chargeur", choices=["grub", "isolinux"])
+    parser.add_argument("chargeur", choices=["grub", "isolinux", "systemd-boot"])
     parser.add_argument("preuve")
     parser.add_argument("dossier")
     parser.add_argument("--entree", type=int, default=0, help="rang de l'entrée du menu")
     parser.add_argument("--ligne", type=int, default=3, help="rang de la ligne du noyau dans l'éditeur de GRUB")
     parser.add_argument("--memoire", default="2048")
     parser.add_argument("--delai", type=int, default=600)
+    parser.add_argument("--attente", type=int, help="secondes avant le menu, en remplacement du défaut")
     args = parser.parse_args()
 
     image = os.path.abspath(args.image)
@@ -126,7 +130,7 @@ def main():
         if os.path.exists(old):
             os.remove(old)
     accel = ["-enable-kvm", "-cpu", "host"] if os.access("/dev/kvm", os.W_OK) else []
-    print(f"{args.mode} : accélération {'KVM' if accel else 'absente'}")
+    print(f"{args.mode} : accélération {'KVM' if accel else 'absente'}", flush=True)
     qemu = subprocess.Popen(
         [
             "qemu-system-x86_64", *firmware(args.mode), *accel, "-m", args.memoire, "-smp", "2",
@@ -140,10 +144,10 @@ def main():
     try:
         monitor = Monitor()
         if args.mode == "bios":
-            time.sleep(BIOS_MENU_SECONDS)
+            time.sleep(args.attente if args.attente is not None else BIOS_MENU_SECONDS)
         else:
             wait_for(r"BdsDxe: starting", UEFI_BOOT_LIMIT_SECONDS, qemu)
-            time.sleep(GRUB_MENU_SECONDS)
+            time.sleep(args.attente if args.attente is not None else GRUB_MENU_SECONDS)
         monitor.screen("menu.png")
         add_console(monitor, args.chargeur, args.entree, args.ligne)
         if wait_for(args.preuve, args.delai, qemu):
