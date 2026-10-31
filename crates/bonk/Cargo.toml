@@ -47,12 +47,16 @@ extended-description = "Création de supports d'amorçage (clés USB et disques 
 assets = [
     ["target/release/bonk", "usr/bin/", "755"],
     ["../../LICENSE", "usr/share/doc/bonk/copyright", "644"],
+    ["assets/bonk.desktop", "usr/share/applications/", "644"],
+    ["assets/bonk.png", "usr/share/icons/hicolor/256x256/apps/", "644"],
 ]
 
 [package.metadata.generate-rpm]
 assets = [
     { source = "target/release/bonk", dest = "/usr/bin/bonk", mode = "755" },
     { source = "../../LICENSE", dest = "/usr/share/licenses/bonk/LICENSE", mode = "644", doc = true },
+    { source = "assets/bonk.desktop", dest = "/usr/share/applications/bonk.desktop", mode = "644" },
+    { source = "assets/bonk.png", dest = "/usr/share/icons/hicolor/256x256/apps/bonk.png", mode = "644" },
 ]
 
 [package.metadata.generate-rpm.recommends]

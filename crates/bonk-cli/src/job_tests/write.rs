@@ -858,3 +858,51 @@ fn le_flux_json_finit_par_un_evenement_d_erreur_avec_son_code() {
     assert_eq!(last["code"], "E3005", "{out}");
     assert!(err.contains("E3005"), "{err}");
 }
+
+/// Le cache se liste et se vide, et seulement ce qu'il a lui-même rangé : un fichier étranger reste.
+#[test]
+fn le_cache_se_liste_et_se_vide_sans_toucher_au_reste() {
+    let body = vec![0xCD; 1 << 20];
+    let (url, _) = serve_file(body.clone());
+    let sha = sha256_of(&body);
+    let cache = TempSource::dir("cache-commandes");
+    let scenario = Scenario::new();
+    let (code, out, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &url,
+        "--sha256",
+        &sha,
+        "--cache-dir",
+        &cache.arg(),
+        "--yes",
+        "--mode",
+        "raw",
+        "--progress",
+        "none",
+    ]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(out.contains("bonk cache clean"), "{out}");
+
+    let images = std::path::Path::new(&cache.arg()).join("images");
+    std::fs::write(images.join("a-moi.txt"), b"garde").unwrap();
+    std::fs::create_dir_all(images.join("autre")).unwrap();
+
+    let (code, out, _) = scenario.run(&["cache", "list", "--cache-dir", &cache.arg(), "--json"]);
+    assert_eq!(code, 0, "{out}");
+    let value: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(value["entries"].as_array().map(Vec::len), Some(1), "{out}");
+    assert_eq!(value["entries"][0]["sha256"], sha);
+    assert_eq!(value["total_bytes"], 1 << 20);
+
+    let (code, out, _) =
+        scenario.run(&["cache", "clean", "--cache-dir", &cache.arg(), "--dry-run"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(images.join(&sha).exists());
+
+    let (code, out, _) = scenario.run(&["cache", "clean", "--cache-dir", &cache.arg()]);
+    assert_eq!(code, 0, "{out}");
+    assert!(!images.join(&sha).exists());
+    assert!(images.join("a-moi.txt").exists());
+    assert!(images.join("autre").exists());
+}

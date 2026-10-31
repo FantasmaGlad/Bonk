@@ -8,7 +8,7 @@ use std::io::{self, Write};
 use clap::Args;
 use serde_json::Value;
 
-use crate::{config, debug, diagnose, errors, format, info, list, serve, transfer};
+use crate::{cache, config, debug, diagnose, errors, format, info, list, serve, transfer};
 
 /// Nom d'une commande et générateur du schéma de sa sortie.
 type Entry = (&'static str, fn() -> Value);
@@ -21,6 +21,7 @@ pub(crate) fn registry() -> Vec<Entry> {
         ("diagnose", diagnose::schema),
         ("explain", errors::schema),
         ("config", config::schema),
+        ("cache", cache::schema),
         ("debug-filter", debug::schema_filter),
         ("debug-sources", debug::schema_sources),
         ("debug-layout", debug::schema_layout),
