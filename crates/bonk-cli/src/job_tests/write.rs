@@ -574,3 +574,261 @@ fn l_empreinte_porte_sur_le_fichier_ecrit_meme_remplace_entre_temps() {
     assert!(err.contains("E3005"), "{err}");
     assert!(scenario.written(1 << 20).iter().all(|b| *b == 0));
 }
+
+/// Sans empreinte, une image compressée est décompressée une fois à blanc : des données après le flux sont
+/// refusées avant d'avoir effacé la clé.
+#[test]
+fn des_donnees_apres_le_flux_sont_refusees_avant_toute_ecriture() {
+    let mut image = gzip_stored(&[0xAB; 4096]);
+    image.extend_from_slice(&[1; 4096]);
+    let source = TempSource::from_bytes("flux-suivi", &image);
+    let scenario = Scenario::new();
+    let (code, out, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &source.arg(),
+        "--yes",
+        "--mode",
+        "raw",
+        "--progress",
+        "none",
+    ]);
+    assert_eq!(code, EXIT_SOURCE, "{out}\n{err}");
+    assert!(err.contains("E3004"), "{err}");
+    assert!(scenario.log().is_empty(), "{:?}", scenario.log());
+    assert!(scenario.written(4096).iter().all(|b| *b == 0));
+}
+
+/// Une image compressée saine passe : le passage à blanc ne consomme pas le flux de l'écriture.
+#[test]
+fn une_image_compressee_saine_s_ecrit_apres_le_passage_a_blanc() {
+    let image = gzip_stored(&[0xAB; 4096]);
+    let source = TempSource::from_bytes("flux-sain", &image);
+    let scenario = Scenario::new();
+    let (code, out, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &source.arg(),
+        "--yes",
+        "--mode",
+        "raw",
+        "--progress",
+        "none",
+    ]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(scenario.written(4096).iter().all(|b| *b == 0xAB));
+}
+
+/// Serveur local d'un seul fichier, servi autant de fois que demandé.
+fn serve_file(body: Vec<u8>) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+    use std::io::{BufRead, BufReader, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let hits = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let seen = std::sync::Arc::clone(&hits);
+    std::thread::spawn(move || {
+        for mut stream in listener.incoming().flatten() {
+            seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            while reader.read_line(&mut line).unwrap_or(0) > 0 && line != "\r\n" {
+                line.clear();
+            }
+            let _ = write!(
+                stream,
+                "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = stream.write_all(&body);
+        }
+    });
+    (format!("http://127.0.0.1:{port}/image.img"), hits)
+}
+
+fn sha256_of(bytes: &[u8]) -> String {
+    bonk_core::write::hash_stream(
+        &mut std::io::Cursor::new(bytes),
+        None,
+        bonk_core::write::DEFAULT_CHUNK,
+        &mut |_| bonk_core::write::Control::Continue,
+    )
+    .unwrap()
+}
+
+#[test]
+fn une_adresse_se_telecharge_et_s_ecrit_puis_sert_le_cache() {
+    let body = vec![0xCD; 1 << 20];
+    let (url, hits) = serve_file(body.clone());
+    let sha = sha256_of(&body);
+    let cache = TempSource::dir("cache-ok");
+    let scenario = Scenario::new();
+    let args = [
+        "write",
+        "usb-a",
+        &url,
+        "--sha256",
+        &sha,
+        "--cache-dir",
+        &cache.arg(),
+        "--yes",
+        "--mode",
+        "raw",
+        "--progress",
+        "none",
+    ];
+    let (code, out, err) = scenario.run(&args);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert_eq!(scenario.written(1 << 20), body);
+    let (code, _, err) = scenario.run(&args);
+    assert_eq!((code, err.as_str()), (0, ""));
+    assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
+#[test]
+fn une_empreinte_fausse_n_ecrit_rien_et_oublie_le_fichier() {
+    let (url, hits) = serve_file(vec![0xCD; 1 << 20]);
+    let faux = "0".repeat(64);
+    let cache = TempSource::dir("cache-faux");
+    let scenario = Scenario::new();
+    let args = [
+        "write",
+        "usb-a",
+        &url,
+        "--sha256",
+        &faux,
+        "--cache-dir",
+        &cache.arg(),
+        "--yes",
+        "--mode",
+        "raw",
+        "--progress",
+        "none",
+    ];
+    let (code, _, err) = scenario.run(&args);
+    assert_eq!(code, EXIT_SOURCE, "{err}");
+    assert!(err.contains("E3005"), "{err}");
+    assert!(scenario.log().is_empty(), "{:?}", scenario.log());
+    assert!(scenario.written(1 << 20).iter().all(|b| *b == 0));
+    let (code, _, _) = scenario.run(&args);
+    assert_eq!(code, EXIT_SOURCE);
+    assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 2);
+}
+
+#[test]
+fn une_adresse_sans_empreinte_ou_sans_confirmation_ne_telecharge_rien() {
+    let (url, hits) = serve_file(vec![0; 16]);
+    let cache = TempSource::dir("cache-refus");
+    let scenario = Scenario::new();
+    let (code, _, err) =
+        scenario.run(&["write", "usb-a", &url, "--yes", "--cache-dir", &cache.arg()]);
+    assert_eq!(code, EXIT_USAGE, "{err}");
+    assert!(err.contains("--sha256"), "{err}");
+    let faux = "0".repeat(64);
+    let (code, _, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &url,
+        "--sha256",
+        &faux,
+        "--cache-dir",
+        &cache.arg(),
+    ]);
+    assert_eq!(code, EXIT_USAGE, "{err}");
+    assert!(err.contains("E2004"), "{err}");
+    let (code, _, err) = scenario.run(&[
+        "write",
+        "absent",
+        &url,
+        "--sha256",
+        &faux,
+        "--yes",
+        "--cache-dir",
+        &cache.arg(),
+    ]);
+    assert_ne!(code, 0, "{err}");
+    assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 0);
+}
+
+#[test]
+fn l_empreinte_se_lit_dans_un_fichier_d_empreintes_local_ou_distant() {
+    let body = vec![0xEF; 1 << 20];
+    let (url, _) = serve_file(body.clone());
+    let sha = sha256_of(&body);
+    let sums = TempSource::from_bytes("sommes", format!("{sha}  image.img\n").as_bytes());
+    let cache = TempSource::dir("cache-sommes");
+    let scenario = Scenario::new();
+    let (code, out, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &url,
+        "--sha256-file",
+        &sums.arg(),
+        "--cache-dir",
+        &cache.arg(),
+        "--yes",
+        "--mode",
+        "raw",
+        "--progress",
+        "none",
+    ]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert_eq!(scenario.written(1 << 20), body);
+
+    let (sums_url, _) = serve_file(format!("{sha}  image.img\n").into_bytes());
+    let cache = TempSource::dir("cache-sommes-url");
+    let (code, _, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &url,
+        "--sha256-file",
+        &sums_url,
+        "--cache-dir",
+        &cache.arg(),
+        "--yes",
+        "--mode",
+        "raw",
+        "--progress",
+        "none",
+    ]);
+    assert_eq!((code, err.as_str()), (0, ""));
+
+    let vide = TempSource::from_bytes("sommes-vides", b"# rien\n");
+    let (code, _, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &url,
+        "--sha256-file",
+        &vide.arg(),
+        "--cache-dir",
+        &cache.arg(),
+        "--yes",
+    ]);
+    assert_eq!(code, EXIT_USAGE, "{err}");
+    assert!(err.contains("image.img"), "{err}");
+}
+
+#[test]
+fn une_coupure_definitive_se_dit_par_son_code_sans_toucher_au_support() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!(
+        "http://127.0.0.1:{}/image.img",
+        listener.local_addr().unwrap().port()
+    );
+    drop(listener);
+    let faux = "0".repeat(64);
+    let cache = TempSource::dir("cache-coupe");
+    let scenario = Scenario::new();
+    let (code, _, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &url,
+        "--sha256",
+        &faux,
+        "--cache-dir",
+        &cache.arg(),
+        "--yes",
+    ]);
+    assert_eq!(code, EXIT_SOURCE, "{err}");
+    assert!(err.contains("E3008"), "{err}");
+    assert!(scenario.log().is_empty(), "{:?}", scenario.log());
+}

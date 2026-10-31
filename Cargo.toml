@@ -34,6 +34,10 @@ iced_test = "0.14"
 # Sélecteur de fichier du système : portail du bureau sous Linux (libdbus chargée à l'exécution, repli
 # `zenity`), dialogue natif sous Windows et macOS.
 rfd = "0.17"
+# Téléchargement HTTPS sans OpenSSL ni racines embarquées : certificats du système par le vérificateur de
+# la plateforme, `ring` choisi explicitement parce que l'option `rustls` d'ureq tirerait aussi `webpki-roots`.
+ureq = { version = "3", default-features = false, features = ["rustls-no-provider", "platform-verifier"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 # Schémas JSON générés depuis les types sérialisés (`bonk schema`) : ils ne peuvent pas diverger des sorties.
 schemars = "1"
 # Complétions de shell générées depuis la définition clap (`bonk completions`).

@@ -178,6 +178,10 @@ impl TempSource {
         std::fs::write(&path, data).expect("écriture de l'image de test");
         Self(path)
     }
+    /// Un dossier pour le cache : il n'est pas créé, c'est le téléchargement qui le crée.
+    fn dir(label: &str) -> Self {
+        Self(std::env::temp_dir().join(format!("bonk-job-{}-{label}", std::process::id())))
+    }
     fn from_bytes(label: &str, data: &[u8]) -> Self {
         let path =
             std::env::temp_dir().join(format!("bonk-job-{}-{label}.img", std::process::id()));
@@ -195,6 +199,7 @@ impl TempSource {
 impl Drop for TempSource {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.0);
+        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 

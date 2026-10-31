@@ -41,6 +41,12 @@ allow = [
 # La liste couvre aussi des cas futurs : ne pas signaler les entrées pas encore utilisées.
 unused-allowed-license = "allow"
 
+# Données de certificats : tirées par rustls-platform-verifier pour la seule cible wasm32, qu'aucun binaire de
+# Bonk ne vise. Exception limitée à ce crate pour ne pas admettre cette licence ailleurs.
+[[licenses.exceptions]]
+crate = "webpki-root-certs"
+allow = ["CDLA-Permissive-2.0"]
+
 # Les crates du workspace (publish = false) portent la licence du projet : non contrôlées.
 [licenses.private]
 ignore = true

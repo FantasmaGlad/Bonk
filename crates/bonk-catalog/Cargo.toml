@@ -10,3 +10,8 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+log.workspace = true
+ureq.workspace = true
+rustls.workspace = true

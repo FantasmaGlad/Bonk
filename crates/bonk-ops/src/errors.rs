@@ -38,6 +38,7 @@ pub enum Code {
     SourceHashMismatch,
     ImageNotBootable,
     ImageTruncated,
+    DownloadFailed,
     WriteFailed,
     VerifyMismatch,
     Cancelled,
@@ -226,6 +227,18 @@ pub const CATALOG: &[Entry] = &[
         title: "L'image est plus courte que ce qu'elle annonce",
         causes: &["téléchargement interrompu"],
         remedy: "Retélécharger l'image et contrôler son empreinte (--sha256). Pour écrire quand même ces octets : --mode raw. Rien n'a été écrit.",
+    },
+    Entry {
+        code: Code::DownloadFailed,
+        id: "E3008",
+        exit: EXIT_SOURCE,
+        title: "Le téléchargement de l'image a échoué",
+        causes: &[
+            "réseau coupé ou serveur indisponible",
+            "adresse fausse, ou qui n'est pas en https://",
+            "dossier de cache plein ou interdit en écriture",
+        ],
+        remedy: "Relancer la même commande : le téléchargement reprend là où il s'est arrêté. Rien n'a été écrit sur le support.",
     },
     Entry {
         code: Code::WriteFailed,
