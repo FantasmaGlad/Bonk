@@ -47,6 +47,10 @@ pub(crate) enum Message {
     Copy,
     /// Saisie du chemin de l'image à écrire.
     ImageInput(String),
+    /// Ouvre le sélecteur de fichier du système pour choisir l'image.
+    BrowseImage,
+    /// Réponse du sélecteur ; `None` : fermé sans choix.
+    ImagePicked(Option<PathBuf>),
     /// Battement qui rafraîchit le décompte avant d'autoriser l'écriture.
     Clock,
     /// Lance l'écriture (après le délai de réflexion).
@@ -83,6 +87,8 @@ enum Focus {
     Disk(String),
     /// Champ du chemin de l'image, dans le panneau d'écriture du disque sélectionné.
     Image,
+    /// Bouton qui ouvre le sélecteur de fichier, à côté du champ de l'image.
+    Browse,
     /// Bouton du panneau d'écriture : écrire, annuler ou fermer selon l'état.
     Action,
     /// Bouton de copie de la commande équivalente, dernier de l'ordre de Tab.
@@ -156,6 +162,12 @@ fn ui_event(message: &Message) -> Option<(&'static str, String)> {
         Message::ImageInput(text) => (
             "type_image_path",
             format!("{} caractères", text.chars().count()),
+        ),
+        Message::BrowseImage => ("click_browse", String::new()),
+        // Comme pour la saisie, le chemin choisi n'est jamais journalisé.
+        Message::ImagePicked(path) => (
+            "image_picked",
+            if path.is_some() { "choisie" } else { "aucune" }.to_owned(),
         ),
         Message::StartWrite => ("click_write", String::new()),
         Message::CancelWrite => ("click_cancel_write", String::new()),

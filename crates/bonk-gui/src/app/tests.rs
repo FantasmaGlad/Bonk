@@ -654,12 +654,50 @@ fn le_chemin_saisi_n_est_jamais_journalise() {
     assert_eq!(event, Some(("type_image_path", "22 caractères".to_owned())));
 }
 
+/// L'image choisie dans le sélecteur du système remplit le champ, comme une saisie ; fermer le
+/// sélecteur sans choisir ne touche pas à ce qui était saisi.
+#[test]
+fn l_image_choisie_remplit_le_champ() {
+    let mut app = app_avec_panneau();
+    let _ = app.update(Message::BrowseImage);
+    assert_eq!(app.focus, Some(Focus::Browse));
+    let _ = app.update(Message::ImagePicked(Some(PathBuf::from("/tmp/debian.iso"))));
+    assert!(matches!(&app.write, WriteState::Draft { image, .. } if image == "/tmp/debian.iso"));
+    assert!(
+        app.equivalents()
+            .iter()
+            .any(|c| c.contains("/tmp/debian.iso"))
+    );
+    let _ = app.update(Message::ImagePicked(None));
+    assert!(matches!(&app.write, WriteState::Draft { image, .. } if image == "/tmp/debian.iso"));
+}
+
+#[test]
+fn le_chemin_choisi_n_est_jamais_journalise() {
+    let choisi = Message::ImagePicked(Some(PathBuf::from("/home/alice/secret.iso")));
+    assert_eq!(
+        ui_event(&choisi),
+        Some(("image_picked", "choisie".to_owned()))
+    );
+    let aucune = Message::ImagePicked(None);
+    assert_eq!(
+        ui_event(&aucune),
+        Some(("image_picked", "aucune".to_owned()))
+    );
+    assert_eq!(
+        ui_event(&Message::BrowseImage),
+        Some(("click_browse", String::new()))
+    );
+}
+
 #[test]
 fn le_clavier_parcourt_le_panneau_et_l_action_respecte_le_delai() {
     let mut app = app_avec_panneau();
     app.focus = Some(Focus::Disk("usb-cle".to_owned()));
     nav(&mut app, Nav::Next);
     assert_eq!(app.focus, Some(Focus::Image));
+    nav(&mut app, Nav::Next);
+    assert_eq!(app.focus, Some(Focus::Browse));
     nav(&mut app, Nav::Next);
     assert_eq!(app.focus, Some(Focus::Action));
     // Espace sur le bouton avant le délai : sans effet.

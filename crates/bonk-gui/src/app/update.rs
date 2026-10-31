@@ -91,6 +91,17 @@ impl App {
                 }
                 Task::none()
             }
+            Message::BrowseImage => {
+                self.focus = Some(Focus::Browse);
+                Task::perform(pick_image(), Message::ImagePicked)
+            }
+            Message::ImagePicked(Some(path)) => {
+                if let WriteState::Draft { image, .. } = &mut self.write {
+                    *image = path.display().to_string();
+                }
+                Task::none()
+            }
+            Message::ImagePicked(None) => Task::none(),
             Message::Clock => Task::none(),
             Message::StartWrite => self.start_write(false),
             Message::ConfirmInternal => {
@@ -227,4 +238,18 @@ impl App {
             _ => {}
         }
     }
+}
+
+/// Le sélecteur de fichier du système, limité aux formats que Bonk écrit.
+async fn pick_image() -> Option<PathBuf> {
+    rfd::AsyncFileDialog::new()
+        .set_title("Choisir l'image à écrire")
+        .add_filter(
+            "Images de disque",
+            &["iso", "img", "raw", "gz", "xz", "zst"],
+        )
+        .add_filter("Tous les fichiers", &["*"])
+        .pick_file()
+        .await
+        .map(|file| file.path().to_path_buf())
 }
