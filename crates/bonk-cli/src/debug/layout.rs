@@ -31,7 +31,12 @@ pub(super) fn open_read_only(target: &Path) -> Result<Box<dyn BlockDevice>, (Cod
     };
     if let Some(path) = disk_path {
         return platform
-            .open_disk(&path, Access::ReadOnly, Elevation::Auto)
+            .open_disk(
+                &path,
+                Access::ReadOnly,
+                Elevation::Auto,
+                &bonk_hal::interrupt::requested,
+            )
             .map_err(|erreur| {
                 (
                     Code::RawDiskUnavailable,

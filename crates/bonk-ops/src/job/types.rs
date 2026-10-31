@@ -92,15 +92,22 @@ impl Io {
     /// donne un par opération) ; sous Unix, Ctrl+C et SIGTERM annulent aussi les commandes et le
     /// service, qui appellent `interrupt::install`.
     pub fn with_cancel(cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>) -> Self {
+        let cancelled = std::sync::Arc::new(move || {
+            bonk_hal::interrupt::requested()
+                || cancel
+                    .as_ref()
+                    .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::SeqCst))
+        });
+        let (for_prepare, for_open) = (cancelled.clone(), cancelled.clone());
         Self {
-            prepare: Box::new(|path, access, elevation| {
-                bonk_hal::platform::current().prepare_access(path, access, elevation)
+            prepare: Box::new(move |path, access, elevation| {
+                bonk_hal::platform::current().prepare_access(path, access, elevation, &*for_prepare)
             }),
             unmount: Box::new(|disk, elevation| {
                 bonk_hal::platform::current().unmount(disk, elevation)
             }),
-            open_node: Box::new(|path, access, elevation| {
-                bonk_hal::platform::current().open_disk(path, access, elevation)
+            open_node: Box::new(move |path, access, elevation| {
+                bonk_hal::platform::current().open_disk(path, access, elevation, &*for_open)
             }),
             capabilities: Box::new(|| bonk_hal::platform::current().capabilities()),
             format_partition: Box::new(|path, fs, label, elevation| {
@@ -110,12 +117,7 @@ impl Io {
                 bonk_hal::platform::current().rescan(path, elevation)
             }),
             pause: Box::new(|| std::thread::sleep(std::time::Duration::from_millis(250))),
-            cancelled: Box::new(move || {
-                bonk_hal::interrupt::requested()
-                    || cancel
-                        .as_ref()
-                        .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::SeqCst))
-            }),
+            cancelled: Box::new(move || cancelled()),
         }
     }
 }

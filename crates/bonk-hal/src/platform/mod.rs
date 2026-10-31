@@ -106,14 +106,17 @@ pub trait Platform: Send + Sync {
         path: &Path,
         access: Access,
         elevation: Elevation,
+        cancelled: &dyn Fn() -> bool,
     ) -> Result<(), BlockError>;
 
     /// Ouvre un disque entier en accès brut. N'est appelé qu'après les garde-fous de `bonk-ops`.
+    /// `cancelled` abandonne l'attente d'une autorisation du système (`ErrorKind::Interrupted`).
     fn open_disk(
         &self,
         path: &Path,
         access: Access,
         elevation: Elevation,
+        cancelled: &dyn Fn() -> bool,
     ) -> Result<Box<dyn BlockDevice>, BlockError>;
 
     /// Ce que ce système permet, et pourquoi pas le reste (`bonk capabilities`).

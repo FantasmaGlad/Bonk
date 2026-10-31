@@ -141,6 +141,9 @@ impl From<BlockError> for VerifyError {
 #[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
 pub struct VerifyReport {
     pub bytes: u64,
+    /// Le cache du système a été vidé avant la relecture. Faux : la relecture a pu lire la mémoire du
+    /// système et non le support.
+    pub cache_dropped: bool,
     pub sha256: String,
     pub elapsed_ms: u64,
     pub bytes_per_second: f64,
@@ -250,9 +253,9 @@ pub fn write_image(
     })
 }
 
-/// Relit les `len` premiers octets de `dev` et compare leur SHA-256 à `expected`.
+/// Vide le cache, puis relit les `len` premiers octets de `dev` et compare leur SHA-256 à `expected`.
 pub fn verify(
-    dev: &dyn BlockDevice,
+    dev: &mut dyn BlockDevice,
     len: u64,
     expected_sha256: &str,
     chunk: usize,
@@ -275,13 +278,14 @@ fn zero_ignored(buf: &mut [u8], offset: u64, ignore: &[Range<u64>]) {
 /// Comme [`verify`], avec les octets des plages `ignore` mis à zéro des deux côtés avant l'empreinte :
 /// la réparation du GPT réécrit légitimement quelques champs.
 pub fn verify_ignoring(
-    dev: &dyn BlockDevice,
+    dev: &mut dyn BlockDevice,
     len: u64,
     expected_sha256: &str,
     chunk: usize,
     ignore: &[Range<u64>],
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<VerifyReport, VerifyError> {
+    let cache_dropped = dev.drop_cache().is_ok();
     let block = u64::from(dev.block_size());
     let step = chunk_for(chunk, dev.block_size());
     let mut buf = vec![0u8; step];
@@ -303,6 +307,7 @@ pub fn verify_ignoring(
     if actual.eq_ignore_ascii_case(expected_sha256) {
         Ok(VerifyReport {
             bytes: len,
+            cache_dropped,
             sha256: actual,
             elapsed_ms: millis(started),
             bytes_per_second: rate(len, started),
@@ -409,7 +414,7 @@ mod tests {
         assert_eq!(report.sha256, sha(&image));
         assert_eq!(&dev.as_bytes()[..4096], image.as_slice());
         assert!(dev.as_bytes()[4096..].iter().all(|&b| b == 0));
-        let verified = verify(&dev, report.bytes, &report.sha256, 1024, &mut silent())?;
+        let verified = verify(&mut dev, report.bytes, &report.sha256, 1024, &mut silent())?;
         assert_eq!(verified.sha256, report.sha256);
         Ok(())
     }
@@ -430,7 +435,7 @@ mod tests {
         assert_eq!(report.sha256, sha(&image));
         assert_eq!(&dev.as_bytes()[..1000], image.as_slice());
         assert!(dev.as_bytes()[1000..1024].iter().all(|&b| b == 0));
-        verify(&dev, 1000, &report.sha256, 4096, &mut silent())?;
+        verify(&mut dev, 1000, &report.sha256, 4096, &mut silent())?;
         Ok(())
     }
 
@@ -448,7 +453,7 @@ mod tests {
             &mut silent(),
         )?;
         assert_eq!((report.bytes, report.padded_bytes), (10_000, 12_288));
-        verify(&dev, report.bytes, &report.sha256, 100, &mut silent())?;
+        verify(&mut dev, report.bytes, &report.sha256, 100, &mut silent())?;
         Ok(())
     }
 
@@ -561,15 +566,15 @@ mod tests {
         let report = write_image(&mut Cursor::new(image), &mut dev, None, 1024, &mut silent())?;
         let mut tampered = dev.as_bytes().to_vec();
         tampered[3000] ^= 0x01;
-        let bad = MemoryDevice::from_bytes(tampered, 512)?;
-        let error = verify(&bad, report.bytes, &report.sha256, 1024, &mut silent()).err();
+        let mut bad = MemoryDevice::from_bytes(tampered, 512)?;
+        let error = verify(&mut bad, report.bytes, &report.sha256, 1024, &mut silent()).err();
         assert!(
             matches!(error, Some(VerifyError::Mismatch { ref expected, ref actual }) if *expected == report.sha256 && actual != expected)
         );
         // Même taille, mais une longueur plus courte que ce qui a été écrit ne correspond pas non plus.
         assert!(
             verify(
-                &dev,
+                &mut dev,
                 report.bytes - 512,
                 &report.sha256,
                 1024,
@@ -592,7 +597,7 @@ mod tests {
         assert_eq!((len, digest.as_str()), (3000, sha(&image).as_str()));
         let mut dev = MemoryDevice::new(8 * 512, 512)?;
         write_image(&mut Cursor::new(image), &mut dev, None, 512, &mut silent())?;
-        verify(&dev, len, &digest, 512, &mut silent())?;
+        verify(&mut dev, len, &digest, 512, &mut silent())?;
         Ok(())
     }
 
@@ -607,6 +612,53 @@ mod tests {
         let mut dev = MemoryDevice::new(4 * 512, 512)?;
         let error = write_image(&mut Broken, &mut dev, None, 512, &mut silent()).err();
         assert!(matches!(error, Some(WriteError::Source(_))));
+        Ok(())
+    }
+
+    /// Un cache que le système refuse de vider est dit dans le rapport : la relecture a pu lire la
+    /// mémoire et non le support.
+    #[test]
+    fn la_relecture_dit_si_le_cache_a_ete_vide() -> Result<(), Box<dyn std::error::Error>> {
+        struct Sticky(MemoryDevice);
+        impl BlockDevice for Sticky {
+            fn size(&self) -> u64 {
+                self.0.size()
+            }
+            fn block_size(&self) -> u32 {
+                self.0.block_size()
+            }
+            fn read_at(&self, o: u64, b: &mut [u8]) -> Result<(), BlockError> {
+                self.0.read_at(o, b)
+            }
+            fn write_at(&mut self, o: u64, d: &[u8]) -> Result<(), BlockError> {
+                self.0.write_at(o, d)
+            }
+            fn flush(&mut self) -> Result<(), BlockError> {
+                Ok(())
+            }
+            fn drop_cache(&mut self) -> Result<(), BlockError> {
+                Err(BlockError::Io(io::Error::other("refusé")))
+            }
+        }
+        let image = data(2048);
+        let mut dev = MemoryDevice::new(4096, 512)?;
+        let report = write_image(
+            &mut Cursor::new(image.clone()),
+            &mut dev,
+            None,
+            512,
+            &mut silent(),
+        )?;
+        assert!(verify(&mut dev, report.bytes, &report.sha256, 512, &mut silent())?.cache_dropped);
+        let mut sticky = Sticky(dev);
+        let verified = verify(
+            &mut sticky,
+            report.bytes,
+            &report.sha256,
+            512,
+            &mut silent(),
+        )?;
+        assert!(!verified.cache_dropped);
         Ok(())
     }
 
@@ -664,16 +716,21 @@ mod tests {
         let mut other = image.clone();
         other[12] ^= 0xFF;
         other[4092] ^= 0xFF;
-        let dev = MemoryDevice::from_bytes(other.clone(), 512)?;
+        let mut dev = MemoryDevice::from_bytes(other.clone(), 512)?;
         assert!(
-            verify_ignoring(&dev, len, &sha, 1024, &ignore, &mut |_| Control::Continue).is_ok()
+            verify_ignoring(&mut dev, len, &sha, 1024, &ignore, &mut |_| {
+                Control::Continue
+            })
+            .is_ok()
         );
         // Sans ignorer, la même différence est détectée ; un octet hors plage l'est aussi.
-        assert!(verify(&dev, len, &sha, 1024, &mut |_| Control::Continue).is_err());
+        assert!(verify(&mut dev, len, &sha, 1024, &mut |_| Control::Continue).is_err());
         other[100] ^= 1;
-        let dev = MemoryDevice::from_bytes(other, 512)?;
+        let mut dev = MemoryDevice::from_bytes(other, 512)?;
         assert!(matches!(
-            verify_ignoring(&dev, len, &sha, 1024, &ignore, &mut |_| Control::Continue),
+            verify_ignoring(&mut dev, len, &sha, 1024, &ignore, &mut |_| {
+                Control::Continue
+            }),
             Err(VerifyError::Mismatch { .. })
         ));
         Ok(())

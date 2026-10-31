@@ -498,3 +498,37 @@ fn sans_reparation_demandee_le_gpt_n_est_pas_dit_sain() {
     assert!(out.contains("GPT : contrôle non demandé"), "{out}");
     assert!(!out.contains("rien à réparer"), "{out}");
 }
+
+/// Le fichier est remplacé après son ouverture : l'empreinte porte sur les octets qui seront écrits,
+/// pas sur ce que le chemin désigne au moment du contrôle.
+#[test]
+fn l_empreinte_porte_sur_le_fichier_ecrit_meme_remplace_entre_temps() {
+    let ecrit = TempSource::from_bytes("piege-empreinte", &[0xAB; 1 << 20]);
+    let attendu = TempSource::new("attendu-empreinte", 1 << 20);
+    let mut lecteur = std::fs::File::open(&attendu.0).unwrap();
+    let empreinte = bonk_core::write::hash_stream(
+        &mut lecteur,
+        None,
+        bonk_core::write::DEFAULT_CHUNK,
+        &mut |_| bonk_core::write::Control::Continue,
+    )
+    .unwrap();
+    let (de, vers) = (attendu.0.clone(), ecrit.0.clone());
+    let mut scenario = Scenario::new();
+    scenario.on_first_enumeration = Some(Rc::new(move || {
+        std::fs::rename(&de, &vers).unwrap();
+    }));
+    let (code, out, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &ecrit.arg(),
+        "--yes",
+        "--mode",
+        "raw",
+        "--sha256",
+        &empreinte,
+    ]);
+    assert_eq!(code, EXIT_SOURCE, "{out}\n{err}");
+    assert!(err.contains("E3005"), "{err}");
+    assert!(scenario.written(1 << 20).iter().all(|b| *b == 0));
+}

@@ -1,6 +1,5 @@
 //! Écrire une image.
 
-use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use bonk_core::BlockDevice;
@@ -10,14 +9,14 @@ use bonk_core::repair::{RepairReport, needs_repair, repair_gpt};
 use bonk_core::write::{self as engine, Control, DEFAULT_CHUNK, Phase, Progress, VerifyError};
 use bonk_hal::{Access, Elevation, Eligibility, FilterOptions, Warning, evaluate};
 
-use super::source::open_source;
+use super::source::ImageFile;
 use super::target::{Chosen, OpenRequest, choose, open_target};
 use super::translate::{guarded, map_verify_error, map_write_error};
 use super::types::{
     Deps, JobError, Plan, SCHEMA_VERSION, SourceInfo, Target, TraceIo, WriteDone, WriteMode,
     WriteOutcome, fail,
 };
-use super::verify::drop_cache_before_verify;
+use super::verify::warn_if_cache_kept;
 use crate::errors::Code;
 
 pub struct WriteJob {
@@ -41,6 +40,7 @@ pub struct WriteJob {
 /// Contrôle le fichier source contre l'empreinte attendue. Avant tout geste : un fichier faux ne doit
 /// coûter ni un démontage, ni le contenu de la clé.
 fn check_sha256(
+    image: &ImageFile,
     path: &Path,
     expected: &str,
     deps: &Deps<'_>,
@@ -53,15 +53,17 @@ fn check_sha256(
             format!("empreinte SHA-256 invalide : « {expected} » (64 caractères hexadécimaux)"),
         ));
     }
-    let mut file = File::open(path)
-        .map_err(|e| fail(Code::SourceUnreadable, format!("{} : {e}", path.display())))?;
-    let total = file.metadata().ok().map(|m| m.len());
     let mut report = guarded(deps, progress);
-    let actual =
-        engine::hash_stream(&mut file, total, DEFAULT_CHUNK, &mut report).map_err(|e| match e {
-            VerifyError::Cancelled => fail(Code::Cancelled, e),
-            _ => fail(Code::SourceUnreadable, format!("{} : {e}", path.display())),
-        })?;
+    let actual = engine::hash_stream(
+        &mut image.raw(),
+        Some(image.size()),
+        DEFAULT_CHUNK,
+        &mut report,
+    )
+    .map_err(|e| match e {
+        VerifyError::Cancelled => fail(Code::Cancelled, e),
+        _ => fail(Code::SourceUnreadable, format!("{} : {e}", path.display())),
+    })?;
     if actual == expected {
         Ok(())
     } else {
@@ -74,10 +76,14 @@ fn check_sha256(
 
 /// Lit le début de l'image (décompressé) et l'analyse. Rouvre le fichier : le flux principal doit rester
 /// intact pour l'écriture.
-fn analyze_source(path: &Path, real_len: Option<u64>) -> Result<ImageReport, JobError> {
+fn analyze_source(
+    image: &ImageFile,
+    path: &Path,
+    real_len: Option<u64>,
+) -> Result<ImageReport, JobError> {
     use std::io::Read;
 
-    let (source, _) = open_source(path)?;
+    let (source, _) = image.decoded()?;
     let mut head = Vec::new();
     source
         .reader
@@ -224,9 +230,10 @@ pub fn write(
     deps: &Deps<'_>,
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<WriteOutcome, JobError> {
-    let (mut source, source_info) = open_source(&job.source)?;
+    let file = ImageFile::open(&job.source)?;
+    let (mut source, source_info) = file.decoded()?;
     let chosen = choose(&job.target, job.options, deps)?;
-    let image = analyze_source(&job.source, source_info.size_bytes)?;
+    let image = analyze_source(&file, &job.source, source_info.size_bytes)?;
     judge_image(&image, job.mode)?;
     // Refus avant tout geste quand la taille de l'image est connue et dépasse la cible.
     if let (Some(needed), Some(available)) = (
@@ -241,7 +248,7 @@ pub fn write(
     }
 
     if let Some(expected) = &job.expected_sha256 {
-        check_sha256(&job.source, expected, deps, progress)?;
+        check_sha256(&file, &job.source, expected, deps, progress)?;
     }
     let sha256_checked = job.expected_sha256.is_some();
 
@@ -310,10 +317,8 @@ pub fn write(
     check_complete(&image, write.bytes, job.mode)?;
 
     let verify = if job.verify {
-        // Sans cela, la relecture lirait le cache du noyau (ce que Bonk vient d'écrire) et non le support.
-        drop_cache_before_verify(&mut *device);
         let report = engine::verify(
-            &*device,
+            &mut *device,
             write.bytes,
             &write.sha256,
             DEFAULT_CHUNK,
@@ -321,6 +326,7 @@ pub fn write(
         )
         .map_err(|e| map_verify_error(e, source_info.format))?;
         log::info!(target: "bonk::write", bytes = report.bytes; "verification passed");
+        warn_if_cache_kept(&report);
         Some(report)
     } else {
         None
