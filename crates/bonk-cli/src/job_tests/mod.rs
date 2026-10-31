@@ -60,6 +60,13 @@ struct Logged {
     inner: Box<dyn BlockDevice>,
     log: Log,
     cache_clean: Cell<bool>,
+    open_devices: Rc<Cell<usize>>,
+}
+
+impl Drop for Logged {
+    fn drop(&mut self) {
+        self.open_devices.set(self.open_devices.get() - 1);
+    }
 }
 
 impl BlockDevice for Logged {
@@ -202,6 +209,7 @@ struct Scenario {
     unmount: Result<Vec<String>, String>,
     open: Result<(), io::ErrorKind>,
     faulty_reads: bool,
+    rescan_fails: bool,
     cancel: bool,
     /// Annulation demandée pendant l'attente de l'autorisation.
     cancel_on_prepare: bool,
@@ -222,6 +230,7 @@ impl Scenario {
             unmount: Ok(vec!["/run/media/u/A".to_owned()]),
             open: Ok(()),
             faulty_reads: false,
+            rescan_fails: false,
             cancel: false,
             cancel_on_prepare: false,
             seen_elevation: Rc::new(Cell::new(None)),
@@ -253,6 +262,9 @@ impl Scenario {
         let capabilities = self.capabilities.clone();
         let log_format = Rc::clone(&self.log);
         let log_rescan = Rc::clone(&self.log);
+        let rescan_fails = self.rescan_fails;
+        let open_devices = Rc::new(Cell::new(0usize));
+        let open_devices_at_rescan = Rc::clone(&open_devices);
         let cancelled = Rc::new(Cell::new(false));
         let cancel_flag = Rc::clone(&cancelled);
         let seen_elevation = Rc::clone(&self.seen_elevation);
@@ -286,10 +298,12 @@ impl Scenario {
                         } else {
                             Box::new(device.clone())
                         };
+                        open_devices.set(open_devices.get() + 1);
                         Ok(Box::new(Logged {
                             inner,
                             log: Rc::clone(&log),
                             cache_clean: Cell::new(false),
+                            open_devices: Rc::clone(&open_devices),
                         }) as Box<dyn BlockDevice>)
                     }
                 }
@@ -305,9 +319,17 @@ impl Scenario {
                 Ok(())
             }),
             rescan: Box::new(move |path, _| {
+                // Le service ne peut pas relire la table d'un disque encore ouvert en exclusif.
+                let call = match open_devices_at_rescan.get() {
+                    0 => "rescan",
+                    _ => "rescan_disque_encore_ouvert",
+                };
                 log_rescan
                     .borrow_mut()
-                    .push(format!("rescan:{}", path.display()));
+                    .push(format!("{call}:{}", path.display()));
+                if rescan_fails {
+                    return Err(BlockError::Io(io::Error::other("service absent")));
+                }
                 Ok(())
             }),
             pause: Box::new(|| {}),

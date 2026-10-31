@@ -14,7 +14,7 @@ use bonk_core::partition::{Severity, inspect};
 use bonk_hal::platform::format_capability;
 use bonk_hal::{Access, Elevation, FilterOptions};
 
-use super::target::{Chosen, OpenRequest, choose, enumerate, open_target};
+use super::target::{Chosen, OpenRequest, choose, enumerate, open_target, reread_table};
 use super::types::{Deps, FormatDone, JobError, SCHEMA_VERSION, Target, TraceIo, fail};
 use super::verify::drop_cache_before_verify;
 use super::write::confirm_internal;
@@ -226,10 +226,7 @@ fn hand_over_to_host(
     label: Option<&str>,
     deps: &Deps<'_>,
 ) -> Result<(), JobError> {
-    let rescanned = (deps.io.rescan)(Path::new(disk.path), disk.elevation);
-    if let Err(error) = &rescanned {
-        log::warn!(target: "bonk::write", error = error.to_string().as_str(); "partition table not reread");
-    }
+    reread_table(Path::new(disk.path), disk.elevation, deps);
     let path = wait_for_partition(disk.id, partition_bytes, deps)?;
     if !filesystem.is_native() {
         let path = path.ok_or_else(|| {
@@ -339,7 +336,6 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
     );
     let (partition, cluster_bytes) =
         write_volume(&mut *device, job.table, filesystem, label.as_deref(), &ids)?;
-    // Libère le disque : le service du système ne peut pas relire la table d'un disque ouvert en exclusif.
     let block = u64::from(device.block_size());
     drop(device);
     if let Some(id) = &disk_id {

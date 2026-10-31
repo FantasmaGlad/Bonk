@@ -1,4 +1,5 @@
-//! Choix et ouverture de la cible : les garde-fous avant le premier geste.
+//! Choix et ouverture de la cible, les garde-fous avant le premier geste ; relecture de sa table après le
+//! dernier.
 
 use std::fs;
 use std::path::Path;
@@ -95,6 +96,20 @@ fn open_error(err: BlockError) -> JobError {
             fail(Code::DeviceOpenDenied, err)
         }
         _ => fail(Code::WriteFailed, err),
+    }
+}
+
+/// Fait relire au système la table du disque qui vient d'être écrit, une fois le disque refermé : le service
+/// ne relit pas la table d'un disque ouvert en exclusif. Sans cela, le noyau peut garder l'ancienne taille
+/// d'une partition, et la lire sur cette machine échoue jusqu'au prochain branchement. Un échec n'enlève
+/// rien à ce qui est écrit : il est signalé, pas fatal.
+pub(super) fn reread_table(disk: &Path, elevation: Elevation, deps: &Deps<'_>) {
+    if let Err(error) = (deps.io.rescan)(disk, elevation) {
+        log::warn!(
+            target: "bonk::write",
+            error = error.to_string().as_str();
+            "partition table not reread: unplug and replug the disk"
+        );
     }
 }
 
