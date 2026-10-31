@@ -24,7 +24,7 @@
 |---|---|
 | `bonk` | Seul binaire. Choisit l'interface. |
 | `bonk-core` | Tables MBR/GPT, formatage FAT32, écriture brute, décompression, vérification, réparation GPT, analyse d'image. N'opère que sur une abstraction de périphérique bloc : aucune API d'OS. |
-| `bonk-hal` | Filtre de sécurité et trait `Platform` : énumération, accès brut, démontage, formatage par les outils de l'hôte, par système. Seul crate contenant du code spécifique à un OS. |
+| `bonk-hal` | Filtre de sécurité et trait `Platform` : énumération, accès brut, démontage, formatage par les outils de l'hôte, par système. Le code propre à un système d'exploitation y vit ; restent à y déplacer la détection de l'affichage (`bonk-gui`) et deux chemins Linux (`bonk-cli`, `diagnose` et `debug layout`). |
 | `bonk-ops` | Porte d'écriture unique (filtre, identité, démontage, vérification) et codes d'erreur stables. Sans interface : ni clap, ni Iced. |
 | `bonk-customizer` | Fichiers de réponse Windows, persistance des systèmes Live Linux. |
 | `bonk-catalog` | Manifeste signé, bibliothèque locale, téléchargements reprenables, empreintes. |
@@ -35,12 +35,12 @@
 - `bonk-core` ne dépend d'aucun autre crate du workspace ni d'aucune API système.
 - `bonk-ops` ne dépend d'aucune interface.
 - `bonk-cli` et `bonk-gui` ne dépendent pas l'un de l'autre.
-- Le code propre à un OS est isolé dans `bonk-hal` derrière le trait `Platform`.
+- Le code propre à un OS est isolé dans `bonk-hal` derrière le trait `Platform`, aux exceptions près citées plus haut.
 
-Ces règles sont vérifiées par `crates/bonk/tests/architecture.rs`.
+`crates/bonk/tests/architecture.rs` vérifie les dépendances entre crates, et, pour le code propre à un OS, l'absence de `cfg(target_os` et de `libc::` hors de `bonk-hal`.
 
 ## Sécurité des disques
-1. Les disques système de l'hôte (racine, démarrage, ESP active, volumes montés par le système, membres RAID/LVM, volumes chiffrés) ne sont jamais listés.
+1. Les disques système de l'hôte (racine, démarrage, ESP active, volumes montés par le système, membres RAID/LVM, volumes chiffrés) ne sont jamais proposés ni écrits ; `bonk list --all` les affiche avec le motif de leur exclusion.
 2. Par défaut, seuls les disques sur bus amovible (USB, SD, Thunderbolt externe) sont proposés ; le filtrage se fait sur le bus, pas sur le drapeau « amovible ».
 3. L'identité du disque (numéro de série et taille) est revérifiée juste avant l'écriture.
 4. En ligne de commande : cible désignée par un identifiant stable, `--yes` obligatoire, `--dry-run` disponible.
@@ -58,5 +58,5 @@ L'interface ne s'exécute jamais avec des droits élevés. Seules les opération
 ## Tests
 - `bonk-core` est testé sur des fichiers image.
 - Le filtre de sécurité est testé sur des jeux d'énumération écrits à la main d'après de vraies machines ; une capture réelle peut être rejouée (`bonk diagnose --capture`, `--fixture`).
-- En CI, une clé écrite (Debian, x86_64) est démarrée dans QEMU avec OVMF, avec et sans Secure Boot, jusqu'au lancement du chargeur d'amorçage.
+- En CI, l'image officielle de Debian (x86_64), écrite par Bonk dans un fichier image, est démarrée dans QEMU avec OVMF, avec et sans Secure Boot, jusqu'au lancement du chargeur d'amorçage.
 - Aucun test n'écrit sur un périphérique réel.

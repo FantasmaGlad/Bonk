@@ -18,7 +18,7 @@ Le projet est maintenu par une seule personne, sur son temps libre. Objectifs, s
 
 ## Versions suivies
 
-Seule la dernière version publiée reçoit des correctifs de sécurité.
+Seule la dernière version publiée recevra des correctifs de sécurité ; tant qu'aucune n'est publiée, ils vont dans la branche principale.
 
 ## Périmètre
 
