@@ -1,7 +1,7 @@
-# La clé écrite par Bonk démarre-t-elle ? Image officielle Debian écrite sur un fichier image (aucun
-# périphérique réel), puis micrologiciel UEFI sous QEMU, avec et sans Secure Boot.
-# Preuve limitée au chargement du chargeur d'amorçage par le micrologiciel (voir le script) ; Linux x86_64
-# seulement. Reste à faire : AAVMF (aarch64), Ubuntu, Fedora, Arch, Mint, Windows.
+# La clé écrite par Bonk démarre-t-elle ? Image officielle téléchargée par Bonk, empreinte vérifiée, écrite sur
+# un fichier image (aucun périphérique réel), puis démarrée sous QEMU en BIOS, UEFI et Secure Boot.
+# Preuve : le système atteint, vu sur la console série (voir les scripts) ; Linux x86_64 seulement. Reste à
+# faire : AAVMF (aarch64), Fedora, Arch, Mint. Windows : jamais en CI, une ISO Windows ne se redistribue pas.
 # L'image n'est jamais hébergée ni conservée : téléchargée du site officiel, empreinte vérifiée.
 name: demarrage-qemu
 
@@ -14,6 +14,7 @@ on:
     paths:
       - ".github/workflows/demarrage-qemu.yml"
       - ".github/scripts/demarrage-qemu.sh"
+      - ".github/scripts/demarrage-qemu.py"
   workflow_dispatch:
 
 permissions:
@@ -29,13 +30,28 @@ env:
 
 jobs:
   demarrer:
-    name: Debian (${{ matrix.mode }})
+    name: ${{ matrix.nom }} (${{ matrix.mode }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        mode: [uefi, secureboot]
+        mode: [bios, uefi, secureboot]
+        nom: [Debian, Ubuntu]
+        include:
+          # Entrée texte de l'installateur : il parle sur la console série, son premier écran fait preuve.
+          - nom: Debian
+            base: https://cdimage.debian.org/debian-cd/current/amd64/iso-cd
+            motif: 'debian-[0-9.]*-amd64-netinst\.iso'
+            preuve: '\[!!\]'
+            chargeur_bios: isolinux
+            options: --entree 1 --memoire 2048 --delai 300
+          - nom: Ubuntu
+            base: https://releases.ubuntu.com/26.04.1
+            motif: 'ubuntu-26\.04\.1-desktop-amd64\.iso'
+            preuve: 'login:'
+            chargeur_bios: grub
+            options: --memoire 4096 --delai 900
     steps:
       - name: Récupérer le code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -43,30 +59,44 @@ jobs:
           persist-credentials: false
       - name: Installer la chaîne Rust du dépôt
         run: rustup toolchain install
-      - name: Installer QEMU et OVMF
+      - name: Installer QEMU, SeaBIOS et OVMF
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf
+      # Sans KVM, l'émulation logicielle dépasserait le délai sur une image de bureau.
+      - name: Ouvrir KVM à l'exécuteur
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
       - name: Construire Bonk
         run: cargo build --release --locked -p bonk
       # L'empreinte vient du même site que l'image : elle protège d'un téléchargement corrompu, pas d'un
       # site compromis (la signature GPG de SHA256SUMS n'est pas vérifiée).
-      - name: Télécharger l'image officielle
+      - name: Trouver l'image officielle
+        env:
+          BASE: ${{ matrix.base }}
+          MOTIF: ${{ matrix.motif }}
         run: |
-          base=https://cdimage.debian.org/debian-cd/current/amd64/iso-cd
-          curl --fail --silent --show-error --location "$base/SHA256SUMS" --output SHA256SUMS
-          iso=$(grep -o 'debian-[0-9.]*-amd64-netinst\.iso' SHA256SUMS | head -n 1)
-          curl --fail --silent --show-error --location "$base/$iso" --output "$iso"
-          grep " $iso\$" SHA256SUMS | sha256sum --check
-          echo "ISO=$iso" >> "$GITHUB_ENV"
-      - name: Démarrer sous QEMU
+          iso=$(curl --fail --silent --show-error --location "$BASE/SHA256SUMS" | grep -o "$MOTIF" | head -n 1)
+          test -n "$iso"
+          echo "URL=$BASE/$iso" >> "$GITHUB_ENV"
+          echo "SHA256_FILE=$BASE/SHA256SUMS" >> "$GITHUB_ENV"
+      - name: Écrire et démarrer sous QEMU
         env:
           MODE: ${{ matrix.mode }}
-        run: .github/scripts/demarrage-qemu.sh target/release/bonk "$ISO" "$MODE" "$RUNNER_TEMP/qemu"
-      - name: Conserver la trace série
+          PREUVE: ${{ matrix.preuve }}
+          OPTIONS: ${{ matrix.options }}
+          CHARGEUR_BIOS: ${{ matrix.chargeur_bios }}
+        run: |
+          read -r -a options <<< "$OPTIONS"
+          .github/scripts/demarrage-qemu.sh target/release/bonk "$URL" "$MODE" "$RUNNER_TEMP/qemu" "$PREUVE" "${options[@]}"
+      - name: Conserver la trace et les écrans
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: serie-${{ matrix.mode }}
-          path: ${{ runner.temp }}/qemu/serie.log
+          name: demarrage-${{ matrix.nom }}-${{ matrix.mode }}
+          path: |
+            ${{ runner.temp }}/qemu/serie.log
+            ${{ runner.temp }}/qemu/*.png
           retention-days: 7
