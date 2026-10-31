@@ -10,6 +10,7 @@
 //! noyau refuse enfin un disque encore utilisé (`O_EXCL`). Les tests injectent ces dépendances
 //! ([`Deps`]) et n'ouvrent jamais de vrai disque.
 
+mod extract;
 mod format;
 mod repair;
 mod source;
@@ -19,6 +20,7 @@ mod types;
 mod verify;
 mod write;
 
+pub use extract::{ExtractDone, ExtractReport, ExtractVerify, Extraction};
 pub use format::{FormatJob, default_filesystem, format};
 pub use repair::{RepairJob, repair};
 pub use source::{FileReader, ImageFile};

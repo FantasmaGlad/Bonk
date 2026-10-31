@@ -9,8 +9,11 @@ pub mod block;
 pub mod codec;
 pub mod format;
 pub mod partition;
+pub mod pe;
 pub mod repair;
 pub mod trace;
+pub mod udf;
+pub mod wim;
 pub mod write;
 
 pub use block::{

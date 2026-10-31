@@ -18,6 +18,7 @@ use serde::Serialize;
 use crate::config::ViewDefaults;
 use crate::errors::{Code, report};
 use crate::fetch;
+use crate::format::TableArg;
 use bonk_ops::job::{
     self, Deps, JobError, RepairDone, RepairJob, Target, TraceIo, VerifyDone, VerifyJob, WriteDone,
     WriteJob, WriteMode, WriteOutcome,
@@ -62,10 +63,12 @@ impl From<ElevateArg> for Elevation {
 /// Mode de `--mode` (voir [`WriteMode`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum ModeArg {
-    /// Refuse une image tronquée ou qui ne démarrerait pas écrite telle quelle
+    /// Extrait une ISO Windows ; refuse une image tronquée ou qui ne démarrerait pas écrite telle quelle
     Auto,
     /// Écrit les octets tels quels, quelle que soit l'analyse
     Raw,
+    /// Copie les fichiers d'une ISO d'installation de Windows sur une partition FAT32 ; auto le choisit seul
+    Extract,
 }
 
 impl From<ModeArg> for WriteMode {
@@ -73,6 +76,7 @@ impl From<ModeArg> for WriteMode {
         match arg {
             ModeArg::Auto => Self::Auto,
             ModeArg::Raw => Self::Raw,
+            ModeArg::Extract => Self::Extract,
         }
     }
 }
@@ -191,9 +195,14 @@ pub(crate) struct WriteArgs {
     #[arg(long, value_name = "DOSSIER")]
     cache_dir: Option<PathBuf>,
 
-    /// auto : analyse l'image et refuse ce qui ne démarrerait pas ; raw : écrit les octets tels quels
+    /// auto : analyse l'image, extrait une ISO Windows et refuse ce qui ne démarrerait pas ; raw : écrit les
+    /// octets tels quels ; extract : exige une ISO Windows
     #[arg(long, value_enum, default_value_t = ModeArg::Auto)]
     mode: ModeArg,
+
+    /// Table de partitions d'une clé Windows ; le démarrage reste en UEFI dans les deux cas
+    #[arg(long, value_enum, default_value_t = TableArg::Gpt)]
+    table: TableArg,
 
     /// Ne relit pas le support après l'écriture
     #[arg(long)]
@@ -294,6 +303,10 @@ fn error_event(error: &JobError, out: &mut dyn Write) {
 
 pub(crate) fn schema_error() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(ErrorEvent)).unwrap_or_default()
+}
+
+pub(crate) fn schema_write_extract() -> serde_json::Value {
+    serde_json::to_value(schemars::schema_for!(job::ExtractDone)).unwrap_or_default()
 }
 
 pub(crate) fn schema_write() -> serde_json::Value {
@@ -467,6 +480,7 @@ pub(crate) fn run_write(
         yes: args.yes,
         expected_sha256: args.sha256.clone(),
         mode: args.mode.into(),
+        table: args.table.into(),
         elevation: args.common.elevate.into(),
         force: args.force,
     };
@@ -505,7 +519,33 @@ pub(crate) fn run_write(
                 if !plan.unmount.is_empty() {
                     writeln!(out, "  Démontage : {}", plan.unmount.join(", "))?;
                 }
+                if let Some(extraction) = &plan.extraction {
+                    extraction_lines(extraction, out)?;
+                }
                 writeln!(out, "  Étapes : {}", plan.steps.join(", "))
+            }
+            WriteOutcome::Extracted(done) => {
+                writeln!(
+                    out,
+                    "Clé Windows écrite : {} en {} ({}/s)",
+                    format_size(done.write.bytes),
+                    seconds(done.write.elapsed_ms),
+                    format_size(done.write.bytes_per_second as u64)
+                )?;
+                writeln!(out, "  Cible  : {}", target_line(&done.target))?;
+                extraction_lines(&done.extraction, out)?;
+                writeln!(
+                    out,
+                    "  Vérification : réussie ({} fichiers relus, {} octets)",
+                    done.verify.files, done.verify.bytes
+                )?;
+                if !done.verify.cache_dropped {
+                    writeln!(
+                        out,
+                        "  Attention : le cache du système n'a pas pu être vidé, la relecture a pu lire la mémoire et non le support"
+                    )?;
+                }
+                Ok(())
             }
             WriteOutcome::Done(done) => {
                 writeln!(
@@ -582,6 +622,23 @@ pub(crate) fn run_verify(
         cache_warning(&done.verify, out)?;
         writeln!(out, "  SHA-256 : {}", done.verify.sha256)
     })
+}
+
+fn extraction_lines(extraction: &job::Extraction, out: &mut dyn Write) -> io::Result<()> {
+    writeln!(
+        out,
+        "  Mode : extraction, {} fichiers, FAT32 en {}, démarrage UEFI",
+        extraction.files,
+        extraction.table.name()
+    )?;
+    if extraction.wim_parts > 0 {
+        writeln!(
+            out,
+            "  install.wim découpé en {} morceaux .swm, sans recompression",
+            extraction.wim_parts
+        )?;
+    }
+    writeln!(out, "  Secure Boot : {}", extraction.secure_boot)
 }
 
 fn cache_warning(report: &VerifyReport, out: &mut dyn Write) -> io::Result<()> {

@@ -89,7 +89,7 @@ fn check_available(fs: Filesystem, chosen: &Chosen, deps: &Deps<'_>) -> Result<(
 
 /// Graine des identifiants du support : deux formatages ne doivent pas donner les mêmes GUID. Seule source
 /// d'horloge et de hasard du formatage : `bonk-core` n'en a pas, ses tests restent déterministes.
-fn fresh_seed(target: &str) -> Vec<u8> {
+pub(super) fn fresh_seed(target: &str) -> Vec<u8> {
     use std::hash::{BuildHasher, RandomState};
 
     let nanos = SystemTime::now()

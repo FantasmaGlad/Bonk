@@ -151,7 +151,7 @@ pub struct VerifyReport {
     pub bytes_per_second: f64,
 }
 
-fn hex(digest: &[u8]) -> String {
+pub(crate) fn hex(digest: &[u8]) -> String {
     digest.iter().map(|b| format!("{b:02x}")).collect()
 }
 

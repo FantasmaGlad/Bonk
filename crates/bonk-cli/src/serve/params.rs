@@ -82,7 +82,7 @@ pub(super) struct TransferParams {
     pub(super) sha256_file: Option<String>,
     /// Dossier des téléchargements.
     pub(super) cache_dir: Option<PathBuf>,
-    /// `auto` (par défaut) ou `raw`.
+    /// `auto` (par défaut), `raw` ou `extract`.
     pub(super) mode: Option<String>,
     /// `never` (par défaut : personne devant l'écran) ou `auto`.
     pub(super) elevate: Option<String>,
@@ -142,6 +142,7 @@ impl TransferParams {
         match self.mode.as_deref() {
             None | Some("auto") => Ok(WriteMode::Auto),
             Some("raw") => Ok(WriteMode::Raw),
+            Some("extract") => Ok(WriteMode::Extract),
             Some(autre) => Err(failure(
                 Code::ProtocolError,
                 format!("mode inconnu : « {autre} » (auto ou raw)"),

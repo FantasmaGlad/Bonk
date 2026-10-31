@@ -5,11 +5,13 @@ use std::path::{Path, PathBuf};
 use bonk_core::BlockDevice;
 use bonk_core::analysis::{self, ImageKind, ImageReport};
 use bonk_core::codec::Format;
+use bonk_core::format::table::TableKind;
 use bonk_core::partition::inspect;
 use bonk_core::repair::{RepairReport, needs_repair, repair_gpt};
 use bonk_core::write::{self as engine, Control, DEFAULT_CHUNK, Phase, Progress, VerifyError};
 use bonk_hal::{Access, Elevation, Eligibility, FilterOptions, Warning, evaluate};
 
+use super::extract::{self, WindowsImage};
 use super::source::ImageFile;
 use super::target::{Chosen, OpenRequest, choose, open_target, reread_table};
 use super::translate::{guarded, map_verify_error, map_write_error};
@@ -32,6 +34,8 @@ pub struct WriteJob {
     /// Empreinte SHA-256 publiée pour le fichier source, en hexadécimal.
     pub expected_sha256: Option<String>,
     pub mode: WriteMode,
+    /// Table de la clé Windows ; sans effet sur une écriture brute, dont la table vient de l'image.
+    pub table: TableKind,
     pub elevation: Elevation,
     /// Tient lieu de `yes` et autorise un disque interne déjà admis par les options du filtre. Sans
     /// aucune question : une commande doit pouvoir tourner sans personne devant l'écran.
@@ -178,7 +182,7 @@ fn judge_image(report: &ImageReport, mode: WriteMode) -> Result<(), JobError> {
         None
     } else if report.kind == ImageKind::PlainIso {
         let hint = if report.udf {
-            " ; les ISO d'installation de Windows sont de ce type"
+            " ; Bonk n'y reconnaît pas une installation de Windows 10 ou 11 x86_64"
         } else {
             ""
         };
@@ -194,7 +198,7 @@ fn judge_image(report: &ImageReport, mode: WriteMode) -> Result<(), JobError> {
     };
     match (problem, mode) {
         (None, _) => Ok(()),
-        (Some((code, message)), WriteMode::Auto) => Err(fail(code, message)),
+        (Some((code, message)), WriteMode::Auto | WriteMode::Extract) => Err(fail(code, message)),
         (Some((code, message)), WriteMode::Raw) => {
             log::warn!(target: "bonk::write", code = code.id(), reason = message.as_str(); "written anyway: raw mode");
             Ok(())
@@ -220,7 +224,7 @@ fn check_complete(image: &ImageReport, written: u64, mode: WriteMode) -> Result<
         "l'image décompressée fait {written} octets et en annonce {declared} : le support est incomplet"
     );
     match mode {
-        WriteMode::Auto => Err(fail(Code::ImageTruncated, message)),
+        WriteMode::Auto | WriteMode::Extract => Err(fail(Code::ImageTruncated, message)),
         WriteMode::Raw => {
             log::warn!(target: "bonk::write", reason = message.as_str(); "written anyway: raw mode");
             Ok(())
@@ -287,6 +291,82 @@ fn repair_if_needed(device: &mut dyn BlockDevice) -> Result<Option<RepairReport>
     Ok(Some(report))
 }
 
+/// L'ISO d'installation de Windows que le mode demande d'extraire, s'il y en a une. `extract` exige d'en
+/// trouver une ; `auto` en cherche une là où l'écriture brute serait refusée ; `raw` n'en cherche jamais.
+fn windows_image(
+    file: &ImageFile,
+    source: &SourceInfo,
+    image: &ImageReport,
+    mode: WriteMode,
+) -> Result<Option<WindowsImage>, JobError> {
+    let wanted = match mode {
+        WriteMode::Raw => false,
+        WriteMode::Extract => true,
+        WriteMode::Auto => image.udf && !image.is_writable_as_is(),
+    };
+    if !wanted || source.format != Format::Raw {
+        return if mode == WriteMode::Extract {
+            Err(fail(
+                Code::ImageNotBootable,
+                "--mode extract demande une ISO d'installation de Windows non compressée",
+            ))
+        } else {
+            Ok(None)
+        };
+    }
+    let found = extract::detect(file)?;
+    if found.is_none() && mode == WriteMode::Extract {
+        return Err(fail(
+            Code::ImageNotBootable,
+            "ce n'est pas une ISO d'installation de Windows 10 ou 11 x86_64 (UDF, sources/install.wim, efi/boot/bootx64.efi)",
+        ));
+    }
+    Ok(found)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn write_windows(
+    windows: &WindowsImage,
+    file: &ImageFile,
+    source: SourceInfo,
+    image: ImageReport,
+    chosen: Chosen,
+    job: &WriteJob,
+    deps: &Deps<'_>,
+    progress: &mut dyn FnMut(&Progress) -> Control,
+) -> Result<WriteOutcome, JobError> {
+    windows.check_fits(chosen.info.size_bytes, job.table)?;
+    if let Some(expected) = &job.expected_sha256 {
+        check_sha256(file, &job.source, expected, deps, progress)?;
+    }
+    let sha256_checked = job.expected_sha256.is_some();
+    if job.dry_run {
+        let mut steps = vec!["unmount", "write_table", "write_fat32", "copy_files"];
+        if chosen.disk.is_none() {
+            steps.remove(0);
+        }
+        steps.push("verify_files");
+        if chosen.disk.is_some() {
+            steps.push("reread_table");
+        }
+        return Ok(WriteOutcome::Plan(Box::new(Plan {
+            schema_version: SCHEMA_VERSION,
+            event: "plan",
+            dry_run: true,
+            target: chosen.info,
+            source,
+            image,
+            sha256_checked,
+            unmount: chosen.mounts,
+            steps,
+            extraction: Some(windows.describe(job.table)),
+        })));
+    }
+    confirm(job, &chosen)?;
+    extract::run(windows, file, chosen, job, sha256_checked, deps, progress)
+        .map(|done| WriteOutcome::Extracted(Box::new(done)))
+}
+
 pub fn write(
     job: &WriteJob,
     deps: &Deps<'_>,
@@ -296,6 +376,18 @@ pub fn write(
     let (mut source, source_info) = file.decoded()?;
     let chosen = choose(&job.target, job.options, deps)?;
     let image = analyze_source(&file, &job.source, source_info.size_bytes)?;
+    if let Some(windows) = windows_image(&file, &source_info, &image, job.mode)? {
+        return write_windows(
+            &windows,
+            &file,
+            source_info,
+            image,
+            chosen,
+            job,
+            deps,
+            progress,
+        );
+    }
     judge_image(&image, job.mode)?;
     // Refus avant tout geste quand la taille de l'image est connue et dépasse la cible.
     if let (Some(needed), Some(available)) = (
@@ -326,6 +418,7 @@ pub fn write(
             sha256_checked,
             unmount: chosen.mounts,
             steps,
+            extraction: None,
         })));
     }
     confirm(job, &chosen)?;

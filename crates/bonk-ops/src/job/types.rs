@@ -37,6 +37,8 @@ pub enum WriteMode {
     Auto,
     /// Écrit les octets tels quels, quelle que soit l'analyse.
     Raw,
+    /// Copie les fichiers d'une ISO d'installation de Windows sur une partition FAT32.
+    Extract,
 }
 
 /// Une erreur d'opération, avec son code stable.
@@ -169,6 +171,8 @@ pub struct Plan {
     /// Points de montage qui seront démontés.
     pub unmount: Vec<String>,
     pub steps: Vec<&'static str>,
+    /// Clé Windows : ce qu'elle recevra. Nul pour une écriture brute.
+    pub extraction: Option<super::extract::Extraction>,
 }
 
 /// Résultat d'une écriture.
@@ -254,4 +258,5 @@ pub struct FormatDone {
 pub enum WriteOutcome {
     Plan(Box<Plan>),
     Done(Box<WriteDone>),
+    Extracted(Box<super::extract::ExtractDone>),
 }

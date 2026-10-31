@@ -47,6 +47,7 @@ impl App {
                     order.push(Focus::Browse);
                     order.push(Focus::Hash);
                     order.push(Focus::Raw);
+                    order.push(Focus::Mbr);
                     order.push(Focus::Action);
                 }
             }
@@ -120,6 +121,7 @@ impl App {
                             | Focus::Browse
                             | Focus::Hash
                             | Focus::Raw
+                            | Focus::Mbr
                             | Focus::Action
                             | Focus::Copy
                     ) =>
@@ -176,6 +178,10 @@ impl App {
             Some(Focus::Browse) => Message::BrowseImage,
             Some(Focus::Raw) => match &self.write {
                 WriteState::Draft { raw, .. } => Message::ToggleRaw(!raw),
+                _ => return Task::none(),
+            },
+            Some(Focus::Mbr) => match &self.write {
+                WriteState::Draft { mbr, .. } => Message::ToggleMbr(!mbr),
                 _ => return Task::none(),
             },
             // Le champ de l'image reçoit les touches lui-même : Espace et Entrée n'y activent rien.

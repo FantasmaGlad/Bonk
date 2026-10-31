@@ -23,7 +23,7 @@
 | Crate | Rôle |
 |---|---|
 | `bonk` | Seul binaire. Choisit l'interface. |
-| `bonk-core` | Tables MBR/GPT, formatage FAT32, écriture brute, décompression, vérification, réparation GPT, analyse d'image. N'opère que sur une abstraction de périphérique bloc : aucune API d'OS. |
+| `bonk-core` | Tables MBR/GPT, formatage FAT32, écriture brute, décompression, vérification, réparation GPT, analyse d'image. N'opère que sur une abstraction de périphérique bloc : aucune API d'OS. Lecture UDF, découpage WIM, arbre FAT32 et certificat de chargeur pour la clé Windows. |
 | `bonk-hal` | Filtre de sécurité et trait `Platform` : énumération, accès brut, démontage, formatage par les outils de l'hôte, par système. Le code propre à un système d'exploitation y vit ; restent à y déplacer la détection de l'affichage (`bonk-gui`) et deux chemins Linux (`bonk-cli`, `diagnose` et `debug layout`). |
 | `bonk-ops` | Porte d'écriture unique (filtre, identité, démontage, vérification) et codes d'erreur stables. Sans interface : ni clap, ni Iced. |
 | `bonk-customizer` | Fichiers de réponse Windows, persistance des systèmes Live Linux. |
