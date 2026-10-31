@@ -18,7 +18,7 @@ pub(crate) const CONTROL_BORDER: Color = Color::BLACK;
 /// Fond d'un composant survolé `#E5E5E5` (texte noir dessus : 16,7:1).
 pub(crate) const HOVER: Color = Color::from_rgb(0.898, 0.898, 0.898);
 
-/// Angles vifs : 2 px, sous le plafond de 4 px de la charte.
+/// Angles vifs.
 const RADIUS: f32 = 2.0;
 
 pub(crate) fn bonk() -> Theme {

@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use super::{ALIGNMENT, Filesystem, FormatError, Ids, zero_range};
 use crate::block::BlockDevice;
-use crate::partition::crc32;
+use crate::partition::{MBR_PROTECTIVE, crc32};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -45,7 +45,6 @@ const GPT_ENTRY_SIZE: u32 = 128;
 const GPT_REVISION: u32 = 0x0001_0000;
 const GPT_HEADER_SIZE: u32 = 92;
 const GPT_ENTRIES_LBA: u64 = 2;
-const MBR_PROTECTIVE: u8 = 0xEE;
 /// « Basic data » : FAT, exFAT et NTFS, EBD0A0A2-B9E5-4433-87C0-68B6B72699C7.
 const GUID_BASIC_DATA: [u8; 16] = [
     0xA2, 0xA0, 0xD0, 0xEB, 0xE5, 0xB9, 0x33, 0x44, 0x87, 0xC0, 0x68, 0xB6, 0xB7, 0x26, 0x99, 0xC7,

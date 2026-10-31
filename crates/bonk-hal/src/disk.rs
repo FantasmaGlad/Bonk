@@ -17,7 +17,7 @@ pub enum Bus {
     Usb,
     /// Lecteur de carte SD ou MMC.
     Sd,
-    /// Thunderbolt **externe** : l'adaptateur ne rapporte ce bus que pour un boîtier branché, pas
+    /// Thunderbolt **externe** : un adaptateur ne doit rapporter ce bus que pour un boîtier branché, pas
     /// pour un SSD interne qui passerait par la même interface.
     Thunderbolt,
     Sata,

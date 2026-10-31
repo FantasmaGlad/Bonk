@@ -17,7 +17,7 @@ use sha2::{Digest, Sha256};
 use crate::block::BlockError;
 
 /// Taille d'alignement des partitions et de la zone de données.
-pub(crate) const ALIGNMENT: u64 = 1 << 20;
+pub(crate) const ALIGNMENT: u64 = crate::partition::ALIGNMENT_BYTES;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]

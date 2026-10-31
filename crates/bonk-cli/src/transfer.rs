@@ -2,7 +2,7 @@
 //!
 //! La logique est dans `bonk_ops::job` ; ce module la présente. Avec `--progress json`, la sortie
 //! standard est un flux de lignes JSON (événements `progress` puis un événement `result`), les mêmes
-//! événements que la barre de la fenêtre ; sinon le résultat est du texte ou, avec `--json`, un JSON.
+//! événements que la barre de la fenêtre (`repair-gpt` ne rend que le `result`) ; sinon le résultat est du texte ou, avec `--json`, un JSON.
 
 use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;
