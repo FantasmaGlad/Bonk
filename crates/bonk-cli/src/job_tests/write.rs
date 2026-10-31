@@ -834,3 +834,27 @@ fn une_coupure_definitive_se_dit_par_son_code_sans_toucher_au_support() {
     assert!(err.contains("E3008"), "{err}");
     assert!(scenario.log().is_empty(), "{:?}", scenario.log());
 }
+
+#[test]
+fn le_flux_json_finit_par_un_evenement_d_erreur_avec_son_code() {
+    let source = TempSource::new("flux-erreur", 4096);
+    let faux = "0".repeat(64);
+    let scenario = Scenario::new();
+    let (code, out, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &source.arg(),
+        "--yes",
+        "--mode",
+        "raw",
+        "--sha256",
+        &faux,
+        "--progress",
+        "json",
+    ]);
+    assert_eq!(code, EXIT_SOURCE, "{err}");
+    let last: serde_json::Value = serde_json::from_str(out.lines().last().unwrap()).unwrap();
+    assert_eq!(last["event"], "error", "{out}");
+    assert_eq!(last["code"], "E3005", "{out}");
+    assert!(err.contains("E3005"), "{err}");
+}

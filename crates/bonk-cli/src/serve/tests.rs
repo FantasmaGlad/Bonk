@@ -657,3 +657,19 @@ fn echec_d_enumeration_rapporte_avec_son_code() {
     // `diagnose` rapporte l'échec dans son rapport au lieu d'échouer.
     assert_eq!(response(&out, 2)["result"]["enumeration"]["ok"], false);
 }
+
+/// Une adresse passe par le même contrôle que dans la ligne de commande : son empreinte est exigée.
+#[test]
+fn disk_write_exige_l_empreinte_d_une_adresse() {
+    let write = r#"{"id":1,"method":"disk.write","params":{"target":"usb-a","source":"https://a.org/x.iso","yes":true}}"#;
+    let f = fake(false, fixed());
+    let buffer = Buffer(Arc::new(Mutex::new(Vec::new())));
+    let code = serve(
+        Cursor::new(format!("{write}\n").into_bytes()),
+        Box::new(buffer.clone()),
+        &f.cfg,
+    );
+    assert_eq!(code, 0);
+    let text = String::from_utf8(buffer.0.lock().unwrap().clone()).unwrap();
+    assert!(text.contains("--sha256"), "{text}");
+}

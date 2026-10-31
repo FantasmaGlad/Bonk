@@ -12,6 +12,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::errors::Code;
+use crate::fetch;
 use crate::list;
 use bonk_ops::job::{self, Deps, FormatJob, RepairJob, VerifyJob, WriteJob};
 
@@ -56,7 +57,8 @@ pub(super) fn progress_event(p: &Progress, request: &Value) -> Value {
 
 /// Une opération longue validée, prête à partir sur son fil.
 pub(super) enum Task {
-    Write(WriteJob),
+    /// L'écriture, avec le fichier d'empreintes et le dossier de cache d'une image à télécharger.
+    Write(Box<WriteJob>, Option<String>, Option<PathBuf>),
     Verify(VerifyJob),
     Repair(RepairJob),
     Format(FormatJob),
@@ -78,20 +80,24 @@ pub(super) fn prepare(kind: Kind, params: &Value, cfg: &Config) -> Result<Task, 
         _ => p.source()?,
     };
     Ok(match kind {
-        Kind::Write => Task::Write(WriteJob {
-            target,
-            source,
-            options,
-            verify: !p.no_verify,
-            repair_gpt: !p.no_repair_gpt,
-            trace_io: trace,
-            dry_run: p.dry_run,
-            yes: p.yes,
-            expected_sha256: p.sha256,
-            mode,
-            elevation,
-            force: p.force,
-        }),
+        Kind::Write => Task::Write(
+            Box::new(WriteJob {
+                target,
+                source,
+                options,
+                verify: !p.no_verify,
+                repair_gpt: !p.no_repair_gpt,
+                trace_io: trace,
+                dry_run: p.dry_run,
+                yes: p.yes,
+                expected_sha256: p.sha256,
+                mode,
+                elevation,
+                force: p.force,
+            }),
+            p.sha256_file,
+            p.cache_dir,
+        ),
         Kind::Verify => Task::Verify(VerifyJob {
             target,
             source,
@@ -238,15 +244,23 @@ pub(super) fn start_or_fail(
 
 impl Task {
     pub(super) fn run(
-        &self,
+        self,
         deps: &Deps<'_>,
         progress: &mut dyn FnMut(&Progress) -> Control,
     ) -> Result<Value, job::JobError> {
         match self {
-            Self::Write(j) => job::write(j, deps, progress).and_then(to_json),
-            Self::Verify(j) => job::verify(j, deps, progress).and_then(to_json),
-            Self::Repair(j) => job::repair(j, deps).and_then(to_json),
-            Self::Format(j) => job::format(j, deps).and_then(to_json),
+            Self::Write(mut j, sha256_file, cache_dir) => {
+                let source = j.source.clone();
+                let request = fetch::Request {
+                    source: &source,
+                    sha256_file: sha256_file.as_deref(),
+                    cache_dir: cache_dir.as_deref(),
+                };
+                fetch::write(&request, &mut j, deps, progress).and_then(to_json)
+            }
+            Self::Verify(j) => job::verify(&j, deps, progress).and_then(to_json),
+            Self::Repair(j) => job::repair(&j, deps).and_then(to_json),
+            Self::Format(j) => job::format(&j, deps).and_then(to_json),
         }
     }
 }

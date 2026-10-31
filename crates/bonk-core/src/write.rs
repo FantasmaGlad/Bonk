@@ -9,7 +9,7 @@ use std::ops::Range;
 use std::time::Instant;
 
 use schemars::JsonSchema;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::block::{BlockDevice, BlockError};
@@ -17,7 +17,7 @@ use crate::block::{BlockDevice, BlockError};
 /// 4 Mio, comme le `dd bs=4M` contre lequel le débit est mesuré.
 pub const DEFAULT_CHUNK: usize = 4 << 20;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Phase {
     /// Téléchargement de l'image, avant tout geste sur le support.

@@ -9,6 +9,8 @@ use iced::widget::{
 };
 use iced::{Element, Fill};
 
+use bonk_core::write::Phase;
+
 use crate::theme;
 use crate::transfer::Outcome;
 
@@ -111,6 +113,14 @@ pub(super) fn detail(disk: &Disk) -> Element<'_, Message> {
     container(lines).padding([8, 0]).into()
 }
 
+fn boxed<'a>(body: Element<'a, Message>) -> Element<'a, Message> {
+    container(body)
+        .padding(12)
+        .width(Fill)
+        .style(theme::panel)
+        .into()
+}
+
 impl App {
     pub(crate) fn view(&self) -> Element<'_, Message> {
         let entries = self.entries();
@@ -126,7 +136,10 @@ impl App {
 
         let controls = self.controls();
 
-        let body = self.disk_list(entries);
+        let body = match self.active_panel() {
+            Some(panel) => column![panel, self.disk_list(entries)].spacing(8).into(),
+            None => self.disk_list(entries),
+        };
 
         let equivalent = row![
             column![
@@ -229,28 +242,33 @@ impl App {
     /// Panneau d'écriture du disque sélectionné : récapitulatif, saisie de l'image, bouton
     /// désactivé pendant 3 secondes, progression, annulation, résultat.
     pub(super) fn write_panel<'a>(&'a self, disk: &'a Disk) -> Option<Element<'a, Message>> {
-        if self.write.disk_id() != Some(disk.id.as_str()) {
+        let WriteState::Draft {
+            disk_id,
+            image,
+            hash,
+            raw,
+            opened,
+        } = &self.write
+        else {
             return None;
-        }
-        let body = match &self.write {
-            WriteState::Idle => return None,
-            WriteState::Draft { image, opened, .. } => self.draft_panel(disk, image, *opened),
+        };
+        (disk_id == &disk.id).then(|| boxed(self.draft_panel(disk, image, hash, *raw, *opened)))
+    }
+
+    /// Écriture en cours ou résultat, au-dessus de la liste : ils ne dépendent pas d'elle. Le disque a pu
+    /// être débranché, le sous-processus tourne encore, et l'on doit pouvoir l'annuler.
+    fn active_panel(&self) -> Option<Element<'_, Message>> {
+        match &self.write {
             WriteState::Running {
                 phase,
                 done,
                 total,
                 rate,
                 ..
-            } => self.running_panel(phase, *done, *total, *rate),
-            WriteState::Finished { outcome, .. } => self.finished_panel(outcome),
-        };
-        Some(
-            container(body)
-                .padding(12)
-                .width(Fill)
-                .style(theme::panel)
-                .into(),
-        )
+            } => Some(boxed(self.running_panel(*phase, *done, *total, *rate))),
+            WriteState::Finished { outcome, .. } => Some(boxed(self.finished_panel(outcome))),
+            WriteState::Idle | WriteState::Draft { .. } => None,
+        }
     }
 
     /// Actualisation et réglages d'affichage.
@@ -328,11 +346,9 @@ impl App {
             for (disk, verdict) in entries {
                 cards.push(self.card(disk, verdict));
                 // Le panneau d'écriture est hors de la carte : un clic dedans ne referme pas le disque.
-                // Une écriture en cours ou terminée reste visible même si l'on désélectionne le disque :
-                // sinon on ne pourrait plus ni la suivre ni l'annuler.
-                let show_panel = self.selected.as_deref() == Some(disk.id.as_str())
-                    || !matches!(self.write, WriteState::Draft { .. });
-                if show_panel && let Some(panel) = self.write_panel(disk) {
+                if self.selected.as_deref() == Some(disk.id.as_str())
+                    && let Some(panel) = self.write_panel(disk)
+                {
                     cards.push(panel);
                 }
             }
@@ -352,6 +368,8 @@ impl App {
         &'a self,
         disk: &'a Disk,
         image: &'a str,
+        hash: &'a str,
+        raw: bool,
         opened: Instant,
     ) -> Element<'a, Message> {
         // Une seule lecture de l'horloge par affichage : le décompte, l'état du bouton et son libellé
@@ -391,7 +409,7 @@ impl App {
                 .color(theme::SECONDARY),
             row![
                 ring(
-                    text_input("Chemin de l'image (.img, .iso, .gz, .xz, .zst)", image)
+                    text_input("Chemin ou adresse https:// de l'image (.img, .iso, .gz, .xz, .zst)", image)
                         .on_input(Message::ImageInput)
                         .on_submit(Message::StartWrite)
                         .padding(8)
@@ -410,6 +428,25 @@ impl App {
             .spacing(8)
             .align_y(iced::Center),
             ring(
+                text_input(
+                    "Empreinte SHA-256, ou chemin ou adresse de SHA256SUMS (exigée pour une adresse)",
+                    hash
+                )
+                .on_input(Message::HashInput)
+                .padding(8)
+                .size(14)
+                .style(theme::input_style),
+                self.has_focus(Focus::Hash),
+            ),
+            ring(
+                checkbox(raw)
+                    .label("Écrire les octets tels quels, sans refuser une image non amorçable")
+                    .on_toggle(Message::ToggleRaw)
+                    .size(16)
+                    .text_size(13),
+                self.has_focus(Focus::Raw),
+            ),
+            ring(
                 button(text(label).size(14))
                     .on_press_maybe(ready.then_some(Message::StartWrite))
                     .padding([6, 14])
@@ -423,19 +460,18 @@ impl App {
 
     fn running_panel(
         &self,
-        phase: &str,
+        phase: Phase,
         done: u64,
         total: Option<u64>,
         rate: f64,
     ) -> Element<'_, Message> {
-        let step = if phase == "authorize" {
-            "En attente de l'autorisation du système"
-        } else if phase == "verify" {
-            "Vérification"
-        } else if phase == "flush" {
-            "Vidage des tampons"
-        } else {
-            "Écriture"
+        let step = match phase {
+            Phase::Download => "Téléchargement",
+            Phase::Source => "Contrôle de l'image",
+            Phase::Authorize => "En attente de l'autorisation du système",
+            Phase::Write => "Écriture",
+            Phase::Flush => "Vidage des tampons",
+            Phase::Verify => "Vérification",
         };
         let fraction = total
             .filter(|t| *t > 0)

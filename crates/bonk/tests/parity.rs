@@ -3,7 +3,7 @@
 //! doit être acceptée par la CLI, et la cible d'`info` doit arriver intacte, même avec des caractères
 //! que le shell interpréterait.
 
-use bonk_gui::{ViewOptions, equivalent_commands};
+use bonk_gui::{ViewOptions, WriteView, equivalent_commands};
 
 /// Images saisies dans le champ de la fenêtre, y compris des chemins que le shell interpréterait.
 const IMAGES: [&str; 4] = [
@@ -31,7 +31,7 @@ fn toutes_les_commandes_equivalentes_sont_acceptees_par_la_cli() -> Result<(), S
             show_all: bits & 4 != 0,
         };
         for selection in identifiants {
-            let commandes = equivalent_commands(options, selection, Some(image));
+            let commandes = equivalent_commands(options, selection, Some(WriteView::image(image)));
             assert_eq!(commandes.len(), 1 + 2 * usize::from(selection.is_some()));
             for commande in &commandes {
                 let mots = bonk_cli::check_command_line(commande)

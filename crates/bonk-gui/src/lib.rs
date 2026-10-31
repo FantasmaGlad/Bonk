@@ -10,7 +10,7 @@ mod command;
 mod theme;
 mod transfer;
 
-pub use command::{ViewOptions, equivalent_commands};
+pub use command::{ViewOptions, WriteView, equivalent_commands};
 
 use iced::Size;
 
