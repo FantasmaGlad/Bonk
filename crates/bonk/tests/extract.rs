@@ -60,6 +60,7 @@ fn windows_iso(machine: u16) -> Vec<u8> {
 }
 
 /// Le volume d'une image : tout ce qui suit le premier Mio, où commence la partition.
+#[cfg(target_os = "linux")]
 fn volume_of(dossier: &Dossier, image: &str) -> String {
     let bytes = fs::read(image).expect("lecture de l'image");
     let path = dossier.file("volume.fat");
@@ -67,6 +68,8 @@ fn volume_of(dossier: &Dossier, image: &str) -> String {
     path
 }
 
+// `fsck.vfat` n'existe en CI que sur Linux.
+#[cfg(target_os = "linux")]
 #[test]
 fn auto_reconnait_une_iso_windows_et_ecrit_un_volume_valide() {
     if !common::outil_disponible("fsck.vfat") {
