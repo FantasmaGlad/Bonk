@@ -1,7 +1,7 @@
 # La clé écrite par Bonk démarre-t-elle ? Image officielle téléchargée par Bonk, empreinte vérifiée, écrite sur
 # un fichier image (aucun périphérique réel), puis démarrée sous QEMU en BIOS, UEFI et Secure Boot.
 # Preuve : le système atteint, vu sur la console série (voir les scripts) ; Linux x86_64 seulement. Reste à
-# faire : AAVMF (aarch64), Fedora, Arch, Mint. Windows : jamais en CI, une ISO Windows ne se redistribue pas.
+# faire : AAVMF (aarch64), Mint. Windows : jamais en CI, une ISO Windows ne se redistribue pas.
 # L'image n'est jamais hébergée ni conservée : téléchargée du site officiel, empreinte vérifiée.
 name: demarrage-qemu
 
@@ -37,7 +37,10 @@ jobs:
       fail-fast: false
       matrix:
         mode: [bios, uefi, secureboot]
-        nom: [Debian, Ubuntu]
+        nom: [Debian, Ubuntu, Fedora, Arch]
+        # Le chargeur d'Arch n'est pas signé : Secure Boot le refuse, comme prévu.
+        exclude:
+          - { nom: Arch, mode: secureboot }
         include:
           # Entrée texte de l'installateur : il parle sur la console série, son premier écran fait preuve.
           - nom: Debian
@@ -52,6 +55,23 @@ jobs:
             preuve: 'login:'
             chargeur_bios: grub
             options: --memoire 4096 --delai 900
+          - nom: Fedora
+            base: https://download.fedoraproject.org/pub/fedora/linux/releases/44/Server/x86_64/iso
+            sommes: Fedora-Server-44-1.7-x86_64-CHECKSUM
+            motif: 'Fedora-Server-netinst-x86_64-44-1\.7\.iso'
+            preuve: '[Aa]naconda'
+            chargeur_bios: grub
+            options: --ligne 2 --attente 4 --memoire 3072 --delai 300
+          # Menus à compte à rebours : les touches partent tôt.
+          - nom: Arch
+            base: https://geo.mirror.pkgbuild.com/iso/latest
+            sommes: sha256sums.txt
+            motif: 'archlinux-x86_64\.iso'
+            preuve: 'login:'
+            chargeur: systemd-boot
+            chargeur_bios: isolinux
+            attente_bios: 8
+            options: --attente 2 --delai 300
     steps:
       - name: Récupérer le code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -77,19 +97,26 @@ jobs:
         env:
           BASE: ${{ matrix.base }}
           MOTIF: ${{ matrix.motif }}
+          SOMMES: ${{ matrix.sommes || 'SHA256SUMS' }}
         run: |
-          iso=$(curl --fail --silent --show-error --location "$BASE/SHA256SUMS" | grep -o "$MOTIF" | head -n 1)
+          iso=$(curl --fail --silent --show-error --location "$BASE/$SOMMES" | grep -o "$MOTIF" | head -n 1)
           test -n "$iso"
           echo "URL=$BASE/$iso" >> "$GITHUB_ENV"
-          echo "SHA256_FILE=$BASE/SHA256SUMS" >> "$GITHUB_ENV"
+          echo "SHA256_FILE=$BASE/$SOMMES" >> "$GITHUB_ENV"
       - name: Écrire et démarrer sous QEMU
         env:
           MODE: ${{ matrix.mode }}
           PREUVE: ${{ matrix.preuve }}
           OPTIONS: ${{ matrix.options }}
+          CHARGEUR: ${{ matrix.chargeur || 'grub' }}
           CHARGEUR_BIOS: ${{ matrix.chargeur_bios }}
+          ATTENTE_BIOS: ${{ matrix.attente_bios }}
         run: |
           read -r -a options <<< "$OPTIONS"
+          # La dernière option donnée l'emporte.
+          if [ "$MODE" = bios ] && [ -n "$ATTENTE_BIOS" ]; then
+            options+=(--attente "$ATTENTE_BIOS")
+          fi
           .github/scripts/demarrage-qemu.sh target/release/bonk "$URL" "$MODE" "$RUNNER_TEMP/qemu" "$PREUVE" "${options[@]}"
       - name: Conserver la trace et les écrans
         if: failure()
