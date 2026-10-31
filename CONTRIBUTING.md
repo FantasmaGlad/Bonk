@@ -7,7 +7,7 @@ French.
 
 - Open an issue first for anything beyond a small fix: new feature, behavior change, new dependency.
 - One logical change per pull request. A fix does not carry a refactoring.
-- Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Code specific to an operating system stays in `bonk-hal`.
+- Code specific to an operating system stays in `bonk-hal`.
 
 ## Rules
 
