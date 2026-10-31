@@ -90,6 +90,15 @@ jobs:
           cargo clippy -p bonk-core -p bonk-ops -p bonk-cli --all-targets --locked --target aarch64-linux-android -- -D warnings
       - name: Tests
         run: cargo test --workspace --locked
+      # La version sans fenêtre ne doit pas casser sans bruit, ni tirer Iced par un autre chemin.
+      - name: Version en ligne de commande seule
+        run: |
+          cargo clippy -p bonk --all-targets --no-default-features --locked -- -D warnings
+          cargo test -p bonk --no-default-features --locked
+          if cargo tree -p bonk --no-default-features --locked -e normal | grep -E '^[^a-z]*(iced|wgpu|winit) '; then
+            echo "la version sans fenêtre embarque une bibliothèque graphique"
+            exit 1
+          fi
       # Le build release n'est vérifié qu'après fusion : il est plus long et la PR a déjà prouvé le reste.
       - name: Build release
         if: github.event_name == 'push'

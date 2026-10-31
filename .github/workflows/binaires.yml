@@ -61,13 +61,13 @@ jobs:
           - { nom: linux-x86_64, os: ubuntu-24.04, target: x86_64-unknown-linux-gnu, outil: zigbuild, suffixe: ".2.17", fumee: true, glibc: true }
           - { nom: linux-aarch64, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, outil: zigbuild, suffixe: ".2.17", fumee: true, glibc: true }
           - { nom: linux-i686, os: ubuntu-24.04, target: i686-unknown-linux-gnu, outil: zigbuild, suffixe: ".2.17", fumee: false, glibc: true }
-          - { nom: linux-x86_64-musl, os: ubuntu-24.04, target: x86_64-unknown-linux-musl, outil: zigbuild, suffixe: "", fumee: true, glibc: false }
-          - { nom: linux-aarch64-musl, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl, outil: zigbuild, suffixe: "", fumee: true, glibc: false }
-          - { nom: windows-x86_64, os: windows-2025, target: x86_64-pc-windows-msvc, outil: build, suffixe: "", fumee: true, glibc: false, exe: ".exe" }
-          - { nom: windows-aarch64, os: windows-11-arm, target: aarch64-pc-windows-msvc, outil: build, suffixe: "", fumee: true, glibc: false, exe: ".exe" }
-          - { nom: windows-i686, os: windows-2025, target: i686-pc-windows-msvc, outil: build, suffixe: "", fumee: true, glibc: false, exe: ".exe" }
-          - { nom: macos-aarch64, os: macos-latest, target: aarch64-apple-darwin, outil: build, suffixe: "", fumee: true, glibc: false, deploiement: "12.0" }
-          - { nom: macos-x86_64, os: macos-15-intel, target: x86_64-apple-darwin, outil: build, suffixe: "", fumee: true, glibc: false, deploiement: "12.0" }
+          - { nom: linux-x86_64-musl, os: ubuntu-24.04, target: x86_64-unknown-linux-musl, outil: zigbuild, suffixe: "", options: --no-default-features, fumee: true, glibc: false }
+          - { nom: linux-aarch64-musl, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl, outil: zigbuild, suffixe: "", options: --no-default-features, fumee: true, glibc: false }
+          - { nom: windows-x86_64, cli: true, os: windows-2025, target: x86_64-pc-windows-msvc, outil: build, suffixe: "", fumee: true, glibc: false, exe: ".exe" }
+          - { nom: windows-aarch64, cli: true, os: windows-11-arm, target: aarch64-pc-windows-msvc, outil: build, suffixe: "", fumee: true, glibc: false, exe: ".exe" }
+          - { nom: windows-i686, cli: true, os: windows-2025, target: i686-pc-windows-msvc, outil: build, suffixe: "", fumee: true, glibc: false, exe: ".exe" }
+          - { nom: macos-aarch64, cli: true, os: macos-latest, target: aarch64-apple-darwin, outil: build, suffixe: "", fumee: true, glibc: false, deploiement: "12.0" }
+          - { nom: macos-x86_64, cli: true, os: macos-15-intel, target: x86_64-apple-darwin, outil: build, suffixe: "", fumee: true, glibc: false, deploiement: "12.0" }
     env:
       TARGET: ${{ matrix.target }}
       NOM: ${{ matrix.nom }}
@@ -96,9 +96,11 @@ jobs:
           OUTIL: ${{ matrix.outil }}
           SUFFIXE: ${{ matrix.suffixe }}
           DEPLOIEMENT: ${{ matrix.deploiement }}
+          OPTIONS: ${{ matrix.options }}
         run: |
           if [ -n "$DEPLOIEMENT" ]; then export MACOSX_DEPLOYMENT_TARGET="$DEPLOIEMENT"; fi
-          cargo "$OUTIL" --release --locked -p bonk --target "$TARGET$SUFFIXE"
+          # shellcheck disable=SC2086
+          cargo "$OUTIL" --release --locked -p bonk $OPTIONS --target "$TARGET$SUFFIXE"
         shell: bash
       # Un symbole de glibc plus récent que 2.17 ferait échouer le binaire sur les distributions anciennes.
       - name: Vérifier la version minimale de la glibc
@@ -228,6 +230,47 @@ jobs:
           path: dist/bonk-*
           if-no-files-found: error
           retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
+      # Après l'archive : cette construction remplace le binaire dans target/. Sous Linux, la version sans fenêtre
+      # est la musl. Artefact à part : le binaire universel de macOS choisit ses entrées par motif.
+      - name: Version en ligne de commande seule
+        id: cli
+        if: matrix.cli
+        env:
+          DOSSIER: ${{ steps.nom.outputs.dossier }}
+          ARCHIVE: ${{ steps.nom.outputs.archive }}
+          DEPLOIEMENT: ${{ matrix.deploiement }}
+        run: |
+          if [ -n "$DEPLOIEMENT" ]; then export MACOSX_DEPLOYMENT_TARGET="$DEPLOIEMENT"; fi
+          cargo build --release --locked -p bonk --no-default-features --target "$TARGET"
+          "target/$TARGET/release/bonk$EXE" --version
+          dossier="${DOSSIER/#bonk-/bonk-cli-}"
+          archive="${ARCHIVE/#bonk-/bonk-cli-}"
+          mkdir -p "cli/$dossier"
+          cp "target/$TARGET/release/bonk$EXE" LICENSE "cli/$dossier/"
+          if [ -n "$EXE" ]; then
+            (cd cli && 7z a -tzip "$archive" "$dossier" > /dev/null)
+          else
+            tar -C cli -czf "cli/$archive" "$dossier"
+          fi
+          rm -r "cli/$dossier"
+          cd cli
+          if command -v sha256sum > /dev/null; then sha256sum "$archive" > "$archive.sha256"; else shasum -a 256 "$archive" > "$archive.sha256"; fi
+          cat "$archive.sha256"
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+        shell: bash
+      - name: Attestation de provenance de la version en ligne de commande
+        if: matrix.cli && github.event_name != 'pull_request' && !github.event.repository.private
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: cli/${{ steps.cli.outputs.archive }}
+      - name: Conserver la version en ligne de commande
+        if: matrix.cli
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: binaire-cli-${{ matrix.nom }}
+          path: cli/bonk-cli-*
+          if-no-files-found: error
+          retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
 
   # Le binaire démarre-t-il sur les distributions que visent les utilisateurs ? centos:7 est le plancher réel
   # (glibc 2.17) ; Alpine exécute la version musl. Ne dit rien de la fenêtre ni de l'accès aux disques
@@ -307,7 +350,7 @@ jobs:
         working-directory: dist
         run: |
           for f in *.sha256; do sha256sum --check "$f"; done
-          sha256sum -- *.tar.gz *.zip *.exe *.deb *.rpm *.json > SHA256SUMS
+          sha256sum -- *.tar.gz *.zip *.exe *.dmg *.deb *.rpm *.json > SHA256SUMS
           cat SHA256SUMS
       - name: Créer la release en brouillon
         env:
@@ -321,4 +364,4 @@ jobs:
             echo "Empreintes : SHA256SUMS. SBOM : bonk.cdx.json."
           } > notes.md
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "$TAG" --notes-file notes.md \
-            dist/*.tar.gz dist/*.zip dist/*.exe dist/*.deb dist/*.rpm dist/bonk.cdx.json dist/SHA256SUMS
+            dist/*.tar.gz dist/*.zip dist/*.exe dist/*.dmg dist/*.deb dist/*.rpm dist/bonk.cdx.json dist/SHA256SUMS

@@ -164,6 +164,7 @@ fn le_journal_va_sur_stderr_et_la_sortie_reste_du_json() -> Resultat {
 /// présent), seule l'ouverture sans panique est vérifiée. Ignoré hors CI si `xvfb-run` ou `timeout`
 /// manque ; en CI, leur absence fait échouer le test.
 #[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(feature = "gui")]
 #[test]
 fn sous_affichage_virtuel_le_rendu_bascule_en_logiciel() -> Resultat {
     // Sans serveur X, `bonk` ne se lance même pas et le test ne dirait rien du repli : saut hors CI,
@@ -346,5 +347,18 @@ fn fixture_refuse_la_lecture_brute_d_un_disque() -> Result<(), Box<dyn std::erro
         );
     }
     std::fs::remove_dir_all(&dossier)?;
+    Ok(())
+}
+
+/// `--no-gui` : un script n'ouvre jamais de fenêtre par accident, même sous un affichage.
+#[test]
+fn no_gui_affiche_l_aide_et_n_ouvre_jamais_la_fenetre() -> Result<(), Box<dyn std::error::Error>> {
+    let seul = bonk().env("DISPLAY", ":0").arg("--no-gui").output()?;
+    common::assert_code(&seul, 2);
+    assert!(String::from_utf8_lossy(&seul.stderr).contains("Usage"));
+    let contradiction = bonk().args(["--no-gui", "gui"]).output()?;
+    common::assert_code(&contradiction, 2);
+    let commande = bonk().args(["--no-gui", "explain", "E2001"]).output()?;
+    common::assert_code(&commande, 0);
     Ok(())
 }

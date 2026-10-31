@@ -62,6 +62,10 @@ struct Cli {
     #[command(flatten)]
     global: fixture::GlobalArgs,
 
+    /// N'ouvre jamais la fenêtre : sans commande, affiche l'aide et échoue, pour les scripts
+    #[arg(long)]
+    no_gui: bool,
+
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -339,6 +343,7 @@ where
         }
     };
 
+    let no_gui = cli.no_gui;
     let (view, default_format, config_error) = stored_settings(env);
 
     let settings = match Settings::from_args(&cli.log, env.bonk_log.as_deref(), default_format) {
@@ -384,6 +389,14 @@ where
         io: &env.io,
     };
     match cli.command {
+        None | Some(Command::Gui) if no_gui => {
+            let _ = writeln!(
+                err,
+                "{}",
+                <Cli as clap::CommandFactory>::command().render_help()
+            );
+            report(err, Code::InvalidArgument, "--no-gui demande une commande")
+        }
         None | Some(Command::Gui) => run_gui(env.privileged, view, err, gui),
         Some(Command::Disk { action }) => match action {
             DiskAction::List(args) => run_list(&args, &view, out, err, enumerate),

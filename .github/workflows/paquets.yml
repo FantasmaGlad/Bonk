@@ -1,6 +1,6 @@
 # Paquets natifs construits à partir des binaires de `binaires` (appelé par lui, même exécution).
-# Faits : .deb et .rpm (Linux x86_64 et aarch64), binaire macOS universel (lipo).
-# Pas encore : AppImage, MSI, .dmg (choix de format et outils à valider).
+# Faits : .deb et .rpm (Linux x86_64 et aarch64), binaire macOS universel (lipo) et son .dmg.
+# Pas encore : AppImage, MSI (choix de format et outils à valider).
 name: paquets
 
 on:
@@ -82,6 +82,10 @@ jobs:
       attestations: write
       artifact-metadata: write
     steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Récupérer les deux binaires
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -103,15 +107,36 @@ jobs:
           cp arm/bonk-*/LICENSE "dist/$dossier/"
           lipo -info "dist/$dossier/bonk"
           "dist/$dossier/bonk" --version
+          # Un double-clic sur une application ouvre la fenêtre ; la version vient de celle du binaire.
+          version=$("dist/$dossier/bonk" --version | cut -d' ' -f2)
+          app=dmg/Bonk.app/Contents
+          mkdir -p "$app/MacOS" "$app/Resources"
+          cp "dist/$dossier/bonk" "$app/MacOS/bonk"
+          cp crates/bonk/assets/bonk.icns "$app/Resources/bonk.icns"
+          sed "s/@VERSION@/$version/g" .github/macos/Info.plist > "$app/Info.plist"
+          plutil -lint "$app/Info.plist"
+          ln -s /Applications dmg/Applications
+          image="$dossier.dmg"
+          hdiutil create -volname Bonk -srcfolder dmg -ov -format UDZO "dist/$image"
+          hdiutil verify "dist/$image"
+          # L'image montée donne bien un programme qui démarre.
+          point=$(hdiutil attach -nobrowse -readonly "dist/$image" | tail -n 1 | cut -f3)
+          "$point/Bonk.app/Contents/MacOS/bonk" --version
+          hdiutil detach "$point"
           tar -C dist -czf "dist/$dossier.tar.gz" "$dossier"
           rm -r "dist/$dossier"
-          (cd dist && shasum -a 256 "$dossier.tar.gz" | tee "$dossier.tar.gz.sha256")
-          echo "archive=$dossier.tar.gz" >> "$GITHUB_OUTPUT"
+          (cd dist && shasum -a 256 "$dossier.tar.gz" "$image" | tee "$dossier.sha256")
+          {
+            echo "archive=$dossier.tar.gz"
+            echo "image=$image"
+          } >> "$GITHUB_OUTPUT"
       - name: Attestation de provenance
         if: github.event_name != 'pull_request' && !github.event.repository.private
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
-          subject-path: dist/${{ steps.universel.outputs.archive }}
+          subject-path: |
+            dist/${{ steps.universel.outputs.archive }}
+            dist/${{ steps.universel.outputs.image }}
       - name: Conserver l'archive
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
