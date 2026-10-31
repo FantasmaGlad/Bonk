@@ -31,6 +31,9 @@ log = { version = "0.4", features = ["kv", "std"] }
 # l'actualisation automatique de la liste des disques ; smol est le plus léger des deux.
 iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia", "crisp", "web-colors", "smol", "x11", "wayland"] }
 iced_test = "0.14"
+# Sélecteur de fichier du système : portail du bureau sous Linux (libdbus chargée à l'exécution, repli
+# `zenity`), dialogue natif sous Windows et macOS.
+rfd = "0.17"
 # Schémas JSON générés depuis les types sérialisés (`bonk schema`) : ils ne peuvent pas diverger des sorties.
 schemars = "1"
 # Complétions de shell générées depuis la définition clap (`bonk completions`).

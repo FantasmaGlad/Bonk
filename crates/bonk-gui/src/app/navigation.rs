@@ -43,6 +43,7 @@ impl App {
                 if self.write.disk_id() == Some(disk.id.as_str()) {
                     if matches!(self.write, WriteState::Draft { .. }) {
                         order.push(Focus::Image);
+                        order.push(Focus::Browse);
                     }
                     order.push(Focus::Action);
                 }
@@ -105,7 +106,7 @@ impl App {
                 Some(i)
                     if matches!(
                         order[i],
-                        Focus::Disk(_) | Focus::Image | Focus::Action | Focus::Copy
+                        Focus::Disk(_) | Focus::Image | Focus::Browse | Focus::Action | Focus::Copy
                     ) =>
                 {
                     // Disque précédent ; depuis les panneaux et le bouton de copie, le disque le plus proche.
@@ -157,6 +158,7 @@ impl App {
             Some(Focus::All) => Message::ToggleAll(!self.show_all),
             Some(Focus::Disk(id)) => Message::Select(id),
             Some(Focus::Copy) => Message::Copy,
+            Some(Focus::Browse) => Message::BrowseImage,
             // Le champ de l'image reçoit les touches lui-même : Espace et Entrée n'y activent rien.
             Some(Focus::Image) | None => return Task::none(),
             Some(Focus::Action) => match self.write {
