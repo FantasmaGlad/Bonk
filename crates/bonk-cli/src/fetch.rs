@@ -9,7 +9,7 @@ use std::time::Instant;
 use bonk_catalog::{Advance, DownloadError, Hooks, SILENCE_LIMIT};
 use bonk_core::write::{Control, Phase, Progress};
 use bonk_ops::errors::Code;
-use bonk_ops::job::{self, Deps, JobError, WriteJob};
+use bonk_ops::job::{self, Deps, JobError, WriteJob, WriteOutcome};
 
 /// Attente avant de réessayer un téléchargement, en pauses courtes par essai : environ 2 s de plus à chaque
 /// fois, le temps que le réseau revienne.
@@ -23,10 +23,10 @@ pub(crate) struct Request<'a> {
 
 /// Un fichier du cache, à oublier s'il se révèle faux : le retélécharger est le seul remède.
 #[derive(Debug)]
-pub(crate) struct Downloaded(PathBuf);
+struct Downloaded(PathBuf);
 
 impl Downloaded {
-    pub(crate) fn forget_if_corrupt(&self, error: &JobError) {
+    fn forget_if_corrupt(&self, error: &JobError) {
         if error.code == Code::SourceHashMismatch
             && let Err(failure) = fs::remove_file(&self.0)
         {
@@ -66,9 +66,24 @@ fn sha256_from_file(location: &str, name: &str) -> Result<String, JobError> {
     })
 }
 
+/// Écrit ce que désigne `request` : même chemin pour la ligne de commande et le service.
+pub(crate) fn write(
+    request: &Request<'_>,
+    job: &mut WriteJob,
+    deps: &Deps<'_>,
+    progress: &mut dyn FnMut(&Progress) -> Control,
+) -> Result<WriteOutcome, JobError> {
+    let downloaded = resolve(request, job, deps, progress)?;
+    let result = job::write(job, deps, progress);
+    if let (Some(downloaded), Err(error)) = (&downloaded, &result) {
+        downloaded.forget_if_corrupt(error);
+    }
+    result
+}
+
 /// Prépare `job` : l'empreinte d'un fichier d'empreintes, et pour une adresse le téléchargement. Rend le
 /// fichier téléchargé, s'il y en a un. Tout ce qui refuserait l'écriture est vérifié avant de télécharger.
-pub(crate) fn resolve(
+fn resolve(
     request: &Request<'_>,
     job: &mut WriteJob,
     deps: &Deps<'_>,

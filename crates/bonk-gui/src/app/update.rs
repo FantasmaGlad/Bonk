@@ -5,6 +5,9 @@ use std::time::Instant;
 
 use iced::Task;
 
+use bonk_core::write::Phase;
+
+use crate::command::WriteView;
 use crate::transfer;
 
 use super::{App, Focus, Message, WRITE_DELAY, WriteState, load};
@@ -90,6 +93,20 @@ impl App {
                 }
                 Task::none()
             }
+            Message::HashInput(text) => {
+                if let WriteState::Draft { hash, .. } = &mut self.write {
+                    *hash = text;
+                    self.focus = Some(Focus::Hash);
+                }
+                Task::none()
+            }
+            Message::ToggleRaw(on) => {
+                if let WriteState::Draft { raw, .. } = &mut self.write {
+                    *raw = on;
+                    self.focus = Some(Focus::Raw);
+                }
+                Task::none()
+            }
             Message::BrowseImage => {
                 self.focus = Some(Focus::Browse);
                 Task::perform(pick_image(), Message::ImagePicked)
@@ -122,7 +139,8 @@ impl App {
             }
             Message::DismissWrite => {
                 self.write = WriteState::Idle;
-                self.sync_write();
+                self.selected = None;
+                self.fix_focus();
                 Task::none()
             }
             Message::Write(event) => {
@@ -143,9 +161,13 @@ impl App {
     }
 
     /// Fait suivre le panneau d'écriture à la sélection : il s'ouvre sur un disque proposé, se referme
-    /// sinon, et ne bouge jamais pendant qu'une écriture tourne.
+    /// sinon. Une écriture en cours ou son résultat ne bougent pas : le disque a pu partir, et l'on doit
+    /// encore pouvoir annuler ou lire le code d'erreur.
     pub(super) fn sync_write(&mut self) {
-        if matches!(self.write, WriteState::Running { .. }) {
+        if matches!(
+            self.write,
+            WriteState::Running { .. } | WriteState::Finished { .. }
+        ) {
             return;
         }
         let wanted = self.selected.clone().filter(|id| self.offered(id));
@@ -155,6 +177,8 @@ impl App {
                 self.write = WriteState::Draft {
                     disk_id: id,
                     image: String::new(),
+                    hash: String::new(),
+                    raw: false,
                     opened: Instant::now(),
                 };
             }
@@ -175,6 +199,8 @@ impl App {
         let WriteState::Draft {
             disk_id,
             image,
+            hash,
+            raw,
             opened,
         } = &self.write
         else {
@@ -189,7 +215,11 @@ impl App {
         }
         let args = transfer::write_args(
             disk_id,
-            image.trim(),
+            WriteView {
+                image: image.trim(),
+                hash,
+                raw: *raw,
+            },
             self.view_options(),
             internal_confirmed,
         );
@@ -198,7 +228,7 @@ impl App {
         self.write = WriteState::Running {
             disk_id: disk_id.clone(),
             pid: None,
-            phase: "write".to_owned(),
+            phase: Phase::Write,
             done: 0,
             total: None,
             rate: 0.0,

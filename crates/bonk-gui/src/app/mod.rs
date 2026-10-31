@@ -21,7 +21,9 @@ use iced::Size;
 use iced::keyboard;
 use iced::{Subscription, Task, Theme};
 
-use crate::command::{ViewOptions, equivalent_commands};
+use bonk_core::write::Phase;
+
+use crate::command::{ViewOptions, WriteView, equivalent_commands};
 use crate::theme;
 use crate::transfer::{self, Outcome};
 
@@ -47,6 +49,10 @@ pub(crate) enum Message {
     Copy,
     /// Saisie du chemin de l'image à écrire.
     ImageInput(String),
+    /// Saisie de l'empreinte, ou du chemin ou de l'adresse d'un fichier d'empreintes.
+    HashInput(String),
+    /// Écrire les octets tels quels, sans refuser une image que l'analyse ne juge pas amorçable.
+    ToggleRaw(bool),
     /// Ouvre le sélecteur de fichier du système pour choisir l'image.
     BrowseImage,
     /// Réponse du sélecteur ; `None` : fermé sans choix.
@@ -89,6 +95,10 @@ enum Focus {
     Image,
     /// Bouton qui ouvre le sélecteur de fichier, à côté du champ de l'image.
     Browse,
+    /// Champ de l'empreinte.
+    Hash,
+    /// Case de l'écriture brute.
+    Raw,
     /// Bouton du panneau d'écriture : écrire, annuler ou fermer selon l'état.
     Action,
     /// Bouton de copie de la commande équivalente, dernier de l'ordre de Tab.
@@ -107,12 +117,14 @@ enum WriteState {
     Draft {
         disk_id: String,
         image: String,
+        hash: String,
+        raw: bool,
         opened: Instant,
     },
     Running {
         disk_id: String,
         pid: Option<u32>,
-        phase: String,
+        phase: Phase,
         done: u64,
         total: Option<u64>,
         rate: f64,
@@ -163,6 +175,8 @@ fn ui_event(message: &Message) -> Option<(&'static str, String)> {
             "type_image_path",
             format!("{} caractères", text.chars().count()),
         ),
+        Message::HashInput(text) => ("type_hash", format!("{} caractères", text.chars().count())),
+        Message::ToggleRaw(on) => ("toggle_raw", on.to_string()),
         Message::BrowseImage => ("click_browse", String::new()),
         // Comme pour la saisie, le détail de l'événement ne porte pas le chemin choisi.
         Message::ImagePicked(path) => (
@@ -209,7 +223,7 @@ impl App {
         let event = ui_event(&message);
         let task = self.apply(message);
         if let Some((name, detail)) = event {
-            let commands = self.equivalents().join(" ; ");
+            let commands = self.logged_equivalents();
             let focus = format!("{:?}", self.focus);
             log::debug!(
                 target: "bonk::gui",
@@ -229,13 +243,24 @@ impl App {
         }
     }
 
+    /// Commandes pour le journal : sans l'image, dont le chemin peut dire qui l'on est.
+    fn logged_equivalents(&self) -> String {
+        equivalent_commands(self.view_options(), self.selected.as_deref(), None).join(" ; ")
+    }
+
     /// Commandes qui donnent ce que montre la fenêtre en ce moment.
     fn equivalents(&self) -> Vec<String> {
-        let image = match &self.write {
-            WriteState::Draft { image, .. } => Some(image.as_str()),
+        let write = match &self.write {
+            WriteState::Draft {
+                image, hash, raw, ..
+            } => Some(WriteView {
+                image,
+                hash,
+                raw: *raw,
+            }),
             _ => None,
         };
-        equivalent_commands(self.view_options(), self.selected.as_deref(), image)
+        equivalent_commands(self.view_options(), self.selected.as_deref(), write)
     }
 
     pub(crate) fn subscription(&self) -> Subscription<Message> {
@@ -249,6 +274,10 @@ impl App {
                     repeat,
                     ..
                 }) if status == iced::event::Status::Ignored => map_key(&key, modifiers, repeat),
+                // Sous Wayland, winit 0.30 ne remet aucun fichier déposé : le sélecteur reste la voie sûre.
+                iced::Event::Window(iced::window::Event::FileDropped(path)) => {
+                    Some(Message::ImagePicked(Some(path)))
+                }
                 _ => None,
             }),
         ];

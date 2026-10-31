@@ -29,6 +29,7 @@ pub(crate) fn registry() -> Vec<Entry> {
         ("verify", transfer::schema_verify),
         ("repair-gpt", transfer::schema_repair),
         ("progress", transfer::schema_progress),
+        ("progress-error", transfer::schema_error),
         ("format", format::schema_format),
         ("capabilities", format::schema_capabilities),
         ("serve-request", serve::schema_request),

@@ -540,7 +540,7 @@ fn progression_puis_resultat() {
     let _ = app.update(Message::StartWrite);
     let _ = app.update(Message::Write(transfer::Event::Started(4242)));
     let _ = app.update(Message::Write(transfer::Event::Progress {
-        phase: "write".into(),
+        phase: Phase::Write,
         done: 1_000_000,
         total: Some(4_000_000),
         rate: 2e6,
@@ -583,7 +583,7 @@ fn un_echec_s_affiche_avec_son_code_et_sa_commande_d_aide() {
     app.write = WriteState::Running {
         disk_id: "usb-cle".into(),
         pid: None,
-        phase: "write".into(),
+        phase: Phase::Write,
         done: 0,
         total: None,
         rate: 0.0,
@@ -698,6 +698,10 @@ fn le_clavier_parcourt_le_panneau_et_l_action_respecte_le_delai() {
     assert_eq!(app.focus, Some(Focus::Image));
     nav(&mut app, Nav::Next);
     assert_eq!(app.focus, Some(Focus::Browse));
+    nav(&mut app, Nav::Next);
+    assert_eq!(app.focus, Some(Focus::Hash));
+    nav(&mut app, Nav::Next);
+    assert_eq!(app.focus, Some(Focus::Raw));
     nav(&mut app, Nav::Next);
     assert_eq!(app.focus, Some(Focus::Action));
     // Espace sur le bouton avant le délai : sans effet.
@@ -851,7 +855,7 @@ fn captures_facultatives() -> Result<(), Box<dyn std::error::Error>> {
     ecriture.program = Some(PathBuf::from("/n/existe/pas"));
     let _ = ecriture.update(Message::StartWrite);
     let _ = ecriture.update(Message::Write(transfer::Event::Progress {
-        phase: "write".into(),
+        phase: Phase::Write,
         done: 1_300_000_000,
         total: Some(2_100_000_000),
         rate: 41e6,
@@ -873,4 +877,84 @@ fn captures_facultatives() -> Result<(), Box<dyn std::error::Error>> {
     .snapshot(&theme)?
     .matches_image(dossier.join("fenetre-erreur"))?;
     Ok(())
+}
+
+fn en_cours_d_ecriture() -> App {
+    let mut app = app_avec_panneau();
+    app.write = WriteState::Running {
+        disk_id: "usb-cle".into(),
+        pid: Some(7),
+        phase: Phase::Write,
+        done: 1,
+        total: Some(2),
+        rate: 0.0,
+    };
+    app
+}
+
+/// Débranché ou énumération en échec : le sous-processus continue, la progression et « Annuler » restent.
+#[test]
+fn l_ecriture_reste_visible_si_le_disque_quitte_la_liste() {
+    let mut app = en_cours_d_ecriture();
+    let _ = app.update(Message::Loaded(Ok(Vec::new())));
+    assert!(contient(&app, "Annuler"));
+    assert!(app.focus_order().contains(&Focus::Action));
+    let mut app = en_cours_d_ecriture();
+    let _ = app.update(Message::Loaded(Err("service absent".into())));
+    assert!(contient(&app, "Annuler"));
+}
+
+/// Le résultat reste à l'écran jusqu'à « Fermer », code d'erreur compris, même si le disque est parti.
+#[test]
+fn le_resultat_reste_jusqu_a_la_fermeture() {
+    let mut app = en_cours_d_ecriture();
+    let _ = app.update(Message::Write(transfer::Event::Finished(Outcome::Failed {
+        code: Some("E4001".into()),
+        message: "clé débranchée".into(),
+    })));
+    let _ = app.update(Message::Loaded(Ok(Vec::new())));
+    assert!(contient(
+        &app,
+        "ÉCHEC : clé débranchée [E4001] : voir « bonk explain E4001 »"
+    ));
+    assert!(matches!(app.write, WriteState::Finished { .. }));
+    let _ = app.update(Message::Select("sata-libre".to_owned()));
+    assert!(matches!(app.write, WriteState::Finished { .. }));
+}
+
+/// « Fermer » ne rouvre pas un panneau d'écriture sur le disque qu'on vient d'écrire.
+#[test]
+fn fermer_le_resultat_ne_rouvre_pas_le_panneau() {
+    let mut app = en_cours_d_ecriture();
+    let _ = app.update(Message::Write(transfer::Event::Finished(Outcome::Done {
+        bytes: 2,
+        verified: true,
+        gpt_repaired: false,
+    })));
+    let _ = app.update(Message::DismissWrite);
+    assert!(matches!(app.write, WriteState::Idle), "{:?}", app.write);
+    assert!(app.selected.is_none());
+}
+
+/// Le journal de la fenêtre ne porte jamais le chemin de l'image, même dans la commande équivalente.
+#[test]
+fn le_journal_ne_porte_pas_le_chemin_de_l_image() {
+    let mut app = app_avec_panneau();
+    let _ = app.update(Message::ImageInput("/home/alice/secret.iso".into()));
+    assert!(app.equivalents().iter().any(|c| c.contains("secret.iso")));
+    assert!(!app.logged_equivalents().contains("secret.iso"));
+}
+
+/// L'empreinte et le mode saisis passent dans la commande équivalente, comme dans ce qui sera lancé.
+#[test]
+fn empreinte_et_mode_brut_arrivent_dans_la_commande() {
+    let mut app = app_avec_panneau();
+    let _ = app.update(Message::ImageInput("https://a.org/x.iso".into()));
+    let _ = app.update(Message::HashInput("https://a.org/SHA256SUMS".into()));
+    let _ = app.update(Message::ToggleRaw(true));
+    let commandes = app.equivalents().join("\n");
+    assert!(
+        commandes.contains("--sha256-file https://a.org/SHA256SUMS --mode raw"),
+        "{commandes}"
+    );
 }

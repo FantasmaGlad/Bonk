@@ -269,6 +269,33 @@ pub(crate) struct ProgressEvent<'a> {
     progress: &'a Progress,
 }
 
+/// Dernier événement du flux `--progress json` quand l'opération échoue : un lecteur du flux n'a pas à
+/// interpréter le texte de la sortie d'erreur.
+#[derive(Serialize, JsonSchema)]
+pub(crate) struct ErrorEvent<'a> {
+    schema_version: u32,
+    event: &'static str,
+    code: &'static str,
+    message: &'a str,
+}
+
+fn error_event(error: &JobError, out: &mut dyn Write) {
+    let event = ErrorEvent {
+        schema_version: job::SCHEMA_VERSION,
+        event: "error",
+        code: error.code.id(),
+        message: &error.message,
+    };
+    if let Ok(line) = serde_json::to_string(&event) {
+        let _ = writeln!(out, "{line}");
+        let _ = out.flush();
+    }
+}
+
+pub(crate) fn schema_error() -> serde_json::Value {
+    serde_json::to_value(schemars::schema_for!(ErrorEvent)).unwrap_or_default()
+}
+
 pub(crate) fn schema_write() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(WriteDone)).unwrap_or_default()
 }
@@ -400,7 +427,12 @@ pub(crate) fn finish<T: Serialize>(
 ) -> u8 {
     end_progress_line(args.progress, err);
     match result {
-        Err(e) => report(err, e.code, e.message),
+        Err(e) => {
+            if args.progress == ProgressMode::Json {
+                error_event(&e, out);
+            }
+            report(err, e.code, e.message)
+        }
         Ok(value) => {
             let written = if args.progress == ProgressMode::Json {
                 print_json(out, &value, true)
@@ -446,13 +478,7 @@ pub(crate) fn run_write(
             sha256_file: args.sha256_file.as_deref(),
             cache_dir: args.cache_dir.as_deref(),
         };
-        fetch::resolve(&request, &mut job, deps, &mut progress).and_then(|downloaded| {
-            let result = job::write(&job, deps, &mut progress);
-            if let (Some(downloaded), Err(error)) = (&downloaded, &result) {
-                downloaded.forget_if_corrupt(error);
-            }
-            result
-        })
+        fetch::write(&request, &mut job, deps, &mut progress)
     };
     finish(
         result,

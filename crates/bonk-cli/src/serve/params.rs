@@ -78,6 +78,10 @@ pub(super) struct TransferParams {
     pub(super) trace_io: Option<String>,
     /// Empreinte SHA-256 publiée pour le fichier source.
     pub(super) sha256: Option<String>,
+    /// Fichier d'empreintes publié, chemin ou adresse.
+    pub(super) sha256_file: Option<String>,
+    /// Dossier des téléchargements.
+    pub(super) cache_dir: Option<PathBuf>,
     /// `auto` (par défaut) ou `raw`.
     pub(super) mode: Option<String>,
     /// `never` (par défaut : personne devant l'écran) ou `auto`.

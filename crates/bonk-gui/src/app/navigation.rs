@@ -40,14 +40,23 @@ impl App {
         if self.error.is_none() {
             for (disk, _) in self.entries() {
                 order.push(Focus::Disk(disk.id.clone()));
-                if self.write.disk_id() == Some(disk.id.as_str()) {
-                    if matches!(self.write, WriteState::Draft { .. }) {
-                        order.push(Focus::Image);
-                        order.push(Focus::Browse);
-                    }
+                if self.write.disk_id() == Some(disk.id.as_str())
+                    && matches!(self.write, WriteState::Draft { .. })
+                {
+                    order.push(Focus::Image);
+                    order.push(Focus::Browse);
+                    order.push(Focus::Hash);
+                    order.push(Focus::Raw);
                     order.push(Focus::Action);
                 }
             }
+        }
+        // Hors de la liste : le disque d'une écriture en cours ou finie a pu partir.
+        if matches!(
+            self.write,
+            WriteState::Running { .. } | WriteState::Finished { .. }
+        ) {
+            order.push(Focus::Action);
         }
         order.push(Focus::Copy);
         order
@@ -106,7 +115,13 @@ impl App {
                 Some(i)
                     if matches!(
                         order[i],
-                        Focus::Disk(_) | Focus::Image | Focus::Browse | Focus::Action | Focus::Copy
+                        Focus::Disk(_)
+                            | Focus::Image
+                            | Focus::Browse
+                            | Focus::Hash
+                            | Focus::Raw
+                            | Focus::Action
+                            | Focus::Copy
                     ) =>
                 {
                     // Disque précédent ; depuis les panneaux et le bouton de copie, le disque le plus proche.
@@ -159,8 +174,12 @@ impl App {
             Some(Focus::Disk(id)) => Message::Select(id),
             Some(Focus::Copy) => Message::Copy,
             Some(Focus::Browse) => Message::BrowseImage,
+            Some(Focus::Raw) => match &self.write {
+                WriteState::Draft { raw, .. } => Message::ToggleRaw(!raw),
+                _ => return Task::none(),
+            },
             // Le champ de l'image reçoit les touches lui-même : Espace et Entrée n'y activent rien.
-            Some(Focus::Image) | None => return Task::none(),
+            Some(Focus::Image | Focus::Hash) | None => return Task::none(),
             Some(Focus::Action) => match self.write {
                 WriteState::Draft { .. } => Message::StartWrite,
                 WriteState::Running { .. } => Message::CancelWrite,

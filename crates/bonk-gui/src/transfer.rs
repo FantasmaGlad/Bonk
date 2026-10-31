@@ -13,7 +13,9 @@ use std::process::{Command, Stdio};
 use iced::futures::channel::mpsc::{UnboundedReceiver, unbounded};
 use serde_json::Value;
 
-use crate::command::ViewOptions;
+use bonk_core::write::Phase;
+
+use crate::command::{ViewOptions, WriteView};
 
 /// Ce que la fenêtre apprend du processus d'écriture.
 #[derive(Debug, Clone, PartialEq)]
@@ -21,7 +23,7 @@ pub(crate) enum Event {
     /// Le processus est lancé (numéro de processus, pour l'annulation).
     Started(u32),
     Progress {
-        phase: String,
+        phase: Phase,
         done: u64,
         total: Option<u64>,
         rate: f64,
@@ -46,14 +48,15 @@ pub(crate) enum Outcome {
 /// Arguments de `bonk write` équivalents à ce que montre la fenêtre.
 pub(crate) fn write_args(
     disk_id: &str,
-    image: &str,
+    write: WriteView<'_>,
     options: ViewOptions,
     internal_confirmed: bool,
 ) -> Vec<String> {
-    let mut args: Vec<String> = ["write", disk_id, image, "--yes", "--progress", "json"]
+    let mut args: Vec<String> = ["write", disk_id, write.image, "--yes", "--progress", "json"]
         .iter()
         .map(|s| (*s).to_owned())
         .collect();
+    args.extend(write.flags());
     if options.show_internal {
         args.push("--show-internal".to_owned());
     }
@@ -72,7 +75,7 @@ pub(crate) fn parse_line(line: &str) -> Option<Event> {
     let value: Value = serde_json::from_str(line).ok()?;
     match value["event"].as_str()? {
         "progress" => Some(Event::Progress {
-            phase: value["phase"].as_str()?.to_owned(),
+            phase: serde_json::from_value(value["phase"].clone()).ok()?,
             done: value["bytes_done"].as_u64()?,
             total: value["bytes_total"].as_u64(),
             rate: value["bytes_per_second"].as_f64().unwrap_or(0.0),
@@ -82,11 +85,16 @@ pub(crate) fn parse_line(line: &str) -> Option<Event> {
             verified: !value["verify"].is_null(),
             gpt_repaired: !value["gpt_repair"].is_null(),
         })),
+        "error" => Some(Event::Finished(Outcome::Failed {
+            code: value["code"].as_str().map(str::to_owned),
+            message: value["message"].as_str()?.to_owned(),
+        })),
         _ => None,
     }
 }
 
-/// Échec d'après la sortie d'erreur : la dernière ligne `bonk : erreur : message [Exxxx]`.
+/// Échec d'un processus qui n'a pas pu donner son événement `error` (arguments refusés, arrêt brutal),
+/// d'après la sortie d'erreur : la dernière ligne `bonk : erreur : message [Exxxx]`.
 pub(crate) fn parse_failure(stderr: &str, status: &str) -> Outcome {
     let line = stderr
         .lines()
@@ -194,7 +202,12 @@ mod tests {
     #[test]
     fn arguments_de_la_commande() {
         assert_eq!(
-            write_args("usb-a", "/tmp/x.img", ViewOptions::default(), false),
+            write_args(
+                "usb-a",
+                WriteView::image("/tmp/x.img"),
+                ViewOptions::default(),
+                false
+            ),
             [
                 "write",
                 "usb-a",
@@ -209,7 +222,7 @@ mod tests {
             allow_virtual: true,
             show_all: true,
         };
-        let args = write_args("usb-a", "x", options, true);
+        let args = write_args("usb-a", WriteView::image("x"), options, true);
         assert!(
             args.contains(&"--show-internal".to_owned())
                 && args.contains(&"--allow-virtual".to_owned())
@@ -225,7 +238,7 @@ mod tests {
         assert_eq!(
             parse_line(progress),
             Some(Event::Progress {
-                phase: "write".into(),
+                phase: Phase::Write,
                 done: 1_048_576,
                 total: Some(4_194_304),
                 rate: 1e7
@@ -271,6 +284,28 @@ mod tests {
         assert!(
             matches!(&silent, Outcome::Failed { code: None, message } if message.contains("signal: 9"))
         );
+    }
+
+    #[test]
+    fn un_evenement_d_erreur_donne_son_code_et_une_phase_inconnue_est_ignoree() {
+        let line = r#"{"event":"error","code":"E3005","message":"empreinte fausse"}"#;
+        assert_eq!(
+            parse_line(line),
+            Some(Event::Finished(Outcome::Failed {
+                code: Some("E3005".into()),
+                message: "empreinte fausse".into(),
+            }))
+        );
+        let download = r#"{"event":"progress","phase":"download","bytes_done":1,"bytes_total":2,"bytes_per_second":1.0}"#;
+        assert!(matches!(
+            parse_line(download),
+            Some(Event::Progress {
+                phase: Phase::Download,
+                ..
+            })
+        ));
+        let unknown = r#"{"event":"progress","phase":"plus_tard","bytes_done":1,"bytes_total":2}"#;
+        assert_eq!(parse_line(unknown), None);
     }
 
     #[cfg(unix)]
