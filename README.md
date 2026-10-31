@@ -1,51 +1,55 @@
 # Bonk
 
-Écrit des images amorçables sur clé USB ou disque externe, en ligne de commande sur toute plateforme, avec une fenêtre quand c'est possible. Écrit en Rust, un seul binaire, licence [MIT](LICENSE).
+<p align="center">
+  <b>Write bootable images to USB drives. One binary, command line and window, zero telemetry.</b>
+</p>
 
-[![binaires](https://github.com/FantasmaGlad/Bonk/actions/workflows/binaires.yml/badge.svg)](https://github.com/FantasmaGlad/Bonk/actions/workflows/binaires.yml)
-[![ci](https://github.com/FantasmaGlad/Bonk/actions/workflows/ci.yml/badge.svg)](https://github.com/FantasmaGlad/Bonk/actions/workflows/ci.yml)
+<p align="center">
+  <a href="https://github.com/FantasmaGlad/Bonk/releases/latest"><b>Downloads</b></a> &nbsp;·&nbsp;
+  <a href="README.fr.md"><b>Français</b></a> &nbsp;·&nbsp;
+  <a href="docs/ARCHITECTURE.md"><b>Architecture</b></a>
+</p>
 
-## État
+<p align="center">
+  <a href="https://github.com/FantasmaGlad/Bonk/actions/workflows/ci.yml"><img src="https://github.com/FantasmaGlad/Bonk/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/FantasmaGlad/Bonk/releases/latest"><img src="https://img.shields.io/github/v/release/FantasmaGlad/Bonk?label=Release&color=brightgreen" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/CLI-GUI-lightgrey" alt="CLI + GUI">
+  <img src="https://img.shields.io/badge/Rust-2024-orange?logo=rust&logoColor=white" alt="Rust">
+  <img src="https://img.shields.io/badge/Platform-Linux-success?logo=linux&logoColor=white" alt="Platform: Linux">
+  <img src="https://img.shields.io/badge/Preview-Windows%20%7C%20macOS-yellow" alt="Preview: Windows, macOS">
+</p>
 
-Version 0.0.1, en développement, aucune release publiée.
+---
 
-- **Fait, Linux** : liste des disques, écriture, vérification, réparation du GPT, décompression gzip, xz, zstd, service `bonk serve`, contrôle d'empreinte et analyse d'image, écriture sans `sudo` (UDisks2 et polkit), formatage (`bonk format`, `bonk capabilities`).
-- **Téléchargement** : `bonk write <clé> <URL> --sha256-file <URL de SHA256SUMS> --yes` télécharge l'image dans le cache, reprend après une coupure et contrôle l'empreinte avant d'écrire.
-- **Clé d'installation Windows 10 ou 11 x86_64 depuis Linux** : `bonk write <clé> <image.iso> --yes` copie les fichiers de l'ISO sur une partition FAT32 et découpe `install.wim` si besoin ; démarrage UEFI. Éprouvé sous QEMU, pas encore sur une machine réelle.
-- **À venir** : Windows et macOS (binaires construits, sans accès aux disques), clé d'installation Windows, DOS, Android.
+## Get started
 
-## Plateformes
+```bash
+tar xzf bonk-0.0.2-linux-x86_64.tar.gz
+./bonk list
+./bonk write <id> https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.7.0-amd64-netinst.iso \
+  --sha256-file https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/SHA256SUMS --yes
+```
 
-| <sub>Famille</sub> | <sub>Systèmes</sub> | <sub>Puces</sub> | <sub>Fichier prévu</sub> | <sub>Lien</sub> |
-|---|---|---|---|---|
-| <sub>Debian</sub> | <sub>Debian, Ubuntu, Kubuntu, Xubuntu, Mint, Pop!_OS, Kali, Zorin, MX, elementary, Tuxedo, Deepin, Devuan, Proxmox VE, Tails, Raspberry Pi OS</sub> | <sub>x86_64, ARM64</sub> | <sub>`.deb`, `linux-<puce>.tar.gz`</sub> | <sub>à venir</sub> |
-| <sub>Red Hat</sub> | <sub>Fedora, RHEL, CentOS, Rocky, AlmaLinux, Oracle Linux, Amazon Linux, Nobara</sub> | <sub>x86_64, ARM64</sub> | <sub>`.rpm`, `linux-<puce>.tar.gz`</sub> | <sub>à venir</sub> |
-| <sub>SUSE</sub> | <sub>SLES, openSUSE Leap, Tumbleweed</sub> | <sub>x86_64, ARM64</sub> | <sub>`.rpm`, `linux-<puce>.tar.gz`</sub> | <sub>à venir</sub> |
-| <sub>Arch</sub> | <sub>Arch, CachyOS, EndeavourOS, Manjaro, Garuda</sub> | <sub>x86_64, ARM64</sub> | <sub>AUR, `linux-<puce>.tar.gz`</sub> | <sub>à venir</sub> |
-| <sub>Linux immuable</sub> | <sub>SteamOS, Bazzite</sub> | <sub>x86_64, ARM64</sub> | <sub>AppImage, Flatpak</sub> | <sub>à venir</sub> |
-| <sub>Linux 32 bits</sub> | <sub>Debian, Kali, MX, Devuan, Slackware, Arch Linux 32, LMDE</sub> | <sub>x86</sub> | <sub>`linux-i686.tar.gz`</sub> | <sub>à venir</sub> |
-| <sub>Linux ARM 32 bits</sub> | <sub>Raspberry Pi OS 32 bits, Debian, Kali, Arch Linux ARM</sub> | <sub>ARMv7</sub> | <sub>`linux-armv7.tar.gz`</sub> | <sub>à venir</sub> |
-| <sub>Indépendantes</sub> | <sub>Slackware, Gentoo, Void</sub> | <sub>x86_64, ARM64</sub> | <sub>`linux-<puce>.tar.gz`</sub> | <sub>à venir</sub> |
-| <sub>Statique, CLI</sub> | <sub>Alpine, NixOS, Void musl, Gentoo musl, serveurs, tout Linux</sub> | <sub>x86_64, ARM64, x86, ARMv6</sub> | <sub>`linux-<puce>-musl.tar.gz`</sub> | <sub>à venir</sub> |
-| <sub>Statique, CLI</sub> | <sub>Debian, Ubuntu, Fedora, openSUSE, RHEL, Deepin, Gentoo</sub> | <sub>RISC-V, POWER, LoongArch</sub> | <sub>`linux-<puce>-musl.tar.gz`</sub> | <sub>à venir</sub> |
-| <sub>ChromeOS</sub> | <sub>ChromeOS par Crostini, CLI ; accès à la clé à vérifier</sub> | <sub>x86_64, ARM64</sub> | <sub>`linux-<puce>-musl.tar.gz`</sub> | <sub>à venir</sub> |
-| <sub>Windows</sub> | <sub>Windows 10, 11, Server 2016 et plus</sub> | <sub>x86_64, ARM64, x86</sub> | <sub>`windows-<puce>.zip`, MSIX</sub> | <sub>à venir</sub> |
-| <sub>macOS</sub> | <sub>macOS 12 et plus</sub> | <sub>Apple Silicon, Intel</sub> | <sub>`macos-universal.tar.gz`, `.dmg`</sub> | <sub>à venir</sub> |
-| <sub>Android</sub> | <sub>Android 8.0 et plus, téléphones et tablettes, Bliss OS, Android-x86, ChromeOS</sub> | <sub>ARM64, ARMv7, x86_64, x86</sub> | <sub>APK, Google Play</sub> | <sub>à venir</sub> |
+`bonk write` takes a URL or a local file (`.iso`, `.img`, `.gz`, `.xz`, `.zst`), verifies it, writes it and reads it back. A Windows 10 or 11 x86_64 ISO becomes a UEFI install drive. No `sudo`: Linux asks for permission through polkit. Run `bonk` alone to open the window.
 
-<sub>Noms complets : `bonk-<version>-<cible>.<format>`. Empreintes `SHA256SUMS`, inventaire `bonk.cdx.json`, provenance vérifiable : `gh attestation verify <fichier> --repo FantasmaGlad/Bonk`. Pas de signature Authenticode ni de notarisation : SmartScreen et Gatekeeper peuvent avertir.</sub>
+## Download
 
-## Principes
+| Platform | Format | Architecture | Download | Status |
+| :--- | :---: | :---: | :---: | :--- |
+| <img src="https://cdn.simpleicons.org/debian" width="18" height="18" valign="middle" alt="Debian"> **Debian, Ubuntu** | `.deb` | amd64, arm64 | [amd64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.2/bonk_0.0.2-1_amd64.deb) · [arm64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.2/bonk_0.0.2-1_arm64.deb) | Writes disks |
+| <img src="https://cdn.simpleicons.org/fedora" width="18" height="18" valign="middle" alt="Fedora"> **Fedora, RHEL, SUSE** | `.rpm` | x86_64, aarch64 | [x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.2/bonk-0.0.2-1.x86_64.rpm) · [aarch64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.2/bonk-0.0.2-1.aarch64.rpm) | Writes disks |
+| <img src="https://cdn.simpleicons.org/linux" width="18" height="18" valign="middle" alt="Linux"> **Any Linux** | `.tar.gz` | x86_64, aarch64, i686 | [x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.2/bonk-0.0.2-linux-x86_64.tar.gz) · [aarch64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.2/bonk-0.0.2-linux-aarch64.tar.gz) · [i686](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.2/bonk-0.0.2-linux-i686.tar.gz) | Writes disks |
+| <img src="https://cdn.simpleicons.org/linux" width="18" height="18" valign="middle" alt="Linux"> **Static, command line** | `.tar.gz` | x86_64, aarch64 | [x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.2/bonk-0.0.2-linux-x86_64-musl.tar.gz) · [aarch64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.2/bonk-0.0.2-linux-aarch64-musl.tar.gz) | Writes disks |
+| **Windows 10+** | `.zip` | x86_64, ARM64, x86 | [x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.2/bonk-0.0.2-windows-x86_64.zip) · [ARM64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.2/bonk-0.0.2-windows-aarch64.zip) · [x86](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.2/bonk-0.0.2-windows-i686.zip) | Preview: no disk access yet |
+| <img src="https://cdn.simpleicons.org/apple" width="18" height="18" valign="middle" alt="macOS"> **macOS 12+** | `.tar.gz` | Universal | [Universal](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.2/bonk-0.0.2-macos-universal.tar.gz) | Preview: no disk access yet |
 
-- Un disque système n'est jamais proposé ni écrit.
-- Aucune télémétrie.
-- Aucune dépendance obligatoire. Sous Linux, l'écriture sans `sudo` passe par UDisks2 et polkit, présents sur la plupart des bureaux ; exFAT, NTFS et ext4 sont formatés par les outils du système.
+Checksums: [`SHA256SUMS`](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.2/SHA256SUMS). Provenance: `gh attestation verify <file> --repo FantasmaGlad/Bonk`.
 
-## Compiler
+## Build
 
 ```bash
 cargo build --workspace --release
-cargo test --workspace
 ```
 
-Architecture : [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+[MIT](LICENSE). A system disk is never offered or written.

@@ -206,3 +206,14 @@ fn fat32_dit_sa_limite_par_fichier_et_propose_exfat() {
     let value: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert!(value["file_size_limit_bytes"].is_null(), "{json}");
 }
+
+/// Annulé juste après l'ouverture : le disque reste intact, la réparation n'a pas commencé.
+#[test]
+fn reparer_s_annule_avant_d_ecrire() {
+    let mut scenario = Scenario::new();
+    scenario.cancel = true;
+    let (code, _, err) = scenario.run(&["repair-gpt", "usb-a", "--yes"]);
+    assert_eq!(code, crate::errors::EXIT_CANCELLED, "{err}");
+    assert!(err.contains("E4003"), "{err}");
+    assert!(scenario.written(1 << 20).iter().all(|b| *b == 0));
+}

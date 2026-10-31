@@ -129,11 +129,17 @@ enum DiskAction {
 }
 
 /// Ce qu'une commande a d'incompatible avec `--fixture`, le cas échéant : tout ce qui lirait le système
-/// réel ou ouvrirait un vrai disque. Aucun cas par défaut : une nouvelle commande ne compile pas tant que
+/// réel ou ouvrirait un vrai disque (le bas niveau reste permis sur un fichier image). Aucun cas par défaut : une nouvelle commande ne compile pas tant que
 /// sa réponse n'est pas écrite ici, car l'oubli laisserait écrire sur un vrai disque sous `--fixture`.
 fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
     const DISK: &str = "--fixture simule l'énumération seulement : l'écriture et la lecture brute d'un disque sont refusées (utiliser --simulate ou --dry-run)";
     match command.as_ref()? {
+        Command::Debug {
+            action: debug::DebugAction::Layout(a),
+        } => (!a.reads_image_file()).then_some(DISK),
+        Command::Debug {
+            action: debug::DebugAction::Hexdump(a),
+        } => (!a.reads_image_file()).then_some(DISK),
         Command::Write(a)
         | Command::Disk {
             action: DiskAction::Write(a),
@@ -170,10 +176,7 @@ fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
         | Command::Info(_)
         | Command::Diagnose(_)
         | Command::Debug {
-            action:
-                debug::DebugAction::Filter(_)
-                | debug::DebugAction::Layout(_)
-                | debug::DebugAction::Hexdump(_),
+            action: debug::DebugAction::Filter(_),
         }
         | Command::Explain(_)
         | Command::Config { .. }
