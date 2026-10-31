@@ -10,7 +10,7 @@ use bonk_core::write::{self as engine, Control, DEFAULT_CHUNK, Phase, Progress, 
 use bonk_hal::{Access, Elevation, Eligibility, FilterOptions, Warning, evaluate};
 
 use super::source::ImageFile;
-use super::target::{Chosen, OpenRequest, choose, open_target};
+use super::target::{Chosen, OpenRequest, choose, open_target, reread_table};
 use super::translate::{guarded, map_verify_error, map_write_error};
 use super::types::{
     Deps, JobError, Plan, SCHEMA_VERSION, SourceInfo, Target, TraceIo, WriteDone, WriteMode,
@@ -211,6 +211,9 @@ fn planned_steps(job: &WriteJob, chosen: &Chosen) -> Vec<&'static str> {
     if job.repair_gpt {
         steps.push("repair_gpt_if_needed");
     }
+    if chosen.disk.is_some() {
+        steps.push("reread_table");
+    }
     steps
 }
 
@@ -337,6 +340,10 @@ pub fn write(
     } else {
         None
     };
+    drop(device);
+    if matches!(job.target, Target::Disk(_)) {
+        reread_table(Path::new(&info.path), job.elevation, deps);
+    }
     Ok(WriteOutcome::Done(Box::new(WriteDone {
         schema_version: SCHEMA_VERSION,
         event: "result",

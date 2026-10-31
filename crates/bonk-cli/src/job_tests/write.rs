@@ -15,19 +15,61 @@ fn ecriture_complete_dans_l_ordre_des_garde_fous() {
         "none",
     ]);
     assert_eq!((code, err.as_str()), (0, ""), "{out}");
-    // Démontage d'abord, ouverture en écriture ensuite, jamais l'inverse.
+    // Démontage d'abord, ouverture en écriture ensuite, jamais l'inverse ; la table n'est relue qu'une
+    // fois le disque refermé, sinon le noyau garde l'ancienne taille des partitions.
     assert_eq!(
         scenario.log(),
         [
             "prepare:/dev/sdb",
             "unmount:usb-a",
             "open:/dev/sdb:ReadWrite",
-            "drop_cache"
+            "drop_cache",
+            "rescan:/dev/sdb"
         ]
     );
     assert_eq!(scenario.written(1 << 20), source.bytes());
     assert!(out.contains("Démonté : /run/media/u/A"), "{out}");
     assert!(out.contains("Vérification : réussie"), "{out}");
+}
+
+#[test]
+fn une_table_non_relue_n_enleve_rien_a_l_ecriture() {
+    let source = TempSource::new("table-non-relue", 1 << 20);
+    let mut scenario = Scenario::new();
+    scenario.rescan_fails = true;
+    let (code, out, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &source.arg(),
+        "--yes",
+        "--progress",
+        "none",
+    ]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(
+        scenario.log().contains(&"rescan:/dev/sdb".to_owned()),
+        "{:?}",
+        scenario.log()
+    );
+    assert_eq!(scenario.written(1 << 20), source.bytes());
+}
+
+#[test]
+fn une_ecriture_simulee_ne_fait_relire_aucune_table() {
+    let source = TempSource::new("simulee-source", 4096);
+    let cible = TempSource::from_bytes("simulee-cible", &[0; 4096]);
+    let scenario = Scenario::new();
+    let args = ["write", "--simulate", &cible.arg(), &source.arg()];
+    let (code, plan, err) = scenario.run(&[&args[..], &["--dry-run"]].concat());
+    assert_eq!((code, err.as_str()), (0, ""), "{plan}");
+    assert!(!plan.contains("reread_table"), "{plan}");
+    let (code, out, err) = scenario.run(&[&args[..], &["--yes", "--progress", "none"]].concat());
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(
+        !scenario.log().iter().any(|call| call.starts_with("rescan")),
+        "{:?}",
+        scenario.log()
+    );
 }
 
 #[test]
@@ -54,7 +96,7 @@ fn dry_run_decrit_sans_rien_faire() {
         "{out}"
     );
     assert!(
-        out.contains("unmount, write, flush, verify, repair_gpt_if_needed"),
+        out.contains("unmount, write, flush, verify, repair_gpt_if_needed, reread_table"),
         "{out}"
     );
     assert!(scenario.log().is_empty());
