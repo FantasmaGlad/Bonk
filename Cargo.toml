@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 # Plancher imposé par zbus 6 (Iced 0.14 demande 1.88) ; le job « msrv » de la CI le vérifie à chaque changement
 # du code.

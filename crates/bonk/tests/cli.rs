@@ -310,3 +310,41 @@ fn une_capture_rejouee_donne_les_memes_verdicts() -> Resultat {
     std::fs::remove_dir_all(&dossier)?;
     Ok(())
 }
+
+/// Sous `--fixture`, le bas niveau lit un fichier image, jamais un disque réel, même désigné par son chemin.
+#[test]
+fn fixture_refuse_la_lecture_brute_d_un_disque() -> Result<(), Box<dyn std::error::Error>> {
+    let dossier = std::env::temp_dir().join(format!("bonk-fixture-brut-{}", std::process::id()));
+    std::fs::create_dir_all(&dossier)?;
+    let capture = dossier.join("capture.json");
+    std::fs::write(
+        &capture,
+        r#"{"reads":[{"path":"/proc/swaps","kind":"file","ok":true,"bytes":3,"error":null,"micros":1,"content":"x\n"}]}"#,
+    )?;
+    let image = dossier.join("image.img");
+    std::fs::write(&image, vec![0u8; 4096])?;
+    for action in ["layout", "hexdump"] {
+        for cible in ["/dev/sda", "usb-une-cle"] {
+            let refus = bonk()
+                .arg("--fixture")
+                .arg(&capture)
+                .args(["debug", action, cible])
+                .output()?;
+            assert_eq!(refus.status.code(), Some(2), "{action} {cible}");
+            assert!(String::from_utf8_lossy(&refus.stderr).contains("--fixture"));
+        }
+        let permis = bonk()
+            .arg("--fixture")
+            .arg(&capture)
+            .args(["debug", action])
+            .arg(&image)
+            .output()?;
+        assert!(
+            permis.status.success(),
+            "{action} : {}",
+            String::from_utf8_lossy(&permis.stderr)
+        );
+    }
+    std::fs::remove_dir_all(&dossier)?;
+    Ok(())
+}

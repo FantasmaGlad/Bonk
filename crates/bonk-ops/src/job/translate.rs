@@ -15,16 +15,23 @@ fn source_error(format: Format) -> Code {
     }
 }
 
-pub(super) fn map_write_error(err: WriteError, format: Format) -> JobError {
-    // Les bornes sont contrôlées avant chaque écriture : le noyau ne répond « plus de place » que si le disque
-    // a disparu sous l'opération.
-    if let WriteError::Device(BlockError::Io(io)) = &err
-        && io.kind() == std::io::ErrorKind::StorageFull
-    {
-        return fail(
+/// Les bornes sont contrôlées avant chaque écriture : le noyau ne répond « plus de place » que si le disque a
+/// disparu sous l'opération.
+pub(super) fn support_lost(err: &BlockError) -> Option<JobError> {
+    match err {
+        BlockError::Io(io) if io.kind() == std::io::ErrorKind::StorageFull => Some(fail(
             Code::WriteFailed,
             "le support a disparu pendant l'écriture (débranché, ou port USB défaillant)",
-        );
+        )),
+        _ => None,
+    }
+}
+
+pub(super) fn map_write_error(err: WriteError, format: Format) -> JobError {
+    if let WriteError::Device(device) = &err
+        && let Some(lost) = support_lost(device)
+    {
+        return lost;
     }
     let code = match &err {
         WriteError::Cancelled { .. } => Code::Cancelled,

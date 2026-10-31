@@ -105,3 +105,17 @@ pub(crate) enum Outcome {
     /// Échec expliqué par un message pour la sortie d'erreur.
     Failed(Code, String),
 }
+
+impl LayoutArgs {
+    /// La cible est-elle un fichier image, et non un disque ?
+    pub(crate) fn reads_image_file(&self) -> bool {
+        self.image.is_file()
+    }
+}
+
+impl HexdumpArgs {
+    /// La cible est-elle un fichier image, et non un disque ?
+    pub(crate) fn reads_image_file(&self) -> bool {
+        self.image.is_file()
+    }
+}

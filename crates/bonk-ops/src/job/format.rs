@@ -186,9 +186,23 @@ fn write_volume(
     filesystem: Filesystem,
     label: Option<&str>,
     ids: &Ids,
+    cancelled: &dyn Fn() -> bool,
 ) -> Result<(PartitionPlan, Option<u32>), JobError> {
+    // Sur le vrai support, avant la table : le plan comptait en secteurs de 512 octets, et une table écrite
+    // pour rien aurait déjà effacé la clé.
+    let block = device.block_size();
+    if filesystem.is_native() {
+        let planned = table::plan(device.size(), block, kind).map_err(format_error)?;
+        fat32::geometry(planned.sectors(), block).map_err(format_error)?;
+    }
     let partition =
         table::write_table(device, kind, filesystem, label, ids).map_err(format_error)?;
+    if cancelled() {
+        return Err(fail(
+            Code::Cancelled,
+            "annulée après l'écriture de la table : le support est à reformater",
+        ));
+    }
     let volume = fat32::Volume {
         first_lba: partition.first_lba,
         sectors: partition.sectors(),
@@ -263,7 +277,7 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
     check_available(filesystem, &chosen, deps)?;
 
     // Refus par la géométrie avant tout geste. Le secteur réel n'est connu qu'à l'ouverture : 512 ici, le
-    // plan est recalculé ensuite, et FAT32 se refuse de nouveau, alors que la table est déjà écrite.
+    // plan est recalculé à l'ouverture, avant d'écrire la table.
     let block = bonk_core::DEFAULT_BLOCK_SIZE;
     let planned = table::plan(size, block, job.table).map_err(format_error)?;
     let cluster_bytes = if filesystem.is_native() {
@@ -335,8 +349,14 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
         target_path = info.path.as_str(), table = job.table.name(), filesystem = filesystem.name();
         "format starting"
     );
-    let (partition, cluster_bytes) =
-        write_volume(&mut *device, job.table, filesystem, label.as_deref(), &ids)?;
+    let (partition, cluster_bytes) = write_volume(
+        &mut *device,
+        job.table,
+        filesystem,
+        label.as_deref(),
+        &ids,
+        &*deps.io.cancelled,
+    )?;
     let block = u64::from(device.block_size());
     drop(device);
     if let Some(id) = &disk_id {
@@ -363,4 +383,55 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
         unmounted,
         true,
     ))
+}
+
+#[cfg(test)]
+mod volume_tests {
+    #![allow(clippy::unwrap_used)]
+
+    use bonk_core::MemoryDevice;
+
+    use super::*;
+
+    fn ids() -> Ids {
+        Ids::from_seed(b"essai")
+    }
+
+    /// Le plan se calcule en secteurs de 512 octets : sur des secteurs de 4 Kio, seul le vrai support dit que
+    /// FAT32 ne tient pas. Le refus doit venir avant la table, pas après.
+    #[test]
+    fn fat32_refuse_sur_secteurs_de_4_kio_ne_laisse_aucune_table() {
+        let mut device = MemoryDevice::new(100 << 20, 4096).unwrap();
+        let result = write_volume(
+            &mut device,
+            TableKind::Gpt,
+            Filesystem::Fat32,
+            None,
+            &ids(),
+            &|| false,
+        );
+        assert!(result.is_err());
+        assert!(device.as_bytes().iter().all(|b| *b == 0));
+    }
+
+    /// L'annulation est vue entre deux étapes : pas de système de fichiers après une table annulée.
+    #[test]
+    fn l_annulation_arrete_le_formatage_entre_ses_etapes() {
+        let mut device = MemoryDevice::new(100 << 20, 512).unwrap();
+        let result = write_volume(
+            &mut device,
+            TableKind::Gpt,
+            Filesystem::Fat32,
+            None,
+            &ids(),
+            &|| true,
+        );
+        assert_eq!(result.err().map(|e| e.code), Some(Code::Cancelled));
+        let volume = 1 << 20;
+        assert!(
+            device.as_bytes()[volume..volume + 512]
+                .iter()
+                .all(|b| *b == 0)
+        );
+    }
 }

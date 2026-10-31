@@ -22,7 +22,7 @@ use super::Target;
 use super::format::fresh_seed;
 use super::source::ImageFile;
 use super::target::{Chosen, OpenRequest, open_target, reread_table};
-use super::translate::guarded;
+use super::translate::{guarded, support_lost};
 use super::types::{Deps, JobError, TargetInfo, fail};
 use super::write::WriteJob;
 use crate::errors::Code;
@@ -256,6 +256,11 @@ fn plan_items(
 }
 
 fn format_failure(code: Code, error: FormatError) -> JobError {
+    if let FormatError::Device(device) = &error
+        && let Some(lost) = support_lost(device)
+    {
+        return lost;
+    }
     match error {
         FormatError::Source(err) if err.kind() == io::ErrorKind::Interrupted => fail(
             Code::Cancelled,
@@ -487,4 +492,20 @@ fn verify_all(
         files: sums.len(),
         cache_dropped,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use bonk_core::BlockError;
+
+    use super::*;
+
+    /// Même message que l'écriture d'une image : le noyau répond « plus de place » sur un disque débranché.
+    #[test]
+    fn un_support_disparu_pendant_la_copie_est_dit() {
+        let full = io::Error::from(io::ErrorKind::StorageFull);
+        let error = format_failure(Code::WriteFailed, FormatError::Device(BlockError::Io(full)));
+        assert_eq!(error.code, Code::WriteFailed);
+        assert!(error.message.contains("débranché"), "{}", error.message);
+    }
 }
