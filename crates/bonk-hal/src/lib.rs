@@ -4,6 +4,7 @@
 //! C'est le seul crate qui contient du code spécifique à un OS, isolé derrière le trait
 //! [`Platform`].
 
+pub mod console;
 pub mod describe;
 pub mod disk;
 pub mod enumerate;

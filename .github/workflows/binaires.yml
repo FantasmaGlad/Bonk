@@ -153,6 +153,15 @@ jobs:
           xcrun notarytool submit "$RUNNER_TEMP/bonk-notarisation.zip" --key "$RUNNER_TEMP/notary.p8" --key-id "$MAC_NOTARY_KEY_ID" --issuer "$MAC_NOTARY_ISSUER" --wait
           security delete-keychain "$trousseau"
           rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/notary.p8"
+      # Le fichier publié porte bien son nom et sa version : sans ressources, Windows n'affiche rien.
+      - name: Vérifier les informations de l'exécutable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $info = (Get-Item "target\$env:TARGET\release\bonk.exe").VersionInfo
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"').Matches[0].Groups[1].Value
+          Write-Output "$($info.ProductName) $($info.ProductVersion) : $($info.FileDescription)"
+          if ($info.ProductName -ne 'Bonk' -or $info.ProductVersion -ne $version) { exit 1 }
       - name: Essai de démarrage
         if: matrix.fumee
         run: |
@@ -174,13 +183,17 @@ jobs:
             v="$cargo_v-${SHA::8}"
           fi
           if [ -n "$EXE" ]; then ext=zip; else ext=tar.gz; fi
-          echo "dossier=bonk-$v-$NOM" >> "$GITHUB_OUTPUT"
-          echo "archive=bonk-$v-$NOM.$ext" >> "$GITHUB_OUTPUT"
+          {
+            echo "dossier=bonk-$v-$NOM"
+            echo "archive=bonk-$v-$NOM.$ext"
+            echo "executable=bonk-$v-$NOM.exe"
+          } >> "$GITHUB_OUTPUT"
         shell: bash
       - name: Archive
         env:
           DOSSIER: ${{ steps.nom.outputs.dossier }}
           ARCHIVE: ${{ steps.nom.outputs.archive }}
+          EXECUTABLE: ${{ steps.nom.outputs.executable }}
         run: |
           mkdir -p "dist/$DOSSIER"
           cp "target/$TARGET/release/bonk$EXE" LICENSE "dist/$DOSSIER/"
@@ -190,6 +203,8 @@ jobs:
             tar -C dist -czf "dist/$ARCHIVE" "$DOSSIER"
           fi
           rm -r "dist/$DOSSIER"
+          # Sous Windows, l'exécutable aussi, seul : rien à décompresser pour le lancer.
+          if [ -n "$EXE" ]; then cp "target/$TARGET/release/bonk$EXE" "dist/$EXECUTABLE"; fi
           cd dist
           if command -v sha256sum > /dev/null; then sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"; else shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"; fi
           cat "$ARCHIVE.sha256"
@@ -201,11 +216,16 @@ jobs:
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: dist/${{ steps.nom.outputs.archive }}
+      - name: Attestation de provenance de l'exécutable
+        if: github.event_name != 'pull_request' && !github.event.repository.private && runner.os == 'Windows'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/${{ steps.nom.outputs.executable }}
       - name: Conserver l'archive
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: binaire-${{ matrix.nom }}
-          path: dist/${{ steps.nom.outputs.archive }}*
+          path: dist/bonk-*
           if-no-files-found: error
           retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
 
@@ -287,7 +307,7 @@ jobs:
         working-directory: dist
         run: |
           for f in *.sha256; do sha256sum --check "$f"; done
-          sha256sum -- *.tar.gz *.zip *.deb *.rpm *.json > SHA256SUMS
+          sha256sum -- *.tar.gz *.zip *.exe *.deb *.rpm *.json > SHA256SUMS
           cat SHA256SUMS
       - name: Créer la release en brouillon
         env:
@@ -301,4 +321,4 @@ jobs:
             echo "Empreintes : SHA256SUMS. SBOM : bonk.cdx.json."
           } > notes.md
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "$TAG" --notes-file notes.md \
-            dist/*.tar.gz dist/*.zip dist/*.deb dist/*.rpm dist/bonk.cdx.json dist/SHA256SUMS
+            dist/*.tar.gz dist/*.zip dist/*.exe dist/*.deb dist/*.rpm dist/bonk.cdx.json dist/SHA256SUMS

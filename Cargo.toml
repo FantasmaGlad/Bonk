@@ -38,6 +38,10 @@ rfd = "0.17"
 # la plateforme, `ring` choisi explicitement parce que l'option `rustls` d'ureq tirerait aussi `webpki-roots`.
 ureq = { version = "3", default-features = false, features = ["rustls-no-provider", "platform-verifier"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+# API de Windows que std n'expose pas : console, et plus tard disques.
+windows-sys = "0.61"
+# Icône et informations de version de bonk.exe, compilées à la construction.
+winresource = "0.1"
 # Schémas JSON générés depuis les types sérialisés (`bonk schema`) : ils ne peuvent pas diverger des sorties.
 schemars = "1"
 # Complétions de shell générées depuis la définition clap (`bonk completions`).

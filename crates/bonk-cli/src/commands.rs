@@ -24,6 +24,9 @@ where
              l'autorisation au moment d'écrire ; ou utiliser la ligne de commande (bonk --help)",
         );
     }
+    if bonk_hal::console::detach_if_alone() {
+        log::debug!(target: "bonk::cli", "own console closed");
+    }
     log::debug!(target: "bonk::cli", "opening the window");
     match gui(view) {
         Ok(()) => 0,
