@@ -4,6 +4,7 @@
 //! Ce crate ne connaît pas la fenêtre : le binaire lui passe la fonction qui l'ouvre. Ainsi `bonk` sans
 //! commande ouvre la fenêtre, et `bonk -v` l'ouvre avec le journal verbeux.
 
+mod cache;
 #[cfg(test)]
 mod cli_tests;
 mod commands;
@@ -76,6 +77,11 @@ enum Command {
     Disk {
         #[command(subcommand)]
         action: DiskAction,
+    },
+    /// Images téléchargées : liste et nettoyage
+    Cache {
+        #[command(subcommand)]
+        action: cache::CacheAction,
     },
     /// Liste les disques que Bonk peut écrire (raccourci de `disk list`)
     List(list::ListArgs),
@@ -184,6 +190,7 @@ fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
         }
         | Command::Explain(_)
         | Command::Config { .. }
+        | Command::Cache { .. }
         | Command::Schema(_)
         | Command::Completions { .. }
         | Command::Serve
@@ -413,6 +420,7 @@ where
         Some(Command::List(args)) => run_list(&args, &view, out, err, enumerate),
         Some(Command::Info(args)) => run_info(&args, &view, out, err, enumerate),
         Some(Command::Config { action }) => run_config(&action, env, out, err),
+        Some(Command::Cache { action }) => cache::run(&action, out, err),
         Some(Command::Schema(args)) => run_schema(&args, out, err),
         Some(Command::Completions { shell }) => run_completions(shell, out, err),
         Some(Command::Serve) => run_serve(fixture_reads.as_deref(), env, view),

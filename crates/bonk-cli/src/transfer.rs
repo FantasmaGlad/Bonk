@@ -494,7 +494,7 @@ pub(crate) fn run_write(
         };
         fetch::write(&request, &mut job, deps, &mut progress)
     };
-    finish(
+    let code = finish(
         result,
         &args.common,
         out,
@@ -583,7 +583,23 @@ pub(crate) fn run_write(
                 }
             }
         },
-    )
+    );
+    // Le téléchargement a pu faire grossir le cache : le dire, seulement à qui lit du texte.
+    let text = !args.common.json && args.common.progress != ProgressMode::Json;
+    let downloaded = args.source.to_str().is_some_and(bonk_catalog::is_url);
+    if code == 0
+        && text
+        && downloaded
+        && let Some(bytes) = crate::cache::directory(args.cache_dir.as_deref())
+            .and_then(|dir| crate::cache::total_bytes(&dir).ok())
+    {
+        let _ = writeln!(
+            out,
+            "  Cache des téléchargements : {} (bonk cache clean pour le vider)",
+            format_size(bytes)
+        );
+    }
+    code
 }
 
 pub(crate) fn run_verify(

@@ -124,18 +124,13 @@ fn resolve(
         job.expected_sha256 = Some(sha256_from_file(location, &name)?);
     }
     let sha256 = job::normalize_sha256(job.expected_sha256.as_deref().unwrap_or_default())?;
-    let cache = request
-        .cache_dir
-        .map(Path::to_path_buf)
-        .or_else(|| bonk_hal::platform::cache_dir(&|name| std::env::var(name).ok()))
-        .ok_or_else(|| {
-            error(
-                Code::DownloadFailed,
-                "aucun dossier de cache connu : le donner avec --cache-dir",
-            )
-        })?;
-    // Rangé sous son empreinte : une nouvelle version de même nom ne reprend jamais l'ancienne.
-    let dest = cache.join("images").join(&sha256).join(&name);
+    let cache = crate::cache::directory(request.cache_dir).ok_or_else(|| {
+        error(
+            Code::DownloadFailed,
+            "aucun dossier de cache connu : le donner avec --cache-dir",
+        )
+    })?;
+    let dest = crate::cache::image_path(&cache, &sha256, &name);
     if dest.exists() {
         log::info!(target: "bonk::catalog", path = dest.display().to_string().as_str(); "image already downloaded");
     } else {

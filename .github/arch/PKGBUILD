@@ -1,0 +1,22 @@
+# Paquet natif d'Arch, construit par le workflow `paquets` à partir du binaire publié, sans recompiler.
+pkgname=bonk
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="Write bootable images to USB drives"
+arch=('x86_64')
+url="https://github.com/FantasmaGlad/Bonk"
+license=('MIT')
+depends=('glibc')
+optdepends=('udisks2: écriture sans sudo' 'polkit: écriture sans sudo')
+options=('!strip' '!debug')
+source=('bonk' 'LICENSE' 'bonk.desktop')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm755 bonk "$pkgdir/usr/bin/bonk"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/bonk/LICENSE"
+  install -Dm644 bonk.desktop "$pkgdir/usr/share/applications/bonk.desktop"
+  for dossier in "$startdir"/icons/*; do
+    install -Dm644 "$dossier/bonk.png" "$pkgdir/usr/share/icons/hicolor/${dossier##*/}/apps/bonk.png"
+  done
+}

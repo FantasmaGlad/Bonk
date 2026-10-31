@@ -80,11 +80,22 @@ fn catching_panics(
     outcome.map_err(|payload| panic_message(payload.as_ref()))
 }
 
+/// Icône de la fenêtre, en RGBA brut : Iced ne décode pas de PNG sans une dépendance de plus.
+fn window_icon() -> Option<iced::window::Icon> {
+    const SIDE: u32 = 64;
+    let pixels = include_bytes!("../assets/bonk-64.rgba").to_vec();
+    iced::window::icon::from_rgba(pixels, SIDE, SIDE).ok()
+}
+
 fn launch(initial: ViewOptions) -> Result<(), String> {
     iced::application(move || App::new(initial), App::update, App::view)
         .title("Bonk")
         .theme(App::theme)
         .subscription(App::subscription)
+        .window(iced::window::Settings {
+            icon: window_icon(),
+            ..iced::window::Settings::default()
+        })
         .window_size(Size::new(960.0, 640.0))
         .centered()
         .run()
@@ -268,5 +279,14 @@ mod repli_tests {
         );
         assert_eq!(resultat, Err("wgpu error: Invalid surface".to_owned()));
         assert_eq!(relances.get(), 0);
+    }
+}
+
+#[cfg(test)]
+mod icon_tests {
+    /// Une icône de la mauvaise taille serait perdue en silence : `window_icon` rend alors `None`.
+    #[test]
+    fn l_icone_de_la_fenetre_est_valide() {
+        assert!(super::window_icon().is_some());
     }
 }

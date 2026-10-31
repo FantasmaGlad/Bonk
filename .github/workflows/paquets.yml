@@ -54,6 +54,9 @@ jobs:
         run: |
           cargo deb -p bonk --no-build --target "$TARGET" --locked --output dist/
           cargo generate-rpm -p crates/bonk --target "$TARGET" --output dist/
+          # L'application doit paraître dans le tiroir du bureau.
+          dpkg-deb -c dist/*.deb | grep -q usr/share/applications/bonk.desktop
+          dpkg-deb -c dist/*.deb | grep -q usr/share/icons/hicolor/256x256/apps/bonk.png
           cd dist
           sha256sum -- *.deb *.rpm > "paquets-$TARGET.sha256"
           cat "paquets-$TARGET.sha256"
@@ -68,6 +71,63 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: paquet-${{ matrix.nom }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
+
+  # Paquet natif d'Arch, installé pour de vrai dans un conteneur avant d'être conservé. x86_64 : Arch n'a pas
+  # d'image officielle pour ARM.
+  arch:
+    name: arch (pkg.tar.zst)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Récupérer le binaire
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: binaire-linux-x86_64
+          path: archive
+      - name: Construire et installer le paquet
+        run: |
+          set -e
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+          mkdir -p build dist
+          tar -xzf archive/bonk-*.tar.gz -C archive
+          cp archive/bonk-*/bonk LICENSE crates/bonk/assets/bonk.desktop build/
+          cp -r crates/bonk/assets/icons build/icons
+          sed "s/@VERSION@/$version/" .github/arch/PKGBUILD > build/PKGBUILD
+          docker run --rm --volume "$PWD/build:/build" --volume "$PWD/dist:/dist" archlinux:latest sh -ec '
+            pacman -Syu --noconfirm --needed base-devel > /dev/null
+            useradd -m constructeur
+            chown -R constructeur /build
+            su constructeur -c "cd /build && makepkg --nodeps --noconfirm"
+            cp /build/*.pkg.tar.zst /dist/
+            pacman -U --noconfirm /dist/*.pkg.tar.zst
+            bonk --version
+            test -f /usr/share/applications/bonk.desktop
+            test -f /usr/share/icons/hicolor/256x256/apps/bonk.png
+          '
+          sudo chown -R "$USER" dist
+          cd dist
+          sha256sum -- *.pkg.tar.zst | tee paquet-arch.sha256
+      - name: Attestation de provenance
+        if: github.event_name != 'pull_request' && !github.event.repository.private
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/*.pkg.tar.zst
+      - name: Conserver le paquet
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: paquet-arch
           path: dist/*
           if-no-files-found: error
           retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}

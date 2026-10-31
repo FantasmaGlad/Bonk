@@ -211,6 +211,37 @@ jobs:
           if command -v sha256sum > /dev/null; then sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"; else shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"; fi
           cat "$ARCHIVE.sha256"
         shell: bash
+      # Sans droits d'administrateur ; installé et désinstallé ici, le raccourci du menu Démarrer contrôlé.
+      - name: Installateur Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          NOM: ${{ matrix.nom }}
+          EXECUTABLE: ${{ steps.nom.outputs.executable }}
+        run: |
+          choco install innosetup --version=6.7.1 --no-progress -y
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"').Matches[0].Groups[1].Value
+          $env:BONK_VERSION = $version
+          $env:BONK_ARCH = $NOM = $env:NOM -replace '^windows-',''
+          $env:BONK_ALLOWED = @{ 'x86_64' = 'x64compatible'; 'aarch64' = 'arm64'; 'i686' = 'x86compatible' }[$NOM]
+          # Un programme x86 reste dans Program Files (x86) : pas de mode 64 bits.
+          $env:BONK_64 = if ($NOM -eq 'i686') { '' } else { $env:BONK_ALLOWED }
+          $env:BONK_EXE = (Resolve-Path "dist\$env:EXECUTABLE").Path
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & $iscc .github\windows\bonk.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $setup = Get-Item "dist\bonk-$version-windows-$NOM-setup.exe"
+          Start-Process -Wait -FilePath $setup.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART'
+          $lien = Join-Path ([Environment]::GetFolderPath('Programs')) 'Bonk.lnk'
+          if (-not (Test-Path $lien)) { Write-Output "raccourci absent : $lien"; exit 1 }
+          $cible = (New-Object -ComObject WScript.Shell).CreateShortcut($lien).TargetPath
+          & $cible --version
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $desinstalleur = Join-Path (Split-Path $cible) 'unins000.exe'
+          Start-Process -Wait -FilePath $desinstalleur -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES'
+          # Fin de ligne Unix : la vérification de la release relit ce fichier sous Linux.
+          $somme = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLower() + "  " + $setup.Name + "`n"
+          [IO.File]::WriteAllText("$PWD\dist\$($setup.Name).sha256", $somme)
       # Dépôt public seulement (les attestations sont réservées aux dépôts publics hors offre Enterprise) ;
       # jamais sur une PR.
       - name: Attestation de provenance
@@ -222,7 +253,9 @@ jobs:
         if: github.event_name != 'pull_request' && !github.event.repository.private && runner.os == 'Windows'
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
-          subject-path: dist/${{ steps.nom.outputs.executable }}
+          subject-path: |
+            dist/${{ steps.nom.outputs.executable }}
+            dist/*-setup.exe
       - name: Conserver l'archive
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -350,7 +383,7 @@ jobs:
         working-directory: dist
         run: |
           for f in *.sha256; do sha256sum --check "$f"; done
-          sha256sum -- *.tar.gz *.zip *.exe *.dmg *.deb *.rpm *.json > SHA256SUMS
+          sha256sum -- *.tar.gz *.zip *.exe *.dmg *.deb *.rpm *.pkg.tar.zst *.json > SHA256SUMS
           cat SHA256SUMS
       - name: Créer la release en brouillon
         env:
@@ -364,4 +397,4 @@ jobs:
             echo "Empreintes : SHA256SUMS. SBOM : bonk.cdx.json."
           } > notes.md
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "$TAG" --notes-file notes.md \
-            dist/*.tar.gz dist/*.zip dist/*.exe dist/*.dmg dist/*.deb dist/*.rpm dist/bonk.cdx.json dist/SHA256SUMS
+            dist/*.tar.gz dist/*.zip dist/*.exe dist/*.dmg dist/*.deb dist/*.rpm dist/*.pkg.tar.zst dist/bonk.cdx.json dist/SHA256SUMS

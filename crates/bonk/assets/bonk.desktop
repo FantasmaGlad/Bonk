@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Bonk
+Comment=Write bootable images to USB drives
+Comment[fr]=Écrit des images amorçables sur clé USB
+Exec=bonk
+Icon=bonk
+Terminal=false
+Categories=Utility;
+Keywords=usb;iso;boot;image;
