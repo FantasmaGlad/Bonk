@@ -134,6 +134,12 @@ pub(crate) fn run_format(
                 ""
             }
         )?;
+        if done.file_size_limit_bytes.is_some() {
+            writeln!(
+                out,
+                "  Limite : un fichier de 4 Gio ou plus n'y tient pas ; pour en stocker, --fs exfat"
+            )?;
+        }
         if let Some(label) = &done.label {
             writeln!(out, "  Étiquette : {label}")?;
         }

@@ -280,6 +280,7 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
         table: job.table,
         filesystem,
         filesystem_defaulted: job.filesystem.is_none(),
+        file_size_limit_bytes: filesystem.file_size_limit(),
         label: label.clone(),
         partition,
         written_by: if filesystem.is_native() {
