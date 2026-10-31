@@ -12,7 +12,16 @@ publish.workspace = true
 bonk-core.workspace = true
 bonk-hal.workspace = true
 bonk-cli.workspace = true
-bonk-gui.workspace = true
+bonk-gui = { workspace = true, optional = true }
+
+[features]
+default = ["gui"]
+# La fenêtre. Sans elle : binaire en ligne de commande seule, `cargo build -p bonk --no-default-features`.
+gui = ["dep:bonk-gui"]
+
+[[test]]
+name = "parity"
+required-features = ["gui"]
 
 [build-dependencies]
 winresource.workspace = true
