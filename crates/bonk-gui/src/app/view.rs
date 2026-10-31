@@ -389,15 +389,26 @@ impl App {
             text("Toutes les données de ce disque seront effacées. Cette action est irréversible.")
                 .size(13)
                 .color(theme::SECONDARY),
-            ring(
-                text_input("Chemin de l'image (.img, .iso, .gz, .xz, .zst)", image)
-                    .on_input(Message::ImageInput)
-                    .on_submit(Message::StartWrite)
-                    .padding(8)
-                    .size(14)
-                    .style(theme::input_style),
-                self.has_focus(Focus::Image),
-            ),
+            row![
+                ring(
+                    text_input("Chemin de l'image (.img, .iso, .gz, .xz, .zst)", image)
+                        .on_input(Message::ImageInput)
+                        .on_submit(Message::StartWrite)
+                        .padding(8)
+                        .size(14)
+                        .style(theme::input_style),
+                    self.has_focus(Focus::Image),
+                ),
+                ring(
+                    button(text("Choisir l'image...").size(14))
+                        .on_press(Message::BrowseImage)
+                        .padding([6, 14])
+                        .style(theme::primary_button),
+                    self.has_focus(Focus::Browse),
+                ),
+            ]
+            .spacing(8)
+            .align_y(iced::Center),
             ring(
                 button(text(label).size(14))
                     .on_press_maybe(ready.then_some(Message::StartWrite))
