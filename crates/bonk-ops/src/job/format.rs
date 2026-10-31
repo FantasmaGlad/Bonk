@@ -263,7 +263,7 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
     check_available(filesystem, &chosen, deps)?;
 
     // Refus par la géométrie avant tout geste. Le secteur réel n'est connu qu'à l'ouverture : 512 ici, le
-    // plan est recalculé ensuite, et FAT32 se refuse de nouveau sans avoir rien écrit.
+    // plan est recalculé ensuite, et FAT32 se refuse de nouveau, alors que la table est déjà écrite.
     let block = bonk_core::DEFAULT_BLOCK_SIZE;
     let planned = table::plan(size, block, job.table).map_err(format_error)?;
     let cluster_bytes = if filesystem.is_native() {

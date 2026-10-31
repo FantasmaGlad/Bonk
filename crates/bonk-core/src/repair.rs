@@ -12,7 +12,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::block::{BlockDevice, BlockError};
-use crate::partition::{GptHeader, Layout, crc32, inspect, read_range};
+use crate::partition::{GptHeader, Layout, MBR_PROTECTIVE, crc32, inspect, read_range};
 
 /// Constats d'inspection qui justifient une réparation.
 const REPAIRABLE: [&str; 8] = [
@@ -41,7 +41,7 @@ pub fn ranges_rewritten_by_repair(head: &[u8]) -> Vec<Range<u64>> {
         if head[510] == 0x55 && head[511] == 0xAA {
             for entry in (0..4u64).map(|i| 446 + i * 16) {
                 let at = usize::try_from(entry).unwrap_or(0);
-                if head[at + 4] == 0xEE {
+                if head[at + 4] == MBR_PROTECTIVE {
                     ranges.push(entry + 8..entry + 16);
                 }
             }
@@ -251,7 +251,7 @@ pub fn repair_gpt(dev: &mut dyn BlockDevice) -> Result<RepairReport, RepairError
     let mut sector0 = read_range(dev, 0, block)?;
     let protective = (0..4)
         .map(|i| 446 + i * 16)
-        .find(|at| sector0[at + 4] == 0xEE);
+        .find(|at| sector0[at + 4] == MBR_PROTECTIVE);
     if let Some(at) = protective.filter(|_| sector0[510] == 0x55 && sector0[511] == 0xAA) {
         let sectors = u32::try_from(last).unwrap_or(u32::MAX);
         if u32::from_le_bytes([

@@ -83,7 +83,7 @@ fn le_code_propre_a_un_systeme_reste_dans_bonk_hal() {
         assert!(!files.is_empty(), "{name} : aucune source lue");
         for file in files {
             let text = fs::read_to_string(&file).unwrap_or_default();
-            for marker in ["cfg(target_os", "libc::"] {
+            for marker in ["cfg(target_os", "libc::", "std::os::"] {
                 assert!(
                     !text.contains(marker),
                     "{} contient {marker} : à placer derrière bonk_hal::Platform",

@@ -1,4 +1,4 @@
-//! Demande d'annulation par Ctrl+C.
+//! Demande d'annulation par Ctrl+C ou SIGTERM.
 //!
 //! Le gestionnaire de signal ne fait que lever un drapeau atomique, seule opération permise dans un
 //! gestionnaire de signal. Le moteur d'écriture le consulte entre deux blocs : il n'est jamais

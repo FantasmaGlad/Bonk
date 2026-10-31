@@ -113,6 +113,20 @@ impl BlockDevice for FileDevice {
 
 // Accès positionnel : pas de curseur partagé, donc pas d'état à resynchroniser entre deux appels.
 
+/// Lit au plus `buf.len()` octets à la position `offset`, sans curseur partagé entre les lecteurs d'un même
+/// fichier.
+#[cfg(unix)]
+pub fn read_at(file: &File, buf: &mut [u8], offset: u64) -> io::Result<usize> {
+    std::os::unix::fs::FileExt::read_at(file, buf, offset)
+}
+
+/// Lit au plus `buf.len()` octets à la position `offset`. `seek_read` déplace aussi le curseur du fichier,
+/// qu'aucun lecteur n'utilise.
+#[cfg(windows)]
+pub fn read_at(file: &File, buf: &mut [u8], offset: u64) -> io::Result<usize> {
+    std::os::windows::fs::FileExt::seek_read(file, buf, offset)
+}
+
 #[cfg(unix)]
 fn read_exact_at(file: &File, buf: &mut [u8], offset: u64) -> io::Result<()> {
     std::os::unix::fs::FileExt::read_exact_at(file, buf, offset)

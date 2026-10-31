@@ -158,13 +158,13 @@ fn ui_event(message: &Message) -> Option<(&'static str, String)> {
         Message::Select(id) => ("select_disk", id.clone()),
         Message::Nav(nav) => ("key", format!("{nav:?}")),
         Message::Copy => ("click_copy", String::new()),
-        // Le chemin saisi n'est jamais journalisé : seulement le fait qu'on saisit.
+        // Le détail de l'événement ne porte que la longueur du chemin saisi.
         Message::ImageInput(text) => (
             "type_image_path",
             format!("{} caractères", text.chars().count()),
         ),
         Message::BrowseImage => ("click_browse", String::new()),
-        // Comme pour la saisie, le chemin choisi n'est jamais journalisé.
+        // Comme pour la saisie, le détail de l'événement ne porte pas le chemin choisi.
         Message::ImagePicked(path) => (
             "image_picked",
             if path.is_some() { "choisie" } else { "aucune" }.to_owned(),

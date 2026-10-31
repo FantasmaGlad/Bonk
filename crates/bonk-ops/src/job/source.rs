@@ -77,19 +77,8 @@ pub struct FileReader {
 
 impl Read for FileReader {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let n = read_at(&self.file, buf, self.position)?;
+        let n = bonk_hal::image::read_at(&self.file, buf, self.position)?;
         self.position += n as u64;
         Ok(n)
     }
-}
-
-#[cfg(unix)]
-fn read_at(file: &File, buf: &mut [u8], offset: u64) -> io::Result<usize> {
-    std::os::unix::fs::FileExt::read_at(file, buf, offset)
-}
-
-// `seek_read` déplace aussi le curseur du fichier, qu'aucun lecteur n'utilise.
-#[cfg(windows)]
-fn read_at(file: &File, buf: &mut [u8], offset: u64) -> io::Result<usize> {
-    std::os::windows::fs::FileExt::seek_read(file, buf, offset)
 }

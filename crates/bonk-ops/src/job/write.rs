@@ -74,8 +74,8 @@ fn check_sha256(
     }
 }
 
-/// Lit le début de l'image (décompressé) et l'analyse. Rouvre le fichier : le flux principal doit rester
-/// intact pour l'écriture.
+/// Lit le début de l'image (décompressé) et l'analyse, par un lecteur à part : le flux principal doit
+/// rester intact pour l'écriture.
 fn analyze_source(
     image: &ImageFile,
     path: &Path,

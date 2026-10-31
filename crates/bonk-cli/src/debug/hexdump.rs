@@ -33,7 +33,6 @@ pub(crate) fn hexdump(args: &HexdumpArgs, out: &mut dyn Write) -> io::Result<Out
             ),
         ));
     }
-    // La plage est ramenée à la taille de l'image ; la lecture est alignée par `read_range`.
     let len = args.len.min(size - args.offset);
     let bytes = match read_range(&*device, args.offset, len) {
         Ok(bytes) => bytes,

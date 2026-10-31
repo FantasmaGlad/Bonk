@@ -9,7 +9,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::block::{DEFAULT_BLOCK_SIZE, MemoryDevice};
-use crate::partition::{Layout, inspect};
+use crate::partition::{Layout, MBR_PROTECTIVE, inspect};
 
 /// Octets du début de l'image à fournir à [`analyze`] : couvre les descripteurs ISO 9660 et les tables
 /// de partitions, placées assez loin par certaines images hybrides.
@@ -21,7 +21,6 @@ const ISO_DESCRIPTORS: usize = 16 * ISO_SECTOR;
 const ISO_DESCRIPTORS_SCANNED: usize = 16;
 const ESP_GUID: &str = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B";
 const MBR_ESP: u8 = 0xEF;
-const MBR_PROTECTIVE: u8 = 0xEE;
 
 /// Ce qu'est l'image, écrite telle quelle sur une clé.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
