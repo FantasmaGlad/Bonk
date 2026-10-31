@@ -408,6 +408,7 @@ dependencies = [
  "bonk-ops",
  "clap",
  "clap_complete",
+ "flate2",
  "log",
  "schemars",
  "serde",

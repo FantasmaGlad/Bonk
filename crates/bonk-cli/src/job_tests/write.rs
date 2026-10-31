@@ -575,11 +575,14 @@ fn l_empreinte_porte_sur_le_fichier_ecrit_meme_remplace_entre_temps() {
     assert!(scenario.written(1 << 20).iter().all(|b| *b == 0));
 }
 
+/// Taille d'une image plus longue que le début lu par l'analyse : seul un passage complet voit sa fin.
+const LONG_IMAGE: usize = 6 << 20;
+
 /// Sans empreinte, une image compressée est décompressée une fois à blanc : des données après le flux sont
 /// refusées avant d'avoir effacé la clé.
 #[test]
 fn des_donnees_apres_le_flux_sont_refusees_avant_toute_ecriture() {
-    let mut image = gzip_stored(&[0xAB; 4096]);
+    let mut image = gzip_stored(&vec![0xAB; LONG_IMAGE]);
     image.extend_from_slice(&[1; 4096]);
     let source = TempSource::from_bytes("flux-suivi", &image);
     let scenario = Scenario::new();
@@ -602,8 +605,7 @@ fn des_donnees_apres_le_flux_sont_refusees_avant_toute_ecriture() {
 /// Une image compressée saine passe : le passage à blanc ne consomme pas le flux de l'écriture.
 #[test]
 fn une_image_compressee_saine_s_ecrit_apres_le_passage_a_blanc() {
-    let image = gzip_stored(&[0xAB; 4096]);
-    let source = TempSource::from_bytes("flux-sain", &image);
+    let source = TempSource::from_bytes("flux-sain", &gzip_stored(&vec![0xAB; LONG_IMAGE]));
     let scenario = Scenario::new();
     let (code, out, err) = scenario.run(&[
         "write",
@@ -616,7 +618,7 @@ fn une_image_compressee_saine_s_ecrit_apres_le_passage_a_blanc() {
         "none",
     ]);
     assert_eq!((code, err.as_str()), (0, ""), "{out}");
-    assert!(scenario.written(4096).iter().all(|b| *b == 0xAB));
+    assert!(scenario.written(LONG_IMAGE).iter().all(|b| *b == 0xAB));
 }
 
 /// Serveur local d'un seul fichier, servi autant de fois que demandé.
