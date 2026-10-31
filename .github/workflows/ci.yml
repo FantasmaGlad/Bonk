@@ -72,8 +72,16 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       # Le code cfg(target_os) d'un autre système n'est pas compilé ci-dessus : clippy le vérifie ici, sans
       # édition de liens ni exécution, pour que le code mort ou l'import inutilisé échoue avant les runners
-      # Windows et macOS, plus chers. Ne dit rien du comportement à l'exécution.
+      # Windows et macOS, plus chers. Ne dit rien du comportement à l'exécution. Sans édition de liens, le C de
+      # ring ne sert pas : `true` tient lieu de compilateur, le vrai passe sur les runners de chaque système.
       - name: Lint croisé (Windows et macOS, compilation seulement)
+        env:
+          CC_x86_64_pc_windows_gnu: "true"
+          AR_x86_64_pc_windows_gnu: "true"
+          CC_x86_64_apple_darwin: "true"
+          AR_x86_64_apple_darwin: "true"
+          CC_aarch64_linux_android: "true"
+          AR_aarch64_linux_android: "true"
         run: |
           rustup target add x86_64-pc-windows-gnu x86_64-apple-darwin aarch64-linux-android
           cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-gnu -- -D warnings

@@ -162,6 +162,24 @@ pub fn config_file(var: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
     config_file_for(std::env::consts::OS, var)
 }
 
+/// Dossier de cache habituel de Bonk sur le système en cours.
+#[must_use]
+pub fn cache_dir(var: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
+    cache_dir_for(std::env::consts::OS, var)
+}
+
+fn cache_dir_for(os: &str, var: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
+    match os {
+        "windows" => var("LOCALAPPDATA").map(|dir| PathBuf::from(dir).join("Bonk").join("cache")),
+        "macos" => var("HOME").map(|home| PathBuf::from(home).join("Library/Caches/Bonk")),
+        _ => var("XDG_CACHE_HOME")
+            .filter(|dir| !dir.is_empty())
+            .map(PathBuf::from)
+            .or_else(|| var("HOME").map(|home| PathBuf::from(home).join(".cache")))
+            .map(|dir| dir.join("bonk")),
+    }
+}
+
 /// Sépare le choix du système de sa lecture : les règles de chaque système se testent partout.
 fn config_file_for(os: &str, var: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
     match os {
@@ -187,6 +205,28 @@ mod tests {
                 .find(|(key, _)| *key == name)
                 .map(|(_, value)| (*value).to_owned())
         }
+    }
+
+    #[test]
+    fn le_cache_suit_les_regles_de_chaque_systeme() {
+        let path = |os, pairs| cache_dir_for(os, &env(pairs));
+        assert_eq!(
+            path("windows", &[("LOCALAPPDATA", "L")]),
+            Some(PathBuf::from("L").join("Bonk").join("cache"))
+        );
+        assert_eq!(
+            path("macos", &[("HOME", "H")]),
+            Some(PathBuf::from("H").join("Library/Caches/Bonk"))
+        );
+        assert_eq!(
+            path("linux", &[("XDG_CACHE_HOME", "X"), ("HOME", "H")]),
+            Some(PathBuf::from("X").join("bonk"))
+        );
+        assert_eq!(
+            path("linux", &[("XDG_CACHE_HOME", ""), ("HOME", "H")]),
+            Some(PathBuf::from("H").join(".cache").join("bonk"))
+        );
+        assert_eq!(path("linux", &[]), None);
     }
 
     #[test]

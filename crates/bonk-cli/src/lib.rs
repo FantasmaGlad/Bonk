@@ -11,6 +11,7 @@ mod config;
 mod debug;
 mod diagnose;
 mod errors;
+mod fetch;
 mod fixture;
 mod format;
 mod info;

@@ -77,7 +77,8 @@ pub struct Io {
     pub capabilities: Box<dyn Fn() -> Vec<Capability>>,
     pub format_partition: FormatPartitionFn,
     pub rescan: RescanFn,
-    /// Attente courte entre deux regards sur une partition que le système n'a pas encore créée.
+    /// Attente courte : entre deux regards sur une partition que le système n'a pas encore créée, entre deux
+    /// essais d'un téléchargement.
     pub pause: Box<dyn Fn()>,
 }
 

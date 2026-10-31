@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use bonk_core::BlockDevice;
 use bonk_core::analysis::{self, ImageKind, ImageReport};
+use bonk_core::codec::Format;
 use bonk_core::partition::inspect;
 use bonk_core::repair::{RepairReport, needs_repair, repair_gpt};
 use bonk_core::write::{self as engine, Control, DEFAULT_CHUNK, Phase, Progress, VerifyError};
@@ -37,6 +38,70 @@ pub struct WriteJob {
     pub force: bool,
 }
 
+/// Empreinte SHA-256 en minuscules, ou le refus de ce qui n'en est pas une.
+///
+/// # Errors
+/// `InvalidArgument` si ce ne sont pas 64 caractères hexadécimaux.
+pub fn normalize_sha256(text: &str) -> Result<String, JobError> {
+    let hex = text.trim().to_ascii_lowercase();
+    if hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        Ok(hex)
+    } else {
+        Err(fail(
+            Code::InvalidArgument,
+            format!("empreinte SHA-256 invalide : « {hex} » (64 caractères hexadécimaux)"),
+        ))
+    }
+}
+
+/// Ce qui refuserait l'écriture quelle que soit l'image : à vérifier avant un long téléchargement, qui ne
+/// doit pas finir sur un refus déjà connu. Ne touche à rien.
+///
+/// # Errors
+/// Cible refusée, confirmation absente.
+pub fn precheck(job: &WriteJob, deps: &Deps<'_>) -> Result<(), JobError> {
+    let chosen = choose(&job.target, job.options, deps)?;
+    if job.dry_run {
+        return Ok(());
+    }
+    confirm(job, &chosen)
+}
+
+fn confirm(job: &WriteJob, chosen: &Chosen) -> Result<(), JobError> {
+    if !job.yes && !job.force {
+        return Err(fail(
+            Code::ConfirmationRequired,
+            "écriture sans confirmation : ajouter --yes ou --force (ou décrire l'opération avec --dry-run)",
+        ));
+    }
+    confirm_internal(chosen, job.options, job.force)
+}
+
+/// Décompresse l'image une fois à blanc. Un flux décompressé ne montre sa fin qu'en dernier : sans ce
+/// passage, des données après le flux ou une image plus grande que la cible ne seraient vues qu'une fois
+/// la clé effacée. Une empreinte contrôlée rend ce passage inutile.
+fn rehearse(
+    image_file: &ImageFile,
+    image: &ImageReport,
+    available: Option<u64>,
+    mode: WriteMode,
+    deps: &Deps<'_>,
+    progress: &mut dyn FnMut(&Progress) -> Control,
+) -> Result<(), JobError> {
+    let (mut source, info) = image_file.decoded()?;
+    let mut report = guarded(deps, progress);
+    let (len, _) =
+        engine::hash_source_ignoring(&mut source.reader, None, DEFAULT_CHUNK, &[], &mut report)
+            .map_err(|e| map_verify_error(e, info.format))?;
+    if let Some(available) = available.filter(|available| len > *available) {
+        return Err(fail(
+            Code::SourceTooLarge,
+            format!("l'image décompressée fait {len} octets, la cible {available} octets"),
+        ));
+    }
+    check_complete(image, len, mode)
+}
+
 /// Contrôle le fichier source contre l'empreinte attendue. Avant tout geste : un fichier faux ne doit
 /// coûter ni un démontage, ni le contenu de la clé.
 fn check_sha256(
@@ -46,13 +111,7 @@ fn check_sha256(
     deps: &Deps<'_>,
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<(), JobError> {
-    let expected = expected.trim().to_ascii_lowercase();
-    if expected.len() != 64 || !expected.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err(fail(
-            Code::InvalidArgument,
-            format!("empreinte SHA-256 invalide : « {expected} » (64 caractères hexadécimaux)"),
-        ));
-    }
+    let expected = normalize_sha256(expected)?;
     let mut report = guarded(deps, progress);
     let actual = engine::hash_stream(
         &mut image.raw(),
@@ -269,13 +328,17 @@ pub fn write(
             steps,
         })));
     }
-    if !job.yes && !job.force {
-        return Err(fail(
-            Code::ConfirmationRequired,
-            "écriture sans confirmation : ajouter --yes ou --force (ou décrire l'opération avec --dry-run)",
-        ));
+    confirm(job, &chosen)?;
+    if !sha256_checked && source_info.format != Format::Raw {
+        rehearse(
+            &file,
+            &image,
+            chosen.info.size_bytes,
+            job.mode,
+            deps,
+            progress,
+        )?;
     }
-    confirm_internal(&chosen, job.options, job.force)?;
 
     log::info!(
         target: "bonk::write",

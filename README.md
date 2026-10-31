@@ -10,7 +10,7 @@
 Version 0.0.1, en développement, aucune release publiée.
 
 - **Fait, Linux** : liste des disques, écriture, vérification, réparation du GPT, décompression gzip, xz, zstd, service `bonk serve`, contrôle d'empreinte et analyse d'image, écriture sans `sudo` (UDisks2 et polkit), formatage (`bonk format`, `bonk capabilities`).
-- **En cours** : téléchargement depuis une URL officielle.
+- **Téléchargement** : `bonk write <clé> <URL> --sha256-file <URL de SHA256SUMS> --yes` télécharge l'image dans le cache, reprend après une coupure et contrôle l'empreinte avant d'écrire.
 - **À venir** : Windows et macOS (binaires construits, sans accès aux disques), clé d'installation Windows, DOS, Android.
 
 ## Plateformes

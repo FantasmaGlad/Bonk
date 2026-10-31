@@ -17,6 +17,7 @@ use serde::Serialize;
 
 use crate::config::ViewDefaults;
 use crate::errors::{Code, report};
+use crate::fetch;
 use bonk_ops::job::{
     self, Deps, JobError, RepairDone, RepairJob, Target, TraceIo, VerifyDone, VerifyJob, WriteDone,
     WriteJob, WriteMode, WriteOutcome,
@@ -164,20 +165,31 @@ pub(crate) struct WriteArgs {
     #[command(flatten)]
     common: CommonArgs,
 
-    /// Image à écrire : .img, .iso, .gz, .xz ou .zst (le format se reconnaît à son contenu)
+    /// Image à écrire : un fichier (.img, .iso, .gz, .xz, .zst ; le format se reconnaît à son contenu) ou
+    /// une adresse https:// à télécharger, avec son empreinte
     source: PathBuf,
 
     /// Confirme l'écriture : sans --yes ni --force, Bonk ne fait rien (il ne pose jamais de question)
     #[arg(long)]
     yes: bool,
 
-    /// Décrit ce qui serait fait sans rien écrire
+    /// Décrit ce qui serait fait sans rien écrire sur le support ; une adresse est quand même téléchargée
+    /// dans le cache, l'analyse ayant besoin de l'image
     #[arg(long)]
     dry_run: bool,
 
     /// Empreinte SHA-256 publiée pour ce fichier : contrôlée avant tout geste sur le support
-    #[arg(long, value_name = "HEX")]
+    #[arg(long, value_name = "HEX", conflicts_with = "sha256_file")]
     sha256: Option<String>,
+
+    /// Fichier d'empreintes publié (SHA256SUMS), chemin ou adresse https:// : l'empreinte y est lue au nom de
+    /// l'image
+    #[arg(long, value_name = "CHEMIN_OU_URL")]
+    sha256_file: Option<String>,
+
+    /// Dossier des téléchargements ; par défaut le dossier de cache de l'utilisateur
+    #[arg(long, value_name = "DOSSIER")]
+    cache_dir: Option<PathBuf>,
 
     /// auto : analyse l'image et refuse ce qui ne démarrerait pas ; raw : écrit les octets tels quels
     #[arg(long, value_enum, default_value_t = ModeArg::Auto)]
@@ -305,6 +317,7 @@ fn sink<'a>(
                 if boundary || last.elapsed() >= Duration::from_millis(250) {
                     last = Instant::now();
                     let step = match p.phase {
+                        Phase::Download => "téléchargement",
                         Phase::Authorize => "autorisation du système",
                         Phase::Source => "contrôle de l'empreinte",
                         Phase::Write => "écriture",
@@ -411,7 +424,7 @@ pub(crate) fn run_write(
     err: &mut dyn Write,
 ) -> u8 {
     bonk_hal::interrupt::install();
-    let job = WriteJob {
+    let mut job = WriteJob {
         target: args.common.target(),
         source: args.source.clone(),
         options: args.common.write_options(),
@@ -428,7 +441,18 @@ pub(crate) fn run_write(
     log::debug!(target: "bonk::cli", target_kind = if args.common.simulate { "image" } else { "disk" }, dry_run = args.dry_run; "command write");
     let result = {
         let mut progress = sink(args.common.progress, &mut *out, &mut *err);
-        job::write(&job, deps, &mut progress)
+        let request = fetch::Request {
+            source: &args.source,
+            sha256_file: args.sha256_file.as_deref(),
+            cache_dir: args.cache_dir.as_deref(),
+        };
+        fetch::resolve(&request, &mut job, deps, &mut progress).and_then(|downloaded| {
+            let result = job::write(&job, deps, &mut progress);
+            if let (Some(downloaded), Err(error)) = (&downloaded, &result) {
+                downloaded.forget_if_corrupt(error);
+            }
+            result
+        })
     };
     finish(
         result,

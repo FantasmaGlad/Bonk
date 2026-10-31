@@ -1,6 +1,6 @@
 # Architecture de Bonk
 
-> Statut : `bonk-catalog` et `bonk-customizer` sont encore vides ; seul Linux a un accès aux disques, et l'élévation des privilèges n'y est faite que pour lui.
+> Statut : `bonk-customizer` est encore vide, `bonk-catalog` ne fait que le téléchargement ; seul Linux a un accès aux disques, et l'élévation des privilèges n'y est faite que pour lui.
 
 ## Vue d'ensemble
 
@@ -27,7 +27,7 @@
 | `bonk-hal` | Filtre de sécurité et trait `Platform` : énumération, accès brut, démontage, formatage par les outils de l'hôte, par système. Le code propre à un système d'exploitation y vit ; restent à y déplacer la détection de l'affichage (`bonk-gui`) et deux chemins Linux (`bonk-cli`, `diagnose` et `debug layout`). |
 | `bonk-ops` | Porte d'écriture unique (filtre, identité, démontage, vérification) et codes d'erreur stables. Sans interface : ni clap, ni Iced. |
 | `bonk-customizer` | Fichiers de réponse Windows, persistance des systèmes Live Linux. |
-| `bonk-catalog` | Manifeste signé, bibliothèque locale, téléchargements reprenables, empreintes. |
+| `bonk-catalog` | Téléchargements reprenables, fichiers d'empreintes ; plus tard manifeste signé et bibliothèque locale. |
 | `bonk-cli` | Commandes, sortie texte et JSON, codes de sortie stables. |
 | `bonk-gui` | Interface graphique Iced. |
 
