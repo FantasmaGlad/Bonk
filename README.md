@@ -38,7 +38,7 @@ Version 0.0.1, en développement, aucune release publiée.
 
 - Un disque système n'est jamais proposé ni écrit.
 - Aucune télémétrie.
-- Rien à installer en plus.
+- Aucune dépendance obligatoire. Sous Linux, l'écriture sans `sudo` passe par UDisks2 et polkit, présents sur la plupart des bureaux ; exFAT, NTFS et ext4 sont formatés par les outils du système.
 
 ## Compiler
 
