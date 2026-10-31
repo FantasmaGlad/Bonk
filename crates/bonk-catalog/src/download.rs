@@ -10,7 +10,7 @@
 
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Read, Write};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender};
@@ -269,12 +269,14 @@ struct Partial {
 
 impl Partial {
     fn open(part: &Path) -> io::Result<Self> {
-        let file = OpenOptions::new()
+        // Pas d'ouverture en ajout : Windows n'y permettrait pas de tronquer le fichier.
+        let mut file = OpenOptions::new()
             .create(true)
-            .append(true)
+            .truncate(false)
             .read(true)
+            .write(true)
             .open(part)?;
-        let done = file.metadata()?.len();
+        let done = file.seek(SeekFrom::End(0))?;
         let validator_path = with_suffix(part, ".validateur");
         let validator = fs::read_to_string(&validator_path).ok();
         Ok(Self {
@@ -287,6 +289,7 @@ impl Partial {
 
     fn restart(&mut self) -> io::Result<()> {
         self.file.set_len(0)?;
+        self.file.seek(SeekFrom::Start(0))?;
         self.done = 0;
         self.validator = None;
         match fs::remove_file(&self.validator_path) {
@@ -305,6 +308,8 @@ impl Partial {
 
     fn finish(self, part: &Path, dest: &Path) -> io::Result<()> {
         self.file.sync_all()?;
+        // Fermé avant de renommer : Windows refuse de renommer un fichier ouvert.
+        drop(self.file);
         fs::rename(part, dest)?;
         match fs::remove_file(&self.validator_path) {
             Err(err) if err.kind() != io::ErrorKind::NotFound => Err(err),
