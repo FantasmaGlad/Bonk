@@ -183,9 +183,11 @@ jobs:
             v="$cargo_v-${SHA::8}"
           fi
           if [ -n "$EXE" ]; then ext=zip; else ext=tar.gz; fi
-          echo "dossier=bonk-$v-$NOM" >> "$GITHUB_OUTPUT"
-          echo "archive=bonk-$v-$NOM.$ext" >> "$GITHUB_OUTPUT"
-          echo "executable=bonk-$v-$NOM.exe" >> "$GITHUB_OUTPUT"
+          {
+            echo "dossier=bonk-$v-$NOM"
+            echo "archive=bonk-$v-$NOM.$ext"
+            echo "executable=bonk-$v-$NOM.exe"
+          } >> "$GITHUB_OUTPUT"
         shell: bash
       - name: Archive
         env:
