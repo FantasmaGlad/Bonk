@@ -247,12 +247,14 @@ impl App {
             image,
             hash,
             raw,
+            mbr,
             opened,
         } = &self.write
         else {
             return None;
         };
-        (disk_id == &disk.id).then(|| boxed(self.draft_panel(disk, image, hash, *raw, *opened)))
+        (disk_id == &disk.id)
+            .then(|| boxed(self.draft_panel(disk, image, hash, (*raw, *mbr), *opened)))
     }
 
     /// Écriture en cours ou résultat, au-dessus de la liste : ils ne dépendent pas d'elle. Le disque a pu
@@ -369,7 +371,7 @@ impl App {
         disk: &'a Disk,
         image: &'a str,
         hash: &'a str,
-        raw: bool,
+        (raw, mbr): (bool, bool),
         opened: Instant,
     ) -> Element<'a, Message> {
         // Une seule lecture de l'horloge par affichage : le décompte, l'état du bouton et son libellé
@@ -447,6 +449,14 @@ impl App {
                 self.has_focus(Focus::Raw),
             ),
             ring(
+                checkbox(mbr)
+                    .label("Clé Windows (extraction, FAT32, démarrage UEFI) : table MBR au lieu de GPT")
+                    .on_toggle(Message::ToggleMbr)
+                    .size(16)
+                    .text_size(13),
+                self.has_focus(Focus::Mbr),
+            ),
+            ring(
                 button(text(label).size(14))
                     .on_press_maybe(ready.then_some(Message::StartWrite))
                     .padding([6, 14])
@@ -503,8 +513,9 @@ impl App {
                 bytes,
                 verified,
                 gpt_repaired,
+                secure_boot,
             } => format!(
-                "ÉCRITURE TERMINÉE : {} écrits{}{}.",
+                "ÉCRITURE TERMINÉE : {} écrits{}{}.{}",
                 format_size(*bytes),
                 if *verified {
                     ", relus et vérifiés"
@@ -516,6 +527,9 @@ impl App {
                 } else {
                     ""
                 },
+                secure_boot
+                    .as_ref()
+                    .map_or_else(String::new, |text| format!(" Secure Boot : {text}.")),
             ),
             Outcome::Failed { code, message } => format!(
                 "ÉCHEC : {message}{}",

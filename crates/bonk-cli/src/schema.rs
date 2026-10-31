@@ -25,6 +25,7 @@ pub(crate) fn registry() -> Vec<Entry> {
         ("debug-sources", debug::schema_sources),
         ("debug-layout", debug::schema_layout),
         ("write", transfer::schema_write),
+        ("write-extract", transfer::schema_write_extract),
         ("write-plan", transfer::schema_plan),
         ("verify", transfer::schema_verify),
         ("repair-gpt", transfer::schema_repair),

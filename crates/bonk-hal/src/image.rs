@@ -127,8 +127,9 @@ pub fn read_at(file: &File, buf: &mut [u8], offset: u64) -> io::Result<usize> {
     std::os::windows::fs::FileExt::seek_read(file, buf, offset)
 }
 
+/// Lit exactement `buf.len()` octets à la position `offset`.
 #[cfg(unix)]
-fn read_exact_at(file: &File, buf: &mut [u8], offset: u64) -> io::Result<()> {
+pub fn read_exact_at(file: &File, buf: &mut [u8], offset: u64) -> io::Result<()> {
     std::os::unix::fs::FileExt::read_exact_at(file, buf, offset)
 }
 
@@ -140,8 +141,9 @@ fn write_all_at(file: &File, data: &[u8], offset: u64) -> io::Result<()> {
 // Sous Windows, `seek_read` et `seek_write` peuvent transférer moins d'octets que demandé et
 // déplacent le curseur du fichier (sans conséquence ici, il n'est jamais utilisé) : boucle explicite.
 
+/// Lit exactement `buf.len()` octets à la position `offset`.
 #[cfg(windows)]
-fn read_exact_at(file: &File, buf: &mut [u8], offset: u64) -> io::Result<()> {
+pub fn read_exact_at(file: &File, buf: &mut [u8], offset: u64) -> io::Result<()> {
     use std::os::windows::fs::FileExt;
     let mut done = 0;
     while done < buf.len() {

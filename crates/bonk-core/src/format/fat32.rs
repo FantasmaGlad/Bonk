@@ -12,8 +12,8 @@ use crate::partition::read_range;
 
 /// Secteurs réservés avant les tables, au minimum (valeur de la spécification).
 const RESERVED: u64 = 32;
-const FATS: u64 = 2;
-const ROOT_CLUSTER: u32 = 2;
+pub(super) const FATS: u64 = 2;
+pub(super) const ROOT_CLUSTER: u32 = 2;
 const FSINFO_SECTOR: u64 = 1;
 const BACKUP_BOOT_SECTOR: u64 = 6;
 /// En deçà, un pilote conforme lit le volume comme du FAT16, d'après la seule valeur du nombre de clusters.
@@ -95,7 +95,7 @@ fn narrow<T: TryFrom<u64> + Default>(value: u64) -> T {
 }
 
 /// Étiquette complétée d'espaces ; déjà validée par [`super::normalize_label`].
-fn label_field(label: Option<&str>) -> [u8; 11] {
+pub(super) fn label_field(label: Option<&str>) -> [u8; 11] {
     let mut field = *NO_LABEL;
     if let Some(label) = label {
         field = [b' '; 11];
@@ -142,19 +142,18 @@ fn boot_sector(block: u32, geo: &Geometry, volume: &Volume<'_>) -> Vec<u8> {
     s
 }
 
-fn fsinfo_sector(block: u32, geo: &Geometry) -> Vec<u8> {
+fn fsinfo_sector(block: u32, free_clusters: u64, next_free: u32) -> Vec<u8> {
     let mut s = vec![0u8; block as usize];
     put_u32(&mut s, 0, 0x4161_5252);
     put_u32(&mut s, 484, 0x6141_7272);
-    // Le cluster racine est le seul occupé.
-    put_u32(&mut s, 488, narrow(geo.clusters - 1));
-    put_u32(&mut s, 492, ROOT_CLUSTER + 1);
+    put_u32(&mut s, 488, narrow(free_clusters));
+    put_u32(&mut s, 492, next_free);
     s[510] = 0x55;
     s[511] = 0xAA;
     s
 }
 
-fn first_fat_sector(block: u32) -> Vec<u8> {
+pub(super) fn first_fat_sector(block: u32) -> Vec<u8> {
     let mut s = vec![0u8; block as usize];
     put_u32(&mut s, 0, 0x0FFF_FF00 | u32::from(MEDIA));
     put_u32(&mut s, 4, 0x0FFF_FFFF);
@@ -188,8 +187,23 @@ pub fn write(dev: &mut dyn BlockDevice, volume: &Volume<'_>) -> Result<Geometry,
         entry[11] = 0x08;
         dev.write_at(at(data_start), &entry)?;
     }
-    let boot = boot_sector(block, &geo, volume);
-    let fsinfo = fsinfo_sector(block, &geo);
+    // Le cluster racine est le seul occupé.
+    write_boot(dev, volume, &geo, geo.clusters - 1, ROOT_CLUSTER + 1)?;
+    Ok(geo)
+}
+
+/// Secteur de démarrage, informations du volume et leurs copies : ce qui fait du support un volume.
+pub(super) fn write_boot(
+    dev: &mut dyn BlockDevice,
+    volume: &Volume<'_>,
+    geo: &Geometry,
+    free_clusters: u64,
+    next_free: u32,
+) -> Result<(), FormatError> {
+    let block = dev.block_size();
+    let at = |sector: u64| (volume.first_lba + sector) * u64::from(block);
+    let boot = boot_sector(block, geo, volume);
+    let fsinfo = fsinfo_sector(block, free_clusters, next_free);
     let mut third = vec![0u8; block as usize];
     third[510] = 0x55;
     third[511] = 0xAA;
@@ -198,31 +212,49 @@ pub fn write(dev: &mut dyn BlockDevice, volume: &Volume<'_>) -> Result<Geometry,
         dev.write_at(at(start + 2), &third)?;
         dev.write_at(at(start), &boot)?;
     }
+    Ok(())
+}
+
+/// Relit ce qui définit le volume vide : secteur de démarrage et sa copie, début des deux tables.
+pub fn verify(dev: &dyn BlockDevice, volume: &Volume<'_>) -> Result<(), FormatError> {
+    let block = dev.block_size();
+    let geo = verify_boot(dev, volume)?;
+    let fat = first_fat_sector(block);
+    for sector in [geo.reserved_sectors, geo.reserved_sectors + geo.fat_sectors] {
+        compare_sector(dev, volume, sector, &fat)?;
+    }
+    Ok(())
+}
+
+/// Relit le secteur de démarrage et sa copie.
+pub(super) fn verify_boot(
+    dev: &dyn BlockDevice,
+    volume: &Volume<'_>,
+) -> Result<Geometry, FormatError> {
+    let block = dev.block_size();
+    let geo = geometry(volume.sectors, block)?;
+    let boot = boot_sector(block, &geo, volume);
+    for sector in [0, BACKUP_BOOT_SECTOR] {
+        compare_sector(dev, volume, sector, &boot)?;
+    }
     Ok(geo)
 }
 
-/// Relit ce qui définit le volume : secteur de démarrage et sa copie, début des deux tables.
-pub fn verify(dev: &dyn BlockDevice, volume: &Volume<'_>) -> Result<(), FormatError> {
-    let block = dev.block_size();
-    let block64 = u64::from(block);
-    let geo = geometry(volume.sectors, block)?;
-    let boot = boot_sector(block, &geo, volume);
-    let fat = first_fat_sector(block);
-    let expected: [(u64, &[u8]); 4] = [
-        (0, &boot),
-        (BACKUP_BOOT_SECTOR, &boot),
-        (geo.reserved_sectors, &fat),
-        (geo.reserved_sectors + geo.fat_sectors, &fat),
-    ];
-    for (sector, bytes) in expected {
-        let found = read_range(dev, (volume.first_lba + sector) * block64, block64)?;
-        if found != bytes {
-            return Err(FormatError::Mismatch(format!(
-                "secteur {sector} du volume : la relecture diffère de ce qui a été écrit"
-            )));
-        }
+fn compare_sector(
+    dev: &dyn BlockDevice,
+    volume: &Volume<'_>,
+    sector: u64,
+    expected: &[u8],
+) -> Result<(), FormatError> {
+    let block = u64::from(dev.block_size());
+    let found = read_range(dev, (volume.first_lba + sector) * block, block)?;
+    if found == expected {
+        Ok(())
+    } else {
+        Err(FormatError::Mismatch(format!(
+            "secteur {sector} du volume : la relecture diffère de ce qui a été écrit"
+        )))
     }
-    Ok(())
 }
 
 #[cfg(test)]

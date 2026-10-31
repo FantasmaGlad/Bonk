@@ -564,6 +564,7 @@ fn progression_puis_resultat() {
         bytes: 4_000_000,
         verified: true,
         gpt_repaired: true,
+        secure_boot: None,
     })));
     assert!(matches!(&app.write, WriteState::Finished { .. }));
     assert!(contient(
@@ -702,6 +703,8 @@ fn le_clavier_parcourt_le_panneau_et_l_action_respecte_le_delai() {
     assert_eq!(app.focus, Some(Focus::Hash));
     nav(&mut app, Nav::Next);
     assert_eq!(app.focus, Some(Focus::Raw));
+    nav(&mut app, Nav::Next);
+    assert_eq!(app.focus, Some(Focus::Mbr));
     nav(&mut app, Nav::Next);
     assert_eq!(app.focus, Some(Focus::Action));
     // Espace sur le bouton avant le délai : sans effet.
@@ -930,6 +933,7 @@ fn fermer_le_resultat_ne_rouvre_pas_le_panneau() {
         bytes: 2,
         verified: true,
         gpt_repaired: false,
+        secure_boot: None,
     })));
     let _ = app.update(Message::DismissWrite);
     assert!(matches!(app.write, WriteState::Idle), "{:?}", app.write);

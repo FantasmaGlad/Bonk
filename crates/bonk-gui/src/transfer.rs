@@ -37,6 +37,8 @@ pub(crate) enum Outcome {
         bytes: u64,
         verified: bool,
         gpt_repaired: bool,
+        /// Clé Windows : ce que le certificat du chargeur implique.
+        secure_boot: Option<String>,
     },
     Failed {
         /// Code d'erreur stable (`bonk explain`), quand le processus en a donné un.
@@ -84,6 +86,9 @@ pub(crate) fn parse_line(line: &str) -> Option<Event> {
             bytes: value["write"]["bytes"].as_u64()?,
             verified: !value["verify"].is_null(),
             gpt_repaired: !value["gpt_repair"].is_null(),
+            secure_boot: value["extraction"]["secure_boot"]
+                .as_str()
+                .map(str::to_owned),
         })),
         "error" => Some(Event::Finished(Outcome::Failed {
             code: value["code"].as_str().map(str::to_owned),
@@ -255,7 +260,8 @@ mod tests {
             Some(Event::Finished(Outcome::Done {
                 bytes: 4_194_304,
                 verified: true,
-                gpt_repaired: false
+                gpt_repaired: false,
+                secure_boot: None,
             }))
         );
         assert_eq!(parse_line("pas du json"), None);
@@ -327,7 +333,8 @@ mod tests {
             Some(&Event::Finished(Outcome::Done {
                 bytes: 20,
                 verified: true,
-                gpt_repaired: true
+                gpt_repaired: true,
+                secure_boot: None,
             }))
         );
         assert_eq!(

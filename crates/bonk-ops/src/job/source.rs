@@ -41,6 +41,11 @@ impl ImageFile {
         })
     }
 
+    /// Lit `buf.len()` octets à cette position, sans déplacer aucun lecteur.
+    pub(super) fn read_exact_positioned(&self, offset: u64, buf: &mut [u8]) -> io::Result<()> {
+        bonk_hal::image::read_exact_at(&self.file, buf, offset)
+    }
+
     pub fn size(&self) -> u64 {
         self.len
     }

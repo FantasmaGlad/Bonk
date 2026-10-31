@@ -6,6 +6,7 @@
 //! du hasard : les identifiants dérivent d'une graine donnée par l'appelant.
 
 pub mod fat32;
+pub mod fat32_tree;
 pub mod table;
 
 use std::fmt;
@@ -137,13 +138,21 @@ pub enum FormatError {
     TooLarge(String),
     /// La relecture ne donne pas ce qui a été écrit.
     Mismatch(String),
+    /// Un nom de fichier que FAT32 ne peut pas porter.
+    Name(String),
+    /// Lecture de la source pendant la copie.
+    Source(std::io::Error),
 }
 
 impl fmt::Display for FormatError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Device(err) => write!(f, "{err}"),
-            Self::TooSmall(what) | Self::TooLarge(what) | Self::Mismatch(what) => f.write_str(what),
+            Self::TooSmall(what)
+            | Self::TooLarge(what)
+            | Self::Mismatch(what)
+            | Self::Name(what) => f.write_str(what),
+            Self::Source(err) => write!(f, "lecture de l'image : {err}"),
         }
     }
 }

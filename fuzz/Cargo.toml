@@ -35,3 +35,24 @@ path = "fuzz_targets/analysis.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "udf_tree"
+path = "fuzz_targets/udf_tree.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "wim_split"
+path = "fuzz_targets/wim_split.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pe_signer"
+path = "fuzz_targets/pe_signer.rs"
+test = false
+doc = false
+bench = false

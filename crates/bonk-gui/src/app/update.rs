@@ -107,6 +107,13 @@ impl App {
                 }
                 Task::none()
             }
+            Message::ToggleMbr(on) => {
+                if let WriteState::Draft { mbr, .. } = &mut self.write {
+                    *mbr = on;
+                    self.focus = Some(Focus::Mbr);
+                }
+                Task::none()
+            }
             Message::BrowseImage => {
                 self.focus = Some(Focus::Browse);
                 Task::perform(pick_image(), Message::ImagePicked)
@@ -179,6 +186,7 @@ impl App {
                     image: String::new(),
                     hash: String::new(),
                     raw: false,
+                    mbr: false,
                     opened: Instant::now(),
                 };
             }
@@ -201,6 +209,7 @@ impl App {
             image,
             hash,
             raw,
+            mbr,
             opened,
         } = &self.write
         else {
@@ -219,6 +228,7 @@ impl App {
                 image: image.trim(),
                 hash,
                 raw: *raw,
+                mbr: *mbr,
             },
             self.view_options(),
             internal_confirmed,

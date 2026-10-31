@@ -17,6 +17,8 @@ pub struct WriteView<'a> {
     /// Empreinte en hexadécimal, ou chemin ou adresse d'un fichier d'empreintes ; vide : aucune.
     pub hash: &'a str,
     pub raw: bool,
+    /// Table MBR pour une clé Windows ; GPT sinon.
+    pub mbr: bool,
 }
 
 impl<'a> WriteView<'a> {
@@ -48,6 +50,10 @@ impl<'a> WriteView<'a> {
         if self.raw {
             flags.push("--mode".to_owned());
             flags.push("raw".to_owned());
+        }
+        if self.mbr {
+            flags.push("--table".to_owned());
+            flags.push("mbr".to_owned());
         }
         flags
     }
@@ -193,6 +199,7 @@ mod tests_write {
             image: "https://a.org/x.iso",
             hash: &hex,
             raw: true,
+            mbr: false,
         };
         let commands = equivalent_commands(ViewOptions::default(), Some("usb-a"), Some(view));
         assert_eq!(
@@ -203,7 +210,16 @@ mod tests_write {
             image: "x.iso",
             hash: "https://a.org/SHA256SUMS",
             raw: false,
+            mbr: true,
         };
-        assert_eq!(view.flags(), ["--sha256-file", "https://a.org/SHA256SUMS"]);
+        assert_eq!(
+            view.flags(),
+            [
+                "--sha256-file",
+                "https://a.org/SHA256SUMS",
+                "--table",
+                "mbr"
+            ]
+        );
     }
 }

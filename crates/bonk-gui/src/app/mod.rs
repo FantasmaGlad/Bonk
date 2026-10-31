@@ -53,6 +53,8 @@ pub(crate) enum Message {
     HashInput(String),
     /// Écrire les octets tels quels, sans refuser une image que l'analyse ne juge pas amorçable.
     ToggleRaw(bool),
+    /// Table MBR pour une clé Windows.
+    ToggleMbr(bool),
     /// Ouvre le sélecteur de fichier du système pour choisir l'image.
     BrowseImage,
     /// Réponse du sélecteur ; `None` : fermé sans choix.
@@ -99,6 +101,8 @@ enum Focus {
     Hash,
     /// Case de l'écriture brute.
     Raw,
+    /// Case de la table MBR.
+    Mbr,
     /// Bouton du panneau d'écriture : écrire, annuler ou fermer selon l'état.
     Action,
     /// Bouton de copie de la commande équivalente, dernier de l'ordre de Tab.
@@ -119,6 +123,7 @@ enum WriteState {
         image: String,
         hash: String,
         raw: bool,
+        mbr: bool,
         opened: Instant,
     },
     Running {
@@ -177,6 +182,7 @@ fn ui_event(message: &Message) -> Option<(&'static str, String)> {
         ),
         Message::HashInput(text) => ("type_hash", format!("{} caractères", text.chars().count())),
         Message::ToggleRaw(on) => ("toggle_raw", on.to_string()),
+        Message::ToggleMbr(on) => ("toggle_mbr", on.to_string()),
         Message::BrowseImage => ("click_browse", String::new()),
         // Comme pour la saisie, le détail de l'événement ne porte pas le chemin choisi.
         Message::ImagePicked(path) => (
@@ -252,11 +258,16 @@ impl App {
     fn equivalents(&self) -> Vec<String> {
         let write = match &self.write {
             WriteState::Draft {
-                image, hash, raw, ..
+                image,
+                hash,
+                raw,
+                mbr,
+                ..
             } => Some(WriteView {
                 image,
                 hash,
                 raw: *raw,
+                mbr: *mbr,
             }),
             _ => None,
         };
