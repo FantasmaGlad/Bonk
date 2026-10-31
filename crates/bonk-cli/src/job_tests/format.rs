@@ -180,3 +180,27 @@ fn capabilities_dit_le_pourquoi() {
     assert_eq!(value["schema_version"], 1);
     assert_eq!(value["capabilities"][1]["missing"], "missing_tool");
 }
+
+/// FAT32 ne garde pas un fichier de 4 Gio : la sortie le dit et donne le remède ; les autres systèmes
+/// n'ont pas cette limite à dire.
+#[test]
+fn fat32_dit_sa_limite_par_fichier_et_propose_exfat() {
+    let scenario = Scenario::new();
+    let (code, out, err) = scenario.run(&["format", "usb-a", "--fs", "fat32", "--dry-run"]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(out.contains("4 Gio"), "{out}");
+    assert!(out.contains("--fs exfat"), "{out}");
+
+    let (code, json, err) =
+        scenario.run(&["format", "usb-a", "--fs", "fat32", "--dry-run", "--json"]);
+    assert_eq!((code, err.as_str()), (0, ""), "{json}");
+    let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(value["file_size_limit_bytes"], (1u64 << 32) - 1);
+
+    let (code, out, err) = scenario.run(&["format", "usb-a", "--fs", "ext4", "--dry-run"]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(!out.contains("4 Gio"), "{out}");
+    let (_, json, _) = scenario.run(&["format", "usb-a", "--fs", "ext4", "--dry-run", "--json"]);
+    let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert!(value["file_size_limit_bytes"].is_null(), "{json}");
+}
