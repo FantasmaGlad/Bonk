@@ -16,6 +16,16 @@ fn source_error(format: Format) -> Code {
 }
 
 pub(super) fn map_write_error(err: WriteError, format: Format) -> JobError {
+    // Les bornes sont contrôlées avant chaque écriture : le noyau ne répond « plus de place » que si le disque
+    // a disparu sous l'opération.
+    if let WriteError::Device(BlockError::Io(io)) = &err
+        && io.kind() == std::io::ErrorKind::StorageFull
+    {
+        return fail(
+            Code::WriteFailed,
+            "le support a disparu pendant l'écriture (débranché, ou port USB défaillant)",
+        );
+    }
     let code = match &err {
         WriteError::Cancelled { .. } => Code::Cancelled,
         WriteError::TooLarge { .. } => Code::SourceTooLarge,
@@ -51,5 +61,19 @@ pub(super) fn guarded<'a>(
         } else {
             progress(p)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Le noyau répond « plus de place » sur un disque débranché : dire ce qui s'est passé.
+    #[test]
+    fn un_support_disparu_n_est_pas_un_disque_plein() {
+        let full = std::io::Error::from(std::io::ErrorKind::StorageFull);
+        let error = map_write_error(WriteError::Device(BlockError::Io(full)), Format::Raw);
+        assert_eq!(error.code, Code::WriteFailed);
+        assert!(error.message.contains("débranché"), "{}", error.message);
     }
 }
