@@ -10,7 +10,8 @@ import sys
 from pathlib import Path
 
 DEPOT = "FantasmaGlad/Bonk"
-DESCRIPTION = "Création de supports d'amorçage (clés USB et disques externes), interface graphique et ligne de commande."
+DESCRIPTION = "Bootable media writer for USB drives and external disks, with a graphical and a command-line interface."
+DESCRIPTION_FR = "Création de supports d'amorçage (clés USB et disques externes), interface graphique et ligne de commande."
 LICENCE = "MIT"
 
 
@@ -124,7 +125,11 @@ package() {{
 def winget(r: Release) -> dict[str, str]:
     ident = "FantasmaGlad.Bonk"
     entete = f"PackageIdentifier: {ident}\nPackageVersion: {r.version}\n"
-    pied = "ManifestVersion: 1.6.0\n"
+    pied = "ManifestVersion: 1.12.0\n"
+    fiche = (
+        "PublisherUrl: https://github.com/FantasmaGlad\nPackageName: Bonk\nPackageUrl: https://bonk-os.app\n"
+        f"License: {LICENCE}\nLicenseUrl: https://github.com/{DEPOT}/blob/main/LICENSE\n"
+    )
 
     def installateur(arch: str, nom: str) -> str:
         return (
@@ -137,7 +142,7 @@ def winget(r: Release) -> dict[str, str]:
         )
 
     return {
-        f"{ident}.yaml": entete + "DefaultLocale: fr-FR\nManifestType: version\n" + pied,
+        f"{ident}.yaml": entete + "DefaultLocale: en-US\nManifestType: version\n" + pied,
         f"{ident}.installer.yaml": entete
         + "InstallerType: zip\nNestedInstallerType: portable\nInstallers:\n"
         + installateur("x64", "windows-x86_64")
@@ -145,10 +150,17 @@ def winget(r: Release) -> dict[str, str]:
         + installateur("x86", "windows-i686")
         + "ManifestType: installer\n"
         + pied,
-        f"{ident}.locale.fr-FR.yaml": entete
-        + "PackageLocale: fr-FR\nPublisher: FantasmaGlad\nPackageName: Bonk\n"
-        + f"License: {LICENCE}\nShortDescription: {DESCRIPTION}\n"
+        f"{ident}.locale.en-US.yaml": entete
+        + "PackageLocale: en-US\nPublisher: FantasmaGlad\n"
+        + fiche
+        + f"ShortDescription: {DESCRIPTION}\n"
         + "ManifestType: defaultLocale\n"
+        + pied,
+        f"{ident}.locale.fr-FR.yaml": entete
+        + "PackageLocale: fr-FR\nPublisher: FantasmaGlad\n"
+        + fiche
+        + f"ShortDescription: {DESCRIPTION_FR}\n"
+        + "ManifestType: locale\n"
         + pied,
     }
 
