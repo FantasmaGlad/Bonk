@@ -6,8 +6,8 @@
 
 <p align="center">
   <a href="https://github.com/FantasmaGlad/Bonk/releases/latest"><b>Téléchargements</b></a> &nbsp;·&nbsp;
-  <a href="README.md"><b>English</b></a> &nbsp;·&nbsp;
-  <a href="docs/ARCHITECTURE.md"><b>Architecture</b></a>
+  <a href="https://bonk-os.app"><b>Site</b></a> &nbsp;·&nbsp;
+  <a href="README.md"><b>English</b></a>
 </p>
 
 <p align="center">
