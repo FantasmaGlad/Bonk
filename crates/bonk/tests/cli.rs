@@ -99,8 +99,35 @@ fn list_json_reussit_ou_echoue_proprement() -> Resultat {
     Ok(())
 }
 
-/// Hors Linux, l'énumération n'existe pas encore : échec propre et message explicite.
-#[cfg(not(target_os = "linux"))]
+/// Le disque du runner porte le système : il doit être listé et interdit, jamais proposé.
+#[cfg(any(windows, target_os = "macos"))]
+#[test]
+fn le_disque_systeme_du_runner_est_interdit() -> Resultat {
+    let sortie = bonk().args(["list", "--all", "--json"]).output()?;
+    common::assert_code(&sortie, 0);
+    let rapport: serde_json::Value = serde_json::from_slice(&sortie.stdout)?;
+    let disques = rapport["disks"].as_array().ok_or("disks")?;
+    let systeme: Vec<_> = disques
+        .iter()
+        .filter(|d| {
+            d["partitions"]
+                .as_array()
+                .is_some_and(|parts| parts.iter().any(|p| p["is_system_volume"] == true))
+        })
+        .collect();
+    assert_eq!(systeme.len(), 1, "{rapport}");
+    assert_eq!(
+        systeme[0]["eligibility"]["verdict"], "excluded",
+        "{rapport}"
+    );
+    let sources = bonk().args(["debug", "sources", "--json"]).output()?;
+    common::assert_code(&sources, 0);
+    assert!(String::from_utf8(sources.stdout)?.contains(":facts"));
+    Ok(())
+}
+
+/// Sans énumération sur ce système : échec propre et message explicite.
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 #[test]
 fn list_hors_linux_echoue_avec_un_message_clair() -> Resultat {
     let sortie = bonk().arg("list").output()?;

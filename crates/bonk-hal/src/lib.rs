@@ -12,11 +12,13 @@ pub mod image;
 pub mod interrupt;
 #[cfg(target_os = "linux")]
 pub mod linux;
+pub mod macos_facts;
 #[cfg(target_os = "linux")]
 pub mod node;
 pub mod platform;
 pub mod safety;
 pub mod target;
+pub mod windows_facts;
 
 pub use describe::{
     Lang, bus_label, exclusion_label, format_size, kind_label, state_label, verdict_badge,
