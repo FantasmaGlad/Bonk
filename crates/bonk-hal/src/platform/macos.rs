@@ -18,10 +18,9 @@ use super::{Capability, Elevation, Platform, Unsupported, macos_disk, native_cap
 use crate::disk::Disk;
 use crate::enumerate::{EnumerateError, SourceRead};
 use crate::image::Access;
-use crate::macos_facts::{RawMedia, SOURCE, media_from_info, normalize};
+use crate::macos_facts::{RawMedia, SOURCE, media_from_info, normalize, serials_from_ioreg};
 use crate::target::OpenTargetError;
 
-/// Les outils de formatage de l'hôte n'existent pas encore : seul FAT32 se formate.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Macos;
 
@@ -71,6 +70,21 @@ fn diskutil(arguments: &[&str]) -> Result<Value, EnumerateError> {
     })
 }
 
+/// Numéros de série : descriptifs, `ioreg` en échec n'empêche pas d'énumérer. La classe USB d'abord : sa série
+/// est celle de la clé, celle du pont de stockage n'en dit rien.
+fn read_serials() -> Vec<(String, String)> {
+    ["IOUSBHostDevice", "IOBlockStorageDevice"]
+        .iter()
+        .filter_map(|class| {
+            Command::new("/usr/sbin/ioreg")
+                .args(["-r", "-l", "-w0", "-c", class])
+                .output()
+                .ok()
+        })
+        .flat_map(|output| serials_from_ioreg(&String::from_utf8_lossy(&output.stdout)))
+        .collect()
+}
+
 fn collect() -> Result<Vec<RawMedia>, EnumerateError> {
     let list = diskutil(&["list", "-plist"])?;
     let devices = list["AllDisks"]
@@ -79,10 +93,20 @@ fn collect() -> Result<Vec<RawMedia>, EnumerateError> {
             what: "diskutil list".to_owned(),
             detail: "no AllDisks".to_owned(),
         })?;
+    let serials = read_serials();
     devices
         .iter()
         .filter_map(Value::as_str)
-        .map(|device| media_from_info(&diskutil(&["info", "-plist", device])?))
+        .map(|device| {
+            let mut media = media_from_info(&diskutil(&["info", "-plist", device])?)?;
+            if media.whole {
+                media.serial = serials
+                    .iter()
+                    .find(|(disk, _)| *disk == media.device)
+                    .map(|(_, serial)| serial.clone());
+            }
+            Ok(media)
+        })
         .collect()
 }
 
@@ -152,7 +176,13 @@ impl Platform for Macos {
     }
 
     fn capabilities(&self) -> Vec<Capability> {
-        native_capabilities(Capability::yes("elevate"))
+        let mut all = native_capabilities(Capability::yes("elevate"));
+        for capability in &mut all {
+            if capability.name == "format.exfat" {
+                *capability = Capability::yes("format.exfat");
+            }
+        }
+        all
     }
 
     fn format_partition(
@@ -162,7 +192,11 @@ impl Platform for Macos {
         label: Option<&str>,
         elevation: Elevation,
     ) -> Result<(), BlockError> {
-        Unsupported.format_partition(partition, fs, label, elevation)
+        if fs == Filesystem::Exfat {
+            macos_disk::format_exfat(partition, label)
+        } else {
+            Unsupported.format_partition(partition, fs, label, elevation)
+        }
     }
 
     fn rescan(&self, _disk: &Path, _elevation: Elevation) -> Result<(), BlockError> {

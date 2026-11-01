@@ -24,6 +24,10 @@ print(s[0]['id'])")
 sudo "$bonk" write "$id" "$image" --allow-virtual --mode raw --yes
 sudo "$bonk" verify "$id" "$image" --allow-virtual
 
+# FAT32 par Bonk, exFAT par le système.
+sudo "$bonk" format "$id" --fs fat32 --label ESSAI --allow-virtual --yes
+sudo "$bonk" format "$id" --fs exfat --label ESSAI --allow-virtual --yes
+
 code=0
 sudo "$bonk" write "$systeme" "$image" --allow-virtual --mode raw --yes || code=$?
 test "$code" -eq 3
