@@ -11,4 +11,5 @@
     <string name="tests_how">The read test changes nothing. The write test needs the test drive and takes a few minutes: do not unplug it.</string>
     <string name="serial_read">Serial read: %1$s</string>
     <string name="write_reserved">Write test reserved for the drive with serial %1$s.</string>
+    <string name="drive_unreadable">This drive was seen but does not answer (%1$s). Bonk tries again every 10 seconds.</string>
 </resources>

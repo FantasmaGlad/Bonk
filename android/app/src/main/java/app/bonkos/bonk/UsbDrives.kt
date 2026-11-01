@@ -8,8 +8,16 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
 import android.os.Build
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 const val ACTION_PERMISSION = "app.bonkos.bonk.USB_PERMISSION"
+
+/**
+ * Une seule conversation à la fois avec une clé : deux échanges mêlés se volent leurs réponses, et le suivant
+ * attend jusqu'au délai maximal.
+ */
+private val usbAccess = ReentrantLock()
 
 private const val SUBCLASS_SCSI = 6
 private const val PROTOCOL_BULK_ONLY = 0x50
@@ -32,17 +40,18 @@ fun UsbManager.askPermission(context: Context, device: UsbDevice) {
 }
 
 /** Réclame la clé, en détachant le pilote du système, le temps de `work`. */
-fun <T> UsbManager.withDrive(device: UsbDevice, work: (fd: Int, descriptors: ByteArray) -> T): T {
-    val connection = openDevice(device) ?: error("openDevice refused")
-    try {
-        val storage = device.storageInterface() ?: error("no storage interface")
-        check(connection.claimInterface(storage, true)) { "claimInterface refused" }
+fun <T> UsbManager.withDrive(device: UsbDevice, work: (fd: Int, descriptors: ByteArray) -> T): T =
+    usbAccess.withLock {
+        val connection = openDevice(device) ?: error("openDevice refused")
         try {
-            return work(connection.fileDescriptor, connection.rawDescriptors)
+            val storage = device.storageInterface() ?: error("no storage interface")
+            check(connection.claimInterface(storage, true)) { "claimInterface refused" }
+            try {
+                work(connection.fileDescriptor, connection.rawDescriptors)
+            } finally {
+                connection.releaseInterface(storage)
+            }
         } finally {
-            connection.releaseInterface(storage)
+            connection.close()
         }
-    } finally {
-        connection.close()
     }
-}

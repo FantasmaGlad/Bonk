@@ -10,4 +10,5 @@
     <string name="tests_how">L\'essai de lecture ne change rien. L\'essai d\'écriture demande la clé de test et prend quelques minutes : ne la débranchez pas.</string>
     <string name="serial_read">Série lue : %1$s</string>
     <string name="write_reserved">Essai d\'écriture réservé à la clé de série %1$s.</string>
+    <string name="drive_unreadable">Cette clé est vue mais ne répond pas (%1$s). Bonk réessaie toutes les 10 secondes.</string>
 </resources>

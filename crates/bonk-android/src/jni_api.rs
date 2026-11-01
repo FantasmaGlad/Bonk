@@ -5,7 +5,7 @@ use std::fs::File;
 use std::os::fd::{FromRawFd, RawFd};
 
 use bonk_catalog::manifest::{self, CatalogReport, FamilyEntry, TRUSTED_KEYS};
-use bonk_core::msc::{MassStorage, UsbDisk};
+use bonk_core::msc::{BulkTransport, MassStorage, UsbDisk};
 use bonk_core::{BlockDevice, BlockError};
 use bonk_hal::usbfs::UsbfsTransport;
 use jni::errors::Error;
@@ -24,7 +24,12 @@ fn transport(fd: RawFd, descriptors: &[u8]) -> Result<UsbfsTransport, String> {
     }
     // SAFETY : `copy` vient d'être créé par `dup` et n'a pas d'autre propriétaire.
     let device = unsafe { File::from_raw_fd(copy) };
-    UsbfsTransport::from_claimed(device, descriptors).map_err(|error| error.to_string())
+    let mut transport =
+        UsbfsTransport::from_claimed(device, descriptors).map_err(|error| error.to_string())?;
+    // Un échange interrompu (application tuée, clé rendue au système) laisse la clé en attente d'une suite que
+    // personne n'enverra. Certaines clés refusent cette remise à zéro sans en avoir besoin : l'échec n'arrête rien.
+    let _ = transport.reset();
+    Ok(transport)
 }
 
 fn answer<'caller>(

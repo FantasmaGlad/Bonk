@@ -1,52 +1,83 @@
 package app.bonkos.bonk
 
 import android.content.Context
+import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.util.Log
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 import org.json.JSONArray
 import org.json.JSONObject
 
 private const val CATALOG = "https://catalog.bonk-os.app/v1/catalog.json"
 private const val BUFFER = 1 shl 20
+private const val RETRY_MS = 10_000L
+private const val TAG = "Bonk"
 
 private fun fetchOrEmpty(address: String): ByteArray =
     runCatching { URL(address).readBytes() }.getOrDefault(ByteArray(0))
 
 /** Ce que Rust demande et que seul Android sait faire : voir l'USB, le réseau, les fichiers. */
-class Actions(private val context: Context, private val send: (JSONObject) -> Unit) {
+class Actions(
+    private val context: Context,
+    private val send: (JSONObject) -> Unit,
+    private val driveError: (String, String?) -> Unit,
+) {
     private val usb = context.getSystemService(UsbManager::class.java)
     private val sizes = HashMap<String, Long>()
+    private val failedAt = HashMap<String, Long>()
+    private val enumerating = AtomicBoolean(false)
 
     @Volatile var cancelled = false
 
-    /** Une clé autorisée est interrogée une seule fois : l'interroger la retire un instant au système. */
+    private fun size(device: UsbDevice): Long? {
+        sizes[device.deviceName]?.let { return it }
+        // Réessayer sans répit retirerait sans cesse la clé au système.
+        val failed = failedAt[device.deviceName]
+        if (failed != null && System.currentTimeMillis() - failed < RETRY_MS) return null
+        return runCatching {
+            val answer = JSONObject(usb.withDrive(device) { fd, raw -> Native.probe(fd, raw) })
+            check(!answer.has("error")) { answer.getString("error") }
+            answer.getLong("blocks") * answer.getLong("block_size")
+        }.onSuccess {
+            sizes[device.deviceName] = it
+            failedAt.remove(device.deviceName)
+            driveError(device.deviceName, null)
+        }.onFailure {
+            Log.w(TAG, "${device.deviceName}: $it")
+            failedAt[device.deviceName] = System.currentTimeMillis()
+            driveError(device.deviceName, it.message ?: it.toString())
+        }.getOrNull()
+    }
+
+    /** Une clé autorisée n'est interrogée qu'une fois : l'interroger la retire un instant au système. */
     fun enumerate() {
+        if (!enumerating.compareAndSet(false, true)) return
         thread {
-            val disks = JSONArray()
-            usb.drives().filter(usb::hasPermission).forEach { device ->
-                val size =
-                    sizes.getOrPut(device.deviceName) {
-                        runCatching {
-                            val answer = usb.withDrive(device) { fd, raw -> JSONObject(Native.probe(fd, raw)) }
-                            answer.getLong("blocks") * answer.getLong("block_size")
-                        }.getOrDefault(0)
+            try {
+                val disks = JSONArray()
+                val drives = usb.drives()
+                drives.filter(usb::hasPermission).forEach { device ->
+                    size(device)?.let {
+                        disks.put(
+                            JSONObject()
+                                .put("device", device.deviceName)
+                                .put("model", "${device.manufacturerName.orEmpty()} ${device.productName.orEmpty()}".trim())
+                                .put("serial", device.serialNumber.orEmpty())
+                                .put("size_bytes", it),
+                        )
                     }
-                if (size > 0) {
-                    disks.put(
-                        JSONObject()
-                            .put("device", device.deviceName)
-                            .put("model", "${device.manufacturerName.orEmpty()} ${device.productName.orEmpty()}".trim())
-                            .put("serial", device.serialNumber.orEmpty())
-                            .put("size_bytes", size),
-                    )
                 }
+                val present = drives.map { it.deviceName }.toSet()
+                sizes.keys.retainAll(present)
+                failedAt.keys.retainAll(present)
+                send(JSONObject().put("type", "disks").put("disks", disks))
+            } finally {
+                enumerating.set(false)
             }
-            val present = usb.drives().map { it.deviceName }.toSet()
-            sizes.keys.retainAll(present)
-            send(JSONObject().put("type", "disks").put("disks", disks))
         }
     }
 

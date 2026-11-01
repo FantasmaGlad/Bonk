@@ -73,6 +73,9 @@ private const val TICKS_PER_REFRESH = 4
 class MainActivity : ComponentActivity() {
     private var revision by mutableIntStateOf(0)
     private var screen by mutableStateOf(JSONObject())
+    private var screenText = ""
+    private var keepingOn = false
+    private var driveErrors by mutableStateOf(mapOf<String, String>())
     private var picked: ParcelFileDescriptor? = null
     private lateinit var actions: Actions
 
@@ -101,15 +104,26 @@ class MainActivity : ComponentActivity() {
         runOnUiThread {
             if (message.optString("type") == "cancel") actions.cancelled = true
             val answer = JSONObject(Native.dispatch(message.toString()))
-            screen = answer.optJSONObject("state") ?: JSONObject()
-            val running = screen.optBoolean("running")
-            if (running) {
-                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            } else {
-                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            // Redessiner ou toucher à la fenêtre sans changement fait tressauter l'écran à chaque battement.
+            val state = answer.optJSONObject("state") ?: JSONObject()
+            val text = state.toString()
+            if (text != screenText) {
+                screenText = text
+                screen = state
+                keepScreenOn(state.optBoolean("running"))
             }
             val effects = answer.optJSONArray("effects") ?: JSONArray()
             for (index in 0 until effects.length()) accomplish(effects.getJSONObject(index))
+        }
+    }
+
+    private fun keepScreenOn(on: Boolean) {
+        if (on == keepingOn) return
+        keepingOn = on
+        if (on) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 
@@ -129,7 +143,12 @@ class MainActivity : ComponentActivity() {
         // Fond clair : les icônes du système doivent rester sombres, quel que soit le thème du téléphone.
         val bars = SystemBarStyle.light(Tokens.PAPER.toInt(), Tokens.INK.toInt())
         enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
-        actions = Actions(this, ::send)
+        actions =
+            Actions(this, ::send) { device, error ->
+                runOnUiThread {
+                    driveErrors = if (error == null) driveErrors - device else driveErrors + (device to error)
+                }
+            }
         val saved = getPreferences(MODE_PRIVATE).getString("lang", null)
         Native.setLanguage((saved ?: Locale.getDefault().language) == "fr")
         val filter =
@@ -152,7 +171,7 @@ class MainActivity : ComponentActivity() {
                             send(JSONObject().put("type", if (ticks == 0) "tick" else "clock"))
                         }
                     }
-                    Screen(screen, usb, revision, ::send)
+                    Screen(screen, usb, revision, driveErrors, ::send)
                 }
             }
         }
@@ -244,7 +263,13 @@ private fun Boxed(selected: Boolean = false, modifier: Modifier = Modifier, cont
 private fun message(type: String) = JSONObject().put("type", type)
 
 @Composable
-private fun Screen(state: JSONObject, usb: UsbManager, revision: Int, send: (JSONObject) -> Unit) {
+private fun Screen(
+    state: JSONObject,
+    usb: UsbManager,
+    revision: Int,
+    errors: Map<String, String>,
+    send: (JSONObject) -> Unit,
+) {
     Column(
         Modifier.safeDrawingPadding()
             .padding(Tokens.SPACE_PAGE.dp)
@@ -257,10 +282,16 @@ private fun Screen(state: JSONObject, usb: UsbManager, revision: Int, send: (JSO
         }
         Small(state.optString("intro"))
         Small(state.optString("status"))
-        val waiting = remember(revision, state) { usb.drives().filterNot(usb::hasPermission) }
+        val waiting = remember(revision, errors) { usb.drives().filterNot(usb::hasPermission) }
         waiting.forEach { device -> AskAccess(usb, device) }
+        errors.forEach { (device, error) ->
+            Boxed {
+                Body(stringResource(R.string.drive_unreadable, device))
+                Small(error, Tokens.INK)
+            }
+        }
         val disks = state.optJSONArray("disks") ?: JSONArray()
-        if (disks.length() == 0 && waiting.isEmpty()) Body(state.optString("empty"))
+        if (disks.length() == 0 && waiting.isEmpty() && errors.isEmpty()) Body(state.optString("empty"))
         val panel = state.optJSONObject("panel")
         for (index in 0 until disks.length()) {
             val disk = disks.getJSONObject(index)
