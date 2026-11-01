@@ -127,6 +127,8 @@ fn bulk_error(error: io::Error) -> BulkError {
 pub struct UsbfsTransport {
     device: File,
     interface: StorageInterface,
+    /// L'interface a été réclamée ici, et se rend ici. Sous Android, c'est l'application qui la tient.
+    claimed_here: bool,
 }
 
 impl UsbfsTransport {
@@ -148,7 +150,11 @@ impl UsbfsTransport {
         let interface = find_storage_interface(&descriptors).ok_or_else(|| {
             io::Error::new(io::ErrorKind::Unsupported, "no bulk-only storage interface")
         })?;
-        let mut transport = Self { device, interface };
+        let mut transport = Self {
+            device,
+            interface,
+            claimed_here: true,
+        };
         let mut detach = InterfaceIoctl {
             interface: libc::c_int::from(interface.number),
             code: USBDEVFS_DISCONNECT as libc::c_int,
@@ -163,6 +169,22 @@ impl UsbfsTransport {
         let mut number = u32::from(interface.number);
         transport.ioctl(USBDEVFS_CLAIMINTERFACE, (&raw mut number).cast())?;
         Ok(transport)
+    }
+
+    /// Sur un descripteur dont l'interface est déjà réclamée : Android le fait par
+    /// `claimInterface(interface, true)` et donne les descripteurs par `getRawDescriptors()`.
+    ///
+    /// # Errors
+    /// Pas d'interface de stockage « bulk-only ».
+    pub fn from_claimed(device: File, descriptors: &[u8]) -> io::Result<Self> {
+        let interface = find_storage_interface(descriptors).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::Unsupported, "no bulk-only storage interface")
+        })?;
+        Ok(Self {
+            device,
+            interface,
+            claimed_here: false,
+        })
     }
 
     fn ioctl(&mut self, code: u64, argument: *mut libc::c_void) -> io::Result<usize> {
@@ -238,6 +260,9 @@ impl BulkTransport for UsbfsTransport {
 
 impl Drop for UsbfsTransport {
     fn drop(&mut self) {
+        if !self.claimed_here {
+            return;
+        }
         let mut number = u32::from(self.interface.number);
         let released = self.ioctl(USBDEVFS_RELEASEINTERFACE, (&raw mut number).cast());
         let mut attach = InterfaceIoctl {
