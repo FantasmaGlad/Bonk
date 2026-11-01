@@ -10,7 +10,7 @@ use bonk_core::write::Phase;
 use crate::command::WriteView;
 use crate::transfer;
 
-use bonk_hal::Lang;
+use bonk_hal::{Disk, Lang};
 
 use super::catalog::{self, CatalogState, ChoiceSource};
 use super::{App, Focus, Message, WRITE_DELAY, WriteState, load};
@@ -26,54 +26,19 @@ impl App {
                 log::trace!(target: "bonk::gui", "tick");
                 self.reload()
             }
-            Message::Loaded(Ok(disks)) => {
-                log::debug!(target: "bonk::gui", disks = disks.len(); "enumeration result received");
-                self.loading = false;
-                self.error = None;
-                if self
-                    .selected
-                    .as_ref()
-                    .is_some_and(|id| !disks.iter().any(|d| &d.id == id))
-                {
-                    self.selected = None;
-                }
-                self.disks = disks;
-                self.select_only_disk();
-                self.sync_write();
-                self.fix_focus();
-                self.load_menu()
-            }
-            Message::Loaded(Err(erreur)) => {
-                log::warn!(target: "bonk::gui", reason = erreur.as_str(); "enumeration failed");
-                self.loading = false;
-                // Jamais de liste périmée présentée comme valable après un échec.
-                self.disks.clear();
-                self.selected = None;
-                self.error = Some(erreur);
-                self.sync_write();
-                self.fix_focus();
-                Task::none()
-            }
+            Message::Loaded(Ok(disks)) => self.on_disks_loaded(disks),
+            Message::Loaded(Err(erreur)) => self.on_detection_failed(erreur),
             Message::ToggleInternal(on) => {
                 self.show_internal = on;
-                self.focus = Some(Focus::Internal);
-                self.sync_write();
-                self.fix_focus();
-                Task::none()
+                self.after_view_option(Focus::Internal)
             }
             Message::ToggleVirtual(on) => {
                 self.allow_virtual = on;
-                self.focus = Some(Focus::Virtual);
-                self.sync_write();
-                self.fix_focus();
-                Task::none()
+                self.after_view_option(Focus::Virtual)
             }
             Message::ToggleAll(on) => {
                 self.show_all = on;
-                self.focus = Some(Focus::All);
-                self.sync_write();
-                self.fix_focus();
-                Task::none()
+                self.after_view_option(Focus::All)
             }
             Message::Select(id) => {
                 self.focus = Some(Focus::Disk(id.clone()));
@@ -135,23 +100,7 @@ impl App {
                 self.tor = address;
                 Task::none()
             }
-            Message::SwitchLanguage => {
-                self.lang = match self.lang {
-                    Lang::En => Lang::Fr,
-                    Lang::Fr => Lang::En,
-                };
-                self.focus = Some(Focus::Language);
-                let program = self.program();
-                let value = match self.lang {
-                    Lang::En => "en",
-                    Lang::Fr => "fr",
-                };
-                // Le réglage passe par la ligne de commande, seule propriétaire du fichier de configuration.
-                Task::perform(async move { save_language(&program, value) }, |()| {
-                    Message::Refresh
-                })
-                .discard()
-            }
+            Message::SwitchLanguage => self.switch_language(),
             Message::ToggleTor(on) => {
                 self.use_tor = on && self.tor.is_some();
                 self.focus = Some(Focus::Tor);
@@ -175,40 +124,8 @@ impl App {
                 self.menu_index = 0;
                 Task::none()
             }
-            Message::CatalogLoaded(result) => {
-                self.catalog = match result {
-                    Ok(systems) => CatalogState::Ready(systems),
-                    Err(error) => {
-                        log::warn!(target: "bonk::gui", reason = error.as_str(); "catalog unavailable");
-                        // Sans liste, la voie manuelle est la seule : elle se montre d'elle-même.
-                        self.advanced = true;
-                        CatalogState::Failed(error)
-                    }
-                };
-                Task::none()
-            }
-            Message::MenuChose(choice) => {
-                if let (
-                    WriteState::Draft {
-                        image,
-                        hash,
-                        raw,
-                        mbr,
-                        ..
-                    },
-                    ChoiceSource::Download { url, sha256 },
-                ) = (&mut self.write, choice.source)
-                {
-                    // Tout est fixé par le catalogue : Bonk analyse l'image et choisit le mode seul.
-                    *image = url;
-                    *hash = sha256;
-                    *raw = false;
-                    *mbr = false;
-                    self.menu_open = false;
-                    self.focus = Some(Focus::Action);
-                }
-                Task::none()
-            }
+            Message::CatalogLoaded(result) => self.on_catalog_loaded(result),
+            Message::MenuChose(choice) => self.on_menu_chosen(choice),
             Message::ToggleAdvanced => {
                 self.advanced = !self.advanced;
                 self.focus = Some(Focus::Advanced);
@@ -274,6 +191,98 @@ impl App {
             self.auto_selected = Some(only.clone());
             self.selected = Some(only.clone());
         }
+    }
+
+    fn on_disks_loaded(&mut self, disks: Vec<Disk>) -> Task<Message> {
+        log::debug!(target: "bonk::gui", disks = disks.len(); "enumeration result received");
+        self.loading = false;
+        self.error = None;
+        if self
+            .selected
+            .as_ref()
+            .is_some_and(|id| !disks.iter().any(|d| &d.id == id))
+        {
+            self.selected = None;
+        }
+        self.disks = disks;
+        self.select_only_disk();
+        self.sync_write();
+        self.fix_focus();
+        self.load_menu()
+    }
+
+    fn on_detection_failed(&mut self, erreur: String) -> Task<Message> {
+        log::warn!(target: "bonk::gui", reason = erreur.as_str(); "enumeration failed");
+        self.loading = false;
+        // Jamais de liste périmée présentée comme valable après un échec.
+        self.disks.clear();
+        self.selected = None;
+        self.error = Some(erreur);
+        self.sync_write();
+        self.fix_focus();
+        Task::none()
+    }
+
+    /// Une case d'affichage a changé : la liste aussi, donc le panneau et le focus.
+    fn after_view_option(&mut self, focus: Focus) -> Task<Message> {
+        self.focus = Some(focus);
+        self.sync_write();
+        self.fix_focus();
+        Task::none()
+    }
+
+    fn switch_language(&mut self) -> Task<Message> {
+        self.lang = match self.lang {
+            Lang::En => Lang::Fr,
+            Lang::Fr => Lang::En,
+        };
+        self.focus = Some(Focus::Language);
+        let program = self.program();
+        let value = match self.lang {
+            Lang::En => "en",
+            Lang::Fr => "fr",
+        };
+        // Le réglage passe par la ligne de commande, seule propriétaire du fichier de configuration.
+        Task::perform(async move { save_language(&program, value) }, |()| {
+            Message::Refresh
+        })
+        .discard()
+    }
+
+    fn on_catalog_loaded(&mut self, result: Result<Vec<catalog::System>, String>) -> Task<Message> {
+        self.catalog = match result {
+            Ok(systems) => CatalogState::Ready(systems),
+            Err(error) => {
+                log::warn!(target: "bonk::gui", reason = error.as_str(); "catalog unavailable");
+                // Sans liste, la voie manuelle est la seule : elle se montre d'elle-même.
+                self.advanced = true;
+                CatalogState::Failed(error)
+            }
+        };
+        Task::none()
+    }
+
+    fn on_menu_chosen(&mut self, choice: catalog::Choice) -> Task<Message> {
+        if let (
+            WriteState::Draft {
+                image,
+                hash,
+                raw,
+                mbr,
+                ..
+            },
+            ChoiceSource::Download { url, sha256 },
+        ) = (&mut self.write, choice.source)
+        {
+            // Tout est fixé par le catalogue : Bonk analyse l'image et choisit le mode seul.
+            *image = url;
+            *hash = sha256;
+            *raw = false;
+            *mbr = false;
+            self.menu_open = false;
+            self.focus = Some(Focus::Action);
+        }
+        Task::none()
     }
 
     /// Le panneau d'écriture vient de s'ouvrir : le menu doit être prêt. Le catalogue n'est lu que là, et relu
