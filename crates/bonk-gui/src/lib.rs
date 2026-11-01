@@ -24,7 +24,7 @@ pub fn run(initial: ViewOptions, lang: Option<bonk_hal::Lang>) -> Result<(), Str
     // Iced ne renvoie pas d'erreur sans affichage : il panique. Détection de la fonctionnalité en
     // amont, pour que Bonk redirige proprement vers la ligne de commande (SSH, serveur).
     if !display_available(|name| std::env::var_os(name)) {
-        return Err("aucun affichage graphique (ni WAYLAND_DISPLAY ni DISPLAY)".to_owned());
+        return Err("no graphical display (neither WAYLAND_DISPLAY nor DISPLAY)".to_owned());
     }
     run_with_fallback(
         move || launch(initial, lang),
@@ -109,7 +109,7 @@ fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
         .downcast_ref::<&str>()
         .map(|text| (*text).to_owned())
         .or_else(|| payload.downcast_ref::<String>().cloned())
-        .unwrap_or_else(|| "panique sans message".to_owned())
+        .unwrap_or_else(|| "panic without a message".to_owned())
 }
 
 /// Relance Bonk avec les mêmes arguments et le moteur de rendu logiciel (`tiny-skia`), et attend sa
@@ -117,17 +117,17 @@ fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
 /// processus qui a déjà des fils n'est pas sûr, et l'état du rendu qui vient de paniquer n'est pas
 /// réutilisable.
 fn relaunch_with_software_renderer() -> Result<(), String> {
-    let exe = std::env::current_exe().map_err(|e| format!("repli impossible : {e}"))?;
+    let exe = std::env::current_exe().map_err(|e| format!("fallback impossible: {e}"))?;
     let status = std::process::Command::new(exe)
         .args(std::env::args_os().skip(1))
         .env("ICED_BACKEND", "tiny-skia")
         .env(FALLBACK_MARKER, "1")
         .status()
-        .map_err(|e| format!("repli impossible : {e}"))?;
+        .map_err(|e| format!("fallback impossible: {e}"))?;
     if status.success() {
         Ok(())
     } else {
-        Err(format!("le rendu logiciel a échoué aussi ({status})"))
+        Err(format!("the software renderer failed too ({status})"))
     }
 }
 
@@ -180,7 +180,10 @@ mod tests {
         let autre: Box<dyn std::any::Any + Send> = Box::new(42_u8);
         assert_eq!(super::panic_message(texte.as_ref()), "wgpu error");
         assert_eq!(super::panic_message(chaine.as_ref()), "surface invalide");
-        assert_eq!(super::panic_message(autre.as_ref()), "panique sans message");
+        assert_eq!(
+            super::panic_message(autre.as_ref()),
+            "panic without a message"
+        );
     }
 
     #[test]

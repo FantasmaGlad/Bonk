@@ -12,7 +12,7 @@ use crate::enumerate::{EnumerateError, SourceRead};
 use crate::image::Access;
 use crate::target::OpenTargetError;
 
-/// Implémentation pour un système que Bonk ne sait pas encore piloter.
+/// Implémentation pour un système que Bonk ne sait pas piloter.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Unsupported;
 

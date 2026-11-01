@@ -38,10 +38,7 @@ pub(crate) fn spawn(program: &Path, args: &[String]) -> UnboundedReceiver<Event>
         {
             Ok(child) => child,
             Err(e) => {
-                return failed(format!(
-                    "{} : lancement impossible : {e}",
-                    program.display()
-                ));
+                return failed(format!("{}: cannot start: {e}", program.display()));
             }
         };
         let _ = sender.unbounded_send(Event::Started(child.id()));
