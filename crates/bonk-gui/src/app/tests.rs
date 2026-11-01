@@ -972,11 +972,13 @@ fn empreinte_et_mode_brut_arrivent_dans_la_commande() {
 fn versions_du_catalogue() -> Vec<catalog::System> {
     vec![catalog::System {
         name: "Ubuntu".to_owned(),
+        category: "Debian derivatives".to_owned(),
         icon: None,
         choices: vec![
             catalog::Choice {
                 label: "26.04.1 desktop LTS".to_owned(),
                 end_of_life: false,
+                note: None,
                 source: catalog::ChoiceSource::Download {
                     url: "https://u/26.iso".to_owned(),
                     sha256: "a".repeat(64),
@@ -985,6 +987,7 @@ fn versions_du_catalogue() -> Vec<catalog::System> {
             catalog::Choice {
                 label: "24.04.5 desktop LTS".to_owned(),
                 end_of_life: false,
+                note: None,
                 source: catalog::ChoiceSource::Download {
                     url: "https://u/24.iso".to_owned(),
                     sha256: "b".repeat(64),
@@ -993,6 +996,7 @@ fn versions_du_catalogue() -> Vec<catalog::System> {
             catalog::Choice {
                 label: "11".to_owned(),
                 end_of_life: false,
+                note: None,
                 source: catalog::ChoiceSource::OfficialPage("https://p/".to_owned()),
             },
         ],

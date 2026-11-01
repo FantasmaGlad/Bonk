@@ -421,7 +421,7 @@ impl App {
         ]
         .spacing(8);
         if let (CatalogState::Ready(systems), true) = (&self.catalog, self.menu_open) {
-            panel = panel.push(menu_list(systems, self.menu_index));
+            panel = panel.push(menu_list(systems, &self.menu_filter, self.menu_index));
         }
         if let CatalogState::Failed(error) = &self.catalog {
             panel = panel.push(text(error.clone()).size(13).color(theme::SECONDARY));

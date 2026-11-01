@@ -38,6 +38,9 @@ pub struct Family {
     /// Identifiant stable : `ubuntu`.
     pub id: String,
     pub name: String,
+    /// Group shown to sort systems: `Debian derivatives`. Absent from older catalogs.
+    #[serde(default)]
+    pub category: Option<String>,
     /// Logo, chemin relatif au manifeste. Son empreinte, couverte par la signature, l'empêche d'être remplacé.
     pub icon: String,
     pub icon_sha256: String,
@@ -71,8 +74,18 @@ pub struct Image {
     pub edition: Option<String>,
     pub arch: String,
     pub homepage: String,
+    /// What to know before choosing it: 90-day evaluation, CD only.
+    #[serde(default)]
+    pub note: Option<String>,
+    /// The file boots once written to a USB drive. False: CD or virtual machine only.
+    #[serde(default = "boots_from_usb")]
+    pub usb_boot: bool,
     #[serde(flatten)]
     pub source: ImageSource,
+}
+
+fn boots_from_usb() -> bool {
+    true
 }
 
 /// Où trouver l'image.
@@ -629,6 +642,7 @@ mod tests {
         let family = |sha: String| Family {
             id: "ubuntu".to_owned(),
             name: "Ubuntu".to_owned(),
+            category: None,
             icon: "icons/ubuntu.svg".to_owned(),
             icon_sha256: sha,
         };
@@ -675,6 +689,7 @@ mod tests {
         let family = |icon: &str| Family {
             id: "ubuntu".to_owned(),
             name: "Ubuntu".to_owned(),
+            category: None,
             icon: icon.to_owned(),
             icon_sha256: "b".repeat(64),
         };
