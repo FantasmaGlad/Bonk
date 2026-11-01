@@ -13,13 +13,41 @@ use serde::{Deserialize, Serialize};
 /// Version du format comprise par ce binaire.
 pub const SCHEMA_VERSION: u32 = 1;
 
+/// Un système, tel que l'écran de choix le présente : ses versions sont ses images.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Family {
+    /// Identifiant stable : `ubuntu`.
+    pub id: String,
+    pub name: String,
+    /// Logo, chemin relatif au manifeste. Son empreinte, couverte par la signature, l'empêche d'être remplacé.
+    pub icon: String,
+    pub icon_sha256: String,
+}
+
+/// Cycle de vie d'une version : ce qui signale une version ancienne.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Channel {
+    /// Maintenue longtemps par l'éditeur (Ubuntu 26.04 LTS).
+    Lts,
+    /// Version courante.
+    Stable,
+    /// Encore proposée, plus maintenue par l'éditeur : l'interface le dit.
+    EndOfLife,
+}
+
 /// Une image proposée.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Image {
     /// Identifiant stable : `debian-13-netinst-x86_64`.
     pub id: String,
+    /// Identifiant de la [`Family`].
+    pub family: String,
     pub name: String,
     pub version: String,
+    pub channel: Channel,
+    /// Date de sortie `AAAA-MM-JJ`, pour ranger les versions.
+    pub released: String,
     #[serde(default)]
     pub edition: Option<String>,
     pub arch: String,
@@ -49,6 +77,7 @@ pub struct Catalog {
     /// Croît à chaque publication : un miroir ne peut pas resservir un ancien manifeste à qui a vu plus récent.
     pub sequence: u64,
     pub expires_unix: u64,
+    pub families: Vec<Family>,
     pub images: Vec<Image>,
 }
 
@@ -96,13 +125,57 @@ pub struct Trust<'a> {
     pub seen_sequence: u64,
 }
 
-fn check_image(image: &Image) -> Result<(), &'static str> {
-    let id_ok = !image.id.is_empty()
-        && image.id.bytes().all(|b| {
+fn is_sha256(text: &str) -> bool {
+    text.len() == 64 && text.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+fn is_identifier(text: &str) -> bool {
+    !text.is_empty()
+        && text.bytes().all(|b| {
             b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'.' || b == b'_'
-        });
-    if !id_ok {
+        })
+}
+
+/// `AAAA-MM-JJ` : la forme seule, assez pour que le tri par texte soit le tri par date.
+fn is_date(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    bytes.len() == 10
+        && bytes.iter().enumerate().all(|(i, b)| {
+            if i == 4 || i == 7 {
+                *b == b'-'
+            } else {
+                b.is_ascii_digit()
+            }
+        })
+}
+
+fn check_family(family: &Family) -> Result<(), &'static str> {
+    if !is_identifier(&family.id) {
         return Err("identifier must be lowercase ASCII");
+    }
+    // Reste sous le dossier du manifeste : ni chemin absolu, ni remontée, ni autre hôte.
+    let relative = !family.icon.starts_with('/')
+        && !family.icon.contains('\\')
+        && !family.icon.contains(':')
+        && family
+            .icon
+            .split('/')
+            .all(|part| !part.is_empty() && part != "..");
+    if !relative {
+        return Err("icon must be a relative path");
+    }
+    if !is_sha256(&family.icon_sha256) {
+        return Err("icon sha256 must be 64 hexadecimal characters");
+    }
+    Ok(())
+}
+
+fn check_image(image: &Image) -> Result<(), &'static str> {
+    if !is_identifier(&image.id) {
+        return Err("identifier must be lowercase ASCII");
+    }
+    if !is_date(&image.released) {
+        return Err("release date must be YYYY-MM-DD");
     }
     if !image.homepage.starts_with("https://") {
         return Err("homepage must be https");
@@ -112,7 +185,7 @@ fn check_image(image: &Image) -> Result<(), &'static str> {
             if !url.starts_with("https://") {
                 return Err("url must be https");
             }
-            if sha256.len() != 64 || !sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
+            if !is_sha256(sha256) {
                 return Err("sha256 must be 64 hexadecimal characters");
             }
         }
@@ -165,8 +238,27 @@ pub fn verify(
             seen: trust.seen_sequence,
         });
     }
+    let mut families = HashSet::new();
+    for family in &catalog.families {
+        check_family(family).map_err(|reason| CatalogError::InvalidImage {
+            id: family.id.clone(),
+            reason,
+        })?;
+        if !families.insert(family.id.as_str()) {
+            return Err(CatalogError::InvalidImage {
+                id: family.id.clone(),
+                reason: "duplicate identifier",
+            });
+        }
+    }
     let mut ids = HashSet::new();
     for image in &catalog.images {
+        if !families.contains(image.family.as_str()) {
+            return Err(CatalogError::InvalidImage {
+                id: image.id.clone(),
+                reason: "unknown family",
+            });
+        }
         check_image(image).map_err(|reason| CatalogError::InvalidImage {
             id: image.id.clone(),
             reason,
@@ -197,20 +289,30 @@ mod tests {
 
     fn manifest(sequence: u64, expires: u64, images: &str) -> Vec<u8> {
         format!(
-            r#"{{"schema_version":1,"sequence":{sequence},"expires_unix":{expires},"images":[{images}]}}"#
+            r#"{{"schema_version":1,"sequence":{sequence},"expires_unix":{expires},"families":[{}],"images":[{images}]}}"#,
+            familles()
         )
         .into_bytes()
     }
 
+    fn familles() -> String {
+        let empreinte = "b".repeat(64);
+        ["debian", "windows"]
+            .map(|id| {
+                format!(r#"{{"id":"{id}","name":"{id}","icon":"icons/{id}.svg","icon_sha256":"{empreinte}"}}"#)
+            })
+            .join(",")
+    }
+
     fn debian() -> String {
         format!(
-            r#"{{"id":"debian-13-netinst-x86_64","name":"Debian","version":"13.6","edition":"netinst","arch":"x86_64","homepage":"https://www.debian.org/","url":"https://cdimage.debian.org/x.iso","sha256":"{}","size_bytes":123}}"#,
+            r#"{{"id":"debian-13-netinst-x86_64","family":"debian","name":"Debian","version":"13.6","channel":"stable","released":"2026-01-10","edition":"netinst","arch":"x86_64","homepage":"https://www.debian.org/","url":"https://cdimage.debian.org/x.iso","sha256":"{}","size_bytes":123}}"#,
             "a".repeat(64)
         )
     }
 
     fn windows() -> String {
-        r#"{"id":"windows-11-x86_64","name":"Windows","version":"11","arch":"x86_64","homepage":"https://www.microsoft.com/","official_page":"https://www.microsoft.com/software-download/windows11"}"#.to_owned()
+        r#"{"id":"windows-11-x86_64","family":"windows","name":"Windows","version":"11","channel":"stable","released":"2021-10-05","arch":"x86_64","homepage":"https://www.microsoft.com/","official_page":"https://www.microsoft.com/software-download/windows11"}"#.to_owned()
     }
 
     fn check(
@@ -310,6 +412,41 @@ mod tests {
     }
 
     #[test]
+    fn plusieurs_versions_d_un_systeme_et_cycle_de_vie() -> Result<(), Box<dyn std::error::Error>> {
+        let (key, public) = pair(1)?;
+        let ancienne = debian()
+            .replace("debian-13-netinst", "debian-12-netinst")
+            .replace("13.6", "12.11")
+            .replace(r#""channel":"stable""#, r#""channel":"end_of_life""#);
+        let images = format!("{},{ancienne}", debian());
+        let catalog = check(&manifest(1, NOW + 1, &images), &key, &[public], 0)?;
+        assert_eq!(catalog.images[1].channel, Channel::EndOfLife);
+        assert_eq!(catalog.images[1].family, catalog.images[0].family);
+        Ok(())
+    }
+
+    #[test]
+    fn un_logo_ne_sort_pas_du_dossier_du_catalogue() {
+        let family = |icon: &str| Family {
+            id: "ubuntu".to_owned(),
+            name: "Ubuntu".to_owned(),
+            icon: icon.to_owned(),
+            icon_sha256: "b".repeat(64),
+        };
+        assert_eq!(check_family(&family("icons/ubuntu.svg")), Ok(()));
+        for refuse in [
+            "../x.svg",
+            "/x.svg",
+            "https://x/y.svg",
+            "a//b.svg",
+            r"a\b.svg",
+            "",
+        ] {
+            assert!(check_family(&family(refuse)).is_err(), "{refuse}");
+        }
+    }
+
+    #[test]
     fn une_image_invalide_refuse_tout_le_manifeste() -> Result<(), Box<dyn std::error::Error>> {
         let (key, public) = pair(1)?;
         let cas = [
@@ -319,6 +456,8 @@ mod tests {
             debian().replace("https://www.debian.org/", "http://www.debian.org/"),
             windows().replace("https://www.microsoft.com/software", "ftp://x/software"),
             format!("{},{}", debian(), debian()),
+            debian().replace(r#""family":"debian""#, r#""family":"absente""#),
+            debian().replace("2026-01-10", "10 janvier"),
         ];
         for images in cas {
             assert!(
