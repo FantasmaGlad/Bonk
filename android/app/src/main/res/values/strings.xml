@@ -12,4 +12,6 @@
     <string name="serial_read">Serial read: %1$s</string>
     <string name="write_reserved">Write test reserved for the drive with serial %1$s.</string>
     <string name="drive_unreadable">This drive was seen but does not answer (%1$s). Bonk tries again every 10 seconds.</string>
+    <string name="writing_notification">Bonk is writing to a drive</string>
+    <string name="do_not_unplug">Do not unplug the drive before the result. You can leave the app.</string>
 </resources>
