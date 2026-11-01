@@ -18,6 +18,8 @@ pub mod node;
 pub mod platform;
 pub mod safety;
 pub mod target;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub mod usbfs;
 pub mod windows_facts;
 
 pub use describe::{
