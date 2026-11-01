@@ -32,10 +32,27 @@
 | <img src="docs/icons/opensuse.svg" width="18" height="18" valign="middle" alt="opensuse"> **openSUSE, SLES** | [.rpm](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-1.x86_64.rpm) | [.rpm](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-1.aarch64.rpm) | — | Writes USB drives |
 | <img src="docs/icons/arch.svg" width="18" height="18" valign="middle" alt="arch"> <img src="docs/icons/manjaro.svg" width="18" height="18" valign="middle" alt="manjaro"> <img src="docs/icons/endeavouros.svg" width="18" height="18" valign="middle" alt="endeavouros"> <img src="docs/icons/cachyos.svg" width="18" height="18" valign="middle" alt="cachyos"> **Arch, Manjaro, EndeavourOS, CachyOS** | [.pkg.tar.zst](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-1-x86_64.pkg.tar.zst) · [.tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-linux-x86_64.tar.gz) | [.tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-linux-aarch64.tar.gz) | — | Writes USB drives |
 | <img src="docs/icons/linux.svg" width="18" height="18" valign="middle" alt="linux"> **Any Linux** | [.tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-linux-x86_64.tar.gz) | [.tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-linux-aarch64.tar.gz) | [.tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-linux-i686.tar.gz) | Writes USB drives |
-| <img src="docs/icons/linux.svg" width="18" height="18" valign="middle" alt="linux"> **Any Linux, static, CLI only** | [.tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-linux-x86_64-musl.tar.gz) | [.tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-linux-aarch64-musl.tar.gz) | — | Writes USB drives |
 | <img src="docs/icons/windows.svg" width="18" height="18" valign="middle" alt="windows"> **Windows 10+** | [Installer](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-windows-x86_64-setup.exe) · [.exe](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-windows-x86_64.exe) · [.zip](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-windows-x86_64.zip) | [Installer](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-windows-aarch64-setup.exe) · [.exe](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-windows-aarch64.exe) · [.zip](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-windows-aarch64.zip) | [Installer](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-windows-i686-setup.exe) · [.exe](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-windows-i686.exe) · [.zip](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-windows-i686.zip) | Preview: no disk access yet |
-| <img src="docs/icons/windows.svg" width="18" height="18" valign="middle" alt="windows"> **Windows 10+, CLI only** | [.zip](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-cli-0.0.3-windows-x86_64.zip) | [.zip](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-cli-0.0.3-windows-aarch64.zip) | [.zip](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-cli-0.0.3-windows-i686.zip) | Preview: no disk access yet |
 | <img src="docs/icons/apple.svg" width="18" height="18" valign="middle" alt="apple"> **macOS 12+** | [.dmg](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-macos-universal.dmg) · [.tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-macos-x86_64.tar.gz) | [.dmg](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-macos-universal.dmg) · [.tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-macos-aarch64.tar.gz) | — | Preview: no disk access yet |
-| <img src="docs/icons/apple.svg" width="18" height="18" valign="middle" alt="apple"> **macOS 12+, CLI only** | [.tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-cli-0.0.3-macos-x86_64.tar.gz) | [.tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-cli-0.0.3-macos-aarch64.tar.gz) | — | Preview: no disk access yet |
 
 Checksums: [`SHA256SUMS`](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/SHA256SUMS). Provenance: `gh attestation verify <file> --repo FantasmaGlad/Bonk`.
+
+## Command line only
+
+No window and no graphics libraries, for servers and scripts. No administrator rights needed.
+
+```bash
+curl -fsSL https://packages.bonk-os.app/install.sh | sh
+```
+
+```powershell
+irm https://packages.bonk-os.app/install.ps1 | iex
+```
+
+Every package manager also offers it as `bonk-cli`: [commands](https://bonk-os.app/install/).
+
+| System | x86_64 | ARM64 | x86 | Status |
+| :--- | :---: | :---: | :---: | :--- |
+| <img src="docs/icons/linux.svg" width="18" height="18" valign="middle" alt="linux"> **Any Linux** | [.tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-linux-x86_64-musl.tar.gz) | [.tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-0.0.3-linux-aarch64-musl.tar.gz) | — | Writes USB drives |
+| <img src="docs/icons/windows.svg" width="18" height="18" valign="middle" alt="windows"> **Windows 10+** | [.zip](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-cli-0.0.3-windows-x86_64.zip) | [.zip](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-cli-0.0.3-windows-aarch64.zip) | [.zip](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-cli-0.0.3-windows-i686.zip) | Preview: no disk access yet |
+| <img src="docs/icons/apple.svg" width="18" height="18" valign="middle" alt="apple"> **macOS 12+** | [.tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-cli-0.0.3-macos-x86_64.tar.gz) | [.tar.gz](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.3/bonk-cli-0.0.3-macos-aarch64.tar.gz) | — | Preview: no disk access yet |

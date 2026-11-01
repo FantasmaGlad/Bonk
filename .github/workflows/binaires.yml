@@ -185,9 +185,11 @@ jobs:
             v="$cargo_v-${SHA::8}"
           fi
           if [ -n "$EXE" ]; then ext=zip; else ext=tar.gz; fi
+          # La version musl est la version sans fenêtre de Linux : son nom le dit, comme sur les autres systèmes.
+          if [[ "$NOM" == *-musl ]]; then racine="bonk-cli-$v-${NOM%-musl}"; else racine="bonk-$v-$NOM"; fi
           {
-            echo "dossier=bonk-$v-$NOM"
-            echo "archive=bonk-$v-$NOM.$ext"
+            echo "dossier=$racine"
+            echo "archive=$racine.$ext"
             echo "executable=bonk-$v-$NOM.exe"
           } >> "$GITHUB_OUTPUT"
         shell: bash
