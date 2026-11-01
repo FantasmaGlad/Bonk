@@ -24,8 +24,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -60,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import java.util.Locale
+import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 import kotlinx.coroutines.delay
 import org.json.JSONArray
@@ -69,11 +72,15 @@ private const val TAG = "Bonk"
 private const val MEBIBYTE = 1_048_576
 private const val CLOCK_MS = 500L
 private const val TICKS_PER_REFRESH = 4
+private const val NO_EFFECT = "\"effects\":[]"
+private const val MENU_HEIGHT_DP = 360
 
 class MainActivity : ComponentActivity() {
     private var revision by mutableIntStateOf(0)
     private var screen by mutableStateOf(JSONObject())
     private var screenText = ""
+    private var lastAnswer = ""
+    private val worker = Executors.newSingleThreadExecutor()
     private var keepingOn = false
     private var driveErrors by mutableStateOf(mapOf<String, String>())
     private var picked: ParcelFileDescriptor? = null
@@ -100,25 +107,39 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    /** Rust et JSON hors du fil de l'écran : un clic ne doit jamais attendre le battement précédent. */
     private fun send(message: JSONObject) {
-        runOnUiThread {
-            if (message.optString("type") == "cancel") actions.cancelled = true
-            val answer = JSONObject(Native.dispatch(message.toString()))
-            // Redessiner ou toucher à la fenêtre sans changement fait tressauter l'écran à chaque battement.
+        if (message.optString("type") == "cancel") actions.cancelled = true
+        val text = message.toString()
+        worker.execute {
+            val raw = Native.dispatch(text)
+            if (raw == lastAnswer && raw.contains(NO_EFFECT)) return@execute
+            lastAnswer = raw
+            val answer = JSONObject(raw)
             val state = answer.optJSONObject("state") ?: JSONObject()
-            val text = state.toString()
-            if (text != screenText) {
-                screenText = text
-                screen = state
-                keepScreenOn(state.optBoolean("running"))
-                // Le résultat reste lisible après coup, même une fois le panneau refermé.
-                state.optJSONObject("panel")?.takeIf { it.optString("kind") == "finished" }?.let {
-                    Log.i(TAG, it.optString("message"))
-                }
-            }
+            val stateText = state.toString()
             val effects = answer.optJSONArray("effects") ?: JSONArray()
-            for (index in 0 until effects.length()) accomplish(effects.getJSONObject(index))
+            runOnUiThread {
+                // Redessiner ou toucher à la fenêtre sans changement fait tressauter l'écran.
+                if (stateText != screenText) {
+                    screenText = stateText
+                    screen = state
+                    keepScreenOn(state.optBoolean("running"))
+                    // Le résultat reste lisible après coup, même une fois le panneau refermé.
+                    state.optJSONObject("panel")?.takeIf { it.optString("kind") == "finished" }?.let {
+                        Log.i(TAG, it.optString("message"))
+                    }
+                }
+                for (index in 0 until effects.length()) accomplish(effects.getJSONObject(index))
+            }
         }
+    }
+
+    /** La clé branchée rouvre cette même fenêtre (`singleTask`) : seule la liste change. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        revision++
+        actions.enumerate()
     }
 
     private fun keepScreenOn(on: Boolean) {
@@ -184,6 +205,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         unregisterReceiver(usbEvents)
         picked?.close()
+        worker.shutdown()
         super.onDestroy()
     }
 }
@@ -396,18 +418,24 @@ private fun Menu(menu: JSONObject, send: (JSONObject) -> Unit) {
         )
     }
     val rows = menu.optJSONArray("rows") ?: JSONArray()
-    for (position in 0 until rows.length()) {
-        val row = rows.getJSONObject(position)
-        val usable = !row.isNull("index")
-        val modifier =
-            if (usable) {
-                Modifier.clickable { send(message("choose").put("index", row.getInt("index"))) }
-            } else {
-                Modifier
+    // Seules les lignes visibles sont dessinées : le catalogue en compte plus de cent cinquante.
+    LazyColumn(
+        Modifier.fillMaxWidth().height(MENU_HEIGHT_DP.dp),
+        verticalArrangement = Arrangement.spacedBy(Tokens.SPACE_SMALL.dp),
+    ) {
+        items(rows.length()) { position ->
+            val row = rows.getJSONObject(position)
+            val usable = !row.isNull("index")
+            val modifier =
+                if (usable) {
+                    Modifier.clickable { send(message("choose").put("index", row.getInt("index"))) }
+                } else {
+                    Modifier
+                }
+            Boxed(modifier = modifier) {
+                Small(row.optString("title"), if (usable) Tokens.INK else Tokens.SECONDARY)
+                if (!row.isNull("note")) Small(row.optString("note"))
             }
-        Boxed(modifier = modifier) {
-            Small(row.optString("title"), if (usable) Tokens.INK else Tokens.SECONDARY)
-            if (!row.isNull("note")) Small(row.optString("note"))
         }
     }
 }

@@ -23,6 +23,16 @@ android {
         buildConfigField("String", "BENCH_SERIAL", "\"$benchSerial\"")
     }
 
+    buildTypes {
+        // Compose est très lent en débogage. Signée avec la clé de débogage : pour les essais, pas pour publier.
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs["debug"]
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true

@@ -205,7 +205,9 @@ fn menu_state(model: &Model) -> Value {
     names.sort();
     let mut index = 0;
     let mut rows = Vec::new();
-    for system in &filtered {
+    // Liste longue : la fabriquer et la relire à chaque battement ralentirait tout l'écran pour rien.
+    let shown: &[&bonk_ui::catalog::System] = if model.menu_open { &filtered } else { &[] };
+    for system in shown {
         for choice in &system.choices {
             let usable = matches!(choice.source, ChoiceSource::Download { .. });
             let note = match &choice.source {
