@@ -171,7 +171,16 @@ pub(crate) struct WriteArgs {
 
     /// Image to write: a file (.img, .iso, .gz, .xz, .zst; the format is recognized by its content) or
     /// an https:// address to download, with its hash
-    source: PathBuf,
+    #[arg(required_unless_present = "image", conflicts_with = "image")]
+    source: Option<PathBuf>,
+
+    /// Image of the signed catalog (`bonk catalog list`): its official link and hash are used
+    #[arg(long, value_name = "ID", conflicts_with_all = ["sha256", "sha256_file"])]
+    image: Option<String>,
+
+    /// Catalog address (`BONK_CATALOG_URL`); its signature is checked wherever it comes from
+    #[arg(long, value_name = "URL", requires = "image")]
+    catalog_url: Option<String>,
 
     /// Confirm the write: without --yes or --force, Bonk does nothing (it never asks a question)
     #[arg(long)]
@@ -478,16 +487,31 @@ pub(crate) fn run_write(
     err: &mut dyn Write,
 ) -> u8 {
     bonk_hal::interrupt::install();
+    let (source, expected_sha256) = match &args.image {
+        Some(id) => {
+            match crate::catalog::image_source(
+                id,
+                args.catalog_url.as_deref(),
+                args.cache_dir.as_deref(),
+            ) {
+                Ok((source, sha256)) => (source, Some(sha256)),
+                Err(error) => {
+                    return finish::<()>(Err(error), &args.common, out, err, |_, _| Ok(()));
+                }
+            }
+        }
+        None => (args.source.clone().unwrap_or_default(), args.sha256.clone()),
+    };
     let mut job = WriteJob {
         target: args.common.target(),
-        source: args.source.clone(),
+        source: source.clone(),
         options: args.common.write_options(),
         verify: !args.no_verify,
         repair_gpt: !args.no_repair_gpt,
         trace_io: args.common.trace_io.map(TraceIo::from),
         dry_run: args.dry_run,
         yes: args.yes,
-        expected_sha256: args.sha256.clone(),
+        expected_sha256,
         mode: args.mode.into(),
         table: args.table.into(),
         elevation: args.common.elevate.into(),
@@ -501,7 +525,7 @@ pub(crate) fn run_write(
             &mut *err,
         );
         let request = fetch::Request {
-            source: &args.source,
+            source: &source,
             sha256_file: args.sha256_file.as_deref(),
             cache_dir: args.cache_dir.as_deref(),
         };
@@ -600,7 +624,7 @@ pub(crate) fn run_write(
     );
     // Le téléchargement a pu faire grossir le cache : le dire, seulement à qui lit du texte.
     let text = !args.common.json && args.common.progress != ProgressMode::Json;
-    let downloaded = args.source.to_str().is_some_and(bonk_catalog::is_url);
+    let downloaded = source.to_str().is_some_and(bonk_catalog::is_url);
     if code == 0
         && text
         && downloaded

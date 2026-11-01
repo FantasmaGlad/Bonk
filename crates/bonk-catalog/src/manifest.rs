@@ -6,15 +6,34 @@
 
 use std::collections::HashSet;
 use std::fmt;
+use std::fs;
+use std::path::{Path, PathBuf};
 
+use ring::digest::{SHA256, digest};
 use ring::signature::{ED25519, UnparsedPublicKey};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Version du format comprise par ce binaire.
 pub const SCHEMA_VERSION: u32 = 1;
 
+/// Clés publiques admises : la courante, dans les secrets de publication, et celle de secours, hors ligne,
+/// qui permet de continuer à publier sans nouvelle version de Bonk si la première est perdue.
+pub const TRUSTED_KEYS: [[u8; 32]; 2] = [
+    [
+        0x0a, 0xa9, 0xf4, 0x66, 0x76, 0x3f, 0x33, 0x45, 0x0a, 0xe8, 0x21, 0x17, 0xf3, 0x00, 0xd4,
+        0x90, 0x32, 0x62, 0xa8, 0x4a, 0x21, 0x11, 0xae, 0x31, 0x3d, 0xf1, 0xe8, 0xb1, 0x5a, 0xb1,
+        0x67, 0xd4,
+    ],
+    [
+        0xed, 0xce, 0x26, 0x90, 0xbc, 0xab, 0xa1, 0x8c, 0x90, 0xfd, 0x01, 0x0a, 0x80, 0x87, 0xab,
+        0x3a, 0x9d, 0x78, 0x85, 0x5d, 0xae, 0x4c, 0xb0, 0xe6, 0xb3, 0x36, 0xf7, 0x17, 0x30, 0xc1,
+        0xe0, 0xee,
+    ],
+];
+
 /// Un système, tel que l'écran de choix le présente : ses versions sont ses images.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Family {
     /// Identifiant stable : `ubuntu`.
     pub id: String,
@@ -25,7 +44,7 @@ pub struct Family {
 }
 
 /// Cycle de vie d'une version : ce qui signale une version ancienne.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Channel {
     /// Maintenue longtemps par l'éditeur (Ubuntu 26.04 LTS).
@@ -37,7 +56,7 @@ pub enum Channel {
 }
 
 /// Une image proposée.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Image {
     /// Identifiant stable : `debian-13-netinst-x86_64`.
     pub id: String,
@@ -57,7 +76,7 @@ pub struct Image {
 }
 
 /// Où trouver l'image.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
 pub enum ImageSource {
     /// Lien officiel, empreinte relue chez l'éditeur.
@@ -71,7 +90,7 @@ pub enum ImageSource {
 }
 
 /// Le manifeste, une fois vérifié.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Catalog {
     pub schema_version: u32,
     /// Croît à chaque publication : un miroir ne peut pas resservir un ancien manifeste à qui a vu plus récent.
@@ -87,9 +106,19 @@ pub enum CatalogError {
     BadSignature,
     Unreadable(String),
     UnsupportedVersion(u32),
-    Expired { expires_unix: u64 },
-    Rollback { sequence: u64, seen: u64 },
-    InvalidImage { id: String, reason: &'static str },
+    Expired {
+        expires_unix: u64,
+    },
+    Rollback {
+        sequence: u64,
+        seen: u64,
+    },
+    InvalidImage {
+        id: String,
+        reason: &'static str,
+    },
+    /// Ni le réseau ni une copie gardée.
+    Unavailable(String),
 }
 
 impl fmt::Display for CatalogError {
@@ -110,6 +139,7 @@ impl fmt::Display for CatalogError {
                 )
             }
             Self::InvalidImage { id, reason } => write!(f, "catalog image '{id}': {reason}"),
+            Self::Unavailable(detail) => write!(f, "catalog unavailable: {detail}"),
         }
     }
 }
@@ -273,6 +303,108 @@ pub fn verify(
     Ok(catalog)
 }
 
+/// Le catalogue vérifié, et d'où il vient.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Loaded {
+    pub catalog: Catalog,
+    /// Copie gardée, le réseau ayant manqué. Elle reste soumise à la signature et à l'expiration.
+    pub saved_copy: bool,
+}
+
+const MANIFEST: &str = "catalog.json";
+const SIGNATURE: &str = "catalog.json.sig";
+const SEEN: &str = "seen";
+
+fn seen_sequence(dir: &Path) -> u64 {
+    fs::read_to_string(dir.join(SEEN))
+        .ok()
+        .and_then(|text| text.trim().parse().ok())
+        .unwrap_or(0)
+}
+
+/// Écrit sans jamais laisser un fichier à moitié : une coupure garde l'ancien.
+fn replace(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let partial = path.with_extension("part");
+    fs::write(&partial, bytes)?;
+    fs::rename(&partial, path)
+}
+
+/// Lit le catalogue sous `base`, ou, **si le réseau seul a manqué**, la dernière copie vérifiée. Un fichier
+/// reçu mais refusé reste une erreur : se rabattre en silence masquerait une falsification.
+///
+/// # Errors
+/// Fichier refusé par [`verify`], ou ni réseau ni copie.
+pub fn load(
+    base: &str,
+    dir: &Path,
+    now_unix: u64,
+    keys: &[[u8; 32]],
+    fetch: &dyn Fn(&str) -> Result<Vec<u8>, String>,
+) -> Result<Loaded, CatalogError> {
+    let trust = Trust {
+        keys,
+        now_unix,
+        seen_sequence: seen_sequence(dir),
+    };
+    let received = fetch(&format!("{base}{MANIFEST}"))
+        .and_then(|manifest| Ok((manifest, fetch(&format!("{base}{SIGNATURE}"))?)));
+    match received {
+        Ok((manifest, signature)) => {
+            let catalog = verify(&manifest, &signature, &trust)?;
+            // Le cache n'est qu'un secours : ne pas pouvoir l'écrire n'empêche pas de lire le catalogue.
+            let saved = fs::create_dir_all(dir)
+                .and_then(|()| replace(&dir.join(MANIFEST), &manifest))
+                .and_then(|()| replace(&dir.join(SIGNATURE), &signature))
+                .and_then(|()| replace(&dir.join(SEEN), catalog.sequence.to_string().as_bytes()));
+            if let Err(error) = saved {
+                log::warn!(target: "bonk::catalog", error = error.to_string().as_str(); "catalog copy not saved");
+            }
+            Ok(Loaded {
+                catalog,
+                saved_copy: false,
+            })
+        }
+        Err(detail) => {
+            let copy = fs::read(dir.join(MANIFEST))
+                .and_then(|manifest| Ok((manifest, fs::read(dir.join(SIGNATURE))?)));
+            let (manifest, signature) = copy.map_err(|_| CatalogError::Unavailable(detail))?;
+            Ok(Loaded {
+                catalog: verify(&manifest, &signature, &trust)?,
+                saved_copy: true,
+            })
+        }
+    }
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Le logo d'un système, dans le cache, contrôlé par son empreinte signée. Descriptif : `None` s'il manque.
+#[must_use]
+pub fn icon_path(
+    base: &str,
+    dir: &Path,
+    family: &Family,
+    fetch: &dyn Fn(&str) -> Result<Vec<u8>, String>,
+) -> Option<PathBuf> {
+    let extension = Path::new(&family.icon).extension()?.to_str()?;
+    let path = dir
+        .join("icons")
+        .join(format!("{}.{extension}", family.icon_sha256));
+    if path.is_file() {
+        return Some(path);
+    }
+    let bytes = fetch(&format!("{base}{}", family.icon)).ok()?;
+    if !hex(digest(&SHA256, &bytes).as_ref()).eq_ignore_ascii_case(&family.icon_sha256) {
+        log::warn!(target: "bonk::catalog", family = family.id.as_str(); "icon does not match its hash");
+        return None;
+    }
+    fs::create_dir_all(path.parent()?).ok()?;
+    replace(&path, &bytes).ok()?;
+    Some(path)
+}
+
 #[cfg(test)]
 mod tests {
     use ring::signature::{Ed25519KeyPair, KeyPair};
@@ -408,6 +540,119 @@ mod tests {
             check(b"pas du json", &key, &[public], 0),
             Err(CatalogError::Unreadable(_))
         ));
+        Ok(())
+    }
+
+    /// Dossier jetable, retiré à la fin du test.
+    struct Dossier(PathBuf);
+
+    impl Dossier {
+        fn new(nom: &str) -> Self {
+            Self(std::env::temp_dir().join(format!("bonk-catalog-{nom}-{}", std::process::id())))
+        }
+    }
+
+    impl Drop for Dossier {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn la_copie_sert_si_le_reseau_manque_jamais_si_le_fichier_est_refuse()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (key, public) = pair(1)?;
+        let dossier = Dossier::new("copie");
+        let bytes = manifest(5, NOW + 1, &debian());
+        let signature = key.sign(&bytes).as_ref().to_vec();
+        let (m, s) = (bytes.clone(), signature.clone());
+        let bon = move |url: &str| {
+            Ok(if url.ends_with(".sig") {
+                s.clone()
+            } else {
+                m.clone()
+            })
+        };
+        let hors_ligne = |_: &str| Err("coupure".to_owned());
+        let lire = |now, fetch: &dyn Fn(&str) -> Result<Vec<u8>, String>| {
+            load("https://c/", &dossier.0, now, &[public], fetch)
+        };
+
+        // Rien encore : ni réseau ni copie.
+        assert!(matches!(
+            lire(NOW, &hors_ligne),
+            Err(CatalogError::Unavailable(_))
+        ));
+        assert!(!lire(NOW, &bon)?.saved_copy);
+        assert!(lire(NOW, &hors_ligne)?.saved_copy);
+
+        // Reçu mais falsifié : refusé, même avec une bonne copie.
+        let (mut f, s2) = (bytes.clone(), signature.clone());
+        f[20] ^= 1;
+        let falsifie = move |url: &str| {
+            Ok(if url.ends_with(".sig") {
+                s2.clone()
+            } else {
+                f.clone()
+            })
+        };
+        assert_eq!(lire(NOW, &falsifie), Err(CatalogError::BadSignature));
+
+        // Un ancien manifeste, même bien signé, ne repasse pas après un plus récent.
+        let ancien = manifest(4, NOW + 1, &debian());
+        let s3 = key.sign(&ancien).as_ref().to_vec();
+        let retour = move |url: &str| {
+            Ok(if url.ends_with(".sig") {
+                s3.clone()
+            } else {
+                ancien.clone()
+            })
+        };
+        assert!(matches!(
+            lire(NOW, &retour),
+            Err(CatalogError::Rollback { .. })
+        ));
+
+        // La copie expire aussi.
+        assert!(matches!(
+            lire(NOW + 1, &hors_ligne),
+            Err(CatalogError::Expired { .. })
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn un_logo_faux_est_ecarte() {
+        let dossier = Dossier::new("logo");
+        let contenu = b"<svg/>".to_vec();
+        let empreinte = hex(digest(&SHA256, &contenu).as_ref());
+        let family = |sha: String| Family {
+            id: "ubuntu".to_owned(),
+            name: "Ubuntu".to_owned(),
+            icon: "icons/ubuntu.svg".to_owned(),
+            icon_sha256: sha,
+        };
+        let fetch = move |_: &str| Ok(contenu.clone());
+        assert_eq!(
+            icon_path("https://c/", &dossier.0, &family("0".repeat(64)), &fetch),
+            None
+        );
+        let chemin = icon_path("https://c/", &dossier.0, &family(empreinte.clone()), &fetch);
+        assert!(chemin.is_some_and(|p| p.is_file()));
+        // Déjà gardé : pas de réseau.
+        let hors_ligne = |_: &str| Err("coupure".to_owned());
+        assert!(icon_path("https://c/", &dossier.0, &family(empreinte), &hors_ligne).is_some());
+    }
+
+    #[test]
+    fn les_cles_embarquees_sont_distinctes_et_refusent_une_signature_de_test()
+    -> Result<(), Box<dyn std::error::Error>> {
+        assert_ne!(TRUSTED_KEYS[0], TRUSTED_KEYS[1]);
+        let (key, _) = pair(1)?;
+        assert_eq!(
+            check(&manifest(1, NOW + 1, &debian()), &key, &TRUSTED_KEYS, 0),
+            Err(CatalogError::BadSignature)
+        );
         Ok(())
     }
 

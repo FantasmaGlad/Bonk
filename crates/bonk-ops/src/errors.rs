@@ -39,6 +39,7 @@ pub enum Code {
     ImageNotBootable,
     ImageTruncated,
     DownloadFailed,
+    CatalogRefused,
     WriteFailed,
     VerifyMismatch,
     Cancelled,
@@ -239,6 +240,19 @@ pub const CATALOG: &[Entry] = &[
             "cache directory full or not writable",
         ],
         remedy: "Run the same command again: the download resumes where it stopped. Nothing was written to the drive.",
+    },
+    Entry {
+        code: Code::CatalogRefused,
+        id: "E3009",
+        exit: EXIT_SOURCE,
+        title: "The image catalog is unavailable or refused",
+        causes: &[
+            "network down, and no saved copy",
+            "signature that does not match: altered file, or wrong address",
+            "expired catalog: publishing has stopped",
+            "catalog older than the one already seen, or format newer than this version of Bonk",
+        ],
+        remedy: "Try again later, or update Bonk. A local file or an address with --sha256 still works without the catalog.",
     },
     Entry {
         code: Code::WriteFailed,
