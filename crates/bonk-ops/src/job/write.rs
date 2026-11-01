@@ -11,6 +11,7 @@ use bonk_core::repair::{RepairReport, needs_repair, repair_gpt};
 use bonk_core::write::{self as engine, Control, DEFAULT_CHUNK, Phase, Progress, VerifyError};
 use bonk_hal::{Access, Elevation, Eligibility, FilterOptions, Warning, evaluate};
 
+use super::extract::Extraction;
 use super::extract::{self, WindowsImage};
 use super::source::ImageFile;
 use super::target::{Chosen, OpenRequest, choose, open_target, reread_table};
@@ -349,22 +350,73 @@ fn write_windows(
         if chosen.disk.is_some() {
             steps.push("reread_table");
         }
-        return Ok(WriteOutcome::Plan(Box::new(Plan {
-            schema_version: SCHEMA_VERSION,
-            event: "plan",
-            dry_run: true,
-            target: chosen.info,
+        return Ok(plan(
+            chosen,
             source,
             image,
             sha256_checked,
-            unmount: chosen.mounts,
             steps,
-            extraction: Some(windows.describe(job.table)),
-        })));
+            Some(windows.describe(job.table)),
+        ));
     }
     confirm(job, &chosen)?;
     extract::run(windows, file, chosen, job, sha256_checked, deps, progress)
         .map(|done| WriteOutcome::Extracted(Box::new(done)))
+}
+
+/// Le plan d'un essai à blanc, le même pour une image brute et une clé Windows.
+fn plan(
+    chosen: Chosen,
+    source: SourceInfo,
+    image: ImageReport,
+    sha256_checked: bool,
+    steps: Vec<&'static str>,
+    extraction: Option<Extraction>,
+) -> WriteOutcome {
+    WriteOutcome::Plan(Box::new(Plan {
+        schema_version: SCHEMA_VERSION,
+        event: "plan",
+        dry_run: true,
+        target: chosen.info,
+        source,
+        image,
+        sha256_checked,
+        unmount: chosen.mounts,
+        steps,
+        extraction,
+    }))
+}
+
+/// L'autorisation du système peut faire attendre : le dire, et laisser annuler avant d'ouvrir le disque.
+fn announce_authorization(
+    total: Option<u64>,
+    deps: &Deps<'_>,
+    progress: &mut dyn FnMut(&Progress) -> Control,
+) -> Result<(), JobError> {
+    let waiting = Progress {
+        phase: Phase::Authorize,
+        bytes_done: 0,
+        bytes_total: total,
+        bytes_per_second: 0.0,
+        elapsed_ms: 0,
+    };
+    if guarded(deps, progress)(&waiting) == Control::Cancel {
+        return Err(fail(Code::Cancelled, "cancelled before opening the disk"));
+    }
+    Ok(())
+}
+
+/// Refus avant tout geste quand la taille de l'image est connue et dépasse la cible.
+fn refuse_if_too_large(needed: Option<u64>, available: Option<u64>) -> Result<(), JobError> {
+    if let (Some(needed), Some(available)) = (needed, available)
+        && needed > available
+    {
+        return Err(fail(
+            Code::SourceTooLarge,
+            format!("the image is {needed} bytes, the target {available} bytes"),
+        ));
+    }
+    Ok(())
 }
 
 pub fn write(
@@ -389,17 +441,10 @@ pub fn write(
         );
     }
     judge_image(&image, job.mode)?;
-    // Refus avant tout geste quand la taille de l'image est connue et dépasse la cible.
-    if let (Some(needed), Some(available)) = (
+    refuse_if_too_large(
         needed_bytes(&source_info, &image, job.mode),
         chosen.info.size_bytes,
-    ) && needed > available
-    {
-        return Err(fail(
-            Code::SourceTooLarge,
-            format!("the image is {needed} bytes, the target {available} bytes"),
-        ));
-    }
+    )?;
 
     if let Some(expected) = &job.expected_sha256 {
         check_sha256(&file, &job.source, expected, deps, progress)?;
@@ -408,18 +453,14 @@ pub fn write(
 
     if job.dry_run {
         let steps = planned_steps(job, &chosen);
-        return Ok(WriteOutcome::Plan(Box::new(Plan {
-            schema_version: SCHEMA_VERSION,
-            event: "plan",
-            dry_run: true,
-            target: chosen.info,
-            source: source_info,
+        return Ok(plan(
+            chosen,
+            source_info,
             image,
             sha256_checked,
-            unmount: chosen.mounts,
             steps,
-            extraction: None,
-        })));
+            None,
+        ));
     }
     confirm(job, &chosen)?;
     if !sha256_checked && source_info.format != Format::Raw {
@@ -440,16 +481,7 @@ pub fn write(
         "write starting"
     );
     if chosen.disk.is_some() {
-        let waiting = Progress {
-            phase: Phase::Authorize,
-            bytes_done: 0,
-            bytes_total: source_info.size_bytes,
-            bytes_per_second: 0.0,
-            elapsed_ms: 0,
-        };
-        if guarded(deps, progress)(&waiting) == Control::Cancel {
-            return Err(fail(Code::Cancelled, "cancelled before opening the disk"));
-        }
+        announce_authorization(source_info.size_bytes, deps, progress)?;
     }
     let (mut device, info, unmounted) = open_target(
         chosen,

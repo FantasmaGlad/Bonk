@@ -1,9 +1,9 @@
+use super::view::secondes_restantes;
 use bonk_hal::{Bus, DiskKind, Partition};
 use iced::keyboard::{Key, key::Named};
 use iced_test::Simulator;
 
 use super::navigation::*;
-use super::view::*;
 use super::*;
 
 fn partition(path: &str, mounts: &[&str], system: bool) -> Partition {

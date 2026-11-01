@@ -65,6 +65,7 @@ ruzstd = "0.9"
 unwrap_used = "warn"
 expect_used = "warn"
 dbg_macro = "deny"
+too_many_lines = "warn"
 
 [profile.release]
 lto = "thin"
