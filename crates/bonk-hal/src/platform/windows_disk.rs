@@ -1,16 +1,18 @@
 //! Windows : ouverture brute d'un disque entier, verrouillage de ses volumes.
 //!
 //! Windows refuse d'écrire sur les secteurs d'un volume monté : chaque volume du disque est verrouillé
-//! puis démonté, et sa poignée gardée tant que l'écriture dure. Ces gestes exigent d'être administrateur ;
-//! sans cela, tout échoue proprement avant d'avoir touché au disque.
+//! puis démonté, et sa poignée gardée tant que l'écriture dure. Ces gestes exigent d'être administrateur :
+//! ce processus l'est, ou c'est le helper élevé qui les fait (`windows_helper`).
 
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::os::windows::fs::{FileExt, OpenOptionsExt};
 use std::os::windows::io::AsRawHandle;
 use std::path::Path;
+use std::process::{Command, Stdio};
 use std::sync::Mutex;
 
+use bonk_core::format::Filesystem;
 use bonk_core::{BlockDevice, BlockError, check_access, check_geometry};
 use windows_sys::Win32::Storage::FileSystem::{
     FILE_FLAG_NO_BUFFERING, FILE_FLAG_WRITE_THROUGH, FILE_SHARE_READ, FILE_SHARE_WRITE,
@@ -23,10 +25,51 @@ use windows_sys::Win32::System::Ioctl::{
 use super::windows::{ioctl_raw, read_volumes};
 use crate::image::Access;
 use crate::target::OpenTargetError;
-use crate::windows_facts::disk_number;
+use crate::windows_facts::{disk_number, partition_numbers};
 
 /// Alignement mémoire exigé par `FILE_FLAG_NO_BUFFERING` : le secteur, 4 Kio au plus sur ces supports.
 const MEMORY_ALIGN: usize = 4096;
+
+/// Pose exFAT ou NTFS par `Format-Volume`. L'étiquette passe par l'environnement : rien de ce qu'elle
+/// contient n'est interprété par PowerShell.
+pub(super) fn format_partition(
+    partition: &Path,
+    fs: Filesystem,
+    label: Option<&str>,
+) -> Result<(), BlockError> {
+    let (disk, number) = partition
+        .to_str()
+        .and_then(partition_numbers)
+        .ok_or_else(|| invalid("the path is not a partition"))?;
+    let name = match fs {
+        Filesystem::Exfat => "exFAT",
+        Filesystem::Ntfs => "NTFS",
+        Filesystem::Fat32 | Filesystem::Ext4 => {
+            return Err(BlockError::Io(io::ErrorKind::Unsupported.into()));
+        }
+    };
+    let script = format!(
+        "$ErrorActionPreference='Stop'; \
+         $p = Get-Partition -DiskNumber {disk} -PartitionNumber {number}; \
+         $a = @{{Partition=$p; FileSystem='{name}'; Force=$true; Confirm=$false}}; \
+         if ($env:BONK_FORMAT_LABEL) {{ $a.NewFileSystemLabel = $env:BONK_FORMAT_LABEL }}; \
+         Format-Volume @a | Out-Null"
+    );
+    let mut command = Command::new("powershell.exe");
+    crate::console::hide_child_console(&mut command);
+    let output = command
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .env("BONK_FORMAT_LABEL", label.unwrap_or_default())
+        .stdin(Stdio::null())
+        .output()?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(BlockError::Io(io::Error::other(format!(
+        "Format-Volume: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    ))))
+}
 
 /// Volumes verrouillés, gardés jusqu'à la relecture de la table ou la fin du processus.
 static LOCKED: Mutex<Vec<File>> = Mutex::new(Vec::new());
@@ -46,7 +89,7 @@ fn check_disk_path(path: &Path) -> Result<(), BlockError> {
     }
 }
 
-fn open_file(path: &Path, access: Access) -> io::Result<File> {
+pub(super) fn open_file(path: &Path, access: Access) -> io::Result<File> {
     OpenOptions::new()
         .read(true)
         .write(access == Access::ReadWrite)
@@ -55,8 +98,7 @@ fn open_file(path: &Path, access: Access) -> io::Result<File> {
         .open(path)
 }
 
-/// Le droit d'ouvrir, sans garder le disque ouvert. Pas d'autorisation à demander ici : l'invite du système
-/// n'existe pas encore sous Windows, la commande doit être lancée en administrateur.
+/// Le droit d'ouvrir, sans garder le disque ouvert, avec les droits de ce processus.
 pub(super) fn prepare(path: &Path, access: Access) -> Result<(), BlockError> {
     check_disk_path(path)?;
     match open_file(path, access) {
@@ -64,7 +106,10 @@ pub(super) fn prepare(path: &Path, access: Access) -> Result<(), BlockError> {
         Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
             Err(BlockError::Io(io::Error::new(
                 io::ErrorKind::PermissionDenied,
-                format!("{}: run the command as administrator", path.display()),
+                format!(
+                    "{}: insufficient rights, elevation disabled",
+                    path.display()
+                ),
             )))
         }
         Err(error) => Err(BlockError::Io(error)),
@@ -81,7 +126,11 @@ pub(super) struct WindowsDisk {
 
 pub(super) fn open(path: &Path, access: Access) -> Result<WindowsDisk, BlockError> {
     check_disk_path(path)?;
-    let file = open_file(path, access)?;
+    from_file(open_file(path, access)?, access)
+}
+
+/// Reprend un disque déjà ouvert, ici ou par le helper. Sa taille se lit sur la poignée : c'est bien celui-là.
+pub(super) fn from_file(file: File, access: Access) -> Result<WindowsDisk, BlockError> {
     let geometry = ioctl_raw(
         file.as_raw_handle(),
         IOCTL_DISK_GET_DRIVE_GEOMETRY_EX,

@@ -5,9 +5,10 @@
 //! liste des disques n'exige donc pas d'être administrateur. L'interprétation vit dans
 //! [`crate::windows_facts`], testée sur tous les systèmes.
 
+use std::collections::HashMap;
 use std::ffi::{OsString, c_void};
 use std::io;
-use std::mem::size_of;
+use std::mem::{offset_of, size_of};
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::Path;
 use std::ptr::{null, null_mut};
@@ -15,6 +16,11 @@ use std::time::Instant;
 
 use bonk_core::format::Filesystem;
 use bonk_core::{BlockDevice, BlockError};
+use windows_sys::Win32::Devices::DeviceAndDriverInstallation::{
+    DIGCF_DEVICEINTERFACE, DIGCF_PRESENT, HDEVINFO, SP_DEVICE_INTERFACE_DATA,
+    SP_DEVICE_INTERFACE_DETAIL_DATA_W, SetupDiDestroyDeviceInfoList, SetupDiEnumDeviceInterfaces,
+    SetupDiGetClassDevsW, SetupDiGetDeviceInterfaceDetailW,
+};
 use windows_sys::Win32::Foundation::{
     CloseHandle, ERROR_FILE_NOT_FOUND, ERROR_INSUFFICIENT_BUFFER, ERROR_INVALID_FUNCTION,
     ERROR_MORE_DATA, ERROR_NO_MEDIA_IN_DRIVE, ERROR_NO_MORE_FILES, ERROR_NOT_READY,
@@ -27,16 +33,15 @@ use windows_sys::Win32::Storage::FileSystem::{
 };
 use windows_sys::Win32::System::IO::DeviceIoControl;
 use windows_sys::Win32::System::Ioctl::{
-    DISK_EXTENT, DISK_GEOMETRY_EX, DRIVE_LAYOUT_INFORMATION_EX, IOCTL_DISK_GET_DRIVE_GEOMETRY_EX,
-    IOCTL_DISK_GET_DRIVE_LAYOUT_EX, IOCTL_STORAGE_QUERY_PROPERTY, PARTITION_INFORMATION_EX,
+    DISK_EXTENT, DISK_GEOMETRY_EX, DRIVE_LAYOUT_INFORMATION_EX, GUID_DEVINTERFACE_DISK,
+    IOCTL_DISK_GET_DRIVE_GEOMETRY_EX, IOCTL_DISK_GET_DRIVE_LAYOUT_EX,
+    IOCTL_STORAGE_GET_DEVICE_NUMBER, IOCTL_STORAGE_QUERY_PROPERTY, PARTITION_INFORMATION_EX,
     PARTITION_STYLE_GPT, PARTITION_STYLE_MBR, PropertyStandardQuery, STORAGE_DEVICE_DESCRIPTOR,
-    STORAGE_PROPERTY_QUERY, StorageDeviceProperty, VOLUME_DISK_EXTENTS,
+    STORAGE_DEVICE_NUMBER, STORAGE_PROPERTY_QUERY, StorageDeviceProperty, VOLUME_DISK_EXTENTS,
 };
 use windows_sys::core::GUID;
 
-use super::{
-    Capability, Elevation, Missing, Platform, Unsupported, native_capabilities, windows_disk,
-};
+use super::{Capability, Elevation, Platform, native_capabilities, windows_disk, windows_helper};
 use crate::disk::Disk;
 use crate::enumerate::{EnumerateError, SourceRead};
 use crate::image::Access;
@@ -48,8 +53,6 @@ use crate::windows_facts::{
 /// Au-delà, Windows ne numérote pas de disques en pratique ; les numéros peuvent avoir des trous.
 const MAX_DISKS: u32 = 128;
 
-/// L'invite d'élévation et les outils de formatage de l'hôte n'existent pas encore : l'écriture demande de
-/// lancer la commande en administrateur, et seul FAT32 se formate.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Windows;
 
@@ -65,7 +68,7 @@ impl Drop for Handle {
     }
 }
 
-fn wide(text: &str) -> Vec<u16> {
+pub(super) fn wide(text: &str) -> Vec<u16> {
     std::ffi::OsStr::new(text)
         .encode_wide()
         .chain(Some(0))
@@ -169,19 +172,12 @@ fn guid_text(guid: &GUID) -> String {
     )
 }
 
-/// Disposition du disque : son identifiant et ses partitions réelles.
-fn layout(handle: &Handle) -> io::Result<(Option<String>, Vec<RawPartition>)> {
+/// Partitions réelles du disque.
+fn layout(handle: &Handle) -> io::Result<Vec<RawPartition>> {
     let buffer = ioctl(handle, IOCTL_DISK_GET_DRIVE_LAYOUT_EX, &[], 16 * 1024)?;
     let info = buffer.as_ptr().cast::<DRIVE_LAYOUT_INFORMATION_EX>();
     // SAFETY : l'appel a réussi, le système a donc écrit l'en-tête dans ce tampon aligné.
     let header = unsafe { &*info };
-    let style = i32::try_from(header.PartitionStyle).unwrap_or(-1);
-    let disk_id = match style {
-        // SAFETY : le style indique le membre valide de l'union.
-        PARTITION_STYLE_GPT => Some(guid_text(unsafe { &header.Anonymous.Gpt.DiskId })),
-        PARTITION_STYLE_MBR => Some(format!("{:08x}", unsafe { header.Anonymous.Mbr.Signature })),
-        _ => None,
-    };
     let count = usize::try_from(header.PartitionCount).unwrap_or(0);
     let room = (buffer.len() * 8 - size_of::<DRIVE_LAYOUT_INFORMATION_EX>())
         / size_of::<PARTITION_INFORMATION_EX>()
@@ -189,7 +185,7 @@ fn layout(handle: &Handle) -> io::Result<(Option<String>, Vec<RawPartition>)> {
     // SAFETY : `count` est borné par ce que le tampon peut contenir ; le système a écrit ces entrées.
     let entries =
         unsafe { std::slice::from_raw_parts(header.PartitionEntry.as_ptr(), count.min(room)) };
-    let partitions = entries
+    Ok(entries
         .iter()
         // Sous MBR, Windows liste aussi des entrées vides, de numéro 0.
         .filter(|entry| entry.PartitionNumber != 0 && entry.PartitionLength > 0)
@@ -207,12 +203,11 @@ fn layout(handle: &Handle) -> io::Result<(Option<String>, Vec<RawPartition>)> {
                 None
             },
         })
-        .collect();
-    Ok((disk_id, partitions))
+        .collect())
 }
 
 /// Lit un disque ; `None` s'il n'existe pas ou s'il n'a pas de support (lecteur de carte vide).
-fn read_disk(number: u32) -> io::Result<Option<RawDisk>> {
+fn read_disk(number: u32, instance: Option<String>) -> io::Result<Option<RawDisk>> {
     let handle = match open_for_query(&format!(r"\\.\PhysicalDrive{number}")) {
         Ok(handle) => handle,
         Err(error) if has_code(&error, &[ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND]) => {
@@ -251,7 +246,7 @@ fn read_disk(number: u32) -> io::Result<Option<RawDisk>> {
     };
     // SAFETY : l'appel a réussi, le système a écrit la géométrie dans ce tampon aligné.
     let size = unsafe { (*geometry.as_ptr().cast::<DISK_GEOMETRY_EX>()).DiskSize };
-    let (disk_id, partitions) = layout(&handle)?;
+    let partitions = layout(&handle)?;
     Ok(Some(RawDisk {
         number,
         bus_type: descriptor.BusType,
@@ -260,9 +255,86 @@ fn read_disk(number: u32) -> io::Result<Option<RawDisk>> {
         product: text_at(raw, descriptor.ProductIdOffset),
         serial: text_at(raw, descriptor.SerialNumberOffset),
         size_bytes: u64::try_from(size).unwrap_or(0),
-        disk_id,
+        instance,
         partitions,
     }))
+}
+
+/// Chemin d'instance de chaque disque, par numéro. Descriptif : sans lui, l'identifiant retombe sur le numéro.
+fn disk_instances() -> HashMap<u32, String> {
+    let mut found = HashMap::new();
+    let class = GUID_DEVINTERFACE_DISK;
+    // SAFETY : GUID valide ; les autres arguments sont facultatifs.
+    let set = unsafe {
+        SetupDiGetClassDevsW(
+            &raw const class,
+            null(),
+            null_mut(),
+            DIGCF_PRESENT | DIGCF_DEVICEINTERFACE,
+        )
+    };
+    if set as isize == -1 {
+        return found;
+    }
+    for index in 0.. {
+        // SAFETY : structure simple ; sa taille est annoncée comme l'exige l'API.
+        let mut interface: SP_DEVICE_INTERFACE_DATA = unsafe { std::mem::zeroed() };
+        interface.cbSize = u32::try_from(size_of::<SP_DEVICE_INTERFACE_DATA>()).unwrap_or(0);
+        // SAFETY : ensemble valide, sortie valide.
+        let more = unsafe {
+            SetupDiEnumDeviceInterfaces(set, null(), &raw const class, index, &raw mut interface)
+        };
+        if more == 0 {
+            break;
+        }
+        if let Some(path) = interface_path(set, &interface)
+            && let Ok(handle) = open_for_query(&path)
+            && let Ok(number) = ioctl(
+                &handle,
+                IOCTL_STORAGE_GET_DEVICE_NUMBER,
+                &[],
+                size_of::<STORAGE_DEVICE_NUMBER>(),
+            )
+        {
+            // SAFETY : l'appel a réussi, le système a écrit le numéro dans ce tampon aligné.
+            let number = unsafe { (*number.as_ptr().cast::<STORAGE_DEVICE_NUMBER>()).DeviceNumber };
+            found.insert(number, path);
+        }
+    }
+    // SAFETY : ensemble valide, fermé une seule fois.
+    unsafe {
+        SetupDiDestroyDeviceInfoList(set);
+    }
+    found
+}
+
+fn interface_path(set: HDEVINFO, interface: &SP_DEVICE_INTERFACE_DATA) -> Option<String> {
+    // Tampon aligné : l'en-tête de la structure précède le chemin, en UTF-16.
+    let mut buffer = vec![0u64; 512];
+    let detail = buffer
+        .as_mut_ptr()
+        .cast::<SP_DEVICE_INTERFACE_DETAIL_DATA_W>();
+    let capacity = u32::try_from(buffer.len() * 8).ok()?;
+    // SAFETY : tampon assez grand et aligné ; `cbSize` est celui de l'en-tête, comme l'exige l'API.
+    let path = unsafe {
+        (*detail).cbSize = u32::try_from(size_of::<SP_DEVICE_INTERFACE_DETAIL_DATA_W>()).ok()?;
+        if SetupDiGetDeviceInterfaceDetailW(
+            set,
+            interface,
+            detail,
+            capacity,
+            null_mut(),
+            null_mut(),
+        ) == 0
+        {
+            return None;
+        }
+        let start = (&raw const (*detail).DevicePath).cast::<u16>();
+        let room =
+            (buffer.len() * 8 - offset_of!(SP_DEVICE_INTERFACE_DETAIL_DATA_W, DevicePath)) / 2;
+        from_wide(std::slice::from_raw_parts(start, room))
+    };
+    (!path.is_empty()).then_some(path)
 }
 
 fn mount_points(volume: &str) -> io::Result<Vec<String>> {
@@ -413,9 +485,13 @@ fn collect() -> Result<WindowsFacts, EnumerateError> {
         let what = what.to_owned();
         move |source| EnumerateError::Io { what, source }
     };
+    let mut instances = disk_instances();
     let mut disks = Vec::new();
     for number in 0..MAX_DISKS {
-        if let Some(disk) = read_disk(number).map_err(failed(&format!("PhysicalDrive{number}")))? {
+        let instance = instances.remove(&number);
+        if let Some(disk) =
+            read_disk(number, instance).map_err(failed(&format!("PhysicalDrive{number}")))?
+        {
             disks.push(disk);
         }
     }
@@ -471,36 +547,51 @@ impl Platform for Windows {
         })
     }
 
-    fn unmount(&self, disk: &Disk, _elevation: Elevation) -> Result<Vec<String>, OpenTargetError> {
-        windows_disk::unmount(&disk.path)
+    fn unmount(&self, disk: &Disk, elevation: Elevation) -> Result<Vec<String>, OpenTargetError> {
+        if through_helper(elevation) {
+            windows_helper::unmount(disk)
+        } else {
+            windows_disk::unmount(&disk.path)
+        }
     }
 
     fn prepare_access(
         &self,
         path: &Path,
         access: Access,
-        _elevation: Elevation,
+        elevation: Elevation,
         _cancelled: &dyn Fn() -> bool,
     ) -> Result<(), BlockError> {
-        windows_disk::prepare(path, access)
+        if through_helper(elevation) {
+            windows_helper::prepare(path, access)
+        } else {
+            windows_disk::prepare(path, access)
+        }
     }
 
     fn open_disk(
         &self,
         path: &Path,
         access: Access,
-        _elevation: Elevation,
+        elevation: Elevation,
         _cancelled: &dyn Fn() -> bool,
     ) -> Result<Box<dyn BlockDevice>, BlockError> {
-        Ok(Box::new(windows_disk::open(path, access)?))
+        if through_helper(elevation) {
+            windows_helper::open(path, access)
+        } else {
+            Ok(Box::new(windows_disk::open(path, access)?))
+        }
     }
 
     fn capabilities(&self) -> Vec<Capability> {
-        native_capabilities(Capability::no(
-            "elevate",
-            Missing::OsUnsupported,
-            "run the command as administrator",
-        ))
+        let mut all = native_capabilities(Capability::yes("elevate"));
+        for capability in &mut all {
+            // exFAT et NTFS passent par `Format-Volume`, présent sur tout Windows pris en charge.
+            if ["format.exfat", "format.ntfs"].contains(&capability.name.as_str()) {
+                *capability = Capability::yes(&capability.name);
+            }
+        }
+        all
     }
 
     fn format_partition(
@@ -510,11 +601,19 @@ impl Platform for Windows {
         label: Option<&str>,
         elevation: Elevation,
     ) -> Result<(), BlockError> {
-        Unsupported.format_partition(partition, fs, label, elevation)
+        if through_helper(elevation) {
+            windows_helper::format(partition, fs, label)
+        } else {
+            windows_disk::format_partition(partition, fs, label)
+        }
     }
 
-    fn rescan(&self, disk: &Path, _elevation: Elevation) -> Result<(), BlockError> {
-        windows_disk::rescan(disk)
+    fn rescan(&self, disk: &Path, elevation: Elevation) -> Result<(), BlockError> {
+        if through_helper(elevation) {
+            windows_helper::rescan(disk)
+        } else {
+            windows_disk::rescan(disk)
+        }
     }
 
     fn is_privileged(&self) -> bool {
@@ -524,6 +623,15 @@ impl Platform for Windows {
     fn kernel_release(&self) -> Option<String> {
         None
     }
+}
+
+/// Passer par le helper ? Sans droits et si l'élévation est permise. `BONK_WINDOWS_HELPER=always` l'impose à
+/// un processus déjà élevé : un runner de CI n'a aucun moyen de lancer Bonk sans droits, et le chemin complet
+/// doit y être essayé.
+fn through_helper(elevation: Elevation) -> bool {
+    elevation == Elevation::Auto
+        && (!is_elevated()
+            || std::env::var_os("BONK_WINDOWS_HELPER").is_some_and(|v| v == "always"))
 }
 
 /// Le processus tourne-t-il élevé ? Illisible : non, la fenêtre s'ouvre et l'écriture sera refusée.
