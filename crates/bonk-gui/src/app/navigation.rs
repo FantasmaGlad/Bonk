@@ -66,6 +66,7 @@ impl App {
             order.push(Focus::Action);
         }
         order.push(Focus::Copy);
+        order.push(Focus::Language);
         order
     }
 
@@ -140,6 +141,7 @@ impl App {
                             | Focus::Browse
                             | Focus::Hash
                             | Focus::Tor
+                            | Focus::Language
                             | Focus::Raw
                             | Focus::Mbr
                             | Focus::Action
@@ -229,6 +231,7 @@ impl App {
                 _ => return Task::none(),
             },
             Some(Focus::Browse) => Message::BrowseImage,
+            Some(Focus::Language) => Message::SwitchLanguage,
             Some(Focus::Tor) if self.tor.is_some() => Message::ToggleTor(!self.use_tor),
             Some(Focus::Tor) => return Task::none(),
             Some(Focus::Raw) => match &self.write {

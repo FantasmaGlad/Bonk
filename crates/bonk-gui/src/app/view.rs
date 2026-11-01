@@ -2,7 +2,9 @@
 
 use std::time::{Duration, Instant};
 
-use bonk_hal::{Disk, Eligibility, bus_label, format_size, kind_label, state_label, verdict_badge};
+use bonk_hal::{
+    Disk, Eligibility, Lang, bus_label, format_size, kind_label, state_label, verdict_badge,
+};
 use iced::widget::{
     Column, button, center, checkbox, column, container, opaque, progress_bar, row, scrollable,
     stack, text, text_input,
@@ -11,6 +13,7 @@ use iced::{Element, Fill};
 
 use bonk_core::write::Phase;
 
+use crate::errors::failure_text;
 use crate::theme;
 use crate::transfer::Outcome;
 
@@ -19,24 +22,27 @@ use super::navigation::LIST;
 use super::{App, Focus, Message, REFRESH_EVERY, WRITE_DELAY, WriteState};
 
 /// Demande de confirmation avant d'effacer un disque interne.
-pub(super) fn internal_dialog(disk: &Disk) -> Element<'_, Message> {
+pub(super) fn internal_dialog(disk: &Disk, lang: Lang) -> Element<'_, Message> {
     container(
         column![
-            text("ATTENTION : DISQUE INTERNE").size(18),
+            text(lang.pick("WARNING: INTERNAL DISK", "ATTENTION : DISQUE INTERNE")).size(18),
             text(format!(
-                "{} ({}, {}) fait partie de cette machine. Toutes ses données seront effacées, sans \
-                 retour possible.",
+                "{} ({}, {}) {}",
                 disk.path,
                 disk.model,
-                format_size(disk.size_bytes, bonk_hal::Lang::Fr)
+                format_size(disk.size_bytes, lang),
+                lang.pick(
+                    "is part of this machine. All its data will be erased, with no way back.",
+                    "fait partie de cette machine. Toutes ses données seront effacées, sans retour possible.",
+                ),
             ))
             .size(14),
             row![
-                button(text("Renoncer").size(14))
+                button(text(lang.pick("Give up", "Renoncer")).size(14))
                     .on_press(Message::CloseInternal)
                     .padding([6, 14])
                     .style(theme::primary_button),
-                button(text("Effacer ce disque interne").size(14))
+                button(text(lang.pick("Erase this internal disk", "Effacer ce disque interne")).size(14))
                     .on_press(Message::ConfirmInternal)
                     .padding([6, 14])
                     .style(theme::primary_button),
@@ -69,13 +75,22 @@ pub(super) fn ring<'a>(
 }
 
 /// Récapitulatif d'un disque : série, nature, partitions, étiquettes, montages.
-pub(super) fn detail(disk: &Disk) -> Element<'_, Message> {
+pub(super) fn detail(disk: &Disk, lang: Lang) -> Element<'_, Message> {
     let mut lines = column![
         text(format!(
-            "Série : {}   Nature : {}   Drapeau amovible du système : {}",
-            disk.serial.as_deref().unwrap_or("inconnue"),
-            kind_label(disk.kind, bonk_hal::Lang::Fr),
-            if disk.removable_flag { "oui" } else { "non" },
+            "{} {}   {} {}   {} {}",
+            lang.pick("Serial:", "Série :"),
+            disk.serial
+                .as_deref()
+                .unwrap_or(lang.pick("unknown", "inconnue")),
+            lang.pick("Kind:", "Nature :"),
+            kind_label(disk.kind, lang),
+            lang.pick("System removable flag:", "Drapeau amovible du système :"),
+            if disk.removable_flag {
+                lang.pick("yes", "oui")
+            } else {
+                lang.pick("no", "non")
+            },
         ))
         .size(13)
         .color(theme::SECONDARY),
@@ -84,27 +99,35 @@ pub(super) fn detail(disk: &Disk) -> Element<'_, Message> {
 
     if disk.partitions.is_empty() {
         lines = lines.push(
-            text("Aucune partition détectée.")
+            text(lang.pick("No partition detected.", "Aucune partition détectée."))
                 .size(13)
                 .color(theme::SECONDARY),
         );
     }
     for partition in &disk.partitions {
         let mounts = if partition.mount_points.is_empty() {
-            "non monté".to_owned()
+            lang.pick("not mounted", "non monté").to_owned()
         } else {
-            format!("monté sur {}", partition.mount_points.join(", "))
+            format!(
+                "{} {}",
+                lang.pick("mounted on", "monté sur"),
+                partition.mount_points.join(", ")
+            )
         };
         lines = lines.push(
             text(format!(
-                "{}  {}  {}  étiquette : {}  {}",
+                "{}  {}  {}  {} {}  {}",
                 partition.path,
-                format_size(partition.size_bytes, bonk_hal::Lang::Fr),
+                format_size(partition.size_bytes, lang),
                 partition
                     .fs_type
                     .as_deref()
-                    .unwrap_or("système de fichiers inconnu"),
-                partition.label.as_deref().unwrap_or("aucune"),
+                    .unwrap_or(lang.pick("unknown filesystem", "système de fichiers inconnu")),
+                lang.pick("label:", "étiquette :"),
+                partition
+                    .label
+                    .as_deref()
+                    .unwrap_or(lang.pick("none", "aucune")),
                 mounts,
             ))
             .size(13)
@@ -124,16 +147,32 @@ fn boxed<'a>(body: Element<'a, Message>) -> Element<'a, Message> {
 
 impl App {
     pub(crate) fn view(&self) -> Element<'_, Message> {
+        let lang = self.lang;
         let entries = self.entries();
         let shown = entries.len();
 
-        let header = column![
-            text("BONK").size(28),
-            text("Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.")
+        let header = row![
+            column![
+                text("BONK").size(28),
+                text(lang.pick(
+                    "Disk detection. A write needs an offered disk, a summary and three seconds to think.",
+                    "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
+                ))
                 .size(14)
                 .color(theme::SECONDARY),
+            ]
+            .spacing(4)
+            .width(Fill),
+            // Chaque langue est nommée dans sa propre langue : elle reste trouvable sans lire l'autre.
+            ring(
+                button(text(lang.pick("Français", "English")).size(14))
+                    .on_press(Message::SwitchLanguage)
+                    .padding([6, 14])
+                    .style(theme::card_button(false)),
+                self.has_focus(Focus::Language),
+            ),
         ]
-        .spacing(4);
+        .align_y(iced::Center);
 
         let controls = self.controls();
 
@@ -144,7 +183,7 @@ impl App {
 
         let equivalent = row![
             column![
-                text("Commande équivalente")
+                text(lang.pick("Equivalent command", "Commande équivalente"))
                     .size(13)
                     .color(theme::SECONDARY),
                 text(self.equivalents().join("\n"))
@@ -153,7 +192,7 @@ impl App {
             ]
             .width(Fill),
             ring(
-                button(text("Copier").size(14))
+                button(text(lang.pick("Copy", "Copier")).size(14))
                     .on_press(Message::Copy)
                     .padding([6, 14])
                     .style(theme::primary_button),
@@ -178,41 +217,54 @@ impl App {
         .width(Fill)
         .height(Fill);
         match self.internal_to_confirm() {
-            Some(disk) => stack![window, opaque(center(internal_dialog(disk)))].into(),
+            Some(disk) => stack![window, opaque(center(internal_dialog(disk, lang)))].into(),
             None => window.into(),
         }
     }
 
     pub(super) fn status_line(&self, shown: usize) -> String {
+        let every = REFRESH_EVERY.as_secs();
+        let detected = self.disks.len();
         if self.error.is_some() {
-            return format!(
-                "Détection en échec. Nouvelle tentative automatique toutes les {} s.",
-                REFRESH_EVERY.as_secs()
-            );
+            return match self.lang {
+                Lang::En => format!("Detection failed. Automatic retry every {every} s."),
+                Lang::Fr => {
+                    format!(
+                        "Détection en échec. Nouvelle tentative automatique toutes les {every} s."
+                    )
+                }
+            };
         }
         if self.loading && self.disks.is_empty() {
-            return "Détection en cours...".to_owned();
+            return self
+                .lang
+                .pick("Detecting...", "Détection en cours...")
+                .to_owned();
         }
-        format!(
-            "{shown} disque(s) affiché(s) sur {} détecté(s). Actualisation automatique toutes les {} s.",
-            self.disks.len(),
-            REFRESH_EVERY.as_secs()
-        )
+        match self.lang {
+            Lang::En => format!(
+                "{shown} of {detected} detected disk(s) shown. Refreshes automatically every {every} s."
+            ),
+            Lang::Fr => format!(
+                "{shown} disque(s) affiché(s) sur {detected} détecté(s). Actualisation automatique toutes les {every} s."
+            ),
+        }
     }
 
     pub(super) fn card<'a>(&'a self, disk: &'a Disk, verdict: Eligibility) -> Element<'a, Message> {
+        let lang = self.lang;
         let selected = self.selected.as_deref() == Some(disk.id.as_str());
 
         let top = row![
             text(disk.model.as_str()).size(16).width(Fill),
-            text(verdict_badge(&verdict, bonk_hal::Lang::Fr)).size(14),
+            text(verdict_badge(&verdict, lang)).size(14),
         ];
         let facts = row![
             text(disk.path.as_str())
                 .size(13)
                 .font(iced::Font::MONOSPACE),
-            text(format_size(disk.size_bytes, bonk_hal::Lang::Fr)).size(13),
-            text(bus_label(disk.bus, bonk_hal::Lang::Fr)).size(13),
+            text(format_size(disk.size_bytes, lang)).size(13),
+            text(bus_label(disk.bus, lang)).size(13),
             text(disk.id.as_str()).size(13).font(iced::Font::MONOSPACE),
         ]
         .spacing(16);
@@ -224,13 +276,13 @@ impl App {
             }
         ) {
             content = content.push(
-                text(state_label(&verdict, bonk_hal::Lang::Fr))
+                text(state_label(&verdict, lang))
                     .size(13)
                     .color(theme::SECONDARY),
             );
         }
         if selected {
-            content = content.push(detail(disk));
+            content = content.push(detail(disk, lang));
         }
 
         let focused = self.focus == Some(Focus::Disk(disk.id.clone()));
@@ -280,9 +332,10 @@ impl App {
 
     /// Actualisation et réglages d'affichage.
     fn controls(&self) -> Element<'_, Message> {
+        let lang = self.lang;
         row![
             ring(
-                button(text("Actualiser").size(14))
+                button(text(lang.pick("Refresh", "Actualiser")).size(14))
                     .on_press(Message::Refresh)
                     .padding([6, 14])
                     .style(theme::primary_button),
@@ -290,7 +343,7 @@ impl App {
             ),
             ring(
                 checkbox(self.show_internal)
-                    .label("Disques internes non système")
+                    .label(lang.pick("Internal non-system disks", "Disques internes non système"))
                     .on_toggle(Message::ToggleInternal)
                     .size(18)
                     .style(theme::checkbox_style),
@@ -298,7 +351,7 @@ impl App {
             ),
             ring(
                 checkbox(self.allow_virtual)
-                    .label("Disques virtuels (mode test)")
+                    .label(lang.pick("Virtual disks (test mode)", "Disques virtuels (mode test)"))
                     .on_toggle(Message::ToggleVirtual)
                     .size(18)
                     .style(theme::checkbox_style),
@@ -306,7 +359,10 @@ impl App {
             ),
             ring(
                 checkbox(self.show_all)
-                    .label("Afficher aussi les disques écartés")
+                    .label(lang.pick(
+                        "Also show excluded disks",
+                        "Afficher aussi les disques écartés"
+                    ))
                     .on_toggle(Message::ToggleAll)
                     .size(18)
                     .style(theme::checkbox_style),
@@ -320,14 +376,22 @@ impl App {
 
     /// La liste des disques, ou ce qui en tient lieu : erreur de détection, liste vide.
     fn disk_list<'a>(&'a self, entries: Vec<(&'a Disk, Eligibility)>) -> Element<'a, Message> {
+        let lang = self.lang;
         if let Some(erreur) = &self.error {
             container(
                 column![
-                    text("ERREUR : les disques n'ont pas pu être détectés.").size(16),
+                    text(lang.pick(
+                        "ERROR: the disks could not be detected.",
+                        "ERREUR : les disques n'ont pas pu être détectés."
+                    ))
+                    .size(16),
                     text(erreur.as_str()).size(14).color(theme::SECONDARY),
-                    text("Aucun disque n'est proposé tant que la détection échoue.")
-                        .size(14)
-                        .color(theme::SECONDARY),
+                    text(lang.pick(
+                        "No disk is offered while detection fails.",
+                        "Aucun disque n'est proposé tant que la détection échoue."
+                    ))
+                    .size(14)
+                    .color(theme::SECONDARY),
                 ]
                 .spacing(6),
             )
@@ -337,13 +401,14 @@ impl App {
             .into()
         } else if entries.is_empty() {
             let message = if self.loading {
-                "Détection en cours...".to_owned()
+                lang.pick("Detecting...", "Détection en cours...")
             } else if self.show_all {
-                "Aucun disque détecté.".to_owned()
+                lang.pick("No disk detected.", "Aucun disque détecté.")
             } else {
-                "Aucun disque proposé. Branchez une clé USB ou une carte SD, ou cochez « Afficher aussi \
-                 les disques écartés » pour voir pourquoi les disques de cette machine sont écartés."
-                    .to_owned()
+                lang.pick(
+                    "No disk offered. Plug in a USB drive or an SD card, or tick \"Also show excluded disks\" to see why this machine's disks are excluded.",
+                    "Aucun disque proposé. Branchez une clé USB ou une carte SD, ou cochez « Afficher aussi les disques écartés » pour voir pourquoi les disques de cette machine sont écartés.",
+                )
             };
             container(text(message).size(14).color(theme::SECONDARY))
                 .padding(12)
@@ -379,17 +444,26 @@ impl App {
         (raw, mbr): (bool, bool),
         opened: Instant,
     ) -> Element<'a, Message> {
+        let lang = self.lang;
         // Une seule lecture de l'horloge par affichage : le décompte, l'état du bouton et son libellé
         // ne peuvent pas se contredire.
         let elapsed = opened.elapsed();
         let ready = elapsed >= WRITE_DELAY && !image.trim().is_empty();
         let label = if elapsed < WRITE_DELAY {
             let remaining = secondes_restantes(elapsed);
-            format!("Écrire et effacer ce disque (dans {remaining} s)")
+            match lang {
+                Lang::En => format!("Write and erase this disk (in {remaining} s)"),
+                Lang::Fr => format!("Écrire et effacer ce disque (dans {remaining} s)"),
+            }
         } else if image.trim().is_empty() {
-            "Écrire et effacer ce disque (choisir une image)".to_owned()
+            lang.pick(
+                "Write and erase this disk (choose an image)",
+                "Écrire et effacer ce disque (choisir une image)",
+            )
+            .to_owned()
         } else {
-            "Écrire et effacer ce disque".to_owned()
+            lang.pick("Write and erase this disk", "Écrire et effacer ce disque")
+                .to_owned()
         };
         let labels: Vec<&str> = disk
             .partitions
@@ -397,31 +471,45 @@ impl App {
             .filter_map(|p| p.label.as_deref())
             .collect();
         let mut panel = column![
-            text("ÉCRIRE UNE IMAGE SUR CE DISQUE").size(14),
+            text(lang.pick(
+                "WRITE AN IMAGE TO THIS DISK",
+                "ÉCRIRE UNE IMAGE SUR CE DISQUE"
+            ))
+            .size(14),
             text(format!(
-                "{}  série {}  {}  {} partition(s){}",
+                "{}  {} {}  {}  {} partition(s){}",
                 disk.model,
-                disk.serial.as_deref().unwrap_or("inconnue"),
-                format_size(disk.size_bytes, bonk_hal::Lang::Fr),
+                lang.pick("serial", "série"),
+                disk.serial
+                    .as_deref()
+                    .unwrap_or(lang.pick("unknown", "inconnue")),
+                format_size(disk.size_bytes, lang),
                 disk.partitions.len(),
                 if labels.is_empty() {
                     String::new()
                 } else {
-                    format!("  étiquettes : {}", labels.join(", "))
+                    format!(
+                        "  {} {}",
+                        lang.pick("labels:", "étiquettes :"),
+                        labels.join(", ")
+                    )
                 },
             ))
             .size(13),
-            text("Toutes les données de ce disque seront effacées. Cette action est irréversible.")
-                .size(13)
-                .color(theme::SECONDARY),
+            text(lang.pick(
+                "All the data on this disk will be erased. This cannot be undone.",
+                "Toutes les données de ce disque seront effacées. Cette action est irréversible.",
+            ))
+            .size(13)
+            .color(theme::SECONDARY),
             ring(
-                menu_button(&self.catalog, image, self.menu_open),
+                menu_button(&self.catalog, image, self.menu_open, lang),
                 self.has_focus(Focus::Menu),
             ),
         ]
         .spacing(8);
         if let (CatalogState::Ready(systems), true) = (&self.catalog, self.menu_open) {
-            panel = panel.push(menu_list(systems, &self.menu_filter, self.menu_index));
+            panel = panel.push(menu_list(systems, &self.menu_filter, self.menu_index, lang));
         }
         if let CatalogState::Failed(error) = &self.catalog {
             panel = panel.push(text(error.clone()).size(13).color(theme::SECONDARY));
@@ -430,17 +518,23 @@ impl App {
             && find_url(systems, image).is_some()
         {
             panel = panel.push(
-                text("Lien officiel et empreinte du catalogue signé : rien à régler.")
-                    .size(13)
-                    .color(theme::SECONDARY),
+                text(lang.pick(
+                    "Official link and hash from the signed catalog: nothing to set.",
+                    "Lien officiel et empreinte du catalogue signé : rien à régler.",
+                ))
+                .size(13)
+                .color(theme::SECONDARY),
             );
         }
         panel = panel.push(ring(
             button(
                 text(if self.advanced {
-                    "Masquer l'image manuelle et les options"
+                    lang.pick(
+                        "Hide the manual image and options",
+                        "Masquer l'image manuelle et les options",
+                    )
                 } else {
-                    "Autre image ou options..."
+                    lang.pick("Other image or options...", "Autre image ou options...")
                 })
                 .size(13),
             )
@@ -455,7 +549,10 @@ impl App {
                     row![
                         ring(
                             text_input(
-                                "Chemin ou adresse https:// de l'image (.img, .iso, .gz, .xz, .zst)",
+                                lang.pick(
+                                    "Path or https:// address of the image (.img, .iso, .gz, .xz, .zst)",
+                                    "Chemin ou adresse https:// de l'image (.img, .iso, .gz, .xz, .zst)",
+                                ),
                                 image
                             )
                             .on_input(Message::ImageInput)
@@ -466,7 +563,7 @@ impl App {
                             self.has_focus(Focus::Image),
                         ),
                         ring(
-                            button(text("Choisir l'image...").size(14))
+                            button(text(lang.pick("Choose the image...", "Choisir l'image...")).size(14))
                                 .on_press(Message::BrowseImage)
                                 .padding([6, 14])
                                 .style(theme::primary_button),
@@ -477,7 +574,10 @@ impl App {
                     .align_y(iced::Center),
                     ring(
                         text_input(
-                            "Empreinte SHA-256, ou chemin ou adresse de SHA256SUMS (exigée pour une adresse)",
+                            lang.pick(
+                                "SHA-256 hash, or path or address of SHA256SUMS (required for an address)",
+                                "Empreinte SHA-256, ou chemin ou adresse de SHA256SUMS (exigée pour une adresse)",
+                            ),
                             hash
                         )
                         .on_input(Message::HashInput)
@@ -489,8 +589,14 @@ impl App {
                     ring(
                         checkbox(self.use_tor)
                             .label(match &self.tor {
-                                Some(_) => "Télécharger par Tor : plus lent, sans montrer votre adresse à l'éditeur",
-                                None => "Télécharger par Tor : aucun Tor détecté sur cet ordinateur",
+                                Some(_) => lang.pick(
+                                    "Download through Tor: slower, without showing your address to the publisher",
+                                    "Télécharger par Tor : plus lent, sans montrer votre adresse à l'éditeur",
+                                ),
+                                None => lang.pick(
+                                    "Download through Tor: no Tor detected on this computer",
+                                    "Télécharger par Tor : aucun Tor détecté sur cet ordinateur",
+                                ),
                             })
                             .on_toggle_maybe(self.tor.is_some().then_some(Message::ToggleTor))
                             .size(16)
@@ -499,7 +605,10 @@ impl App {
                     ),
                     ring(
                         checkbox(raw)
-                            .label("Écrire les octets tels quels, sans refuser une image non amorçable")
+                            .label(lang.pick(
+                                "Write the bytes as they are, without refusing a non-bootable image",
+                                "Écrire les octets tels quels, sans refuser une image non amorçable",
+                            ))
                             .on_toggle(Message::ToggleRaw)
                             .size(16)
                             .text_size(13),
@@ -507,7 +616,10 @@ impl App {
                     ),
                     ring(
                         checkbox(mbr)
-                            .label("Clé Windows (extraction, FAT32, démarrage UEFI) : table MBR au lieu de GPT")
+                            .label(lang.pick(
+                                "Windows drive (extraction, FAT32, UEFI boot): MBR table instead of GPT",
+                                "Clé Windows (extraction, FAT32, démarrage UEFI) : table MBR au lieu de GPT",
+                            ))
                             .on_toggle(Message::ToggleMbr)
                             .size(16)
                             .text_size(13),
@@ -535,31 +647,37 @@ impl App {
         total: Option<u64>,
         rate: f64,
     ) -> Element<'_, Message> {
+        let lang = self.lang;
         let step = match phase {
-            Phase::Download => "Téléchargement",
-            Phase::Source => "Contrôle de l'image",
-            Phase::Authorize => "En attente de l'autorisation du système",
-            Phase::Write => "Écriture",
-            Phase::Flush => "Vidage des tampons",
-            Phase::Verify => "Vérification",
+            Phase::Download => lang.pick("Download", "Téléchargement"),
+            Phase::Source => lang.pick("Checking the image", "Contrôle de l'image"),
+            Phase::Authorize => lang.pick(
+                "Waiting for the system's authorization",
+                "En attente de l'autorisation du système",
+            ),
+            Phase::Write => lang.pick("Writing", "Écriture"),
+            Phase::Flush => lang.pick("Flushing buffers", "Vidage des tampons"),
+            Phase::Verify => lang.pick("Verifying", "Vérification"),
         };
         let fraction = total
             .filter(|t| *t > 0)
             .map_or(0.0, |t| (done as f32 / t as f32).clamp(0.0, 1.0));
         column![
             text(format!(
-                "{step} : {}{}  ({}/s)",
-                format_size(done, bonk_hal::Lang::Fr),
+                "{step}{} {}{}  ({}/s)",
+                lang.pick(":", " :"),
+                format_size(done, lang),
                 total.map_or_else(String::new, |t| format!(
-                    " sur {}",
-                    format_size(t, bonk_hal::Lang::Fr)
+                    " {} {}",
+                    lang.pick("of", "sur"),
+                    format_size(t, lang)
                 )),
-                format_size(rate as u64, bonk_hal::Lang::Fr),
+                format_size(rate as u64, lang),
             ))
             .size(14),
             progress_bar(0.0..=1.0, fraction).girth(14),
             ring(
-                button(text("Annuler").size(14))
+                button(text(lang.pick("Cancel", "Annuler")).size(14))
                     .on_press(Message::CancelWrite)
                     .padding([6, 14])
                     .style(theme::primary_button),
@@ -571,6 +689,7 @@ impl App {
     }
 
     fn finished_panel<'a>(&'a self, outcome: &Outcome) -> Element<'a, Message> {
+        let lang = self.lang;
         let message = match outcome {
             Outcome::Done {
                 bytes,
@@ -578,15 +697,17 @@ impl App {
                 gpt_repaired,
                 secure_boot,
             } => format!(
-                "ÉCRITURE TERMINÉE : {} écrits{}{}.{}",
-                format_size(*bytes, bonk_hal::Lang::Fr),
+                "{} {} {}{}{}.{}",
+                lang.pick("WRITE FINISHED:", "ÉCRITURE TERMINÉE :"),
+                format_size(*bytes, lang),
+                lang.pick("written", "écrits"),
                 if *verified {
-                    ", relus et vérifiés"
+                    lang.pick(", read back and verified", ", relus et vérifiés")
                 } else {
                     ""
                 },
                 if *gpt_repaired {
-                    ", GPT de secours réparé"
+                    lang.pick(", backup GPT repaired", ", GPT de secours réparé")
                 } else {
                     ""
                 },
@@ -595,16 +716,19 @@ impl App {
                     .map_or_else(String::new, |text| format!(" Secure Boot : {text}.")),
             ),
             Outcome::Failed { code, message } => format!(
-                "ÉCHEC : {message}{}",
-                code.as_ref().map_or_else(String::new, |c| format!(
-                    " [{c}] : voir « bonk explain {c} »"
-                )),
+                "{} {}{}",
+                lang.pick("FAILED:", "ÉCHEC :"),
+                failure_text(lang, code.as_deref(), message),
+                code.as_ref().map_or_else(String::new, |c| match lang {
+                    Lang::En => format!(" [{c}]: see \"bonk explain {c}\""),
+                    Lang::Fr => format!(" [{c}] : voir « bonk explain {c} »"),
+                }),
             ),
         };
         column![
             text(message).size(14),
             ring(
-                button(text("Fermer").size(14))
+                button(text(lang.pick("Close", "Fermer")).size(14))
                     .on_press(Message::DismissWrite)
                     .padding([6, 14])
                     .style(theme::primary_button),

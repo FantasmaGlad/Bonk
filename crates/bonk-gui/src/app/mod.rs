@@ -56,6 +56,7 @@ pub(crate) enum Message {
     ToggleRaw(bool),
     TorDetected(Option<String>),
     ToggleTor(bool),
+    SwitchLanguage,
     /// Table MBR pour une clé Windows.
     ToggleMbr(bool),
     /// Ouvre le sélecteur de fichier du système pour choisir l'image.
@@ -117,6 +118,7 @@ enum Focus {
     Advanced,
     /// Case de l'écriture brute.
     Tor,
+    Language,
     Raw,
     /// Case de la table MBR.
     Mbr,
@@ -174,6 +176,7 @@ pub(crate) struct App {
     menu_filter: catalog::MenuFilter,
     /// Adresse d'un Tor local, proposé dans les options ; jamais utilisé sans la case.
     tor: Option<String>,
+    lang: bonk_hal::Lang,
     use_tor: bool,
     menu_open: bool,
     /// Ligne du menu désignée au clavier.
@@ -214,6 +217,7 @@ fn ui_event(message: &Message) -> Option<(&'static str, String)> {
         Message::HashInput(text) => ("type_hash", format!("{} caractères", text.chars().count())),
         Message::ToggleRaw(on) => ("toggle_raw", on.to_string()),
         Message::ToggleTor(on) => ("toggle_tor", on.to_string()),
+        Message::SwitchLanguage => ("switch_language", String::new()),
         Message::TorDetected(found) => ("tor_detected", found.is_some().to_string()),
         Message::ToggleMbr(on) => ("toggle_mbr", on.to_string()),
         Message::BrowseImage => ("click_browse", String::new()),
@@ -253,9 +257,10 @@ impl WriteState {
 }
 
 impl App {
-    pub(crate) fn new(initial: ViewOptions) -> (Self, Task<Message>) {
+    pub(crate) fn new(initial: ViewOptions, lang: bonk_hal::Lang) -> (Self, Task<Message>) {
         (
             Self {
+                lang,
                 loading: true,
                 auto_select: true,
                 show_internal: initial.show_internal,

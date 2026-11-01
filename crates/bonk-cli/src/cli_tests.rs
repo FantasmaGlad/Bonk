@@ -557,10 +557,10 @@ fn config_set_puis_list_puis_effet_sur_list_et_la_fenetre() -> Result<(), Box<dy
 #[test]
 fn config_refuse_une_valeur_invalide_avec_le_code_d_usage() {
     let file = fichier_de_config("refus");
-    let r = lancer_config(&["config", "set", "lang", "en"], &file, &[], vec![]);
+    let r = lancer_config(&["config", "set", "lang", "de"], &file, &[], vec![]);
     assert_eq!(r.code, EXIT_USAGE);
     assert!(
-        r.err.contains("values: fr") && r.err.trim_end().ends_with("[E5002]"),
+        r.err.contains("values: auto, en, fr") && r.err.trim_end().ends_with("[E5002]"),
         "{}",
         r.err
     );
