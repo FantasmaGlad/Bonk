@@ -167,14 +167,6 @@ pub(crate) fn image_source(
     resolve_image(&loaded.catalog, id)
 }
 
-/// Les nombres d'une version : `24.04.5` passe après `26.04.1`, même sorti plus tard, et `9` avant `10`.
-fn version_numbers(version: &str) -> Vec<u64> {
-    version
-        .split(|c: char| !c.is_ascii_digit())
-        .filter_map(|part| part.parse().ok())
-        .collect()
-}
-
 /// Par défaut, les systèmes dans l'ordre du catalogue, la version la plus récente d'abord.
 pub(crate) fn sorted<'a>(catalog: &'a Catalog, query: &Query) -> Vec<&'a Image> {
     let rank = |image: &Image| {
@@ -219,7 +211,8 @@ pub(crate) fn sorted<'a>(catalog: &'a Catalog, query: &Query) -> Vec<&'a Image> 
         .filter(|image| query.channel.is_none_or(|wanted| image.channel == wanted))
         .collect();
     images.sort_by(|a, b| {
-        let newest = version_numbers(&b.version).cmp(&version_numbers(&a.version));
+        let newest =
+            manifest::version_numbers(&b.version).cmp(&manifest::version_numbers(&a.version));
         match query.sort {
             SortBy::System => rank(a).cmp(&rank(b)).then(newest),
             SortBy::Released => b.released.cmp(&a.released).then(newest),

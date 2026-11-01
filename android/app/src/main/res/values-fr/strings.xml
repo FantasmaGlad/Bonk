@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="no_drive">Aucune clé USB. Branchez-en une avec un adaptateur OTG.</string>
     <string name="allow">Autoriser l\'accès</string>
     <string name="read_test">Essai de lecture</string>
     <string name="write_test">Essai d\'écriture (64 Mo, restaurés)</string>
     <string name="write_warning">Sur la clé de test seulement : l\'essai écrit dessus, puis remet les données.</string>
     <string name="working">En cours…</string>
-    <string name="refused">Accès refusé</string>
+    <string name="allow_why">Android demande votre accord avant que Bonk parle à ce disque.</string>
+    <string name="tests_title">Essais de développement</string>
+    <string name="tests_how">L\'essai de lecture ne change rien. L\'essai d\'écriture demande la clé de test et prend quelques minutes : ne la débranchez pas.</string>
+    <string name="serial_read">Série lue : %1$s</string>
+    <string name="write_reserved">Essai d\'écriture réservé à la clé de série %1$s.</string>
 </resources>

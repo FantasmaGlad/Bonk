@@ -355,4 +355,33 @@ impl Model {
             .iter()
             .find(|disk| disk.id == id && self.is_internal(id))
     }
+
+    pub fn status_line(&self, shown: usize) -> String {
+        let every = REFRESH_EVERY.as_secs();
+        let detected = self.disks.len();
+        if self.error.is_some() {
+            return match self.lang {
+                Lang::En => format!("Detection failed. Automatic retry every {every} s."),
+                Lang::Fr => {
+                    format!(
+                        "Détection en échec. Nouvelle tentative automatique toutes les {every} s."
+                    )
+                }
+            };
+        }
+        if self.loading && self.disks.is_empty() {
+            return self
+                .lang
+                .pick("Detecting...", "Détection en cours...")
+                .to_owned();
+        }
+        match self.lang {
+            Lang::En => format!(
+                "{shown} of {detected} detected disk(s) shown. Refreshes automatically every {every} s."
+            ),
+            Lang::Fr => format!(
+                "{shown} disque(s) affiché(s) sur {detected} détecté(s). Actualisation automatique toutes les {every} s."
+            ),
+        }
+    }
 }
