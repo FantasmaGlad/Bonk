@@ -36,9 +36,10 @@ impl App {
                     self.selected = None;
                 }
                 self.disks = disks;
+                self.select_only_disk();
                 self.sync_write();
                 self.fix_focus();
-                Task::none()
+                self.load_menu()
             }
             Message::Loaded(Err(erreur)) => {
                 log::warn!(target: "bonk::gui", reason = erreur.as_str(); "enumeration failed");
@@ -80,7 +81,7 @@ impl App {
                     Some(id)
                 };
                 self.sync_write();
-                Task::none()
+                self.load_menu()
             }
             Message::Nav(nav) => self.navigate(nav),
             Message::Copy => {
@@ -122,43 +123,54 @@ impl App {
             Message::ImagePicked(Some(path)) => {
                 if let WriteState::Draft { image, .. } = &mut self.write {
                     *image = path.display().to_string();
+                    // Une image déposée doit se voir : le menu ne la nomme pas.
+                    self.advanced = true;
                 }
                 Task::none()
             }
             Message::ImagePicked(None) => Task::none(),
-            Message::ToggleCatalog => {
-                if matches!(self.catalog, CatalogState::Closed) {
-                    self.catalog = CatalogState::Loading;
-                    let program = self.program();
-                    Task::perform(
-                        async move { catalog::read(program) },
-                        Message::CatalogLoaded,
-                    )
-                } else {
-                    self.catalog = CatalogState::Closed;
-                    Task::none()
-                }
-            }
-            Message::CatalogLoaded(result) => {
-                // Refermée entre-temps : la réponse n'a plus d'objet.
-                if matches!(self.catalog, CatalogState::Loading) {
-                    self.catalog = match result {
-                        Ok(systems) => CatalogState::Ready(systems),
-                        Err(error) => CatalogState::Failed(error),
-                    };
-                }
+            Message::ToggleMenu => {
+                self.focus = Some(Focus::Menu);
+                self.menu_open = !self.menu_open;
                 Task::none()
             }
-            Message::CatalogChose(choice) => {
+            Message::CatalogLoaded(result) => {
+                self.catalog = match result {
+                    Ok(systems) => CatalogState::Ready(systems),
+                    Err(error) => {
+                        log::warn!(target: "bonk::gui", reason = error.as_str(); "catalog unavailable");
+                        // Sans liste, la voie manuelle est la seule : elle se montre d'elle-même.
+                        self.advanced = true;
+                        CatalogState::Failed(error)
+                    }
+                };
+                Task::none()
+            }
+            Message::MenuChose(choice) => {
                 if let (
-                    WriteState::Draft { image, hash, .. },
+                    WriteState::Draft {
+                        image,
+                        hash,
+                        raw,
+                        mbr,
+                        ..
+                    },
                     ChoiceSource::Download { url, sha256 },
                 ) = (&mut self.write, choice.source)
                 {
+                    // Tout est fixé par le catalogue : Bonk analyse l'image et choisit le mode seul.
                     *image = url;
                     *hash = sha256;
-                    self.catalog = CatalogState::Closed;
+                    *raw = false;
+                    *mbr = false;
+                    self.menu_open = false;
+                    self.focus = Some(Focus::Action);
                 }
+                Task::none()
+            }
+            Message::ToggleAdvanced => {
+                self.advanced = !self.advanced;
+                self.focus = Some(Focus::Advanced);
                 Task::none()
             }
             Message::Clock => Task::none(),
@@ -201,6 +213,44 @@ impl App {
             self.loading = true;
             load()
         }
+    }
+
+    /// Un seul disque proposé, et aucun choix encore : le sélectionner épargne un clic. Une fois par disque, pour
+    /// qu'une désélection tienne malgré l'actualisation.
+    fn select_only_disk(&mut self) {
+        if !self.auto_select || self.selected.is_some() {
+            return;
+        }
+        let offered: Vec<String> = self
+            .entries()
+            .iter()
+            .filter(|(_, verdict)| verdict.is_writable())
+            .map(|(disk, _)| disk.id.clone())
+            .collect();
+        if let [only] = offered.as_slice()
+            && self.auto_selected.as_ref() != Some(only)
+        {
+            self.auto_selected = Some(only.clone());
+            self.selected = Some(only.clone());
+        }
+    }
+
+    /// Le panneau d'écriture vient de s'ouvrir : le menu doit être prêt. Le catalogue n'est lu que là, et relu
+    /// après un échec à la prochaine sélection.
+    fn load_menu(&mut self) -> Task<Message> {
+        let needed = matches!(
+            self.catalog,
+            CatalogState::NotLoaded | CatalogState::Failed(_)
+        );
+        if !needed || !matches!(self.write, WriteState::Draft { .. }) {
+            return Task::none();
+        }
+        self.catalog = CatalogState::Loading;
+        let program = self.program();
+        Task::perform(
+            async move { catalog::read(program) },
+            Message::CatalogLoaded,
+        )
     }
 
     /// Fait suivre le panneau d'écriture à la sélection : il s'ouvre sur un disque proposé, se referme

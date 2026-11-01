@@ -620,7 +620,7 @@ fn le_panneau_montre_le_recapitulatif_et_le_decompte() {
     vieillir_le_panneau(&mut vieux);
     assert!(contient(
         &vieux,
-        "Écrire et effacer ce disque (saisir une image)"
+        "Écrire et effacer ce disque (choisir une image)"
     ));
     let _ = vieux.update(Message::ImageInput("/tmp/x.img".to_owned()));
     assert!(contient(&vieux, "Écrire et effacer ce disque"));
@@ -695,6 +695,12 @@ fn le_chemin_choisi_n_est_jamais_journalise() {
 fn le_clavier_parcourt_le_panneau_et_l_action_respecte_le_delai() {
     let mut app = app_avec_panneau();
     app.focus = Some(Focus::Disk("usb-cle".to_owned()));
+    let _ = app.update(Message::ToggleAdvanced);
+    app.focus = Some(Focus::Disk("usb-cle".to_owned()));
+    nav(&mut app, Nav::Next);
+    assert_eq!(app.focus, Some(Focus::Menu));
+    nav(&mut app, Nav::Next);
+    assert_eq!(app.focus, Some(Focus::Advanced));
     nav(&mut app, Nav::Next);
     assert_eq!(app.focus, Some(Focus::Image));
     nav(&mut app, Nav::Next);
@@ -977,6 +983,14 @@ fn versions_du_catalogue() -> Vec<catalog::System> {
                 },
             },
             catalog::Choice {
+                label: "24.04.5 desktop LTS".to_owned(),
+                end_of_life: false,
+                source: catalog::ChoiceSource::Download {
+                    url: "https://u/24.iso".to_owned(),
+                    sha256: "b".repeat(64),
+                },
+            },
+            catalog::Choice {
                 label: "11".to_owned(),
                 end_of_life: false,
                 source: catalog::ChoiceSource::OfficialPage("https://p/".to_owned()),
@@ -985,33 +999,112 @@ fn versions_du_catalogue() -> Vec<catalog::System> {
     }]
 }
 
-#[test]
-fn choisir_une_version_remplit_l_adresse_et_l_empreinte() {
+fn app_avec_menu() -> App {
     let mut app = app_avec_panneau();
-    app.catalog = catalog::CatalogState::Loading;
     let _ = app.update(Message::CatalogLoaded(Ok(versions_du_catalogue())));
-    assert!(contient(&app, "Ubuntu"));
-    assert!(contient(&app, "26.04.1 desktop LTS"));
-    assert!(contient(&app, "11 : à télécharger sur https://p/"));
-
-    let systemes = versions_du_catalogue();
-    let _ = app.update(Message::CatalogChose(systemes[0].choices[0].clone()));
-    assert!(matches!(
-        &app.write,
-        WriteState::Draft { image, hash, .. } if image == "https://u/26.iso" && hash.len() == 64
-    ));
-    assert!(matches!(app.catalog, catalog::CatalogState::Closed));
+    app
 }
 
 #[test]
-fn un_catalogue_refuse_le_dit_et_une_reponse_tardive_est_ignoree() {
-    let mut app = app_avec_panneau();
-    app.catalog = catalog::CatalogState::Loading;
-    let _ = app.update(Message::CatalogLoaded(Err("expired".to_owned())));
-    assert!(contient(&app, "Catalogue indisponible : expired"));
+fn le_menu_s_ouvre_nomme_les_versions_et_un_choix_regle_tout() {
+    let mut app = app_avec_menu();
+    assert!(contient(&app, "Choisir un système..."));
+    assert!(!contient(&app, "Ubuntu 26.04.1 desktop LTS"));
+    let _ = app.update(Message::ToggleMenu);
+    assert!(contient(&app, "Ubuntu 26.04.1 desktop LTS"));
+    assert!(contient(
+        &app,
+        "à télécharger sur https://p/, puis Autre image"
+    ));
 
-    let _ = app.update(Message::ToggleCatalog);
-    assert!(matches!(app.catalog, catalog::CatalogState::Closed));
-    let _ = app.update(Message::CatalogLoaded(Ok(versions_du_catalogue())));
-    assert!(matches!(app.catalog, catalog::CatalogState::Closed));
+    if let WriteState::Draft { raw, mbr, .. } = &mut app.write {
+        (*raw, *mbr) = (true, true);
+    }
+    let _ = app.update(Message::MenuChose(
+        versions_du_catalogue()[0].choices[0].clone(),
+    ));
+    assert!(matches!(
+        &app.write,
+        WriteState::Draft { image, hash, raw: false, mbr: false, .. }
+            if image == "https://u/26.iso" && hash.len() == 64
+    ));
+    assert!(!app.menu_open);
+    assert_eq!(
+        app.focus,
+        Some(Focus::Action),
+        "le geste suivant est d'écrire"
+    );
+    assert!(
+        contient(&app, "Ubuntu 26.04.1 desktop LTS"),
+        "le choix reste nommé"
+    );
+    assert!(contient(
+        &app,
+        "Lien officiel et empreinte du catalogue signé : rien à régler."
+    ));
+}
+
+#[test]
+fn au_clavier_les_fleches_parcourent_le_menu_et_entree_choisit() {
+    let mut app = app_avec_menu();
+    app.focus = Some(Focus::Menu);
+    let _ = app.update(Message::Nav(Nav::Activate));
+    assert!(app.menu_open);
+    let _ = app.update(Message::Nav(Nav::Down));
+    let _ = app.update(Message::Nav(Nav::Down));
+    assert_eq!(
+        app.menu_index, 1,
+        "la page officielle n'est pas une ligne à écrire"
+    );
+    let _ = app.update(Message::Nav(Nav::Activate));
+    assert!(matches!(&app.write, WriteState::Draft { image, .. } if image == "https://u/24.iso"));
+
+    let _ = app.update(Message::ToggleMenu);
+    let _ = app.update(Message::Nav(Nav::Escape));
+    assert!(!app.menu_open);
+    assert!(app.selected.is_some(), "Échap referme le menu d'abord");
+}
+
+#[test]
+fn catalogue_indisponible_la_voie_manuelle_se_montre() {
+    let mut app = app_avec_panneau();
+    assert!(!contient(&app, "Choisir l'image..."));
+    let _ = app.update(Message::CatalogLoaded(Err("expired".to_owned())));
+    assert!(contient(&app, "Liste des systèmes indisponible"));
+    assert!(contient(&app, "expired"));
+    assert!(contient(&app, "Choisir l'image..."));
+}
+
+#[test]
+fn les_options_se_replient_et_quittent_l_ordre_du_clavier() {
+    let mut app = app_avec_menu();
+    assert!(!app.focus_order().contains(&Focus::Hash));
+    let _ = app.update(Message::ToggleAdvanced);
+    assert!(app.focus_order().contains(&Focus::Hash));
+    let _ = app.update(Message::ImagePicked(Some(PathBuf::from("/x.iso"))));
+    assert!(app.advanced);
+}
+
+#[test]
+fn un_seul_disque_propose_se_selectionne_une_fois() {
+    let mut app = App {
+        auto_select: true,
+        ..App::default()
+    };
+    let _ = app.update(Message::Loaded(Ok(sample())));
+    assert_eq!(app.selected.as_deref(), Some("usb-cle"));
+    assert!(matches!(app.write, WriteState::Draft { .. }));
+    // Écrire reste un geste : rien n'est lancé, et une désélection tient malgré l'actualisation.
+    let _ = app.update(Message::Select("usb-cle".to_owned()));
+    let _ = app.update(Message::Loaded(Ok(sample())));
+    assert_eq!(app.selected, None);
+    // Deux disques : aucun choix à la place de l'utilisateur.
+    let mut deux = App {
+        auto_select: true,
+        allow_virtual: false,
+        show_internal: true,
+        ..App::default()
+    };
+    let _ = deux.update(Message::Loaded(Ok(sample())));
+    assert_eq!(deux.selected, None);
 }
