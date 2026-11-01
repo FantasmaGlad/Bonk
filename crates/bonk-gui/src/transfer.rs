@@ -281,7 +281,7 @@ mod tests {
                 .await
         });
         assert!(
-            matches!(events.as_slice(), [Event::Finished(Outcome::Failed { message, .. })] if message.contains("lancement impossible"))
+            matches!(events.as_slice(), [Event::Finished(Outcome::Failed { message, .. })] if message.contains("cannot start impossible"))
         );
         // L'annulation envoie SIGTERM au processus.
         let mut stream = spawn(
