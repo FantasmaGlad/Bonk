@@ -6,9 +6,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use bonk_catalog::manifest::{self, Catalog, Channel, Image, ImageSource, Loaded, TRUSTED_KEYS};
 use bonk_hal::{Lang, format_size};
-use clap::{Args, Subcommand};
+use clap::{Args, Subcommand, ValueEnum};
 use schemars::JsonSchema;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::errors::{Code, report};
 use bonk_ops::job::{self, JobError};
@@ -27,6 +27,18 @@ pub(crate) struct ListArgs {
     /// Keep one system only (`ubuntu`)
     #[arg(long, value_name = "ID")]
     family: Option<String>,
+    /// Keep one category (`Debian derivatives`); the families list gives them
+    #[arg(long, value_name = "NAME")]
+    category: Option<String>,
+    /// Keep one architecture (`x86_64`, `aarch64`)
+    #[arg(long, value_name = "ARCH")]
+    arch: Option<String>,
+    /// Keep one life cycle
+    #[arg(long, value_enum)]
+    channel: Option<ChannelArg>,
+    /// Order of the list
+    #[arg(long, value_enum, default_value_t = SortBy::System)]
+    sort: SortBy,
     /// Catalog address (`BONK_CATALOG_URL`); its signature is checked wherever it comes from
     #[arg(long, value_name = "URL")]
     catalog_url: Option<String>,
@@ -36,6 +48,39 @@ pub(crate) struct ListArgs {
     /// Result as JSON
     #[arg(long)]
     json: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[value(rename_all = "snake_case")]
+pub(crate) enum ChannelArg {
+    Lts,
+    Stable,
+    EndOfLife,
+}
+
+/// Ordre de la liste. Le service reçoit les mêmes noms que la ligne de commande.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum SortBy {
+    /// By system, newest version first
+    #[default]
+    System,
+    /// Most recently released first
+    Released,
+    /// Alphabetical
+    Name,
+    /// Smallest download first
+    Size,
+}
+
+/// Ce que l'appelant garde de la liste, et dans quel ordre.
+#[derive(Debug, Default, Clone)]
+pub(crate) struct Query {
+    pub(crate) family: Option<String>,
+    pub(crate) category: Option<String>,
+    pub(crate) arch: Option<String>,
+    pub(crate) channel: Option<Channel>,
+    pub(crate) sort: SortBy,
 }
 
 /// L'adresse donnée, sinon la variable, sinon celle de Bonk ; toujours terminée par `/`.
@@ -88,6 +133,17 @@ pub(crate) fn resolve_image(catalog: &Catalog, id: &str) -> Result<(PathBuf, Str
             code: Code::InvalidArgument,
             message: format!("unknown image: '{id}' (images: bonk catalog list)"),
         })?;
+    if !image.usb_boot {
+        return Err(JobError {
+            code: Code::InvalidArgument,
+            message: format!(
+                "{} {} does not boot from a USB drive: {}",
+                image.name,
+                image.version,
+                image.note.as_deref().unwrap_or("see its publisher")
+            ),
+        });
+    }
     match &image.source {
         ImageSource::Download { url, sha256, .. } => Ok((PathBuf::from(url), sha256.clone())),
         ImageSource::OfficialPage { official_page } => Err(JobError {
@@ -118,8 +174,8 @@ fn version_numbers(version: &str) -> Vec<u64> {
         .collect()
 }
 
-/// Les systèmes dans l'ordre du catalogue, la version la plus récente d'abord.
-pub(crate) fn sorted<'a>(catalog: &'a Catalog, family: Option<&str>) -> Vec<&'a Image> {
+/// Par défaut, les systèmes dans l'ordre du catalogue, la version la plus récente d'abord.
+pub(crate) fn sorted<'a>(catalog: &'a Catalog, query: &Query) -> Vec<&'a Image> {
     let rank = |image: &Image| {
         catalog
             .families
@@ -127,16 +183,49 @@ pub(crate) fn sorted<'a>(catalog: &'a Catalog, family: Option<&str>) -> Vec<&'a 
             .position(|f| f.id == image.family)
             .unwrap_or(usize::MAX)
     };
+    let category = |image: &Image| {
+        catalog
+            .families
+            .iter()
+            .find(|f| f.id == image.family)
+            .and_then(|f| f.category.as_deref())
+    };
+    let size = |image: &Image| match image.source {
+        ImageSource::Download { size_bytes, .. } => size_bytes,
+        ImageSource::OfficialPage { .. } => u64::MAX,
+    };
     let mut images: Vec<&Image> = catalog
         .images
         .iter()
-        .filter(|image| family.is_none_or(|wanted| image.family == wanted))
+        .filter(|image| {
+            query
+                .family
+                .as_ref()
+                .is_none_or(|wanted| &image.family == wanted)
+        })
+        .filter(|image| {
+            query
+                .category
+                .as_deref()
+                .is_none_or(|wanted| category(image) == Some(wanted))
+        })
+        .filter(|image| {
+            query
+                .arch
+                .as_ref()
+                .is_none_or(|wanted| &image.arch == wanted)
+        })
+        .filter(|image| query.channel.is_none_or(|wanted| image.channel == wanted))
         .collect();
     images.sort_by(|a, b| {
-        rank(a)
-            .cmp(&rank(b))
-            .then_with(|| version_numbers(&b.version).cmp(&version_numbers(&a.version)))
-            .then_with(|| a.id.cmp(&b.id))
+        let newest = version_numbers(&b.version).cmp(&version_numbers(&a.version));
+        match query.sort {
+            SortBy::System => rank(a).cmp(&rank(b)).then(newest),
+            SortBy::Released => b.released.cmp(&a.released).then(newest),
+            SortBy::Name => a.name.cmp(&b.name).then(newest),
+            SortBy::Size => size(a).cmp(&size(b)),
+        }
+        .then_with(|| a.id.cmp(&b.id))
     });
     images
 }
@@ -153,6 +242,7 @@ fn channel_label(channel: Channel) -> &'static str {
 struct FamilyEntry {
     id: String,
     name: String,
+    category: Option<String>,
     /// Logo checked by its hash, in the local cache; absent if it could not be read.
     icon_path: Option<PathBuf>,
 }
@@ -176,7 +266,7 @@ pub(crate) fn schema() -> serde_json::Value {
 pub(crate) fn report_value(
     url: Option<&str>,
     cache_dir: Option<&Path>,
-    family: Option<&str>,
+    query: &Query,
 ) -> Result<serde_json::Value, JobError> {
     let (loaded, dir) = load(url, cache_dir)?;
     let base = base_url(url, std::env::var("BONK_CATALOG_URL").ok());
@@ -193,16 +283,17 @@ pub(crate) fn report_value(
             .map(|f| FamilyEntry {
                 id: f.id.clone(),
                 name: f.name.clone(),
+                category: f.category.clone(),
                 icon_path: manifest::icon_path(&base, &dir, f, &fetch),
             })
             .collect(),
-        images: sorted(catalog, family).into_iter().cloned().collect(),
+        images: sorted(catalog, query).into_iter().cloned().collect(),
     };
     serde_json::to_value(report).map_err(refused)
 }
 
-fn write_table(catalog: &Catalog, family: Option<&str>, out: &mut dyn Write) -> io::Result<()> {
-    let rows: Vec<[String; 5]> = sorted(catalog, family)
+fn write_table(catalog: &Catalog, query: &Query, out: &mut dyn Write) -> io::Result<()> {
+    let rows: Vec<[String; 6]> = sorted(catalog, query)
         .into_iter()
         .map(|image| {
             let size = match &image.source {
@@ -212,14 +303,15 @@ fn write_table(catalog: &Catalog, family: Option<&str>, out: &mut dyn Write) -> 
             [
                 image.id.clone(),
                 format!("{} {}", image.name, image.version),
+                image.arch.clone(),
                 channel_label(image.channel).to_owned(),
                 image.released.clone(),
                 size,
             ]
         })
         .collect();
-    let header = ["ID", "SYSTEM", "CHANNEL", "RELEASED", "SIZE"].map(str::to_owned);
-    let mut widths = [0; 5];
+    let header = ["ID", "SYSTEM", "ARCH", "CHANNEL", "RELEASED", "SIZE"].map(str::to_owned);
+    let mut widths = [0; 6];
     for row in std::iter::once(&header).chain(&rows) {
         for (width, cell) in widths.iter_mut().zip(row) {
             *width = (*width).max(cell.len());
@@ -240,15 +332,25 @@ pub(crate) fn run(action: &CatalogAction, out: &mut dyn Write, err: &mut dyn Wri
     let CatalogAction::List(args) = action;
     let url = args.catalog_url.as_deref();
     let cache = args.cache_dir.as_deref();
+    let query = Query {
+        family: args.family.clone(),
+        category: args.category.clone(),
+        arch: args.arch.clone(),
+        channel: args.channel.map(|channel| match channel {
+            ChannelArg::Lts => Channel::Lts,
+            ChannelArg::Stable => Channel::Stable,
+            ChannelArg::EndOfLife => Channel::EndOfLife,
+        }),
+        sort: args.sort,
+    };
     let written = if args.json {
-        report_value(url, cache, args.family.as_deref()).map(|value| {
+        report_value(url, cache, &query).map(|value| {
             serde_json::to_writer_pretty(&mut *out, &value)
                 .map_err(io::Error::from)
                 .and_then(|()| writeln!(out))
         })
     } else {
-        load(url, cache)
-            .map(|(loaded, _)| write_table(&loaded.catalog, args.family.as_deref(), out))
+        load(url, cache).map(|(loaded, _)| write_table(&loaded.catalog, &query, out))
     };
     match written {
         Ok(Ok(())) => 0,
@@ -274,6 +376,8 @@ mod tests {
             edition: None,
             arch: "x86_64".to_owned(),
             homepage: "https://h/".to_owned(),
+            note: None,
+            usb_boot: true,
             source,
         }
     }
@@ -290,6 +394,7 @@ mod tests {
         let family = |id: &str| Family {
             id: id.to_owned(),
             name: id.to_owned(),
+            category: None,
             icon: format!("icons/{id}.svg"),
             icon_sha256: "b".repeat(64),
         };
@@ -313,21 +418,91 @@ mod tests {
         }
     }
 
+    fn of_family(id: &str) -> Query {
+        Query {
+            family: Some(id.to_owned()),
+            ..Query::default()
+        }
+    }
+
+    fn ids<'a>(catalog: &'a Catalog, query: &Query) -> Vec<&'a str> {
+        sorted(catalog, query)
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect()
+    }
+
+    #[test]
+    fn filtres_par_categorie_architecture_et_cycle_de_vie() {
+        let mut catalog = catalog();
+        catalog.families[0].category = Some("Debian derivatives".to_owned());
+        catalog.images[1].arch = "aarch64".to_owned();
+        catalog.images[2].channel = Channel::EndOfLife;
+        let query = |change: fn(&mut Query)| {
+            let mut query = Query::default();
+            change(&mut query);
+            query
+        };
+        assert_eq!(
+            ids(
+                &catalog,
+                &query(|q| q.category = Some("Debian derivatives".to_owned()))
+            ),
+            ["u22", "u26"]
+        );
+        assert_eq!(
+            ids(&catalog, &query(|q| q.arch = Some("aarch64".to_owned()))),
+            ["u22"]
+        );
+        assert_eq!(
+            ids(&catalog, &query(|q| q.channel = Some(Channel::EndOfLife))),
+            ["u26"]
+        );
+    }
+
+    #[test]
+    fn tris_par_date_nom_et_taille() {
+        let catalog = catalog();
+        let by = |sort| Query {
+            sort,
+            ..Query::default()
+        };
+        assert_eq!(ids(&catalog, &by(SortBy::Released)), ["u26", "u22", "w"]);
+        assert_eq!(ids(&catalog, &by(SortBy::Name)), ["u22", "u26", "w"]);
+        assert_eq!(
+            ids(&catalog, &by(SortBy::Size)),
+            ["u22", "u26", "w"],
+            "sans taille : en dernier"
+        );
+    }
+
+    #[test]
+    fn une_image_qui_ne_demarre_pas_sur_cle_est_refusee_avant_le_telechargement() {
+        let mut catalog = catalog();
+        catalog.images[1].usb_boot = false;
+        catalog.images[1].note = Some("CD only".to_owned());
+        let message = resolve_image(&catalog, "u22")
+            .err()
+            .map(|e| e.message)
+            .unwrap_or_default();
+        assert!(message.contains("CD only"), "{message}");
+    }
+
     #[test]
     fn systemes_dans_l_ordre_et_versions_recentes_d_abord() {
         let catalog = catalog();
-        let ids: Vec<&str> = sorted(&catalog, None)
+        let ids: Vec<&str> = sorted(&catalog, &Query::default())
             .iter()
             .map(|i| i.id.as_str())
             .collect();
         assert_eq!(ids, ["u22", "u26", "w"]);
-        assert_eq!(sorted(&catalog, Some("windows")).len(), 1);
+        assert_eq!(sorted(&catalog, &of_family("windows")).len(), 1);
         // Une version plus ancienne sortie plus tard reste après la plus récente.
         let mut tardive = catalog.clone();
         tardive.images[1].version = "24.04.5".to_owned();
         tardive.images[1].released = "2027-01-01".to_owned();
         tardive.images[2].version = "26.04.1".to_owned();
-        let ids: Vec<&str> = sorted(&tardive, Some("ubuntu"))
+        let ids: Vec<&str> = sorted(&tardive, &of_family("ubuntu"))
             .iter()
             .map(|i| i.id.as_str())
             .collect();
@@ -362,7 +537,7 @@ mod tests {
     #[test]
     fn tableau_lisible_en_anglais() -> io::Result<()> {
         let mut out = Vec::new();
-        write_table(&catalog(), None, &mut out)?;
+        write_table(&catalog(), &Query::default(), &mut out)?;
         let text = String::from_utf8_lossy(&out);
         assert!(text.starts_with("ID "), "{text}");
         assert!(text.contains("LTS") && text.contains("2.0 GB"), "{text}");

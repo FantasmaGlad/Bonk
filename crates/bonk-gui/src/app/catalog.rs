@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{button, column, container, image, row, scrollable, text};
+use iced::widget::{button, column, container, image, pick_list, row, scrollable, text};
 use iced::{Element, Length};
 use serde_json::Value;
 
@@ -17,6 +17,8 @@ use super::Message;
 pub(crate) struct Choice {
     pub(crate) label: String,
     pub(crate) end_of_life: bool,
+    /// Ce qu'il faut savoir avant de la choisir (évaluation, CD seulement).
+    pub(crate) note: Option<String>,
     pub(crate) source: ChoiceSource,
 }
 
@@ -28,14 +30,40 @@ pub(crate) enum ChoiceSource {
     },
     /// Pas de lien stable chez l'éditeur : l'adresse de sa page, à ouvrir soi-même.
     OfficialPage(String),
+    /// Ne démarre pas d'une clé : montrée sans pouvoir être écrite.
+    NotForUsb,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct System {
     pub(crate) name: String,
+    pub(crate) category: String,
     pub(crate) icon: Option<PathBuf>,
     pub(crate) choices: Vec<Choice>,
 }
+
+/// Ce que le menu garde : une catégorie, ou un seul système et ses versions. Vide : tout.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub(crate) struct MenuFilter {
+    pub(crate) category: Option<String>,
+    pub(crate) system: Option<String>,
+}
+
+impl MenuFilter {
+    pub(crate) fn apply<'a>(&self, systems: &'a [System]) -> Vec<&'a System> {
+        systems
+            .iter()
+            .filter(|s| self.category.as_ref().is_none_or(|c| &s.category == c))
+            .filter(|s| self.system.as_ref().is_none_or(|n| &s.name == n))
+            .collect()
+    }
+}
+
+const ALL_CATEGORIES: &str = "Toutes les catégories";
+const ALL_SYSTEMS: &str = "Tous les systèmes";
+
+/// Sans catégorie dans le catalogue : un seul groupe, celui de tout le monde.
+const NO_CATEGORY: &str = "Autres";
 
 #[derive(Debug, Default)]
 pub(crate) enum CatalogState {
@@ -52,6 +80,10 @@ fn label_of(image: &Value) -> Option<String> {
     if let Some(edition) = image["edition"].as_str() {
         label.push(' ');
         label.push_str(edition);
+    }
+    if let Some(arch) = image["arch"].as_str().filter(|arch| *arch != "x86_64") {
+        label.push(' ');
+        label.push_str(arch);
     }
     match image["channel"].as_str() {
         Some("lts") => label.push_str(" LTS"),
@@ -75,6 +107,7 @@ pub(crate) fn parse(report: &Value) -> Vec<System> {
                 .filter(|image| image["family"] == id)
                 .filter_map(|image| {
                     let source = match (image["url"].as_str(), image["sha256"].as_str()) {
+                        _ if image["usb_boot"] == false => ChoiceSource::NotForUsb,
                         (Some(url), Some(sha256)) => ChoiceSource::Download {
                             url: url.to_owned(),
                             sha256: sha256.to_owned(),
@@ -86,12 +119,17 @@ pub(crate) fn parse(report: &Value) -> Vec<System> {
                     Some(Choice {
                         label: label_of(image)?,
                         end_of_life: image["channel"] == "end_of_life",
+                        note: image["note"].as_str().map(str::to_owned),
                         source,
                     })
                 })
                 .collect();
             (!choices.is_empty()).then(|| System {
                 name: family["name"].as_str().unwrap_or(id).to_owned(),
+                category: family["category"]
+                    .as_str()
+                    .unwrap_or(NO_CATEGORY)
+                    .to_owned(),
                 icon: family["icon_path"].as_str().map(PathBuf::from),
                 choices,
             })
@@ -138,7 +176,7 @@ fn logo(icon: Option<&PathBuf>) -> Element<'_, Message> {
 }
 
 /// Les versions qu'un clic peut écrire, dans l'ordre du menu : l'indice du clavier s'y rapporte.
-pub(crate) fn writable(systems: &[System]) -> Vec<&Choice> {
+pub(crate) fn writable<'a>(systems: &[&'a System]) -> Vec<&'a Choice> {
     systems
         .iter()
         .flat_map(|system| &system.choices)
@@ -196,16 +234,74 @@ pub(crate) fn menu_button<'a>(
     .into()
 }
 
-/// La liste ouverte : une ligne par version, avec le logo de son système.
-pub(crate) fn menu_list<'a>(systems: &'a [System], highlighted: usize) -> Element<'a, Message> {
+fn without_doubles(mut values: Vec<String>, first: &str) -> Vec<String> {
+    values.sort();
+    values.dedup();
+    values.insert(0, first.to_owned());
+    values
+}
+
+/// Les deux sélecteurs : une catégorie, ou un seul système et ses versions.
+fn menu_filters<'a>(systems: &[System], filter: &MenuFilter) -> Element<'a, Message> {
+    let categories = without_doubles(
+        systems.iter().map(|s| s.category.clone()).collect(),
+        ALL_CATEGORIES,
+    );
+    let in_category = MenuFilter {
+        category: filter.category.clone(),
+        system: None,
+    };
+    let names = without_doubles(
+        in_category
+            .apply(systems)
+            .iter()
+            .map(|s| s.name.clone())
+            .collect(),
+        ALL_SYSTEMS,
+    );
+    let category = filter
+        .category
+        .clone()
+        .unwrap_or_else(|| ALL_CATEGORIES.to_owned());
+    let system = filter
+        .system
+        .clone()
+        .unwrap_or_else(|| ALL_SYSTEMS.to_owned());
+    row![
+        pick_list(categories, Some(category), |value: String| {
+            Message::MenuCategory((value != ALL_CATEGORIES).then_some(value))
+        })
+        .text_size(13),
+        pick_list(names, Some(system), |value: String| {
+            Message::MenuSystem((value != ALL_SYSTEMS).then_some(value))
+        })
+        .text_size(13),
+    ]
+    .spacing(8)
+    .into()
+}
+
+/// La liste ouverte : les filtres, puis une ligne par version, avec le logo de son système.
+pub(crate) fn menu_list<'a>(
+    systems: &'a [System],
+    filter: &MenuFilter,
+    highlighted: usize,
+) -> Element<'a, Message> {
     let mut index = 0;
     let mut lines = column![].spacing(2);
-    for system in systems {
+    for system in filter.apply(systems) {
         for choice in &system.choices {
             let title = format!("{} {}", system.name, choice.label);
             let line = row![logo(system.icon.as_ref()), text(title).size(14)]
                 .spacing(8)
                 .align_y(iced::Center);
+            let line = match &choice.note {
+                Some(note) => Element::from(column![
+                    line,
+                    text(note.as_str()).size(12).color(theme::SECONDARY)
+                ]),
+                None => line.into(),
+            };
             lines = lines.push(match &choice.source {
                 ChoiceSource::Download { .. } => {
                     let selected = index == highlighted;
@@ -224,14 +320,19 @@ pub(crate) fn menu_list<'a>(systems: &'a [System], highlighted: usize) -> Elemen
                         .color(theme::SECONDARY);
                     container(column![line, note]).padding([4, 8]).into()
                 }
+                ChoiceSource::NotForUsb => container(line).padding([4, 8]).into(),
             });
         }
     }
     // Marge à droite : la barre de défilement ne doit pas couvrir le texte d'une ligne.
-    scrollable(lines.padding(iced::Padding::ZERO.right(16)))
-        .id(MENU)
-        .height(Length::Fixed(260.0))
-        .into()
+    column![
+        menu_filters(systems, filter),
+        scrollable(lines.padding(iced::Padding::ZERO.right(16)))
+            .id(MENU)
+            .height(Length::Fixed(260.0)),
+    ]
+    .spacing(6)
+    .into()
 }
 
 #[cfg(test)]
@@ -243,7 +344,7 @@ mod tests {
     fn report() -> Value {
         json!({
             "families": [
-                {"id": "ubuntu", "name": "Ubuntu", "icon_path": "/c/u.png"},
+                {"id": "ubuntu", "name": "Ubuntu", "category": "Debian derivatives", "icon_path": "/c/u.png"},
                 {"id": "vide", "name": "Vide"},
                 {"id": "windows", "name": "Windows"}
             ],
@@ -252,7 +353,9 @@ mod tests {
                  "url": "https://u/26.iso", "sha256": "aa"},
                 {"family": "ubuntu", "version": "20.04.5", "edition": "desktop", "channel": "end_of_life",
                  "url": "https://u/20.iso", "sha256": "bb"},
-                {"family": "windows", "version": "11", "channel": "stable", "official_page": "https://p/"}
+                {"family": "windows", "version": "11", "channel": "stable", "official_page": "https://p/"},
+                {"family": "ubuntu", "version": "1", "channel": "stable", "arch": "aarch64", "usb_boot": false,
+                 "note": "CD", "url": "https://u/cd.iso", "sha256": "cc"}
             ]
         })
     }
@@ -274,12 +377,35 @@ mod tests {
     #[test]
     fn le_menu_clavier_ne_compte_que_ce_qui_s_ecrit_et_retrouve_un_choix() {
         let systems = parse(&report());
-        assert_eq!(writable(&systems).len(), 2);
+        let all = MenuFilter::default().apply(&systems);
+        assert_eq!(writable(&all).len(), 2, "une image de CD ne s'écrit pas");
         assert!(matches!(
             find_url(&systems, "https://u/20.iso"),
             Some((system, choice)) if system.name == "Ubuntu" && choice.end_of_life
         ));
         assert!(find_url(&systems, "https://ailleurs/").is_none());
+    }
+
+    #[test]
+    fn une_categorie_ou_un_seul_systeme() {
+        let systems = parse(&report());
+        assert_eq!(systems[1].category, NO_CATEGORY);
+        let debian = MenuFilter {
+            category: Some("Debian derivatives".to_owned()),
+            system: None,
+        };
+        assert_eq!(debian.apply(&systems).len(), 1);
+        let windows = MenuFilter {
+            category: None,
+            system: Some("Windows".to_owned()),
+        };
+        assert_eq!(windows.apply(&systems)[0].name, "Windows");
+        let cd = &systems[0].choices[2];
+        assert_eq!(
+            (cd.label.as_str(), cd.source.clone()),
+            ("1 aarch64", ChoiceSource::NotForUsb)
+        );
+        assert_eq!(cd.note.as_deref(), Some("CD"));
     }
 
     #[test]

@@ -189,7 +189,7 @@ impl App {
         let CatalogState::Ready(systems) = &self.catalog else {
             return Task::none();
         };
-        let count = writable(systems).len();
+        let count = writable(&self.menu_filter.apply(systems)).len();
         if count == 0 {
             return Task::none();
         }
@@ -218,7 +218,7 @@ impl App {
             Some(Focus::Advanced) => Message::ToggleAdvanced,
             Some(Focus::Menu) => match (&self.catalog, self.menu_open) {
                 (CatalogState::Ready(systems), true) => {
-                    match writable(systems).get(self.menu_index) {
+                    match writable(&self.menu_filter.apply(systems)).get(self.menu_index) {
                         Some(choice) => Message::MenuChose((*choice).clone()),
                         None => return Task::none(),
                     }

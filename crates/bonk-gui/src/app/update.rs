@@ -134,6 +134,19 @@ impl App {
                 self.menu_open = !self.menu_open;
                 Task::none()
             }
+            Message::MenuCategory(category) => {
+                self.menu_filter = catalog::MenuFilter {
+                    category,
+                    system: None,
+                };
+                self.menu_index = 0;
+                Task::none()
+            }
+            Message::MenuSystem(system) => {
+                self.menu_filter.system = system;
+                self.menu_index = 0;
+                Task::none()
+            }
             Message::CatalogLoaded(result) => {
                 self.catalog = match result {
                     Ok(systems) => CatalogState::Ready(systems),

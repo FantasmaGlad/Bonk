@@ -62,6 +62,8 @@ pub(crate) enum Message {
     ImagePicked(Option<PathBuf>),
     /// Ouvre ou referme le menu des images.
     ToggleMenu,
+    MenuCategory(Option<String>),
+    MenuSystem(Option<String>),
     CatalogLoaded(Result<Vec<catalog::System>, String>),
     /// Une version choisie : adresse, empreinte et réglages automatiques.
     MenuChose(catalog::Choice),
@@ -166,6 +168,7 @@ pub(crate) struct App {
     /// La demande de confirmation d'un disque interne est à l'écran.
     confirming_internal: bool,
     catalog: catalog::CatalogState,
+    menu_filter: catalog::MenuFilter,
     menu_open: bool,
     /// Ligne du menu désignée au clavier.
     menu_index: usize,
@@ -212,6 +215,9 @@ fn ui_event(message: &Message) -> Option<(&'static str, String)> {
             if path.is_some() { "choisie" } else { "aucune" }.to_owned(),
         ),
         Message::ToggleMenu => ("click_menu", String::new()),
+        Message::MenuCategory(value) | Message::MenuSystem(value) => {
+            ("menu_filter", value.clone().unwrap_or_default())
+        }
         Message::MenuChose(choice) => ("menu_chose", choice.label.clone()),
         Message::ToggleAdvanced => ("click_advanced", String::new()),
         Message::StartWrite => ("click_write", String::new()),

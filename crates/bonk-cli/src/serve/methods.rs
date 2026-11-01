@@ -37,7 +37,13 @@ pub(super) fn quick(method: Method, params: &Value, cfg: &Config) -> Result<Valu
             crate::catalog::report_value(
                 p.catalog_url.as_deref(),
                 p.cache_dir.as_deref(),
-                p.family.as_deref(),
+                &crate::catalog::Query {
+                    family: p.family,
+                    category: p.category,
+                    arch: p.arch,
+                    channel: p.channel,
+                    sort: p.sort,
+                },
             )
             .map_err(|e| failure(e.code, e.message))
         }

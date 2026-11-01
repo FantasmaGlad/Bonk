@@ -65,6 +65,10 @@ pub(super) struct WatchParams {
 #[serde(deny_unknown_fields, default)]
 pub(super) struct CatalogParams {
     pub(super) family: Option<String>,
+    pub(super) category: Option<String>,
+    pub(super) arch: Option<String>,
+    pub(super) channel: Option<bonk_catalog::manifest::Channel>,
+    pub(super) sort: crate::catalog::SortBy,
     pub(super) catalog_url: Option<String>,
     pub(super) cache_dir: Option<PathBuf>,
 }
