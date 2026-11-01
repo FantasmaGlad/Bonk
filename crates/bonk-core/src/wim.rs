@@ -34,16 +34,13 @@ pub enum WimError {
 impl fmt::Display for WimError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NotWim => f.write_str("ce n'est pas un fichier WIM"),
-            Self::Malformed(what) => write!(f, "WIM illisible : {what}"),
+            Self::NotWim => f.write_str("not a WIM file"),
+            Self::Malformed(what) => write!(f, "WIM unreadable: {what}"),
             Self::Solid => f.write_str(
-                "WIM à ressources solides (install.esd) : découpage impossible sans recompression",
+                "WIM with solid resources (install.esd): cannot be split without recompression",
             ),
             Self::ResourceTooLarge(len) => {
-                write!(
-                    f,
-                    "une ressource de {len} octets ne tient dans aucun morceau"
-                )
+                write!(f, "a resource of {len} bytes fits in no part")
             }
         }
     }
@@ -130,11 +127,11 @@ pub fn read_header(header: &[u8]) -> Result<Header, WimError> {
     }
     let total = u16::from_le_bytes([header[AT_TOTAL_PARTS], header[AT_TOTAL_PARTS + 1]]);
     if total > 1 {
-        return Err(WimError::Malformed("WIM déjà découpé"));
+        return Err(WimError::Malformed("WIM already split"));
     }
     let lookup = Resource::read(&header[AT_LOOKUP..AT_LOOKUP + RESOURCE_LEN]);
     if lookup.flags & 0x04 != 0 {
-        return Err(WimError::Malformed("table des ressources compressée"));
+        return Err(WimError::Malformed("compressed resource table"));
     }
     Ok(Header {
         lookup_offset: lookup.offset,
@@ -148,7 +145,7 @@ pub fn read_header(header: &[u8]) -> Result<Header, WimError> {
 /// Table mal formée.
 pub fn has_solid_resources(lookup: &[u8]) -> Result<bool, WimError> {
     if !lookup.len().is_multiple_of(ENTRY_LEN) {
-        return Err(WimError::Malformed("table des ressources"));
+        return Err(WimError::Malformed("resource table"));
     }
     Ok(lookup
         .as_chunks::<ENTRY_LEN>()
@@ -199,7 +196,7 @@ pub fn split(
             .checked_add(resource.stored)
             .is_none_or(|end| end > file_size)
         {
-            return Err(WimError::Malformed("ressource hors du fichier"));
+            return Err(WimError::Malformed("resource outside the file"));
         }
         let mut rest = [0; ENTRY_LEN - RESOURCE_LEN];
         rest.copy_from_slice(&raw[RESOURCE_LEN..]);
@@ -214,7 +211,7 @@ pub fn split(
         .checked_add(xml.stored)
         .is_none_or(|end| end > file_size)
     {
-        return Err(WimError::Malformed("XML hors du fichier"));
+        return Err(WimError::Malformed("XML outside the file"));
     }
 
     let mut parts = vec![Part::default()];
@@ -234,11 +231,10 @@ pub fn split(
         }
     }
 
-    let total = u16::try_from(parts.len()).map_err(|_| WimError::Malformed("trop de morceaux"))?;
+    let total = u16::try_from(parts.len()).map_err(|_| WimError::Malformed("too many parts"))?;
     let mut files = Vec::with_capacity(parts.len());
     for (index, part) in parts.iter().enumerate() {
-        let number =
-            u16::try_from(index + 1).map_err(|_| WimError::Malformed("trop de morceaux"))?;
+        let number = u16::try_from(index + 1).map_err(|_| WimError::Malformed("too many parts"))?;
         let mut position = HEADER_LEN as u64;
         let mut sources = Vec::new();
         let mut table = Vec::with_capacity(part.entries.len() * ENTRY_LEN);

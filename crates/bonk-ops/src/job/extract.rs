@@ -237,7 +237,7 @@ fn plan_items(
     let (_, parent) = wim_file
         .path
         .split_last()
-        .ok_or_else(|| wim_error("chemin vide"))?;
+        .ok_or_else(|| wim_error("empty path"))?;
     for (index, segments) in parts.into_iter().enumerate() {
         let file = if index == 0 {
             "install.swm".to_owned()
@@ -264,7 +264,7 @@ fn format_failure(code: Code, error: FormatError) -> JobError {
     match error {
         FormatError::Source(err) if err.kind() == io::ErrorKind::Interrupted => fail(
             Code::Cancelled,
-            "annulée pendant la copie : la clé est à refaire",
+            "cancelled during the copy: the drive must be redone",
         ),
         FormatError::Source(err) => fail(Code::SourceUnreadable, err),
         FormatError::TooSmall(what) | FormatError::TooLarge(what) => {
@@ -500,12 +500,12 @@ mod tests {
 
     use super::*;
 
-    /// Même message que l'écriture d'une image : le noyau répond « plus de place » sur un disque débranché.
+    /// Même message que l'écriture d'une image : le noyau répond « plus de place » sur un disque unplugged.
     #[test]
     fn un_support_disparu_pendant_la_copie_est_dit() {
         let full = io::Error::from(io::ErrorKind::StorageFull);
         let error = format_failure(Code::WriteFailed, FormatError::Device(BlockError::Io(full)));
         assert_eq!(error.code, Code::WriteFailed);
-        assert!(error.message.contains("débranché"), "{}", error.message);
+        assert!(error.message.contains("unplugged"), "{}", error.message);
     }
 }

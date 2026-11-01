@@ -45,11 +45,11 @@ pub(crate) fn sources(
         writeln!(out)?;
     } else {
         for read in reads {
-            let status = if read.ok { "ok    " } else { "ÉCHEC " };
+            let status = if read.ok { "ok    " } else { "FAILED" };
             let size = read.bytes.map_or_else(String::new, |b| format!("{b} o"));
             writeln!(
                 out,
-                "[{status}] {:<4} {}  {size}  {} µs",
+                "[{status}] {:<4} {}  {size}  {} us",
                 read.kind, read.path, read.micros
             )?;
             if let Some(error) = &read.error {
@@ -61,13 +61,13 @@ pub(crate) fn sources(
                 }
             }
         }
-        writeln!(out, "{} lecture(s) de sources.", reads.len())?;
+        writeln!(out, "{} source read(s).", reads.len())?;
     }
     Ok(match result {
         Ok(_) => Outcome::Done,
         Err(erreur) => Outcome::Failed(
             Code::of_enumeration(erreur),
-            format!("l'énumération a échoué : {erreur}"),
+            format!("enumeration failed: {erreur}"),
         ),
     })
 }

@@ -31,31 +31,31 @@ pub(crate) fn image_path(cache: &Path, sha256: &str, name: &str) -> PathBuf {
 /// Les images téléchargées
 #[derive(Debug, Subcommand)]
 pub(crate) enum CacheAction {
-    /// Liste les images gardées, téléchargements inachevés compris
+    /// List the kept images, incomplete downloads included
     List(ListArgs),
-    /// Supprime les images gardées ; une adresse sera retéléchargée à la prochaine écriture
+    /// Remove the kept images; an address is downloaded again on the next write
     Clean(CleanArgs),
 }
 
 #[derive(Debug, Args)]
 pub(crate) struct ListArgs {
-    /// Dossier des téléchargements ; par défaut le dossier de cache de l'utilisateur
-    #[arg(long, value_name = "DOSSIER")]
+    /// Download directory; by default the user's cache directory
+    #[arg(long, value_name = "DIR")]
     cache_dir: Option<PathBuf>,
-    /// Résultat en JSON
+    /// Result as JSON
     #[arg(long)]
     json: bool,
 }
 
 #[derive(Debug, Args)]
 pub(crate) struct CleanArgs {
-    /// Dossier des téléchargements ; par défaut le dossier de cache de l'utilisateur
-    #[arg(long, value_name = "DOSSIER")]
+    /// Download directory; by default the user's cache directory
+    #[arg(long, value_name = "DIR")]
     cache_dir: Option<PathBuf>,
-    /// Dit ce qui serait supprimé sans rien supprimer
+    /// Say what would be removed without removing anything
     #[arg(long)]
     dry_run: bool,
-    /// Résultat en JSON
+    /// Result as JSON
     #[arg(long)]
     json: bool,
 }
@@ -145,15 +145,20 @@ fn print(report: &CacheReport, json: bool, out: &mut dyn Write) -> io::Result<()
         return writeln!(out);
     }
     for entry in &report.entries {
-        let state = if entry.partial { " (inachevé)" } else { "" };
-        writeln!(out, "{}  {}{state}", format_size(entry.bytes), entry.name)?;
+        let state = if entry.partial { " (incomplete)" } else { "" };
+        writeln!(
+            out,
+            "{}  {}{state}",
+            format_size(entry.bytes, bonk_hal::Lang::En),
+            entry.name
+        )?;
     }
     match report.removed_bytes {
-        Some(bytes) => writeln!(out, "Supprimé : {}", format_size(bytes)),
+        Some(bytes) => writeln!(out, "Removed: {}", format_size(bytes, bonk_hal::Lang::En)),
         None => writeln!(
             out,
-            "Cache : {} dans {}",
-            format_size(report.total_bytes),
+            "Cache: {} in {}",
+            format_size(report.total_bytes, bonk_hal::Lang::En),
             report.directory
         ),
     }
@@ -168,7 +173,7 @@ pub(crate) fn run(action: &CacheAction, out: &mut dyn Write, err: &mut dyn Write
         return report(
             err,
             Code::InvalidArgument,
-            "aucun dossier de cache connu : le donner avec --cache-dir",
+            "no known cache directory: give it with --cache-dir",
         );
     };
     let done = read_entries(&cache).and_then(|entries| {
@@ -193,7 +198,7 @@ pub(crate) fn run(action: &CacheAction, out: &mut dyn Write, err: &mut dyn Write
         Err(error) => report(
             err,
             Code::OutputFailed,
-            format!("{} : {error}", cache.display()),
+            format!("{}: {error}", cache.display()),
         ),
     }
 }

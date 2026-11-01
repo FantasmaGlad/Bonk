@@ -27,7 +27,7 @@ pub(super) fn internal_dialog(disk: &Disk) -> Element<'_, Message> {
                  retour possible.",
                 disk.path,
                 disk.model,
-                format_size(disk.size_bytes)
+                format_size(disk.size_bytes, bonk_hal::Lang::Fr)
             ))
             .size(14),
             row![
@@ -73,7 +73,7 @@ pub(super) fn detail(disk: &Disk) -> Element<'_, Message> {
         text(format!(
             "Série : {}   Nature : {}   Drapeau amovible du système : {}",
             disk.serial.as_deref().unwrap_or("inconnue"),
-            kind_label(disk.kind),
+            kind_label(disk.kind, bonk_hal::Lang::Fr),
             if disk.removable_flag { "oui" } else { "non" },
         ))
         .size(13)
@@ -98,7 +98,7 @@ pub(super) fn detail(disk: &Disk) -> Element<'_, Message> {
             text(format!(
                 "{}  {}  {}  étiquette : {}  {}",
                 partition.path,
-                format_size(partition.size_bytes),
+                format_size(partition.size_bytes, bonk_hal::Lang::Fr),
                 partition
                     .fs_type
                     .as_deref()
@@ -204,14 +204,14 @@ impl App {
 
         let top = row![
             text(disk.model.as_str()).size(16).width(Fill),
-            text(verdict_badge(&verdict)).size(14),
+            text(verdict_badge(&verdict, bonk_hal::Lang::Fr)).size(14),
         ];
         let facts = row![
             text(disk.path.as_str())
                 .size(13)
                 .font(iced::Font::MONOSPACE),
-            text(format_size(disk.size_bytes)).size(13),
-            text(bus_label(disk.bus)).size(13),
+            text(format_size(disk.size_bytes, bonk_hal::Lang::Fr)).size(13),
+            text(bus_label(disk.bus, bonk_hal::Lang::Fr)).size(13),
             text(disk.id.as_str()).size(13).font(iced::Font::MONOSPACE),
         ]
         .spacing(16);
@@ -222,7 +222,11 @@ impl App {
                 warning: bonk_hal::Warning::None
             }
         ) {
-            content = content.push(text(state_label(&verdict)).size(13).color(theme::SECONDARY));
+            content = content.push(
+                text(state_label(&verdict, bonk_hal::Lang::Fr))
+                    .size(13)
+                    .color(theme::SECONDARY),
+            );
         }
         if selected {
             content = content.push(detail(disk));
@@ -397,7 +401,7 @@ impl App {
                 "{}  série {}  {}  {} partition(s){}",
                 disk.model,
                 disk.serial.as_deref().unwrap_or("inconnue"),
-                format_size(disk.size_bytes),
+                format_size(disk.size_bytes, bonk_hal::Lang::Fr),
                 disk.partitions.len(),
                 if labels.is_empty() {
                     String::new()
@@ -489,9 +493,12 @@ impl App {
         column![
             text(format!(
                 "{step} : {}{}  ({}/s)",
-                format_size(done),
-                total.map_or_else(String::new, |t| format!(" sur {}", format_size(t))),
-                format_size(rate as u64),
+                format_size(done, bonk_hal::Lang::Fr),
+                total.map_or_else(String::new, |t| format!(
+                    " sur {}",
+                    format_size(t, bonk_hal::Lang::Fr)
+                )),
+                format_size(rate as u64, bonk_hal::Lang::Fr),
             ))
             .size(14),
             progress_bar(0.0..=1.0, fraction).girth(14),
@@ -516,7 +523,7 @@ impl App {
                 secure_boot,
             } => format!(
                 "ÉCRITURE TERMINÉE : {} écrits{}{}.{}",
-                format_size(*bytes),
+                format_size(*bytes, bonk_hal::Lang::Fr),
                 if *verified {
                     ", relus et vérifiés"
                 } else {

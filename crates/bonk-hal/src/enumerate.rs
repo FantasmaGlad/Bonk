@@ -31,12 +31,9 @@ pub enum EnumerateError {
 impl fmt::Display for EnumerateError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Io { what, source } => write!(f, "lecture impossible de {what} : {source}"),
-            Self::Malformed { what, detail } => write!(f, "{what} inattendu : {detail}"),
-            Self::Unsupported { os } => write!(
-                f,
-                "l'énumération des disques n'est pas encore disponible sous {os}"
-            ),
+            Self::Io { what, source } => write!(f, "could not read {what}: {source}"),
+            Self::Malformed { what, detail } => write!(f, "unexpected {what}: {detail}"),
+            Self::Unsupported { os } => write!(f, "disk enumeration is not available yet on {os}"),
         }
     }
 }

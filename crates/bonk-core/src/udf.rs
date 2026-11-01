@@ -59,9 +59,9 @@ pub enum UdfError {
 impl fmt::Display for UdfError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NotUdf => f.write_str("aucun système de fichiers UDF"),
-            Self::Malformed(what) => write!(f, "UDF illisible : {what}"),
-            Self::Io(err) => write!(f, "lecture de l'image : {err}"),
+            Self::NotUdf => f.write_str("no UDF filesystem"),
+            Self::Malformed(what) => write!(f, "UDF unreadable: {what}"),
+            Self::Io(err) => write!(f, "reading the image: {err}"),
         }
     }
 }
@@ -121,14 +121,14 @@ impl Tree {
 fn u16_at(data: &[u8], at: usize) -> Result<u16, UdfError> {
     let bytes = data
         .get(at..at + 2)
-        .ok_or(UdfError::Malformed("champ hors du descripteur"))?;
+        .ok_or(UdfError::Malformed("field outside the descriptor"))?;
     Ok(u16::from_le_bytes([bytes[0], bytes[1]]))
 }
 
 fn u32_at(data: &[u8], at: usize) -> Result<u32, UdfError> {
     let bytes = data
         .get(at..at + 4)
-        .ok_or(UdfError::Malformed("champ hors du descripteur"))?;
+        .ok_or(UdfError::Malformed("field outside the descriptor"))?;
     Ok(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
 }
 
@@ -166,7 +166,7 @@ fn recorded_len(raw: u32) -> Result<u64, UdfError> {
     if raw >> 30 == 0 {
         Ok(u64::from(raw))
     } else {
-        Err(UdfError::Malformed("morceau de fichier non enregistré"))
+        Err(UdfError::Malformed("file extent not recorded"))
     }
 }
 
@@ -182,13 +182,13 @@ fn decode_name(raw: &[u8]) -> Result<String, UdfError> {
                 .map(|c| u16::from_be_bytes(*c));
             char::decode_utf16(units)
                 .collect::<Result<String, _>>()
-                .map_err(|_| UdfError::Malformed("nom de fichier invalide"))?
+                .map_err(|_| UdfError::Malformed("invalid file name"))?
         }
-        _ => return Err(UdfError::Malformed("nom de fichier invalide")),
+        _ => return Err(UdfError::Malformed("invalid file name")),
     };
     // Un nom vient de l'image et deviendra un chemin : aucun moyen d'en sortir.
     if name.is_empty() || name == "." || name == ".." || name.contains(['/', '\\', '\0']) {
-        return Err(UdfError::Malformed("nom de fichier invalide"));
+        return Err(UdfError::Malformed("invalid file name"));
     }
     Ok(name)
 }
@@ -234,9 +234,9 @@ impl<'a, R: ReadAt + ?Sized> Udf<'a, R> {
                     let maps = u32_at(&sector, 268)?;
                     let map_kind = *sector
                         .get(440)
-                        .ok_or(UdfError::Malformed("table de partitions"))?;
+                        .ok_or(UdfError::Malformed("partition table"))?;
                     if block != SECTOR as u32 || maps != 1 || map_kind != 1 {
-                        return Err(UdfError::Malformed("forme de volume non prise en charge"));
+                        return Err(UdfError::Malformed("volume shape not supported"));
                     }
                     volume = Some(long_ad(&sector, 248)?);
                 }
@@ -244,8 +244,8 @@ impl<'a, R: ReadAt + ?Sized> Udf<'a, R> {
                 _ => {}
             }
         }
-        let partition_start = partition.ok_or(UdfError::Malformed("partition absente"))?;
-        let file_set = volume.ok_or(UdfError::Malformed("volume logique absent"))?;
+        let partition_start = partition.ok_or(UdfError::Malformed("partition missing"))?;
+        let file_set = volume.ok_or(UdfError::Malformed("logical volume missing"))?;
         let mut udf = Self {
             reader,
             partition_start,
@@ -255,7 +255,7 @@ impl<'a, R: ReadAt + ?Sized> Udf<'a, R> {
         let mut sector = [0; SECTOR as usize];
         reader.read_exact_at(udf.block_offset(file_set.block), &mut sector)?;
         if tag_id(&sector) != Some(TAG_FILE_SET) {
-            return Err(UdfError::Malformed("descripteur du jeu de fichiers"));
+            return Err(UdfError::Malformed("file set descriptor"));
         }
         udf.root = long_ad(&sector, 400)?;
         Ok(udf)
@@ -272,7 +272,7 @@ impl<'a, R: ReadAt + ?Sized> Udf<'a, R> {
         let (ea_at, ad_at, base) = match tag_id(&sector) {
             Some(TAG_FILE_ENTRY) => (168, 172, 176),
             Some(TAG_EXTENDED_FILE_ENTRY) => (208, 212, 216),
-            _ => return Err(UdfError::Malformed("entrée de fichier attendue")),
+            _ => return Err(UdfError::Malformed("file entry expected")),
         };
         let directory = sector[27] == ICB_DIRECTORY;
         let flags = u16_at(&sector, 34)?;
@@ -283,19 +283,19 @@ impl<'a, R: ReadAt + ?Sized> Udf<'a, R> {
         let descriptors = start
             .checked_add(ad_len)
             .and_then(|end| sector.get(start..end))
-            .ok_or(UdfError::Malformed("morceaux hors de l'entrée"))?;
+            .ok_or(UdfError::Malformed("extents outside the entry"))?;
         let content = match flags & 7 {
             0 => Content::Extents(self.extents(descriptors, 8, |d| u32_at(d, 4))?),
             1 => Content::Extents(self.extents(descriptors, 16, |d| u32_at(d, 4))?),
             3 => Content::Inline(descriptors.to_vec()),
-            _ => return Err(UdfError::Malformed("forme de morceaux non prise en charge")),
+            _ => return Err(UdfError::Malformed("extent shape not supported")),
         };
         let held = match &content {
             Content::Extents(extents) => extents.iter().map(|extent| extent.len).sum(),
             Content::Inline(bytes) => bytes.len() as u64,
         };
         if held < size {
-            return Err(UdfError::Malformed("fichier plus long que ses morceaux"));
+            return Err(UdfError::Malformed("file longer than its extents"));
         }
         Ok(Entry {
             directory,
@@ -326,7 +326,7 @@ impl<'a, R: ReadAt + ?Sized> Udf<'a, R> {
 
     fn directory_bytes(&self, entry: &Entry) -> Result<Vec<u8>, UdfError> {
         if entry.size > MAX_DIRECTORY_BYTES {
-            return Err(UdfError::Malformed("dossier trop grand"));
+            return Err(UdfError::Malformed("directory too large"));
         }
         let mut bytes = vec![0; entry.size as usize];
         read_content(self.reader, &entry.content, 0, &mut bytes)?;
@@ -343,35 +343,35 @@ impl<'a, R: ReadAt + ?Sized> Udf<'a, R> {
         while let Some((at, path)) = pending.pop() {
             let directory = self.read_entry(at)?;
             if !directory.directory {
-                return Err(UdfError::Malformed("dossier attendu"));
+                return Err(UdfError::Malformed("directory expected"));
             }
             let bytes = self.directory_bytes(&directory)?;
             let mut position = 0;
             while position + 38 <= bytes.len() {
                 let record = &bytes[position..];
                 if tag_id(record) != Some(TAG_FILE_ID) {
-                    return Err(UdfError::Malformed("entrée de dossier"));
+                    return Err(UdfError::Malformed("directory entry"));
                 }
                 let characteristics = record[18];
                 let name_len = usize::from(record[19]);
                 let use_len = usize::from(u16_at(record, 36)?);
                 let total = (38 + use_len + name_len + 3) & !3;
                 if total > record.len() {
-                    return Err(UdfError::Malformed("entrée de dossier tronquée"));
+                    return Err(UdfError::Malformed("truncated directory entry"));
                 }
                 position += total;
                 if characteristics & (FID_PARENT | FID_DELETED) != 0 {
                     continue;
                 }
                 if tree.files.len() + tree.directories.len() >= MAX_ENTRIES {
-                    return Err(UdfError::Malformed("trop de fichiers"));
+                    return Err(UdfError::Malformed("too many files"));
                 }
                 let mut child = path.clone();
                 child.push(decode_name(&record[38 + use_len..38 + use_len + name_len])?);
                 let icb = long_ad(record, 20)?;
                 if characteristics & FID_DIRECTORY != 0 {
                     if child.len() > MAX_DEPTH {
-                        return Err(UdfError::Malformed("dossiers trop profonds"));
+                        return Err(UdfError::Malformed("directories too deep"));
                     }
                     tree.directories.push(child.clone());
                     pending.push((icb, child));

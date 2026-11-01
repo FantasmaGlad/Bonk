@@ -48,35 +48,35 @@ impl From<TableArg> for TableKind {
     }
 }
 
-/// Remet un disque en état de stockage : une table, une partition, un système de fichiers. Efface tout
+/// Return a disk to storage use: one table, one partition, one filesystem. Erases everything
 #[derive(Debug, Args)]
 #[command(long_about = None)]
 pub(crate) struct FormatArgs {
     #[command(flatten)]
     common: CommonArgs,
 
-    /// Système de fichiers ; par défaut fat32 jusqu'à 32 Gio, exfat au-delà
+    /// Filesystem; by default fat32 up to 32 GiB, exfat above
     #[arg(long, value_enum)]
     fs: Option<FsArg>,
 
-    /// Table de partitions
+    /// Partition table
     #[arg(long, value_enum, default_value_t = TableArg::Gpt)]
     table: TableArg,
 
-    /// Étiquette du volume
-    #[arg(long, value_name = "NOM")]
+    /// Volume label
+    #[arg(long, value_name = "NAME")]
     label: Option<String>,
 
-    /// Confirme le formatage : sans --yes ni --force, Bonk ne fait rien
+    /// Confirm the format: without --yes or --force, Bonk does nothing
     #[arg(long)]
     yes: bool,
 
-    /// Décrit ce qui serait fait sans rien écrire
+    /// Describe what would be done without writing anything
     #[arg(long)]
     dry_run: bool,
 
-    /// Confirme comme --yes, et autorise un disque interne admis par --show-internal, sans question.
-    /// Jamais un disque système : le filtre de sécurité reste souverain
+    /// Confirm like --yes, and allow an internal disk admitted by --show-internal, without a question.
+    /// Never a system disk: the safety filter stays in charge
     #[arg(long)]
     force: bool,
 }
@@ -114,22 +114,24 @@ pub(crate) fn run_format(
     finish(result, &args.common, out, err, |done, out| {
         writeln!(
             out,
-            "{} {} : {}",
+            "{} {}: {}",
             if done.dry_run {
-                "Plan (rien n'est écrit) :"
+                "Plan (nothing is written):"
             } else {
-                "Formatage terminé :"
+                "Format finished:"
             },
             target_line(&done.target),
-            done.target.size_bytes.map_or_else(String::new, format_size),
+            done.target
+                .size_bytes
+                .map_or_else(String::new, |s| format_size(s, bonk_hal::Lang::En)),
         )?;
         writeln!(
             out,
-            "  Table : {}, système de fichiers : {}{}",
+            "  Table: {}, filesystem: {}{}",
             done.table.name(),
             done.filesystem,
             if done.filesystem_defaulted {
-                " (par défaut)"
+                " (default)"
             } else {
                 ""
             }
@@ -137,27 +139,27 @@ pub(crate) fn run_format(
         if done.file_size_limit_bytes.is_some() {
             writeln!(
                 out,
-                "  Limite : un fichier de 4 Gio ou plus n'y tient pas ; pour en stocker, --fs exfat"
+                "  Limit: a file of 4 GiB or more does not fit; to store one, --fs exfat"
             )?;
         }
         if let Some(label) = &done.label {
-            writeln!(out, "  Étiquette : {label}")?;
+            writeln!(out, "  Label: {label}")?;
         }
         if !done.unmounted.is_empty() {
-            writeln!(out, "  Démontage : {}", done.unmounted.join(", "))?;
+            writeln!(out, "  Unmount: {}", done.unmounted.join(", "))?;
         }
         if done.verified {
-            writeln!(out, "  Relecture : conforme")?;
+            writeln!(out, "  Read-back: matches")?;
         }
         Ok(())
     })
 }
 
-/// Ce que cet hôte permet, et pourquoi pas le reste
+/// What this host allows, and why not the rest
 #[derive(Debug, Args)]
 #[command(long_about = None)]
 pub(crate) struct CapabilitiesArgs {
-    /// Résultat en JSON
+    /// Result as JSON
     #[arg(long)]
     json: bool,
 }
@@ -185,9 +187,9 @@ pub(crate) fn report_value(capabilities: Vec<Capability>) -> serde_json::Result<
 
 fn reason(missing: Option<Missing>) -> &'static str {
     match missing {
-        Some(Missing::MissingTool) => "outil absent",
-        Some(Missing::OsUnsupported) => "non pris en charge",
-        Some(Missing::NoPermission) => "droits refusés",
+        Some(Missing::MissingTool) => "tool missing",
+        Some(Missing::OsUnsupported) => "not supported",
+        Some(Missing::NoPermission) => "permission denied",
         None => "indisponible",
     }
 }
@@ -204,11 +206,11 @@ fn write_capabilities(
     }
     for capability in capabilities {
         if capability.available {
-            writeln!(out, "{:<14} oui", capability.name)?;
+            writeln!(out, "{:<14} yes", capability.name)?;
         } else {
             writeln!(
                 out,
-                "{:<14} non : {} ({})",
+                "{:<14} no: {} ({})",
                 capability.name,
                 reason(capability.missing),
                 capability.detail.unwrap_or_default()

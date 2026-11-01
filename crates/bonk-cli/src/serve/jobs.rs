@@ -141,7 +141,7 @@ pub(super) fn start_job(
     let Some(guard) = state.slot.try_acquire() else {
         return Err(failure(
             Code::ProtocolError,
-            "une opération d'écriture est déjà en cours (voir « cancel »)",
+            "a write operation is already running (see 'cancel')",
         ));
     };
     // Les paramètres sont validés tout de suite : une erreur de requête répond sans démarrer.

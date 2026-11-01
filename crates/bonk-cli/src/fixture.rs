@@ -14,9 +14,9 @@ use serde::Deserialize;
 /// Options globales liées aux captures.
 #[derive(Debug, Args)]
 pub(crate) struct GlobalArgs {
-    /// Rejoue une énumération capturée (`bonk diagnose --capture`) au lieu de lire ce système :
-    /// lecture, `--dry-run` et `--simulate` seulement, jamais d'écriture sur un disque
-    #[arg(long, value_name = "FICHIER", global = true)]
+    /// Replay a captured enumeration (`bonk diagnose --capture`) instead of reading this system:
+    /// reads, `--dry-run` and `--simulate` only, never a write to a disk
+    #[arg(long, value_name = "FILE", global = true)]
     fixture: Option<PathBuf>,
 }
 
@@ -39,19 +39,21 @@ struct Document {
 
 /// Lit les lectures d'un rapport `diagnose --capture` (ou d'une capture seule).
 pub(crate) fn load(path: &Path) -> Result<Vec<SourceRead>, String> {
-    let text = fs::read_to_string(path)
-        .map_err(|e| format!("{} : lecture impossible : {e}", path.display()))?;
-    parse(&text).map_err(|e| format!("{} : {e}", path.display()))
+    let text =
+        fs::read_to_string(path).map_err(|e| format!("{}: could not read: {e}", path.display()))?;
+    parse(&text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 pub(crate) fn parse(text: &str) -> Result<Vec<SourceRead>, String> {
     let document: Document = serde_json::from_str(text)
-        .map_err(|e| format!("pas une capture de Bonk (JSON illisible : {e})"))?;
-    let reads = document.capture.map(|c| c.reads).or(document.reads).ok_or(
-        "pas de capture dans ce fichier (produire le rapport avec `bonk diagnose --capture`)",
-    )?;
+        .map_err(|e| format!("not a Bonk capture (unreadable JSON: {e})"))?;
+    let reads = document
+        .capture
+        .map(|c| c.reads)
+        .or(document.reads)
+        .ok_or("no capture in this file (produce the report with `bonk diagnose --capture`)")?;
     if reads.is_empty() {
-        return Err("capture vide".to_owned());
+        return Err("empty capture".to_owned());
     }
     Ok(reads)
 }
@@ -75,16 +77,14 @@ mod tests {
 
     #[test]
     fn refuse_ce_qui_n_est_pas_une_capture() {
-        assert!(parse("pas du json").is_err_and(|e| e.contains("JSON illisible")));
+        assert!(parse("pas du json").is_err_and(|e| e.contains("unreadable JSON")));
         assert!(parse(r#"{"schema_version":1}"#).is_err_and(|e| e.contains("diagnose --capture")));
-        assert!(parse(r#"{"reads":[]}"#).is_err_and(|e| e.contains("vide")));
+        assert!(parse(r#"{"reads":[]}"#).is_err_and(|e| e.contains("empty")));
         assert!(parse(r#"{"reads":[{"path":1}]}"#).is_err());
     }
 
     #[test]
     fn fichier_absent() {
-        assert!(
-            load(Path::new("/n/existe/pas.json")).is_err_and(|e| e.contains("lecture impossible"))
-        );
+        assert!(load(Path::new("/n/existe/pas.json")).is_err_and(|e| e.contains("could not read")));
     }
 }

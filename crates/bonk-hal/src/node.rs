@@ -61,16 +61,16 @@ mod imp {
     /// Le nom noyau du périphérique, s'il s'agit d'un disque entier : jamais une partition ni un fichier.
     fn whole_disk_name(resolved: &Path) -> Result<String, BlockError> {
         if !fs::metadata(resolved)?.file_type().is_block_device() {
-            return Err(invalid("le chemin n'est pas un périphérique bloc"));
+            return Err(invalid("the path is not a block device"));
         }
         let name = resolved
             .file_name()
             .and_then(|n| n.to_str())
-            .ok_or_else(|| invalid("nom de périphérique illisible"))?
+            .ok_or_else(|| invalid("unreadable device name"))?
             .to_owned();
         // Une partition porte un fichier `partition` dans sysfs : on n'écrit que des disques entiers.
         if Path::new(&format!("/sys/class/block/{name}/partition")).exists() {
-            return Err(invalid("le chemin est une partition, pas un disque entier"));
+            return Err(invalid("the path is a partition, not a whole disk"));
         }
         Ok(name)
     }
@@ -106,7 +106,7 @@ mod imp {
             let file = fs::File::from(fd);
             let (held, expected) = (file.metadata()?, fs::metadata(&resolved)?);
             if !held.file_type().is_block_device() || held.rdev() != expected.rdev() {
-                return Err(invalid("le descripteur reçu n'est pas ce disque"));
+                return Err(invalid("the received descriptor is not this disk"));
             }
             Self::finish(file, resolved, name, access == Access::ReadOnly)
         }

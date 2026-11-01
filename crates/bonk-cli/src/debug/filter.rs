@@ -49,7 +49,7 @@ pub(crate) fn filter(
         return Ok(Outcome::Failed(
             Code::DiskNotFound,
             format!(
-                "disque introuvable : « {} » (identifiants : bonk list --all)",
+                "disk not found: '{}' (identifiers: bonk list --all)",
                 args.target
             ),
         ));
@@ -71,17 +71,17 @@ pub(crate) fn filter(
         writeln!(out)?;
         return Ok(Outcome::Done);
     }
-    writeln!(out, "Disque {} ({})", disk.id, disk.path)?;
+    writeln!(out, "Disk {} ({})", disk.id, disk.path)?;
     writeln!(
         out,
-        "Réglages : disques internes {}, disques virtuels {}",
+        "Settings: internal disks {}, virtual disks {}",
         if options.show_internal {
-            "proposés"
+            "offered"
         } else {
-            "cachés"
+            "hidden"
         },
         if options.allow_virtual {
-            "autorisés"
+            "allowed"
         } else {
             "interdits"
         },
@@ -96,8 +96,8 @@ pub(crate) fn filter(
         // La règle du bus ne refuse rien : quand elle « s'applique », elle décide de la proposition.
         let mark = match (rule.rule, rule.fired) {
             ("bus", true) => "VERDICT  ",
-            (_, true) => "APPLIQUÉE",
-            _ => "non      ",
+            (_, true) => "APPLIED  ",
+            _ => "no       ",
         };
         writeln!(
             out,
@@ -105,7 +105,11 @@ pub(crate) fn filter(
             rule.rule, rule.subject, rule.facts
         )?;
     }
-    writeln!(out, "Verdict : {}", state_label(&verdict))?;
+    writeln!(
+        out,
+        "Verdict: {}",
+        state_label(&verdict, bonk_hal::Lang::En)
+    )?;
     Ok(Outcome::Done)
 }
 

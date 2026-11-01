@@ -52,15 +52,15 @@ fn layout_d_une_image_mbr() -> Result<(), Box<dyn std::error::Error>> {
     assert!(matches!(layout(&args, &mut out)?, Outcome::Done));
     let text = texte(out);
     assert!(
-        text.contains("MBR : signature 55 AA oui, protection GPT : non"),
+        text.contains("MBR: 55 AA signature yes, GPT protection: no"),
         "{text}"
     );
     assert!(
-        text.contains("entrée 1 : type 0x83  début 2048  1000 secteurs"),
+        text.contains("entry 1: type 0x83  start 2048  1000 sectors"),
         "{text}"
     );
-    assert!(text.contains("GPT : aucun"), "{text}");
-    assert!(text.contains("Constats : aucun"), "{text}");
+    assert!(text.contains("GPT: none"), "{text}");
+    assert!(text.contains("Findings: none"), "{text}");
 
     let mut json = Vec::new();
     let args = LayoutArgs {
@@ -134,7 +134,7 @@ fn hexdump_borne_et_signale_la_fin_de_l_image() -> Result<(), Box<dyn std::error
     // Au-delà de la fin : la lecture est ramenée à l'image et le dit.
     let (done, text) = hex(4096 * 512 - 16, 64)?;
     assert!(
-        done && text.contains("(fin de l'image : 16 octets lus sur 64 demandés)"),
+        done && text.contains("(end of image: 16 bytes read of 64 requested)"),
         "{text}"
     );
     // Décalage hors de l'image et longueurs interdites.
@@ -154,7 +154,7 @@ fn un_disque_reel_est_refuse_avec_une_explication() -> Result<(), io::Error> {
     match layout(&args, &mut out)? {
         Outcome::Failed(code, message) => {
             assert_eq!(code, Code::RawDiskUnavailable);
-            assert!(message.contains("n'existe pas"), "{message}");
+            assert!(message.contains("does not exist"), "{message}");
         }
         Outcome::Done => panic!("un disque réel ne doit pas être lu"),
     }

@@ -19,7 +19,7 @@ const MANAGER_PATH: &str = "/org/freedesktop/UDisks2/Manager";
 const MANAGER: &str = "org.freedesktop.UDisks2.Manager";
 const BLOCK: &str = "org.freedesktop.UDisks2.Block";
 const FILESYSTEM: &str = "org.freedesktop.UDisks2.Filesystem";
-const SUDO_HINT: &str = "relancer avec sudo";
+const SUDO_HINT: &str = "run again with sudo";
 /// Au-delà, une demande d'autorisation restée sans réponse est abandonnée : personne n'est peut-être
 /// devant l'écran, et l'opération ne doit pas attendre sans fin.
 const AUTHORIZATION_LIMIT: Duration = Duration::from_secs(5 * 60);
@@ -32,15 +32,15 @@ type Options<'a> = HashMap<&'a str, Variant<'a>>;
 fn advice(error_name: &str) -> Option<String> {
     match error_name {
         "org.freedesktop.UDisks2.Error.NotAuthorizedDismissed" => {
-            Some("autorisation annulée".to_owned())
+            Some("authorization cancelled".to_owned())
         }
         "org.freedesktop.UDisks2.Error.NotAuthorized"
         | "org.freedesktop.UDisks2.Error.NotAuthorizedCanObtain" => Some(format!(
-            "autorisation impossible : aucun agent polkit dans cette session (SSH ?) ; {SUDO_HINT}"
+            "authorization impossible: no polkit agent in this session (SSH?); {SUDO_HINT}"
         )),
         "org.freedesktop.DBus.Error.ServiceUnknown"
         | "org.freedesktop.DBus.Error.NameHasNoOwner" => {
-            Some(format!("service UDisks2 absent ; {SUDO_HINT}"))
+            Some(format!("UDisks2 service missing; {SUDO_HINT}"))
         }
         _ => None,
     }
@@ -54,13 +54,13 @@ fn from_zbus(error: zbus::Error) -> BlockError {
     if let zbus::Error::MethodError(name, detail, _) = &error {
         return denied(advice(name.as_str()).unwrap_or_else(|| {
             format!(
-                "UDisks2 : {} : {}",
+                "UDisks2: {}: {}",
                 name.as_str(),
-                detail.as_deref().unwrap_or("sans détail")
+                detail.as_deref().unwrap_or("no detail")
             )
         }));
     }
-    denied(format!("UDisks2 injoignable : {error} ; {SUDO_HINT}"))
+    denied(format!("UDisks2 unreachable: {error}; {SUDO_HINT}"))
 }
 
 fn connect() -> Result<Connection, BlockError> {
@@ -71,7 +71,7 @@ fn connect() -> Result<Connection, BlockError> {
 fn resolve(connection: &Connection, device: &Path) -> Result<OwnedObjectPath, BlockError> {
     let path = device
         .to_str()
-        .ok_or_else(|| denied("nom de périphérique illisible".to_owned()))?;
+        .ok_or_else(|| denied("unreadable device name".to_owned()))?;
     let spec: Options<'_> = HashMap::from([("path", Variant::from(path))]);
     let options: Options<'_> = HashMap::new();
     let reply = block_on(connection.call_method(
@@ -86,7 +86,7 @@ fn resolve(connection: &Connection, device: &Path) -> Result<OwnedObjectPath, Bl
     objects
         .into_iter()
         .next()
-        .ok_or_else(|| denied(format!("{} inconnu de UDisks2", device.display())))
+        .ok_or_else(|| denied(format!("{} unknown to UDisks2", device.display())))
 }
 
 /// Comme [`resolve`], pour une partition que le noyau vient de créer : le service la découvre après lui.
@@ -126,13 +126,13 @@ pub(super) fn open(
         Waited::Answer(result) => result,
         Waited::Cancelled => Err(BlockError::Io(io::Error::new(
             io::ErrorKind::Interrupted,
-            "annulée pendant la demande d'autorisation",
+            "cancelled during the authorization request",
         ))),
         Waited::TimedOut => Err(denied(format!(
-            "aucune réponse à la demande d'autorisation en {} minutes",
+            "no answer to the authorization request within {} minutes",
             AUTHORIZATION_LIMIT.as_secs() / 60
         ))),
-        Waited::Lost => Err(denied("UDisks2 : réponse perdue".to_owned())),
+        Waited::Lost => Err(denied("UDisks2: response lost".to_owned())),
     }
 }
 
@@ -214,7 +214,7 @@ pub(super) fn can_format(kind: &str) -> Result<(), String> {
     if available {
         Ok(())
     } else {
-        Err(format!("outil absent : {tool}"))
+        Err(format!("tool missing: {tool}"))
     }
 }
 
@@ -294,7 +294,7 @@ mod tests {
     fn chaque_refus_connu_dit_quoi_faire() {
         assert_eq!(
             advice("org.freedesktop.UDisks2.Error.NotAuthorizedDismissed").as_deref(),
-            Some("autorisation annulée")
+            Some("authorization cancelled")
         );
         for name in [
             "org.freedesktop.UDisks2.Error.NotAuthorized",

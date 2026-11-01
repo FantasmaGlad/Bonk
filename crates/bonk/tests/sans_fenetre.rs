@@ -15,7 +15,7 @@ fn sans_commande_elle_dit_qu_elle_n_a_pas_de_fenetre() -> Result<(), Box<dyn std
     let sortie = bonk().env("DISPLAY", ":0").output()?;
     common::assert_code(&sortie, 1);
     let erreur = String::from_utf8_lossy(&sortie.stderr);
-    assert!(erreur.contains("sans fenêtre"), "{erreur}");
+    assert!(erreur.contains("without a window"), "{erreur}");
     assert!(erreur.contains("E5003"), "{erreur}");
     Ok(())
 }

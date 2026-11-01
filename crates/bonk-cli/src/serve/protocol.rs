@@ -69,7 +69,7 @@ pub(super) fn parse<T: DeserializeOwned>(params: &Value) -> Result<T, Failure> {
         params.clone()
     };
     serde_json::from_value(value)
-        .map_err(|e| failure(Code::ProtocolError, format!("paramètres invalides : {e}")))
+        .map_err(|e| failure(Code::ProtocolError, format!("invalid parameters: {e}")))
 }
 
 pub(super) fn json_error(e: serde_json::Error) -> Failure {
@@ -77,10 +77,7 @@ pub(super) fn json_error(e: serde_json::Error) -> Failure {
 }
 
 pub(super) fn disk_not_found(target: &str) -> Failure {
-    failure(
-        Code::DiskNotFound,
-        format!("disque introuvable : « {target} »"),
-    )
+    failure(Code::DiskNotFound, format!("disk not found: '{target}'"))
 }
 
 impl Out {

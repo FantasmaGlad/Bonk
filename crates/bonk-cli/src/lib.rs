@@ -32,7 +32,7 @@ use std::process::ExitCode;
 
 use bonk_hal::{Disk, EnumerateError, enumerate_disks};
 use bonk_ops::job;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 
 use crate::commands::{
     run_completions, run_config, run_debug, run_diagnose, run_explain, run_gui, run_info, run_list,
@@ -53,8 +53,16 @@ use crate::transfer::{RepairArgs, VerifyArgs, WriteArgs};
 #[command(
     name = "bonk",
     version,
-    about = "Création de supports d'amorçage (clés USB et disques externes)",
+    about = "Create bootable media (USB drives and external disks)",
     long_about = None,
+    // Lue par `parse` avant l'analyse : aucun champ ne la porte.
+    arg(
+        clap::Arg::new("no_color")
+            .long("no-color")
+            .global(true)
+            .action(clap::ArgAction::SetTrue)
+            .help("No color in the help and usage errors (`NO_COLOR` has the same effect)"),
+    ),
 )]
 struct Cli {
     #[command(flatten)]
@@ -63,7 +71,7 @@ struct Cli {
     #[command(flatten)]
     global: fixture::GlobalArgs,
 
-    /// N'ouvre jamais la fenêtre : sans commande, affiche l'aide et échoue, pour les scripts
+    /// Never open the window: without a command, print the help and fail, for scripts
     #[arg(long)]
     no_gui: bool,
 
@@ -73,68 +81,68 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// Disques : liste et détail
+    /// Disks: list and detail
     Disk {
         #[command(subcommand)]
         action: DiskAction,
     },
-    /// Images téléchargées : liste et nettoyage
+    /// Downloaded images: list and cleanup
     Cache {
         #[command(subcommand)]
         action: cache::CacheAction,
     },
-    /// Liste les disques que Bonk peut écrire (raccourci de `disk list`)
+    /// List the disks Bonk can write (shortcut for `disk list`)
     List(list::ListArgs),
-    /// Détail d'un disque (raccourci de `disk info`)
+    /// Detail of a disk (shortcut for `disk info`)
     Info(info::InfoArgs),
-    /// Écrit une image sur un disque, puis la vérifie (`--simulate` : sur un fichier image)
+    /// Write an image to a disk, then verify it (`--simulate`: to an image file)
     Write(WriteArgs),
-    /// Compare un disque à une image, sans rien écrire
+    /// Compare a disk to an image, writing nothing
     Verify(VerifyArgs),
-    /// Répare le GPT d'un disque ou d'une image
+    /// Repair the GPT of a disk or an image
     RepairGpt(RepairArgs),
-    /// Remet un disque en état de stockage : table, partition, système de fichiers
+    /// Return a disk to storage use: table, partition, filesystem
     Format(format::FormatArgs),
-    /// Ce que cet hôte permet, et pourquoi pas le reste
+    /// What this host allows, and why not the rest
     Capabilities(format::CapabilitiesArgs),
-    /// Rapport de support en JSON : système, rendu, disques et verdicts, secrets masqués
+    /// Support report as JSON: system, rendering, disks and verdicts, secrets masked
     Diagnose(diagnose::DiagnoseArgs),
-    /// Bas niveau des disques, en lecture seule : sources système, filtre pas à pas, tables de partitions
+    /// Low-level disk view, read-only: system sources, step-by-step filter, partition tables
     Debug {
         #[command(subcommand)]
         action: debug::DebugAction,
     },
-    /// Explique un code d'erreur (`bonk explain E1003`) ou liste tous les codes
+    /// Explain an error code (`bonk explain E1003`) or list all codes
     Explain(ExplainArgs),
-    /// Réglages persistants : list, get, set, reset
+    /// Persistent settings: list, get, set, reset
     Config {
         #[command(subcommand)]
         action: ConfigAction,
     },
-    /// JSON Schema de la sortie `--json` d'une commande
+    /// JSON Schema of a command's `--json` output
     Schema(SchemaArgs),
-    /// Complétions de shell : bash, zsh, fish, powershell, elvish
+    /// Shell completions: bash, zsh, fish, powershell, elvish
     Completions {
-        /// Shell visé
+        /// Target shell
         shell: clap_complete::Shell,
     },
-    /// Service headless : pilote Bonk en JSON sur l'entrée et la sortie standard, sans fenêtre
+    /// Headless service: drive Bonk with JSON on standard input and output, without a window
     Serve,
-    /// Ouvre la fenêtre (comme `bonk` seul)
+    /// Open the window (like `bonk` alone)
     Gui,
 }
 
 #[derive(Debug, Subcommand)]
 enum DiskAction {
-    /// Liste les disques que Bonk peut écrire (lecture seule)
+    /// List the disks Bonk can write (read-only)
     List(list::ListArgs),
-    /// Détail d'un disque (lecture seule)
+    /// Detail of a disk (read-only)
     Info(info::InfoArgs),
-    /// Écrit une image sur un disque, puis la vérifie
+    /// Write an image to a disk, then verify it
     Write(WriteArgs),
-    /// Compare un disque à une image, sans rien écrire
+    /// Compare a disk to an image, writing nothing
     Verify(VerifyArgs),
-    /// Répare le GPT d'un disque
+    /// Repair the GPT of a disk
     RepairGpt(RepairArgs),
 }
 
@@ -142,7 +150,7 @@ enum DiskAction {
 /// réel ou ouvrirait un vrai disque (le bas niveau reste permis sur un fichier image). Aucun cas par défaut : une nouvelle commande ne compile pas tant que
 /// sa réponse n'est pas écrite ici, car l'oubli laisserait écrire sur un vrai disque sous `--fixture`.
 fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
-    const DISK: &str = "--fixture simule l'énumération seulement : l'écriture et la lecture brute d'un disque sont refusées (utiliser --simulate ou --dry-run)";
+    const DISK: &str = "--fixture only simulates the enumeration: writing to and raw reading of a disk are refused (use --simulate or --dry-run)";
     match command.as_ref()? {
         Command::Debug {
             action: debug::DebugAction::Layout(a),
@@ -165,9 +173,9 @@ fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
         Command::Format(a) if a.touches_real_disk() => Some(DISK),
         Command::Debug {
             action: debug::DebugAction::Sources(_),
-        } => Some("debug sources lit le système réel : incompatible avec --fixture"),
+        } => Some("debug sources reads the real system: incompatible with --fixture"),
         Command::Diagnose(a) if a.capture() => {
-            Some("--capture lit le système réel : incompatible avec --fixture")
+            Some("--capture reads the real system: incompatible with --fixture")
         }
         Command::Format(_)
         | Command::Capabilities(_)
@@ -221,7 +229,7 @@ fn split_words(line: &str) -> Result<Vec<String>, String> {
             // Hors guillemets, l'antislash rend le caractère suivant littéral (`'\''` dans le texte
             // d'un identifiant contenant une apostrophe).
             (None, '\\') => {
-                current.push(chars.next().ok_or("antislash final")?);
+                current.push(chars.next().ok_or("trailing backslash")?);
                 in_word = true;
             }
             (None, '\'' | '"') => {
@@ -322,6 +330,22 @@ fn stored_settings(env: &Env) -> (ViewDefaults, LogFormat, Option<String>) {
 }
 
 /// Cœur de [`run`], avec les flux, l'environnement et les dépendances injectés pour les tests.
+/// `--no-color` règle l'affichage de l'analyse elle-même (aide, erreurs d'usage) : il faut le connaître avant
+/// d'analyser. `NO_COLOR` et un flux qui n'est pas un terminal sont déjà traités par clap.
+fn parse<I, T>(args: I) -> Result<Cli, clap::Error>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+{
+    let args: Vec<OsString> = args.into_iter().map(Into::into).collect();
+    let mut command = Cli::command();
+    if args.iter().any(|a| a == "--no-color") {
+        command = command.color(clap::ColorChoice::Never);
+    }
+    let matches = command.try_get_matches_from(args)?;
+    Cli::from_arg_matches(&matches)
+}
+
 fn execute<I, T, O, E, L, F, G>(
     args: I,
     env: &Env,
@@ -340,7 +364,7 @@ where
     F: Fn() -> Result<Vec<Disk>, EnumerateError>,
     G: FnOnce(ViewDefaults) -> Result<(), String>,
 {
-    let cli = match Cli::try_parse_from(args) {
+    let cli = match parse(args) {
         Ok(cli) => cli,
         Err(erreur) => {
             // `print` choisit la sortie adaptée : aide et version sur stdout, erreurs sur stderr.
@@ -351,6 +375,7 @@ where
     };
 
     let no_gui = cli.no_gui;
+    let quiet = cli.log.quiet();
     let (view, default_format, config_error) = stored_settings(env);
 
     let settings = match Settings::from_args(&cli.log, env.bonk_log.as_deref(), default_format) {
@@ -397,23 +422,19 @@ where
     };
     match cli.command {
         None | Some(Command::Gui) if no_gui => {
-            let _ = writeln!(
-                err,
-                "{}",
-                <Cli as clap::CommandFactory>::command().render_help()
-            );
-            report(err, Code::InvalidArgument, "--no-gui demande une commande")
+            let _ = writeln!(err, "{}", Cli::command().render_help());
+            report(err, Code::InvalidArgument, "--no-gui requires a command")
         }
         None | Some(Command::Gui) => run_gui(env.privileged, view, err, gui),
         Some(Command::Disk { action }) => match action {
             DiskAction::List(args) => run_list(&args, &view, out, err, enumerate),
             DiskAction::Info(args) => run_info(&args, &view, out, err, enumerate),
-            DiskAction::Write(args) => transfer::run_write(&args, &deps, out, err),
-            DiskAction::Verify(args) => transfer::run_verify(&args, &view, &deps, out, err),
+            DiskAction::Write(args) => transfer::run_write(&args, &deps, quiet, out, err),
+            DiskAction::Verify(args) => transfer::run_verify(&args, &view, &deps, quiet, out, err),
             DiskAction::RepairGpt(args) => transfer::run_repair(&args, &deps, out, err),
         },
-        Some(Command::Write(args)) => transfer::run_write(&args, &deps, out, err),
-        Some(Command::Verify(args)) => transfer::run_verify(&args, &view, &deps, out, err),
+        Some(Command::Write(args)) => transfer::run_write(&args, &deps, quiet, out, err),
+        Some(Command::Verify(args)) => transfer::run_verify(&args, &view, &deps, quiet, out, err),
         Some(Command::RepairGpt(args)) => transfer::run_repair(&args, &deps, out, err),
         Some(Command::Format(args)) => format::run_format(&args, &deps, out, err),
         Some(Command::Capabilities(args)) => format::run_capabilities(&args, &deps, out, err),

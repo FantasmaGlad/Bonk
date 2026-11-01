@@ -13,10 +13,7 @@ pub(crate) fn hexdump(args: &HexdumpArgs, out: &mut dyn Write) -> io::Result<Out
     if args.len == 0 || args.len > HEXDUMP_MAX {
         return Ok(Outcome::Failed(
             Code::InvalidArgument,
-            format!(
-                "longueur invalide : {} (de 1 à {HEXDUMP_MAX} octets)",
-                args.len
-            ),
+            format!("invalid length: {} (1 to {HEXDUMP_MAX} bytes)", args.len),
         ));
     }
     let device = match open_read_only(&args.image) {
@@ -28,7 +25,7 @@ pub(crate) fn hexdump(args: &HexdumpArgs, out: &mut dyn Write) -> io::Result<Out
         return Ok(Outcome::Failed(
             Code::InvalidArgument,
             format!(
-                "décalage {} au-delà de la fin de l'image ({size} octets)",
+                "offset {} past the end of the image ({size} bytes)",
                 args.offset
             ),
         ));
@@ -39,7 +36,7 @@ pub(crate) fn hexdump(args: &HexdumpArgs, out: &mut dyn Write) -> io::Result<Out
         Err(erreur) => {
             return Ok(Outcome::Failed(
                 Code::SourceUnreadable,
-                format!("lecture impossible : {erreur}"),
+                format!("could not read: {erreur}"),
             ));
         }
     };
@@ -49,7 +46,7 @@ pub(crate) fn hexdump(args: &HexdumpArgs, out: &mut dyn Write) -> io::Result<Out
     if len < args.len {
         writeln!(
             out,
-            "(fin de l'image : {len} octets lus sur {} demandés)",
+            "(end of image: {len} bytes read of {} requested)",
             args.len
         )?;
     }

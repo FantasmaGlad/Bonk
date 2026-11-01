@@ -104,7 +104,7 @@ fn liste_par_defaut_ne_montre_que_les_disques_proposes() {
     let (code, out, err) = lancer(&["list"], sample());
     assert_eq!((code, err.as_str()), (0, ""));
     assert!(out.contains("usb-cle"), "{out}");
-    assert!(out.contains("proposé"), "{out}");
+    assert!(out.contains("offered"), "{out}");
     assert!(!out.contains("nvme-systeme"), "{out}");
     assert!(!out.contains("sata-libre"), "{out}");
 }
@@ -114,18 +114,18 @@ fn all_montre_les_ecartes_avec_la_raison() {
     let (code, out, _) = lancer(&["list", "--all"], sample());
     assert_eq!(code, 0);
     assert!(
-        out.contains("interdit : volume système (/dev/nvme0n1p2)"),
+        out.contains("forbidden: system volume (/dev/nvme0n1p2)"),
         "{out}"
     );
-    assert!(out.contains("/dev/nvme0n1p2 monté sur /"), "{out}");
-    assert!(out.contains("non affiché (bus interne"), "{out}");
+    assert!(out.contains("/dev/nvme0n1p2 mounted on /"), "{out}");
+    assert!(out.contains("hidden (internal bus"), "{out}");
 }
 
 #[test]
 fn show_internal_propose_le_disque_interne_avec_avertissement() {
     let (_, out, _) = lancer(&["list", "--show-internal"], sample());
     assert!(out.contains("sata-libre"), "{out}");
-    assert!(out.contains("confirmation renforcée"), "{out}");
+    assert!(out.contains("stronger confirmation"), "{out}");
     assert!(!out.contains("nvme-systeme"), "{out}");
 }
 
@@ -133,7 +133,7 @@ fn show_internal_propose_le_disque_interne_avec_avertissement() {
 fn aucun_disque_donne_un_message_et_le_code_zero() {
     let (code, out, _) = lancer(&["list"], vec![]);
     assert_eq!(code, 0);
-    assert!(out.contains("Aucun disque proposé."), "{out}");
+    assert!(out.contains("No disk offered."), "{out}");
     assert!(out.contains("--all"), "{out}");
 }
 
@@ -142,7 +142,7 @@ fn colonnes_alignees() {
     let (_, out, _) = lancer(&["list", "--all"], sample());
     let columns: Vec<usize> = out
         .lines()
-        .filter_map(|l| l.find("/dev/").or_else(|| l.find("CHEMIN")))
+        .filter_map(|l| l.find("/dev/").or_else(|| l.find("PATH")))
         .collect();
     assert_eq!(columns.len(), 4, "{out}");
     assert!(
@@ -199,7 +199,7 @@ fn echec_de_l_enumeration_donne_le_code_un_et_rien_sur_stdout() {
     assert_eq!(code, EXIT_RUNTIME_ERROR);
     assert!(out.is_empty());
     let err = String::from_utf8_lossy(&err);
-    assert!(err.starts_with("bonk : erreur : "), "{err}");
+    assert!(err.starts_with("bonk: error: "), "{err}");
 }
 
 #[test]
@@ -222,10 +222,10 @@ fn info_par_identifiant_ou_par_chemin() {
     for cible in ["usb-cle", "/dev/sdb"] {
         let (code, out, err) = lancer(&["info", cible], sample());
         assert_eq!((code, err.as_str()), (0, ""), "{cible}");
-        assert!(out.contains("Identifiant"), "{out}");
+        assert!(out.contains("Identifier"), "{out}");
         assert!(out.contains("usb-cle"), "{out}");
         assert!(out.contains("/dev/sdb"), "{out}");
-        assert!(out.contains("proposé"), "{out}");
+        assert!(out.contains("offered"), "{out}");
     }
     assert_eq!(
         lancer(&["disk", "info", "usb-cle"], sample()),
@@ -237,18 +237,18 @@ fn info_par_identifiant_ou_par_chemin() {
 fn info_montre_les_partitions_et_les_motifs() {
     let (code, out, _) = lancer(&["info", "nvme-systeme"], sample());
     assert_eq!(code, 0);
-    assert!(out.contains("Partitions :"), "{out}");
+    assert!(out.contains("Partitions:"), "{out}");
     assert!(out.contains("/dev/nvme0n1p2"), "{out}");
-    assert!(out.contains("monté sur /"), "{out}");
-    assert!(out.contains("interdit : volume système"), "{out}");
+    assert!(out.contains("mounted on /"), "{out}");
+    assert!(out.contains("forbidden: system volume"), "{out}");
 }
 
 #[test]
 fn info_suit_les_reglages_du_filtre() {
     let (_, defaut, _) = lancer(&["info", "sata-libre"], sample());
-    assert!(defaut.contains("non affiché"), "{defaut}");
+    assert!(defaut.contains("hidden"), "{defaut}");
     let (_, interne, _) = lancer(&["info", "sata-libre", "--show-internal"], sample());
-    assert!(interne.contains("confirmation renforcée"), "{interne}");
+    assert!(interne.contains("stronger confirmation"), "{interne}");
 }
 
 #[test]
@@ -267,10 +267,7 @@ fn info_d_un_disque_inconnu_echoue_sans_rien_ecrire_sur_stdout() {
     let (code, out, err) = lancer(&["info", "n-existe-pas"], sample());
     assert_eq!(code, EXIT_RUNTIME_ERROR);
     assert!(out.is_empty());
-    assert!(
-        err.contains("disque introuvable : « n-existe-pas »"),
-        "{err}"
-    );
+    assert!(err.contains("disk not found: 'n-existe-pas'"), "{err}");
     assert!(err.contains("bonk list --all"), "{err}");
 }
 
@@ -348,16 +345,16 @@ fn debug_filter_explique_un_disque_propose() {
     assert_eq!((code, err.as_str()), (0, ""));
     assert!(out.contains("[VERDICT  ] bus"), "{out}");
     assert!(!out.contains('§'), "{out}");
-    assert!(out.contains("Verdict : proposé"), "{out}");
-    assert!(!out.contains("APPLIQUÉE"), "{out}");
+    assert!(out.contains("Verdict: offered"), "{out}");
+    assert!(!out.contains("APPLIED  "), "{out}");
 }
 
 #[test]
 fn debug_filter_explique_un_refus_regle_par_regle() -> Result<(), serde_json::Error> {
     let (code, out, _) = lancer(&["debug", "filter", "nvme-systeme"], sample());
     assert_eq!(code, 0);
-    assert!(out.contains("[APPLIQUÉE] system_volume"), "{out}");
-    assert!(out.contains("Verdict : interdit"), "{out}");
+    assert!(out.contains("[APPLIED  ] system_volume"), "{out}");
+    assert!(out.contains("Verdict: forbidden"), "{out}");
 
     let (_, json, _) = lancer(&["debug", "filter", "nvme-systeme", "--json"], sample());
     let value: Value = serde_json::from_str(&json)?;
@@ -384,14 +381,11 @@ fn debug_filter_suit_les_reglages_et_refuse_un_inconnu() {
         &["debug", "filter", "sata-libre", "--show-internal"],
         sample(),
     );
-    assert!(out.contains("disques internes proposés"), "{out}");
-    assert!(out.contains("confirmation renforcée"), "{out}");
+    assert!(out.contains("internal disks offered"), "{out}");
+    assert!(out.contains("stronger confirmation"), "{out}");
     let (code, out, err) = lancer(&["debug", "filter", "absent"], sample());
     assert_eq!(code, EXIT_RUNTIME_ERROR);
-    assert!(
-        out.is_empty() && err.contains("disque introuvable"),
-        "{err}"
-    );
+    assert!(out.is_empty() && err.contains("disk not found"), "{err}");
 }
 
 /// Un verrou de la sortie d'erreur tenu pendant que la fenêtre est ouverte bloquerait pour toujours
@@ -446,13 +440,13 @@ fn toute_erreur_porte_son_code_en_fin_de_message() {
 fn explain_donne_le_sens_d_un_code_et_refuse_un_code_inconnu() {
     let (code, out, _) = lancer(&["explain", "E1003"], vec![]);
     assert_eq!(code, 0);
-    assert!(out.starts_with("E1003 : Disque introuvable"), "{out}");
+    assert!(out.starts_with("E1003: Disk not found"), "{out}");
     let (code, out, _) = lancer(&["explain"], vec![]);
     assert_eq!(code, 0);
     assert!(out.lines().count() >= 20, "{out}");
     let (code, out, err) = lancer(&["explain", "E9999"], vec![]);
     assert_eq!(code, EXIT_USAGE);
-    assert!(out.is_empty() && err.contains("code inconnu"), "{err}");
+    assert!(out.is_empty() && err.contains("unknown code"), "{err}");
     assert!(err.trim_end().ends_with("[E0001]"), "{err}");
 }
 
@@ -516,7 +510,7 @@ fn config_set_puis_list_puis_effet_sur_list_et_la_fenetre() -> Result<(), Box<dy
     assert_eq!((r.code, r.err.as_str()), (0, ""), "{}", r.err);
     let r = lancer_config(&["config", "list"], &file, &[], vec![]);
     assert!(
-        r.out.contains("view.show_all") && r.out.contains("(fichier)"),
+        r.out.contains("view.show_all") && r.out.contains("(file)"),
         "{}",
         r.out
     );
@@ -562,7 +556,7 @@ fn config_refuse_une_valeur_invalide_avec_le_code_d_usage() {
     let r = lancer_config(&["config", "set", "lang", "en"], &file, &[], vec![]);
     assert_eq!(r.code, EXIT_USAGE);
     assert!(
-        r.err.contains("valeurs : fr") && r.err.trim_end().ends_with("[E5002]"),
+        r.err.contains("values: fr") && r.err.trim_end().ends_with("[E5002]"),
         "{}",
         r.err
     );
@@ -582,7 +576,7 @@ fn un_fichier_de_config_illisible_n_empeche_pas_list() -> Result<(), Box<dyn std
     // `config list` en revanche le dit.
     let r = lancer_config(&["config", "list"], &file, &[], vec![]);
     assert_eq!(r.code, EXIT_USAGE);
-    assert!(r.err.contains("illisible"), "{}", r.err);
+    assert!(r.err.contains("unreadable"), "{}", r.err);
     let _ = std::fs::remove_dir_all(file.parent().ok_or("parent")?);
     Ok(())
 }
@@ -599,7 +593,7 @@ fn schema_liste_et_decrit() -> Result<(), serde_json::Error> {
     let (code, _, err) = lancer(&["schema", "inconnu"], vec![]);
     assert_eq!(code, EXIT_USAGE);
     assert!(
-        err.contains("schémas :") && err.trim_end().ends_with("[E0001]"),
+        err.contains("schemas:") && err.trim_end().ends_with("[E0001]"),
         "{err}"
     );
     Ok(())
@@ -660,9 +654,8 @@ fn l_echec_de_la_fenetre_renvoie_vers_la_ligne_de_commande() {
     let r = lancer_avec(&[], None, vec![], Err("aucun affichage".to_owned()));
     assert_eq!(r.code, EXIT_RUNTIME_ERROR);
     assert!(
-        r.err.starts_with(
-            "bonk : erreur : impossible d'ouvrir l'interface graphique : aucun affichage"
-        ),
+        r.err
+            .starts_with("bonk: error: could not open the graphical interface: aucun affichage"),
         "{}",
         r.err
     );
@@ -692,7 +685,7 @@ fn les_options_de_journal_sont_acceptees_apres_la_commande() {
 fn un_reglage_de_journal_invalide_est_une_erreur_d_usage() {
     let r = lancer_avec(&["list"], Some("gui=bavard"), sample(), Ok(()));
     assert_eq!(r.code, EXIT_USAGE);
-    assert!(r.err.contains("niveau de journal inconnu"), "{}", r.err);
+    assert!(r.err.contains("unknown log level"), "{}", r.err);
     assert!(!r.journal_installe && r.out.is_empty());
 }
 

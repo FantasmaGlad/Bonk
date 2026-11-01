@@ -71,7 +71,7 @@ pub(super) fn choose(
                 Ok(_) => {
                     return Err(fail(
                         Code::SourceUnreadable,
-                        format!("{} n'est pas un fichier image ordinaire", path.display()),
+                        format!("{} is not a regular image file", path.display()),
                     ));
                 }
                 Err(_) => *size,
@@ -144,7 +144,7 @@ pub(super) fn open_target(
             let prepared = (deps.io.prepare)(Path::new(&disk.path), access, elevation);
             // Annulé pendant l'attente de l'autorisation : la clé reste montée, intacte.
             if (deps.io.cancelled)() {
-                return Err(fail(Code::Cancelled, "annulée avant l'ouverture du disque"));
+                return Err(fail(Code::Cancelled, "cancelled before opening the disk"));
             }
             prepared.map_err(open_error)?;
             // Démonter seulement pour écrire : relire un volume monté ne le perturbe pas.
@@ -158,7 +158,7 @@ pub(super) fn open_target(
             let again = reverify(&identity, &fresh, options).map_err(map_open_target)?;
             let opened = (deps.io.open_node)(Path::new(&again.path), access, elevation);
             if (deps.io.cancelled)() {
-                return Err(fail(Code::Cancelled, "annulée avant l'ouverture du disque"));
+                return Err(fail(Code::Cancelled, "cancelled before opening the disk"));
             }
             let node = opened.map_err(open_error)?;
             if node.size() != identity.size_bytes {
@@ -179,7 +179,7 @@ pub(super) fn open_target(
                 let wanted = size.or(size_hint).ok_or_else(|| {
                     fail(
                         Code::InvalidArgument,
-                        "taille de l'image cible inconnue : la donner avec --size",
+                        "target image size unknown: give it with --size",
                     )
                 })?;
                 FileDevice::create(
@@ -191,12 +191,12 @@ pub(super) fn open_target(
             } else {
                 return Err(fail(
                     Code::SourceUnreadable,
-                    format!("{} : fichier absent", path.display()),
+                    format!("{}: file missing", path.display()),
                 ));
             };
             (Box::new(device) as Box<dyn BlockDevice>, Vec::new())
         }
-        (None, Target::Disk(_)) => unreachable!("une cible disque a toujours un disque choisi"),
+        (None, Target::Disk(_)) => unreachable!("a disk target always has a chosen disk"),
     };
     let device: Box<dyn BlockDevice> = match trace_io {
         Some(mode) => {

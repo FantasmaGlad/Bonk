@@ -21,7 +21,7 @@ pub(super) fn support_lost(err: &BlockError) -> Option<JobError> {
     match err {
         BlockError::Io(io) if io.kind() == std::io::ErrorKind::StorageFull => Some(fail(
             Code::WriteFailed,
-            "le support a disparu pendant l'écriture (débranché, ou port USB défaillant)",
+            "the drive disappeared during the write (unplugged, or a faulty USB port)",
         )),
         _ => None,
     }
@@ -75,12 +75,12 @@ pub(super) fn guarded<'a>(
 mod tests {
     use super::*;
 
-    /// Le noyau répond « plus de place » sur un disque débranché : dire ce qui s'est passé.
+    /// Le noyau répond « plus de place » sur un disque unplugged : dire ce qui s'est passé.
     #[test]
     fn un_support_disparu_n_est_pas_un_disque_plein() {
         let full = std::io::Error::from(std::io::ErrorKind::StorageFull);
         let error = map_write_error(WriteError::Device(BlockError::Io(full)), Format::Raw);
         assert_eq!(error.code, Code::WriteFailed);
-        assert!(error.message.contains("débranché"), "{}", error.message);
+        assert!(error.message.contains("unplugged"), "{}", error.message);
     }
 }

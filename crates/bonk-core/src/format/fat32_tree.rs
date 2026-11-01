@@ -120,7 +120,7 @@ fn short_name(name: &str, taken: &mut BTreeSet<[u8; 11]>) -> Result<([u8; 11], b
             return Ok((field, true));
         }
     }
-    Err(FormatError::Name(format!("{name} : aucun nom court libre")))
+    Err(FormatError::Name(format!("{name}: no free short name")))
 }
 
 fn short_checksum(short: &[u8; 11]) -> u8 {
@@ -133,7 +133,7 @@ fn short_checksum(short: &[u8; 11]) -> u8 {
 fn long_entries(name: &str, short: &[u8; 11]) -> Result<Vec<[u8; ENTRY]>, FormatError> {
     let mut units: Vec<u16> = name.encode_utf16().collect();
     if units.len() > MAX_NAME_UNITS || name.chars().any(|c| "\"*/:<>?\\|".contains(c) || c < ' ') {
-        return Err(FormatError::Name(format!("{name} : nom refusé par FAT32")));
+        return Err(FormatError::Name(format!("{name}: name refused by FAT32")));
     }
     if !units.len().is_multiple_of(LONG_NAME_UNITS) {
         units.push(0);
@@ -217,7 +217,7 @@ pub fn layout(
     for (index, file) in files.iter().enumerate() {
         if file.size > MAX_FILE_BYTES {
             return Err(FormatError::TooLarge(format!(
-                "{} : {} octets, FAT32 s'arrête à {MAX_FILE_BYTES}",
+                "{}: {} bytes, FAT32 stops at {MAX_FILE_BYTES}",
                 file.path.join("/"),
                 file.size
             )));
@@ -225,7 +225,7 @@ pub fn layout(
         let (name, parent) = file
             .path
             .split_last()
-            .ok_or_else(|| FormatError::Name("chemin vide".to_owned()))?;
+            .ok_or_else(|| FormatError::Name("empty path".to_owned()))?;
         add_directory(&mut children, parent);
         if let Some(list) = children.get_mut(parent) {
             list.push(Child {
@@ -244,7 +244,7 @@ pub fn layout(
         for (position, child) in list.iter().enumerate() {
             if !seen.insert(child.name.to_lowercase()) {
                 return Err(FormatError::Name(format!(
-                    "{} : deux noms que FAT32 ne distingue pas",
+                    "{}: two names FAT32 cannot tell apart",
                     child.name
                 )));
             }
@@ -286,7 +286,7 @@ pub fn layout(
     let used = next - u64::from(ROOT_CLUSTER);
     if used > geometry.clusters {
         return Err(FormatError::TooSmall(format!(
-            "{} octets à poser : le support n'a que {} octets de données",
+            "{} bytes to store: the drive only has {} data bytes",
             used * cluster,
             geometry.clusters * cluster
         )));
@@ -346,8 +346,7 @@ pub fn layout(
 }
 
 fn narrow(value: u64) -> Result<u32, FormatError> {
-    u32::try_from(value)
-        .map_err(|_| FormatError::TooLarge(format!("{value} : trop grand pour FAT32")))
+    u32::try_from(value).map_err(|_| FormatError::TooLarge(format!("{value}: too large for FAT32")))
 }
 
 impl Layout {
@@ -483,7 +482,7 @@ impl Layout {
             Ok(())
         } else {
             Err(FormatError::Mismatch(format!(
-                "fichier n° {index} : la relecture diffère de ce qui a été écrit"
+                "file number {index}: the read-back differs from what was written"
             )))
         }
     }
@@ -526,14 +525,16 @@ impl Layout {
             )?;
             if found != fat {
                 return Err(FormatError::Mismatch(
-                    "table FAT relue différente".to_owned(),
+                    "FAT read back differently".to_owned(),
                 ));
             }
         }
         for (first, _, bytes) in &self.directories {
             let found = read_range(dev, self.cluster_offset(*first), bytes.len() as u64)?;
             if &found != bytes {
-                return Err(FormatError::Mismatch("dossier relu différent".to_owned()));
+                return Err(FormatError::Mismatch(
+                    "directory read back differently".to_owned(),
+                ));
             }
         }
         Ok(())

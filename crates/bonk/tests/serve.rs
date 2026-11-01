@@ -150,7 +150,7 @@ fn ecriture_simulee_par_le_service() -> Resultat {
 }
 
 /// Une requête envoyée dès la réponse reçue ne trouve jamais l'emplacement de l'opération encore pris
-/// (« déjà en cours ») : le service le libère avant de répondre.
+/// (« already running ») : le service le libère avant de répondre.
 #[test]
 fn des_operations_enchainees_sans_attente_ne_sont_jamais_refusees() -> Resultat {
     let dir = std::env::temp_dir().join(format!("bonk-serve-chain-{}", std::process::id()));

@@ -17,7 +17,7 @@ fn main() -> ExitCode {
         #[cfg(not(feature = "gui"))]
         {
             let _ = view;
-            Err("cette version est en ligne de commande, sans fenêtre".to_owned())
+            Err("this version is command line only, without a window".to_owned())
         }
     })
 }

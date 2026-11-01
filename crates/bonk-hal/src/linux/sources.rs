@@ -182,13 +182,13 @@ pub(super) fn read_size(dir: &Path) -> Result<u64, EnumerateError> {
     let text = read_required(&path)?;
     let sectors: u64 = text.trim().parse().map_err(|_| EnumerateError::Malformed {
         what: path.display().to_string(),
-        detail: format!("taille illisible : {:?}", text.trim()),
+        detail: format!("unreadable size: {:?}", text.trim()),
     })?;
     // Le noyau exprime toujours `size` en secteurs de 512 octets, quelle que soit la taille logique.
     sectors
         .checked_mul(512)
         .ok_or_else(|| EnumerateError::Malformed {
             what: path.display().to_string(),
-            detail: "taille hors limites".to_owned(),
+            detail: "size out of range".to_owned(),
         })
 }

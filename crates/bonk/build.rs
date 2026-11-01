@@ -15,7 +15,7 @@ fn main() {
         .set("FileDescription", "Bonk - bootable USB writer")
         .set("LegalCopyright", "FantasmaGlad, MIT");
     if let Err(error) = resource.compile() {
-        println!("cargo:warning=ressources Windows : {error}");
+        println!("cargo:warning=Windows resources: {error}");
         std::process::exit(1);
     }
 }

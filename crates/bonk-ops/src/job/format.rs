@@ -62,9 +62,7 @@ fn check_available(fs: Filesystem, chosen: &Chosen, deps: &Deps<'_>) -> Result<(
     if chosen.disk.is_none() {
         return Err(fail(
             Code::FilesystemUnavailable,
-            format!(
-                "{fs} passe par les outils du système : pas sur un fichier image, seul fat32 l'est"
-            ),
+            format!("{fs} goes through system tools: not on an image file, only fat32 does"),
         ));
     }
     let name = format_capability(fs);
@@ -76,13 +74,13 @@ fn check_available(fs: Filesystem, chosen: &Chosen, deps: &Deps<'_>) -> Result<(
         Some(capability) => Err(fail(
             Code::FilesystemUnavailable,
             format!(
-                "{fs} indisponible : {} ; --fs fat32 n'exige aucun outil",
+                "{fs} unavailable: {}; --fs fat32 needs no tool",
                 capability.detail.unwrap_or_default()
             ),
         )),
         None => Err(fail(
             Code::FilesystemUnavailable,
-            format!("{fs} indisponible sur cet hôte"),
+            format!("{fs} unavailable on this host"),
         )),
     }
 }
@@ -109,7 +107,7 @@ fn check_table(dev: &dyn BlockDevice, part: PartitionPlan) -> Result<(), JobErro
     {
         return Err(fail(
             Code::FormatFailed,
-            format!("table relue incorrecte : {}", finding.message),
+            format!("table read back incorrect: {}", finding.message),
         ));
     }
     let in_gpt = layout.gpt.as_ref().is_some_and(|gpt| {
@@ -127,7 +125,7 @@ fn check_table(dev: &dyn BlockDevice, part: PartitionPlan) -> Result<(), JobErro
     } else {
         Err(fail(
             Code::FormatFailed,
-            "table relue incorrecte : partition absente",
+            "table read back incorrect: partition missing",
         ))
     }
 }
@@ -151,7 +149,10 @@ fn wait_for_partition(
             return Ok(Some(partition.path.clone()));
         }
         if (deps.io.cancelled)() {
-            return Err(fail(Code::Cancelled, "annulée en attendant la partition"));
+            return Err(fail(
+                Code::Cancelled,
+                "cancelled while waiting for the partition",
+            ));
         }
         (deps.io.pause)();
     }
@@ -175,7 +176,7 @@ fn wait_for_filesystem(id: &str, fs: Filesystem, deps: &Deps<'_>) -> Result<(), 
     }
     Err(fail(
         Code::FormatFailed,
-        format!("le système ne reconnaît pas {fs} sur la nouvelle partition"),
+        format!("the system does not recognize {fs} on the new partition"),
     ))
 }
 
@@ -200,7 +201,7 @@ fn write_volume(
     if cancelled() {
         return Err(fail(
             Code::Cancelled,
-            "annulée après l'écriture de la table : le support est à reformater",
+            "cancelled after writing the table: the drive must be formatted again",
         ));
     }
     let volume = fat32::Volume {
@@ -246,7 +247,7 @@ fn hand_over_to_host(
         let path = path.ok_or_else(|| {
             fail(
                 Code::FormatFailed,
-                "le système ne montre pas la nouvelle partition : rien n'a été formaté dessus",
+                "the system does not show the new partition: nothing was formatted on it",
             )
         })?;
         (deps.io.format_partition)(Path::new(&path), filesystem, label, disk.elevation)
@@ -264,7 +265,7 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
     let size = chosen.info.size_bytes.ok_or_else(|| {
         fail(
             Code::InvalidArgument,
-            "taille de l'image cible inconnue : la donner avec --size",
+            "target image size unknown: give it with --size",
         )
     })?;
     let filesystem = job.filesystem.unwrap_or_else(|| default_filesystem(size));
@@ -321,7 +322,7 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
     if !job.yes && !job.force {
         return Err(fail(
             Code::ConfirmationRequired,
-            "formatage sans confirmation : ajouter --yes ou --force (ou décrire l'opération avec --dry-run)",
+            "format without confirmation: add --yes or --force (or describe the operation with --dry-run)",
         ));
     }
     confirm_internal(&chosen, job.options, job.force)?;
@@ -341,7 +342,7 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
         deps,
     )?;
     if (deps.io.cancelled)() {
-        return Err(fail(Code::Cancelled, "annulée avant le formatage"));
+        return Err(fail(Code::Cancelled, "cancelled before formatting"));
     }
     let ids = Ids::from_seed(&fresh_seed(&seed_name));
     log::info!(

@@ -52,12 +52,12 @@ pub(crate) fn names() -> Vec<&'static str> {
     registry().iter().map(|(n, _)| *n).collect()
 }
 
-/// Schéma JSON de la sortie d'une commande
+/// JSON Schema of a command's output
 #[derive(Debug, Args)]
 // `long_about = None` : sans lui, clap reprendrait le commentaire ci-dessus comme texte long.
 #[command(long_about = None)]
 pub(crate) struct SchemaArgs {
-    /// Commande dont on veut le schéma ; sans nom, liste les commandes
+    /// Command whose schema is wanted; without a name, list the commands
     name: Option<String>,
 }
 
@@ -90,10 +90,7 @@ pub(crate) fn run(args: &SchemaArgs, out: &mut dyn Write) -> io::Result<bool> {
 
 pub(crate) fn unknown_message(name: &str) -> String {
     let names: Vec<&str> = registry().iter().map(|(n, _)| *n).collect();
-    format!(
-        "schéma inconnu : « {name} » (schémas : {})",
-        names.join(", ")
-    )
+    format!("unknown schema: '{name}' (schemas: {})", names.join(", "))
 }
 
 #[cfg(test)]

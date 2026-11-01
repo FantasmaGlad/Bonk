@@ -20,8 +20,8 @@ where
         return report(
             err,
             Code::WindowUnavailable,
-            "la fenêtre ne s'ouvre pas en administrateur : relancer sans sudo, elle demandera \
-             l'autorisation au moment d'écrire ; ou utiliser la ligne de commande (bonk --help)",
+            "the window does not open as administrator: run again without sudo, it will ask \
+             for authorization when writing; or use the command line (bonk --help)",
         );
     }
     if bonk_hal::console::detach_if_alone() {
@@ -37,8 +37,8 @@ where
                 err,
                 Code::WindowUnavailable,
                 format!(
-                    "impossible d'ouvrir l'interface graphique : {erreur}\n\
-                     Utilisez la ligne de commande : bonk --help"
+                    "could not open the graphical interface: {erreur}\n\
+                     Use the command line: bonk --help"
                 ),
             )
         }
@@ -147,7 +147,7 @@ pub(crate) fn run_diagnose<O: Write, E: Write>(
         Err(erreur) => report(
             err,
             Code::OutputFailed,
-            format!("rapport impossible à écrire : {erreur}"),
+            format!("could not write the report: {erreur}"),
         ),
     }
 }
@@ -236,7 +236,7 @@ where
             err,
             Code::DiskNotFound,
             format!(
-                "disque introuvable : « {} » (identifiants : bonk list --all)",
+                "disk not found: '{}' (identifiers: bonk list --all)",
                 args.target()
             ),
         ),

@@ -42,14 +42,14 @@ pub(super) fn check_mbr(
         note(
             Severity::Warning,
             "mbr_signature_missing",
-            "des entrées MBR existent mais la signature 55 AA est absente".to_owned(),
+            "MBR entries exist but the 55 AA signature is missing".to_owned(),
         );
     }
     if has_gpt && !mbr.protective {
         note(
             Severity::Warning,
             "gpt_protective_mbr_missing",
-            "un GPT existe mais le MBR ne contient pas d'entrée de protection (type EE)".to_owned(),
+            "a GPT exists but the MBR has no protective entry (type EE)".to_owned(),
         );
     }
     if mbr.protective {
@@ -63,7 +63,7 @@ pub(super) fn check_mbr(
                 Severity::Error,
                 "mbr_entry_out_of_range",
                 format!(
-                    "entrée MBR {} : fin au secteur {end}, le disque en compte {total}",
+                    "MBR entry {}: ends at sector {end}, the disk has {total}",
                     entry.index
                 ),
             );
@@ -79,7 +79,7 @@ pub(super) fn check_mbr(
                 note(
                     Severity::Error,
                     "mbr_entries_overlap",
-                    format!("les entrées MBR {} et {} se chevauchent", a.index, b.index),
+                    format!("MBR entries {} and {} overlap", a.index, b.index),
                 );
             }
         }

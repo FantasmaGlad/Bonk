@@ -15,24 +15,24 @@ use crate::config::ViewDefaults;
 /// Version du format de la sortie `--json`, incrémentée à chaque changement incompatible.
 const JSON_SCHEMA_VERSION: u32 = 1;
 
-/// Liste les disques que Bonk peut écrire (lecture seule)
+/// List the disks Bonk can write (read-only)
 #[derive(Debug, Args)]
 // `long_about = None` : sans lui, clap reprendrait le commentaire ci-dessus comme texte long.
 #[command(long_about = None)]
 pub(crate) struct ListArgs {
-    /// Sortie JSON, pour les scripts
+    /// JSON output, for scripts
     #[arg(long)]
     json: bool,
 
-    /// Affiche aussi les disques écartés ou non affichés, avec la raison
+    /// Also show excluded or hidden disks, with the reason
     #[arg(long)]
     all: bool,
 
-    /// Propose aussi les disques internes non système (avertissement renforcé)
+    /// Also offer internal non-system disks (stronger warning)
     #[arg(long)]
     show_internal: bool,
 
-    /// Mode test : autorise les disques virtuels (loop, zram, machine virtuelle)
+    /// Test mode: allow virtual disks (loop, zram, virtual machine)
     #[arg(long)]
     allow_virtual: bool,
 }
@@ -119,17 +119,14 @@ pub(crate) fn run(
 
 fn write_table(entries: &[Entry<'_>], all: bool, out: &mut dyn Write) -> io::Result<()> {
     if entries.is_empty() {
-        writeln!(out, "Aucun disque proposé.")?;
+        writeln!(out, "No disk offered.")?;
         if !all {
-            writeln!(
-                out,
-                "Utilisez --all pour voir les disques écartés et la raison."
-            )?;
+            writeln!(out, "Use --all to see the excluded disks and why.")?;
         }
         return Ok(());
     }
 
-    let header = ["ID", "CHEMIN", "MODELE", "TAILLE", "BUS", "ETAT"];
+    let header = ["ID", "PATH", "MODEL", "SIZE", "BUS", "STATE"];
     let rows: Vec<[String; 6]> = entries
         .iter()
         .map(|entry| {
@@ -137,9 +134,9 @@ fn write_table(entries: &[Entry<'_>], all: bool, out: &mut dyn Write) -> io::Res
                 entry.disk.id.clone(),
                 entry.disk.path.clone(),
                 entry.disk.model.clone(),
-                format_size(entry.disk.size_bytes),
-                bus_label(entry.disk.bus).to_owned(),
-                state_label(&entry.eligibility),
+                format_size(entry.disk.size_bytes, bonk_hal::Lang::En),
+                bus_label(entry.disk.bus, bonk_hal::Lang::En).to_owned(),
+                state_label(&entry.eligibility, bonk_hal::Lang::En),
             ]
         })
         .collect();

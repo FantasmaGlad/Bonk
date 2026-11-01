@@ -84,7 +84,7 @@ pub fn plan(size: u64, block: u32, kind: TableKind) -> Result<PartitionPlan, For
         TableKind::Mbr => {
             if sectors > u64::from(u32::MAX) {
                 return Err(FormatError::TooLarge(format!(
-                    "une table MBR n'adresse pas {size} octets : choisir GPT"
+                    "an MBR table cannot address {size} bytes: choose GPT"
                 )));
             }
             sectors.checked_sub(1)
@@ -96,7 +96,7 @@ pub fn plan(size: u64, block: u32, kind: TableKind) -> Result<PartitionPlan, For
             last_lba,
         }),
         _ => Err(FormatError::TooSmall(format!(
-            "support de {size} octets trop petit pour une table et une partition"
+            "drive of {size} bytes too small for a table and a partition"
         ))),
     }
 }

@@ -20,7 +20,7 @@ pub(super) struct MountEntry {
 pub(super) fn parse_mountinfo(text: &str) -> Result<Vec<MountEntry>, EnumerateError> {
     let malformed = |line: &str| EnumerateError::Malformed {
         what: "mountinfo".to_owned(),
-        detail: format!("ligne illisible : {line:?}"),
+        detail: format!("unreadable line: {line:?}"),
     };
     let mut entries = Vec::new();
     for line in text.lines().filter(|l| !l.trim().is_empty()) {

@@ -70,21 +70,21 @@ pub enum WriteError {
 impl fmt::Display for WriteError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Device(err) => write!(f, "écriture impossible : {err}"),
-            Self::Source(err) => write!(f, "image illisible : {err}"),
+            Self::Device(err) => write!(f, "write failed: {err}"),
+            Self::Source(err) => write!(f, "image unreadable: {err}"),
             Self::TooLarge {
                 device_size,
                 needed: Some(needed),
             } => write!(
                 f,
-                "l'image fait {needed} octets, le support {device_size} octets"
+                "the image is {needed} bytes, the drive {device_size} bytes"
             ),
             Self::TooLarge { device_size, .. } => write!(
                 f,
-                "l'image décompressée dépasse le support ({device_size} octets) : écriture arrêtée à sa fin"
+                "the decompressed image exceeds the drive ({device_size} bytes): write stopped at its end"
             ),
             Self::Cancelled { bytes_written } => {
-                write!(f, "annulée après {bytes_written} octets écrits")
+                write!(f, "cancelled after {bytes_written} bytes written")
             }
         }
     }
@@ -121,13 +121,13 @@ pub enum VerifyError {
 impl fmt::Display for VerifyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Device(err) => write!(f, "relecture impossible : {err}"),
-            Self::Source(err) => write!(f, "image illisible : {err}"),
+            Self::Device(err) => write!(f, "read-back failed: {err}"),
+            Self::Source(err) => write!(f, "image unreadable: {err}"),
             Self::Mismatch { expected, actual } => write!(
                 f,
-                "les octets relus ne correspondent pas à l'image (SHA-256 attendu {expected}, relu {actual})"
+                "the bytes read back do not match the image (expected SHA-256 {expected}, read {actual})"
             ),
-            Self::Cancelled => write!(f, "vérification annulée"),
+            Self::Cancelled => write!(f, "verification cancelled"),
         }
     }
 }
