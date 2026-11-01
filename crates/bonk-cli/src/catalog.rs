@@ -378,6 +378,7 @@ mod tests {
             homepage: "https://h/".to_owned(),
             note: None,
             usb_boot: true,
+            mirrors: Vec::new(),
             source,
         }
     }

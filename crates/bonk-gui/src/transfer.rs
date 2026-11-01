@@ -53,12 +53,16 @@ pub(crate) fn write_args(
     write: WriteView<'_>,
     options: ViewOptions,
     internal_confirmed: bool,
+    proxy: Option<&str>,
 ) -> Vec<String> {
     let mut args: Vec<String> = ["write", disk_id, write.image, "--yes", "--progress", "json"]
         .iter()
         .map(|s| (*s).to_owned())
         .collect();
     args.extend(write.flags());
+    if let Some(proxy) = proxy {
+        args.extend(["--proxy".to_owned(), proxy.to_owned()]);
+    }
     if options.show_internal {
         args.push("--show-internal".to_owned());
     }
@@ -213,7 +217,8 @@ mod tests {
                 "usb-a",
                 WriteView::image("/tmp/x.img"),
                 ViewOptions::default(),
-                false
+                false,
+                None
             ),
             [
                 "write",
@@ -229,7 +234,17 @@ mod tests {
             allow_virtual: true,
             show_all: true,
         };
-        let args = write_args("usb-a", WriteView::image("x"), options, true);
+        let args = write_args(
+            "usb-a",
+            WriteView::image("x"),
+            options,
+            true,
+            Some("socks5h://t"),
+        );
+        assert!(
+            args.windows(2)
+                .any(|pair| pair == ["--proxy", "socks5h://t"])
+        );
         assert!(
             args.contains(&"--show-internal".to_owned())
                 && args.contains(&"--allow-virtual".to_owned())

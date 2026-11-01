@@ -54,6 +54,8 @@ pub(crate) enum Message {
     HashInput(String),
     /// Écrire les octets tels quels, sans refuser une image que l'analyse ne juge pas amorçable.
     ToggleRaw(bool),
+    TorDetected(Option<String>),
+    ToggleTor(bool),
     /// Table MBR pour une clé Windows.
     ToggleMbr(bool),
     /// Ouvre le sélecteur de fichier du système pour choisir l'image.
@@ -114,6 +116,7 @@ enum Focus {
     /// Bouton qui montre l'image manuelle et les options.
     Advanced,
     /// Case de l'écriture brute.
+    Tor,
     Raw,
     /// Case de la table MBR.
     Mbr,
@@ -169,6 +172,9 @@ pub(crate) struct App {
     confirming_internal: bool,
     catalog: catalog::CatalogState,
     menu_filter: catalog::MenuFilter,
+    /// Adresse d'un Tor local, proposé dans les options ; jamais utilisé sans la case.
+    tor: Option<String>,
+    use_tor: bool,
     menu_open: bool,
     /// Ligne du menu désignée au clavier.
     menu_index: usize,
@@ -207,6 +213,8 @@ fn ui_event(message: &Message) -> Option<(&'static str, String)> {
         ),
         Message::HashInput(text) => ("type_hash", format!("{} caractères", text.chars().count())),
         Message::ToggleRaw(on) => ("toggle_raw", on.to_string()),
+        Message::ToggleTor(on) => ("toggle_tor", on.to_string()),
+        Message::TorDetected(found) => ("tor_detected", found.is_some().to_string()),
         Message::ToggleMbr(on) => ("toggle_mbr", on.to_string()),
         Message::BrowseImage => ("click_browse", String::new()),
         // Comme pour la saisie, le détail de l'événement ne porte pas le chemin choisi.

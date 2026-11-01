@@ -50,6 +50,7 @@ impl App {
                         order.push(Focus::Image);
                         order.push(Focus::Browse);
                         order.push(Focus::Hash);
+                        order.push(Focus::Tor);
                         order.push(Focus::Raw);
                         order.push(Focus::Mbr);
                     }
@@ -138,6 +139,7 @@ impl App {
                             | Focus::Image
                             | Focus::Browse
                             | Focus::Hash
+                            | Focus::Tor
                             | Focus::Raw
                             | Focus::Mbr
                             | Focus::Action
@@ -227,6 +229,8 @@ impl App {
                 _ => return Task::none(),
             },
             Some(Focus::Browse) => Message::BrowseImage,
+            Some(Focus::Tor) if self.tor.is_some() => Message::ToggleTor(!self.use_tor),
+            Some(Focus::Tor) => return Task::none(),
             Some(Focus::Raw) => match &self.write {
                 WriteState::Draft { raw, .. } => Message::ToggleRaw(!raw),
                 _ => return Task::none(),

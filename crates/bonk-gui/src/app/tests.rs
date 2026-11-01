@@ -708,6 +708,8 @@ fn le_clavier_parcourt_le_panneau_et_l_action_respecte_le_delai() {
     nav(&mut app, Nav::Next);
     assert_eq!(app.focus, Some(Focus::Hash));
     nav(&mut app, Nav::Next);
+    assert_eq!(app.focus, Some(Focus::Tor));
+    nav(&mut app, Nav::Next);
     assert_eq!(app.focus, Some(Focus::Raw));
     nav(&mut app, Nav::Next);
     assert_eq!(app.focus, Some(Focus::Mbr));
@@ -1111,4 +1113,17 @@ fn un_seul_disque_propose_se_selectionne_une_fois() {
     };
     let _ = deux.update(Message::Loaded(Ok(sample())));
     assert_eq!(deux.selected, None);
+}
+
+#[test]
+fn tor_propose_seulement_s_il_est_la_jamais_coche_seul() {
+    let mut app = app_avec_panneau();
+    let _ = app.update(Message::ToggleTor(true));
+    assert!(!app.use_tor, "sans Tor détecté, la case reste vide");
+    let _ = app.update(Message::TorDetected(Some(
+        "socks5h://127.0.0.1:9050".to_owned(),
+    )));
+    assert!(!app.use_tor, "détecté n'est pas activé");
+    let _ = app.update(Message::ToggleTor(true));
+    assert!(app.use_tor);
 }
