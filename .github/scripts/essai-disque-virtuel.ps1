@@ -24,7 +24,8 @@ try {
 
     & $bonk write $virtuel[0].id $image --allow-virtual --mode raw --yes
     if ($LASTEXITCODE -ne 0) { throw "write : $LASTEXITCODE" }
-    & $bonk verify $virtuel[0].id $image --allow-virtual
+    # Un VHD n'a pas de numéro de série : son identifiant vient de sa table, que l'écriture a remplacée.
+    & $bonk verify $virtuel[0].path $image --allow-virtual
     if ($LASTEXITCODE -ne 0) { throw "verify : $LASTEXITCODE" }
 
     & $bonk write $systeme[0].id $image --allow-virtual --mode raw --yes
