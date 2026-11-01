@@ -391,6 +391,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "bonk-android"
+version = "0.0.4"
+dependencies = [
+ "bonk-core",
+ "bonk-hal",
+ "jni",
+ "libc",
+ "serde_json",
+ "sha2 0.11.1",
+]
+
+[[package]]
 name = "bonk-catalog"
 version = "0.0.4"
 dependencies = [

@@ -137,3 +137,28 @@ pub(crate) fn input_style(_theme: &Theme, status: text_input::Status) -> text_in
         selection: HOVER,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Les couleurs viennent de `design/tokens.json`, partagé avec l'application Android.
+    #[test]
+    fn la_charte_suit_le_fichier_commun() {
+        let tokens: serde_json::Value =
+            serde_json::from_str(include_str!("../../../design/tokens.json")).unwrap_or_default();
+        let hex = |color: Color| {
+            let [r, g, b, _] = color.into_rgba8();
+            format!("#{r:02X}{g:02X}{b:02X}")
+        };
+        for (name, color) in [
+            ("paper", BACKGROUND),
+            ("ink", TEXT),
+            ("secondary", SECONDARY),
+            ("hover", HOVER),
+        ] {
+            assert_eq!(tokens["color"][name], hex(color), "{name}");
+        }
+        assert_eq!(tokens["radius"].as_f64(), Some(f64::from(RADIUS)));
+    }
+}

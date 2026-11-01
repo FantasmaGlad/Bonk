@@ -1,0 +1,34 @@
+# Construit l'application Android et sa bibliothèque Rust. Aucun secret : version de débogage, jamais publiée.
+name: android
+
+on:
+  pull_request:
+    paths: ["android/**", "crates/bonk-android/**", "crates/bonk-hal/src/usbfs.rs", "crates/bonk-core/src/msc.rs", "design/**", ".github/workflows/android.yml"]
+  push:
+    branches: [main]
+    paths: ["android/**", "crates/bonk-android/**", "design/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  apk:
+    name: apk
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Plateforme Android
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" > /dev/null
+          rustup target add aarch64-linux-android
+      - name: Construire
+        working-directory: android
+        run: ./gradlew --no-daemon :app:assembleDebug

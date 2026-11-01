@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Bonk</string>
+    <string name="no_drive">No USB drive. Plug one in with an OTG adapter.</string>
+    <string name="allow">Allow access</string>
+    <string name="read_test">Read test</string>
+    <string name="write_test">Write test (64 MB, restored)</string>
+    <string name="write_warning">Only on the test drive: this writes to it, then puts the data back.</string>
+    <string name="working">Working…</string>
+    <string name="refused">Access refused</string>
+</resources>
