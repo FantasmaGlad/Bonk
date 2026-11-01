@@ -60,11 +60,13 @@ pub(crate) enum Message {
     BrowseImage,
     /// Réponse du sélecteur ; `None` : fermé sans choix.
     ImagePicked(Option<PathBuf>),
-    /// Ouvre ou referme la liste des systèmes du catalogue.
-    ToggleCatalog,
+    /// Ouvre ou referme le menu des images.
+    ToggleMenu,
     CatalogLoaded(Result<Vec<catalog::System>, String>),
-    /// Une version choisie : remplit l'adresse et l'empreinte.
-    CatalogChose(catalog::Choice),
+    /// Une version choisie : adresse, empreinte et réglages automatiques.
+    MenuChose(catalog::Choice),
+    /// Montre ou cache l'image manuelle et les options.
+    ToggleAdvanced,
     /// Battement qui rafraîchit le décompte avant d'autoriser l'écriture.
     Clock,
     /// Lance l'écriture (après le délai de réflexion).
@@ -105,6 +107,10 @@ enum Focus {
     Browse,
     /// Champ de l'empreinte.
     Hash,
+    /// Menu des images.
+    Menu,
+    /// Bouton qui montre l'image manuelle et les options.
+    Advanced,
     /// Case de l'écriture brute.
     Raw,
     /// Case de la table MBR.
@@ -160,6 +166,15 @@ pub(crate) struct App {
     /// La demande de confirmation d'un disque interne est à l'écran.
     confirming_internal: bool,
     catalog: catalog::CatalogState,
+    menu_open: bool,
+    /// Ligne du menu désignée au clavier.
+    menu_index: usize,
+    /// Image manuelle et options visibles.
+    advanced: bool,
+    /// À l'ouverture de la fenêtre, un seul disque proposé se sélectionne seul, une fois pour chaque disque :
+    /// écrire reste un geste explicite, avec le disque nommé à l'écran.
+    auto_select: bool,
+    auto_selected: Option<String>,
     /// Programme lancé pour écrire : `bonk` lui-même, sauf dans les tests.
     program: Option<PathBuf>,
 }
@@ -196,8 +211,9 @@ fn ui_event(message: &Message) -> Option<(&'static str, String)> {
             "image_picked",
             if path.is_some() { "choisie" } else { "aucune" }.to_owned(),
         ),
-        Message::ToggleCatalog => ("click_catalog", String::new()),
-        Message::CatalogChose(choice) => ("catalog_chose", choice.label.clone()),
+        Message::ToggleMenu => ("click_menu", String::new()),
+        Message::MenuChose(choice) => ("menu_chose", choice.label.clone()),
+        Message::ToggleAdvanced => ("click_advanced", String::new()),
         Message::StartWrite => ("click_write", String::new()),
         Message::CancelWrite => ("click_cancel_write", String::new()),
         Message::DismissWrite => ("click_close_write", String::new()),
@@ -227,6 +243,7 @@ impl App {
         (
             Self {
                 loading: true,
+                auto_select: true,
                 show_internal: initial.show_internal,
                 allow_virtual: initial.allow_virtual,
                 show_all: initial.show_all,

@@ -4,6 +4,7 @@ use iced::Task;
 use iced::keyboard::{self, Key, key::Named};
 use iced::widget::scrollable;
 
+use super::catalog::{CatalogState, MENU, writable};
 use super::{App, Focus, Message, Nav, WriteState};
 
 /// Identifiant de la liste défilante, pour la suivre quand le focus descend dans la liste.
@@ -43,11 +44,15 @@ impl App {
                 if self.write.disk_id() == Some(disk.id.as_str())
                     && matches!(self.write, WriteState::Draft { .. })
                 {
-                    order.push(Focus::Image);
-                    order.push(Focus::Browse);
-                    order.push(Focus::Hash);
-                    order.push(Focus::Raw);
-                    order.push(Focus::Mbr);
+                    order.push(Focus::Menu);
+                    order.push(Focus::Advanced);
+                    if self.advanced {
+                        order.push(Focus::Image);
+                        order.push(Focus::Browse);
+                        order.push(Focus::Hash);
+                        order.push(Focus::Raw);
+                        order.push(Focus::Mbr);
+                    }
                     order.push(Focus::Action);
                 }
             }
@@ -83,6 +88,17 @@ impl App {
                 Task::none()
             };
         }
+        // Menu ouvert : les flèches y circulent, Échap le referme.
+        if self.menu_open {
+            match nav {
+                Nav::Up | Nav::Down => return self.move_in_menu(nav),
+                Nav::Escape => {
+                    self.menu_open = false;
+                    return Task::none();
+                }
+                _ => {}
+            }
+        }
         let order = self.focus_order();
         let current = self
             .focus
@@ -117,6 +133,8 @@ impl App {
                     if matches!(
                         order[i],
                         Focus::Disk(_)
+                            | Focus::Menu
+                            | Focus::Advanced
                             | Focus::Image
                             | Focus::Browse
                             | Focus::Hash
@@ -166,6 +184,28 @@ impl App {
         Task::none()
     }
 
+    /// Déplace la ligne désignée et garde la liste à sa hauteur.
+    fn move_in_menu(&mut self, nav: Nav) -> Task<Message> {
+        let CatalogState::Ready(systems) = &self.catalog else {
+            return Task::none();
+        };
+        let count = writable(systems).len();
+        if count == 0 {
+            return Task::none();
+        }
+        self.menu_index = match nav {
+            Nav::Up => self.menu_index.saturating_sub(1),
+            _ => (self.menu_index + 1).min(count - 1),
+        };
+        iced::widget::operation::snap_to(
+            MENU,
+            scrollable::RelativeOffset {
+                x: 0.0,
+                y: self.menu_index as f32 / (count.max(2) - 1) as f32,
+            },
+        )
+    }
+
     /// Espace ou Entrée : même effet qu'un clic sur le composant qui a le focus.
     pub(super) fn activate(&mut self) -> Task<Message> {
         let message = match self.focus.clone() {
@@ -175,6 +215,17 @@ impl App {
             Some(Focus::All) => Message::ToggleAll(!self.show_all),
             Some(Focus::Disk(id)) => Message::Select(id),
             Some(Focus::Copy) => Message::Copy,
+            Some(Focus::Advanced) => Message::ToggleAdvanced,
+            Some(Focus::Menu) => match (&self.catalog, self.menu_open) {
+                (CatalogState::Ready(systems), true) => {
+                    match writable(systems).get(self.menu_index) {
+                        Some(choice) => Message::MenuChose((*choice).clone()),
+                        None => return Task::none(),
+                    }
+                }
+                (CatalogState::Ready(_), false) => Message::ToggleMenu,
+                _ => return Task::none(),
+            },
             Some(Focus::Browse) => Message::BrowseImage,
             Some(Focus::Raw) => match &self.write {
                 WriteState::Draft { raw, .. } => Message::ToggleRaw(!raw),

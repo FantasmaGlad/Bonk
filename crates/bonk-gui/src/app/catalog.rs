@@ -1,6 +1,6 @@
-//! Choisir une image dans le catalogue : la fenêtre lit `bonk catalog list --json`, comme elle écrit par
-//! `bonk write`. Signature et expiration restent donc contrôlées au même endroit ; un choix remplit simplement
-//! l'adresse et l'empreinte, que l'utilisateur voit avant d'écrire.
+//! Le menu des images : la fenêtre lit `bonk catalog list --json`, comme elle écrit par `bonk write`. Signature
+//! et expiration restent donc contrôlées au même endroit ; un choix donne l'adresse et l'empreinte officielles,
+//! sans rien à régler.
 
 use std::path::PathBuf;
 
@@ -40,7 +40,7 @@ pub(crate) struct System {
 #[derive(Debug, Default)]
 pub(crate) enum CatalogState {
     #[default]
-    Closed,
+    NotLoaded,
     Loading,
     Ready(Vec<System>),
     Failed(String),
@@ -124,6 +124,9 @@ pub(crate) fn read(program: PathBuf) -> Result<Vec<System>, String> {
         .map_err(|e| e.to_string())
 }
 
+/// Identifiant de la liste du menu, pour la suivre au clavier.
+pub(super) const MENU: &str = "menu-images";
+
 fn logo(icon: Option<&PathBuf>) -> Element<'_, Message> {
     match icon {
         Some(path) => image(image::Handle::from_path(path))
@@ -134,66 +137,101 @@ fn logo(icon: Option<&PathBuf>) -> Element<'_, Message> {
     }
 }
 
-fn version_button(choice: &Choice) -> Element<'_, Message> {
-    match &choice.source {
-        ChoiceSource::Download { .. } => {
-            let chosen = button(text(choice.label.clone()).size(13))
-                .on_press(Message::CatalogChose(choice.clone()))
-                .padding([3, 8]);
-            // Une version en fin de vie reste possible, sans être mise en avant.
-            if choice.end_of_life {
-                chosen.style(theme::card_button(false)).into()
-            } else {
-                chosen.style(theme::primary_button).into()
-            }
-        }
-        ChoiceSource::OfficialPage(page) => {
-            text(format!("{} : à télécharger sur {page}", choice.label))
-                .size(13)
-                .color(theme::SECONDARY)
-                .into()
-        }
-    }
+/// Les versions qu'un clic peut écrire, dans l'ordre du menu : l'indice du clavier s'y rapporte.
+pub(crate) fn writable(systems: &[System]) -> Vec<&Choice> {
+    systems
+        .iter()
+        .flat_map(|system| &system.choices)
+        .filter(|choice| matches!(choice.source, ChoiceSource::Download { .. }))
+        .collect()
 }
 
-/// Un système par ligne : son logo, son nom, puis ses versions.
-pub(crate) fn view(state: &CatalogState) -> Option<Element<'_, Message>> {
-    match state {
-        CatalogState::Closed => None,
-        CatalogState::Loading => Some(text("Lecture du catalogue...").size(13).into()),
-        CatalogState::Failed(error) => Some(
-            text(format!("Catalogue indisponible : {error}"))
-                .size(13)
-                .color(theme::SECONDARY)
-                .into(),
-        ),
-        CatalogState::Ready(systems) => {
-            let lines = systems.iter().map(|system| {
-                let versions = system.choices.iter().map(version_button);
-                column![
-                    row![
-                        logo(system.icon.as_ref()),
-                        text(system.name.clone()).size(14)
-                    ]
-                    .spacing(8)
-                    .align_y(iced::Center),
-                    row(versions).spacing(6).wrap(),
-                ]
-                .spacing(4)
-                .into()
+/// Le système et la version dont `url` est l'adresse.
+pub(crate) fn find_url<'a>(systems: &'a [System], url: &str) -> Option<(&'a System, &'a Choice)> {
+    systems.iter().find_map(|system| {
+        system
+            .choices
+            .iter()
+            .find(|choice| {
+                matches!(&choice.source, ChoiceSource::Download { url: u, .. } if u == url)
+            })
+            .map(|choice| (system, choice))
+    })
+}
+
+/// Le bouton fermé du menu : le choix en cours avec son logo, ou l'invitation à choisir.
+pub(crate) fn menu_button<'a>(
+    state: &'a CatalogState,
+    image_url: &str,
+    open: bool,
+) -> Element<'a, Message> {
+    let chosen = match state {
+        CatalogState::Ready(systems) => find_url(systems, image_url),
+        _ => None,
+    };
+    let content: Element<'a, Message> = match (state, chosen) {
+        (_, Some((system, choice))) => row![
+            logo(system.icon.as_ref()),
+            text(format!("{} {}", system.name, choice.label)).size(14),
+        ]
+        .spacing(8)
+        .align_y(iced::Center)
+        .into(),
+        (CatalogState::Loading | CatalogState::NotLoaded, _) => {
+            text("Lecture de la liste des systèmes...").size(14).into()
+        }
+        (CatalogState::Failed(_), _) => text("Liste des systèmes indisponible").size(14).into(),
+        (CatalogState::Ready(_), None) => text("Choisir un système...").size(14).into(),
+    };
+    let arrow = text(if open { "^" } else { "v" }).size(14);
+    button(
+        row![content, iced::widget::space::horizontal(), arrow]
+            .spacing(8)
+            .align_y(iced::Center),
+    )
+    .on_press_maybe(matches!(state, CatalogState::Ready(_)).then_some(Message::ToggleMenu))
+    .width(Length::Fill)
+    .padding([8, 12])
+    .style(theme::card_button(false))
+    .into()
+}
+
+/// La liste ouverte : une ligne par version, avec le logo de son système.
+pub(crate) fn menu_list<'a>(systems: &'a [System], highlighted: usize) -> Element<'a, Message> {
+    let mut index = 0;
+    let mut lines = column![].spacing(2);
+    for system in systems {
+        for choice in &system.choices {
+            let title = format!("{} {}", system.name, choice.label);
+            let line = row![logo(system.icon.as_ref()), text(title).size(14)]
+                .spacing(8)
+                .align_y(iced::Center);
+            lines = lines.push(match &choice.source {
+                ChoiceSource::Download { .. } => {
+                    let selected = index == highlighted;
+                    index += 1;
+                    Element::from(
+                        button(line)
+                            .on_press(Message::MenuChose(choice.clone()))
+                            .width(Length::Fill)
+                            .padding([4, 8])
+                            .style(theme::card_button(selected)),
+                    )
+                }
+                ChoiceSource::OfficialPage(page) => {
+                    let note = text(format!("à télécharger sur {page}, puis Autre image"))
+                        .size(12)
+                        .color(theme::SECONDARY);
+                    container(column![line, note]).padding([4, 8]).into()
+                }
             });
-            Some(
-                // Marge à droite : la barre de défilement ne doit pas couvrir la dernière version d'une ligne.
-                scrollable(
-                    column(lines)
-                        .spacing(10)
-                        .padding(iced::Padding::ZERO.right(16)),
-                )
-                .height(Length::Fixed(240.0))
-                .into(),
-            )
         }
     }
+    // Marge à droite : la barre de défilement ne doit pas couvrir le texte d'une ligne.
+    scrollable(lines.padding(iced::Padding::ZERO.right(16)))
+        .id(MENU)
+        .height(Length::Fixed(260.0))
+        .into()
 }
 
 #[cfg(test)]
@@ -231,6 +269,15 @@ mod tests {
             systems[1].choices[0].source,
             ChoiceSource::OfficialPage("https://p/".to_owned())
         );
+    }
+
+    #[test]
+    fn le_menu_clavier_ne_compte_que_ce_qui_s_ecrit_et_retrouve_un_choix() {
+        let systems = parse(&report());
+        assert_eq!(writable(&systems).len(), 2);
+        let (system, choice) = find_url(&systems, "https://u/20.iso").expect("trouvé");
+        assert_eq!((system.name.as_str(), choice.end_of_life), ("Ubuntu", true));
+        assert!(find_url(&systems, "https://ailleurs/").is_none());
     }
 
     #[test]

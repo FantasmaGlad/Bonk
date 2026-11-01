@@ -14,14 +14,9 @@ use bonk_core::write::Phase;
 use crate::theme;
 use crate::transfer::Outcome;
 
-use super::catalog::{CatalogState, view as catalog_panel};
+use super::catalog::{CatalogState, find_url, menu_button, menu_list};
 use super::navigation::LIST;
 use super::{App, Focus, Message, REFRESH_EVERY, WRITE_DELAY, WriteState};
-
-/// La liste du catalogue, ou rien quand elle est fermée.
-fn catalog_view(state: &CatalogState) -> Element<'_, Message> {
-    catalog_panel(state).unwrap_or_else(|| Column::new().into())
-}
 
 /// Demande de confirmation avant d'effacer un disque interne.
 pub(super) fn internal_dialog(disk: &Disk) -> Element<'_, Message> {
@@ -392,7 +387,7 @@ impl App {
             let remaining = secondes_restantes(elapsed);
             format!("Écrire et effacer ce disque (dans {remaining} s)")
         } else if image.trim().is_empty() {
-            "Écrire et effacer ce disque (saisir une image)".to_owned()
+            "Écrire et effacer ce disque (choisir une image)".to_owned()
         } else {
             "Écrire et effacer ce disque".to_owned()
         };
@@ -401,7 +396,7 @@ impl App {
             .iter()
             .filter_map(|p| p.label.as_deref())
             .collect();
-        column![
+        let mut panel = column![
             text("ÉCRIRE UNE IMAGE SUR CE DISQUE").size(14),
             text(format!(
                 "{}  série {}  {}  {} partition(s){}",
@@ -419,71 +414,107 @@ impl App {
             text("Toutes les données de ce disque seront effacées. Cette action est irréversible.")
                 .size(13)
                 .color(theme::SECONDARY),
-            row![
-                ring(
-                    text_input("Chemin ou adresse https:// de l'image (.img, .iso, .gz, .xz, .zst)", image)
-                        .on_input(Message::ImageInput)
-                        .on_submit(Message::StartWrite)
+            ring(
+                menu_button(&self.catalog, image, self.menu_open),
+                self.has_focus(Focus::Menu),
+            ),
+        ]
+        .spacing(8);
+        if let (CatalogState::Ready(systems), true) = (&self.catalog, self.menu_open) {
+            panel = panel.push(menu_list(systems, self.menu_index));
+        }
+        if let CatalogState::Failed(error) = &self.catalog {
+            panel = panel.push(text(error.clone()).size(13).color(theme::SECONDARY));
+        }
+        if let CatalogState::Ready(systems) = &self.catalog
+            && find_url(systems, image).is_some()
+        {
+            panel = panel.push(
+                text("Lien officiel et empreinte du catalogue signé : rien à régler.")
+                    .size(13)
+                    .color(theme::SECONDARY),
+            );
+        }
+        panel = panel.push(ring(
+            button(
+                text(if self.advanced {
+                    "Masquer l'image manuelle et les options"
+                } else {
+                    "Autre image ou options..."
+                })
+                .size(13),
+            )
+            .on_press(Message::ToggleAdvanced)
+            .padding([4, 10])
+            .style(theme::card_button(false)),
+            self.has_focus(Focus::Advanced),
+        ));
+        if self.advanced {
+            panel = panel.push(
+                column![
+                    row![
+                        ring(
+                            text_input(
+                                "Chemin ou adresse https:// de l'image (.img, .iso, .gz, .xz, .zst)",
+                                image
+                            )
+                            .on_input(Message::ImageInput)
+                            .on_submit(Message::StartWrite)
+                            .padding(8)
+                            .size(14)
+                            .style(theme::input_style),
+                            self.has_focus(Focus::Image),
+                        ),
+                        ring(
+                            button(text("Choisir l'image...").size(14))
+                                .on_press(Message::BrowseImage)
+                                .padding([6, 14])
+                                .style(theme::primary_button),
+                            self.has_focus(Focus::Browse),
+                        ),
+                    ]
+                    .spacing(8)
+                    .align_y(iced::Center),
+                    ring(
+                        text_input(
+                            "Empreinte SHA-256, ou chemin ou adresse de SHA256SUMS (exigée pour une adresse)",
+                            hash
+                        )
+                        .on_input(Message::HashInput)
                         .padding(8)
                         .size(14)
                         .style(theme::input_style),
-                    self.has_focus(Focus::Image),
-                ),
-                ring(
-                    button(text("Choisir l'image...").size(14))
-                        .on_press(Message::BrowseImage)
-                        .padding([6, 14])
-                        .style(theme::primary_button),
-                    self.has_focus(Focus::Browse),
-                ),
-            ]
-            .spacing(8)
-            .align_y(iced::Center),
-            button(text(match self.catalog {
-                CatalogState::Closed => "Choisir dans le catalogue...",
-                _ => "Fermer le catalogue",
-            }).size(14))
-                .on_press(Message::ToggleCatalog)
-                .padding([6, 14])
-                .style(theme::primary_button),
-            catalog_view(&self.catalog),
-            ring(
-                text_input(
-                    "Empreinte SHA-256, ou chemin ou adresse de SHA256SUMS (exigée pour une adresse)",
-                    hash
-                )
-                .on_input(Message::HashInput)
-                .padding(8)
-                .size(14)
-                .style(theme::input_style),
-                self.has_focus(Focus::Hash),
-            ),
-            ring(
-                checkbox(raw)
-                    .label("Écrire les octets tels quels, sans refuser une image non amorçable")
-                    .on_toggle(Message::ToggleRaw)
-                    .size(16)
-                    .text_size(13),
-                self.has_focus(Focus::Raw),
-            ),
-            ring(
-                checkbox(mbr)
-                    .label("Clé Windows (extraction, FAT32, démarrage UEFI) : table MBR au lieu de GPT")
-                    .on_toggle(Message::ToggleMbr)
-                    .size(16)
-                    .text_size(13),
-                self.has_focus(Focus::Mbr),
-            ),
-            ring(
+                        self.has_focus(Focus::Hash),
+                    ),
+                    ring(
+                        checkbox(raw)
+                            .label("Écrire les octets tels quels, sans refuser une image non amorçable")
+                            .on_toggle(Message::ToggleRaw)
+                            .size(16)
+                            .text_size(13),
+                        self.has_focus(Focus::Raw),
+                    ),
+                    ring(
+                        checkbox(mbr)
+                            .label("Clé Windows (extraction, FAT32, démarrage UEFI) : table MBR au lieu de GPT")
+                            .on_toggle(Message::ToggleMbr)
+                            .size(16)
+                            .text_size(13),
+                        self.has_focus(Focus::Mbr),
+                    ),
+                ]
+                .spacing(8),
+            );
+        }
+        panel
+            .push(ring(
                 button(text(label).size(14))
                     .on_press_maybe(ready.then_some(Message::StartWrite))
                     .padding([6, 14])
                     .style(theme::primary_button),
                 self.has_focus(Focus::Action),
-            ),
-        ]
-        .spacing(8)
-        .into()
+            ))
+            .into()
     }
 
     fn running_panel(
