@@ -157,6 +157,14 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Tests
         run: cargo test --workspace --locked
+      # Parcours entier sur un disque virtuel, le disque système restant refusé : aucune vraie clé ici.
+      - name: Écriture sur un disque virtuel (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .github/scripts/essai-disque-virtuel.ps1
+      - name: Écriture sur un disque virtuel (macOS)
+        if: runner.os == 'macOS'
+        run: .github/scripts/essai-disque-virtuel.sh
       - name: Build release
         if: github.event_name == 'push'
         run: cargo build --workspace --release --locked

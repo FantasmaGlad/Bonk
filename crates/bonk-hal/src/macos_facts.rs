@@ -194,6 +194,14 @@ pub fn normalize(media: &[RawMedia]) -> Result<Vec<Disk>, EnumerateError> {
     Ok(disks)
 }
 
+/// Chemin brut d'un disque entier : `/dev/disk2` donne `/dev/rdisk2`. Ni partition, ni autre périphérique.
+#[must_use]
+pub fn raw_disk_path(path: &str) -> Option<String> {
+    let digits = path.strip_prefix("/dev/disk")?;
+    (!digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
+        .then(|| format!("/dev/rdisk{digits}"))
+}
+
 /// La lecture de la capture qui porte ces faits, s'il y en a une.
 pub(crate) fn from_capture(reads: &[SourceRead]) -> Option<Result<Vec<Disk>, EnumerateError>> {
     let read = reads.iter().find(|read| read.path == SOURCE)?;
@@ -317,6 +325,14 @@ mod tests {
         media[5].bus = Some("Thunderbolt".to_owned());
         assert_eq!(normalize(&media)?[1].bus, Bus::Unknown);
         Ok(())
+    }
+
+    #[test]
+    fn seul_un_disque_entier_a_un_chemin_brut() {
+        assert_eq!(raw_disk_path("/dev/disk2").as_deref(), Some("/dev/rdisk2"));
+        for refuse in ["/dev/disk2s1", "/dev/disk", "/dev/rdisk2", "/tmp/disk2"] {
+            assert_eq!(raw_disk_path(refuse), None, "{refuse}");
+        }
     }
 
     #[test]

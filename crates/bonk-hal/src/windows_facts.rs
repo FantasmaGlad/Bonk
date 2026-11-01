@@ -237,6 +237,16 @@ fn disambiguate(disks: &mut [Disk]) {
     }
 }
 
+/// Numéro `N` d'un chemin `\\\\.\\PhysicalDriveN` exact : ni partition, ni autre périphérique.
+#[must_use]
+pub fn disk_number(path: &str) -> Option<u32> {
+    let digits = path.strip_prefix(r"\\.\PhysicalDrive")?;
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse().ok()
+}
+
 /// La lecture de la capture qui porte ces faits, s'il y en a une.
 pub(crate) fn from_capture(reads: &[SourceRead]) -> Option<Result<Vec<Disk>, EnumerateError>> {
     let read = reads.iter().find(|read| read.path == SOURCE)?;
@@ -333,6 +343,20 @@ mod tests {
 
     fn verdict(disk: &Disk) -> Eligibility {
         evaluate(disk, FilterOptions::default())
+    }
+
+    #[test]
+    fn seul_un_disque_entier_a_un_numero() {
+        assert_eq!(disk_number(r"\\.\PhysicalDrive12"), Some(12));
+        for refuse in [
+            r"\\.\PhysicalDrive",
+            r"\\.\PhysicalDrive1\Partition1",
+            r"\\.\C:",
+            "C:\\image.img",
+            "PhysicalDrive1",
+        ] {
+            assert_eq!(disk_number(refuse), None, "{refuse}");
+        }
     }
 
     #[test]
