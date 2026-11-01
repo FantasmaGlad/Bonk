@@ -40,6 +40,12 @@ try {
     foreach ($fs in 'fat32', 'exfat', 'ntfs') {
         & $bonk format $virtuel[0].id --fs $fs --label ESSAI --allow-virtual --yes
         if ($LASTEXITCODE -ne 0) { throw "format $fs : $LASTEXITCODE" }
+        # Windows a donné une lettre à la nouvelle partition : sur un bus non amovible, le filtre interdirait
+        # le disque au tour suivant, comme il se doit pour un disque en service.
+        $numero = [int]($virtuel[0].path -replace '^.*PhysicalDrive', '')
+        Get-Partition -DiskNumber $numero | Where-Object DriveLetter | ForEach-Object {
+            Remove-PartitionAccessPath -DiskNumber $numero -PartitionNumber $_.PartitionNumber -AccessPath "$($_.DriveLetter):\"
+        }
     }
     Remove-Item Env:BONK_WINDOWS_HELPER
 }
