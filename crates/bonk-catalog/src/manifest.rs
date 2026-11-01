@@ -106,6 +106,15 @@ pub enum ImageSource {
     OfficialPage { official_page: String },
 }
 
+/// Les nombres d'une version : `24.04.5` passe après `26.04.1`, même sorti plus tard, et `9` avant `10`.
+#[must_use]
+pub fn version_numbers(version: &str) -> Vec<u64> {
+    version
+        .split(|c: char| !c.is_ascii_digit())
+        .filter_map(|part| part.parse().ok())
+        .collect()
+}
+
 /// A system in the report of `bonk catalog list --json`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct FamilyEntry {

@@ -7,6 +7,7 @@ pub mod errors;
 pub mod event;
 pub mod model;
 mod navigation;
+pub mod text;
 mod update;
 
 pub use errors::french_title;

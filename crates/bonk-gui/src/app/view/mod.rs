@@ -1,6 +1,6 @@
 //! Rendu de la fenêtre : liste, cartes, détail, panneau d'écriture et demande de confirmation.
 
-use bonk_hal::{Disk, Eligibility, Lang};
+use bonk_hal::{Disk, Eligibility};
 use iced::widget::{
     Column, button, center, checkbox, column, container, opaque, row, scrollable, stack, text,
 };
@@ -9,13 +9,13 @@ use iced::{Element, Fill};
 use crate::theme;
 
 use super::navigation::LIST;
-use super::{App, Focus, Message, REFRESH_EVERY};
+use super::{App, Focus, Message};
 
 mod disk;
 mod panel;
 
 #[cfg(test)]
-pub(super) use panel::secondes_restantes;
+pub(super) use bonk_ui::text::secondes_restantes;
 
 pub(super) use disk::internal_dialog;
 
@@ -115,35 +115,6 @@ impl App {
         }
     }
 
-    pub(super) fn status_line(&self, shown: usize) -> String {
-        let every = REFRESH_EVERY.as_secs();
-        let detected = self.disks.len();
-        if self.error.is_some() {
-            return match self.lang {
-                Lang::En => format!("Detection failed. Automatic retry every {every} s."),
-                Lang::Fr => {
-                    format!(
-                        "Détection en échec. Nouvelle tentative automatique toutes les {every} s."
-                    )
-                }
-            };
-        }
-        if self.loading && self.disks.is_empty() {
-            return self
-                .lang
-                .pick("Detecting...", "Détection en cours...")
-                .to_owned();
-        }
-        match self.lang {
-            Lang::En => format!(
-                "{shown} of {detected} detected disk(s) shown. Refreshes automatically every {every} s."
-            ),
-            Lang::Fr => format!(
-                "{shown} disque(s) affiché(s) sur {detected} détecté(s). Actualisation automatique toutes les {every} s."
-            ),
-        }
-    }
-
     fn controls(&self) -> Element<'_, Message> {
         let lang = self.lang;
         row![
@@ -213,7 +184,7 @@ impl App {
             .width(Fill)
             .into()
         } else if entries.is_empty() {
-            let message = if self.loading {
+            let message = if self.loading && !self.answered {
                 lang.pick("Detecting...", "Détection en cours...")
             } else if self.show_all {
                 lang.pick("No disk detected.", "Aucun disque détecté.")

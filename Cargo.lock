@@ -394,8 +394,11 @@ dependencies = [
 name = "bonk-android"
 version = "0.0.4"
 dependencies = [
+ "bonk-catalog",
  "bonk-core",
  "bonk-hal",
+ "bonk-ops",
+ "bonk-ui",
  "jni",
  "libc",
  "serde_json",

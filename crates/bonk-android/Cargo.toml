@@ -18,6 +18,9 @@ sha2.workspace = true
 
 [target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
 bonk-hal.workspace = true
+bonk-catalog.workspace = true
+bonk-ops.workspace = true
+bonk-ui.workspace = true
 jni = "0.22"
 libc.workspace = true
 
