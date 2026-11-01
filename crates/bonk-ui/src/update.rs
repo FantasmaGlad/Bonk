@@ -1,24 +1,19 @@
 //! Effet des messages sur l'état de la fenêtre, et suivi du processus d'écriture.
 
-use std::path::PathBuf;
 use std::time::Instant;
 
-use iced::Task;
-
 use bonk_core::write::Phase;
-
-use crate::command::WriteView;
-use crate::transfer;
-
 use bonk_hal::{Disk, Lang};
 
-use super::catalog::{self, CatalogState, ChoiceSource};
-use super::{App, Focus, Message, WRITE_DELAY, WriteState, load};
+use crate::catalog::{self, CatalogState, ChoiceSource};
+use crate::command::WriteView;
+use crate::event::{Event, write_args};
+use crate::model::{Effect, Effects, Focus, Message, Model, WRITE_DELAY, WriteState};
 
-impl App {
+impl Model {
     // Un aiguillage plat, un bras par message : le découper le rendrait plus difficile à parcourir.
     #[allow(clippy::too_many_lines)]
-    pub(super) fn apply(&mut self, message: Message) -> Task<Message> {
+    pub fn apply(&mut self, message: Message) -> Effects {
         match message {
             Message::Refresh => {
                 self.focus = Some(Focus::Refresh);
@@ -55,39 +50,39 @@ impl App {
             Message::Nav(nav) => self.navigate(nav),
             Message::Copy => {
                 self.focus = Some(Focus::Copy);
-                iced::clipboard::write(self.equivalents().join("\n"))
+                vec![Effect::Copy(self.equivalents().join("\n"))]
             }
             Message::ImageInput(text) => {
                 if let WriteState::Draft { image, .. } = &mut self.write {
                     *image = text;
                     self.focus = Some(Focus::Image);
                 }
-                Task::none()
+                Vec::new()
             }
             Message::HashInput(text) => {
                 if let WriteState::Draft { hash, .. } = &mut self.write {
                     *hash = text;
                     self.focus = Some(Focus::Hash);
                 }
-                Task::none()
+                Vec::new()
             }
             Message::ToggleRaw(on) => {
                 if let WriteState::Draft { raw, .. } = &mut self.write {
                     *raw = on;
                     self.focus = Some(Focus::Raw);
                 }
-                Task::none()
+                Vec::new()
             }
             Message::ToggleMbr(on) => {
                 if let WriteState::Draft { mbr, .. } = &mut self.write {
                     *mbr = on;
                     self.focus = Some(Focus::Mbr);
                 }
-                Task::none()
+                Vec::new()
             }
             Message::BrowseImage => {
                 self.focus = Some(Focus::Browse);
-                Task::perform(pick_image(self.lang), Message::ImagePicked)
+                vec![Effect::PickImage]
             }
             Message::ImagePicked(Some(path)) => {
                 if let WriteState::Draft { image, .. } = &mut self.write {
@@ -95,23 +90,23 @@ impl App {
                     // Une image déposée doit se voir : le menu ne la nomme pas.
                     self.advanced = true;
                 }
-                Task::none()
+                Vec::new()
             }
-            Message::ImagePicked(None) => Task::none(),
+            Message::ImagePicked(None) => Vec::new(),
             Message::TorDetected(address) => {
                 self.tor = address;
-                Task::none()
+                Vec::new()
             }
             Message::SwitchLanguage => self.switch_language(),
             Message::ToggleTor(on) => {
                 self.use_tor = on && self.tor.is_some();
                 self.focus = Some(Focus::Tor);
-                Task::none()
+                Vec::new()
             }
             Message::ToggleMenu => {
                 self.focus = Some(Focus::Menu);
                 self.menu_open = !self.menu_open;
-                Task::none()
+                Vec::new()
             }
             Message::MenuCategory(category) => {
                 self.menu_filter = catalog::MenuFilter {
@@ -119,21 +114,21 @@ impl App {
                     system: None,
                 };
                 self.menu_index = 0;
-                Task::none()
+                Vec::new()
             }
             Message::MenuSystem(system) => {
                 self.menu_filter.system = system;
                 self.menu_index = 0;
-                Task::none()
+                Vec::new()
             }
             Message::CatalogLoaded(result) => self.on_catalog_loaded(result),
             Message::MenuChose(choice) => self.on_menu_chosen(choice),
             Message::ToggleAdvanced => {
                 self.advanced = !self.advanced;
                 self.focus = Some(Focus::Advanced);
-                Task::none()
+                Vec::new()
             }
-            Message::Clock => Task::none(),
+            Message::Clock => Vec::new(),
             Message::StartWrite => self.start_write(false),
             Message::ConfirmInternal => {
                 self.confirming_internal = false;
@@ -142,36 +137,36 @@ impl App {
             Message::CloseInternal => {
                 self.confirming_internal = false;
                 self.focus = Some(Focus::Action);
-                Task::none()
+                Vec::new()
             }
             Message::CancelWrite => {
                 self.focus = Some(Focus::Action);
                 if let WriteState::Running { pid: Some(pid), .. } = &self.write {
                     log::info!(target: "bonk::gui", pid = *pid; "cancelling the write");
-                    transfer::cancel(*pid);
+                    return vec![Effect::CancelWrite(*pid)];
                 }
-                Task::none()
+                Vec::new()
             }
             Message::DismissWrite => {
                 self.write = WriteState::Idle;
                 self.selected = None;
                 self.fix_focus();
-                Task::none()
+                Vec::new()
             }
             Message::Write(event) => {
                 self.on_write_event(event);
-                Task::none()
+                Vec::new()
             }
         }
     }
 
     /// Lance une énumération, une seule à la fois : le minuteur ne les empile pas si l'une est lente.
-    pub(super) fn reload(&mut self) -> Task<Message> {
+    pub fn reload(&mut self) -> Effects {
         if self.loading {
-            Task::none()
+            Vec::new()
         } else {
             self.loading = true;
-            load()
+            vec![Effect::Enumerate]
         }
     }
 
@@ -195,7 +190,7 @@ impl App {
         }
     }
 
-    fn on_disks_loaded(&mut self, disks: Vec<Disk>) -> Task<Message> {
+    fn on_disks_loaded(&mut self, disks: Vec<Disk>) -> Effects {
         log::debug!(target: "bonk::gui", disks = disks.len(); "enumeration result received");
         self.loading = false;
         self.error = None;
@@ -213,7 +208,7 @@ impl App {
         self.load_menu()
     }
 
-    fn on_detection_failed(&mut self, erreur: String) -> Task<Message> {
+    fn on_detection_failed(&mut self, erreur: String) -> Effects {
         log::warn!(target: "bonk::gui", reason = erreur.as_str(); "enumeration failed");
         self.loading = false;
         // Jamais de liste périmée présentée comme valable après un échec.
@@ -222,36 +217,27 @@ impl App {
         self.error = Some(erreur);
         self.sync_write();
         self.fix_focus();
-        Task::none()
+        Vec::new()
     }
 
     /// Une case d'affichage a changé : la liste aussi, donc le panneau et le focus.
-    fn after_view_option(&mut self, focus: Focus) -> Task<Message> {
+    fn after_view_option(&mut self, focus: Focus) -> Effects {
         self.focus = Some(focus);
         self.sync_write();
         self.fix_focus();
-        Task::none()
+        Vec::new()
     }
 
-    fn switch_language(&mut self) -> Task<Message> {
+    fn switch_language(&mut self) -> Effects {
         self.lang = match self.lang {
             Lang::En => Lang::Fr,
             Lang::Fr => Lang::En,
         };
         self.focus = Some(Focus::Language);
-        let program = self.program();
-        let value = match self.lang {
-            Lang::En => "en",
-            Lang::Fr => "fr",
-        };
-        // Le réglage passe par la ligne de commande, seule propriétaire du fichier de configuration.
-        Task::perform(async move { save_language(&program, value) }, |()| {
-            Message::Refresh
-        })
-        .discard()
+        vec![Effect::SaveLanguage(self.lang)]
     }
 
-    fn on_catalog_loaded(&mut self, result: Result<Vec<catalog::System>, String>) -> Task<Message> {
+    fn on_catalog_loaded(&mut self, result: Result<Vec<catalog::System>, String>) -> Effects {
         self.catalog = match result {
             Ok(systems) => CatalogState::Ready(systems),
             Err(error) => {
@@ -261,10 +247,10 @@ impl App {
                 CatalogState::Failed(error)
             }
         };
-        Task::none()
+        Vec::new()
     }
 
-    fn on_menu_chosen(&mut self, choice: catalog::Choice) -> Task<Message> {
+    fn on_menu_chosen(&mut self, choice: catalog::Choice) -> Effects {
         if let (
             WriteState::Draft {
                 image,
@@ -284,34 +270,27 @@ impl App {
             self.menu_open = false;
             self.focus = Some(Focus::Action);
         }
-        Task::none()
+        Vec::new()
     }
 
     /// Le panneau d'écriture vient de s'ouvrir : le menu doit être prêt. Le catalogue n'est lu que là, et relu
     /// après un échec à la prochaine sélection.
-    fn load_menu(&mut self) -> Task<Message> {
+    fn load_menu(&mut self) -> Effects {
         let needed = matches!(
             self.catalog,
             CatalogState::NotLoaded | CatalogState::Failed(_)
         );
         if !needed || !matches!(self.write, WriteState::Draft { .. }) {
-            return Task::none();
+            return Vec::new();
         }
         self.catalog = CatalogState::Loading;
-        let program = self.program();
-        Task::batch([
-            Task::perform(
-                async move { catalog::read(program) },
-                Message::CatalogLoaded,
-            ),
-            Task::perform(async { bonk_catalog::tor::detect() }, Message::TorDetected),
-        ])
+        vec![Effect::LoadCatalog, Effect::DetectTor]
     }
 
     /// Fait suivre le panneau d'écriture à la sélection : il s'ouvre sur un disque proposé, se referme
     /// sinon. Une écriture en cours ou son résultat ne bougent pas : le disque a pu partir, et l'on doit
     /// encore pouvoir annuler ou lire le code d'erreur.
-    pub(super) fn sync_write(&mut self) {
+    pub fn sync_write(&mut self) {
         if matches!(
             self.write,
             WriteState::Running { .. } | WriteState::Finished { .. }
@@ -335,15 +314,8 @@ impl App {
         }
     }
 
-    pub(super) fn program(&self) -> PathBuf {
-        self.program
-            .clone()
-            .or_else(|| std::env::current_exe().ok())
-            .unwrap_or_else(|| PathBuf::from("bonk"))
-    }
-
     /// Lance `bonk write` dans un processus séparé, une fois le délai de réflexion écoulé.
-    pub(super) fn start_write(&mut self, internal_confirmed: bool) -> Task<Message> {
+    pub fn start_write(&mut self, internal_confirmed: bool) -> Effects {
         self.focus = Some(Focus::Action);
         let WriteState::Draft {
             disk_id,
@@ -354,16 +326,16 @@ impl App {
             opened,
         } = &self.write
         else {
-            return Task::none();
+            return Vec::new();
         };
         if image.trim().is_empty() || opened.elapsed() < WRITE_DELAY || !self.offered(disk_id) {
-            return Task::none();
+            return Vec::new();
         }
         if self.is_internal(disk_id) && !internal_confirmed {
             self.confirming_internal = true;
-            return Task::none();
+            return Vec::new();
         }
-        let args = transfer::write_args(
+        let args = write_args(
             disk_id,
             WriteView {
                 image: image.trim(),
@@ -376,7 +348,6 @@ impl App {
             self.tor.as_deref().filter(|_| self.use_tor),
         );
         log::info!(target: "bonk::gui", disk = disk_id.as_str(); "starting the write");
-        let receiver = transfer::spawn(&self.program(), &args);
         self.write = WriteState::Running {
             disk_id: disk_id.clone(),
             pid: None,
@@ -385,14 +356,14 @@ impl App {
             total: None,
             rate: 0.0,
         };
-        Task::run(receiver, Message::Write)
+        vec![Effect::StartWrite(args)]
     }
 
-    pub(super) fn on_write_event(&mut self, event: transfer::Event) {
+    pub fn on_write_event(&mut self, event: Event) {
         match (event, &mut self.write) {
-            (transfer::Event::Started(new), WriteState::Running { pid, .. }) => *pid = Some(new),
+            (Event::Started(new), WriteState::Running { pid, .. }) => *pid = Some(new),
             (
-                transfer::Event::Progress {
+                Event::Progress {
                     phase: p,
                     done: d,
                     total: t,
@@ -408,7 +379,7 @@ impl App {
             ) => {
                 (*phase, *done, *total, *rate) = (p, d, t, r);
             }
-            (transfer::Event::Finished(outcome), WriteState::Running { disk_id, .. }) => {
+            (Event::Finished(outcome), WriteState::Running { disk_id, .. }) => {
                 log::info!(target: "bonk::gui", outcome = format!("{outcome:?}").as_str(); "write finished");
                 self.write = WriteState::Finished {
                     disk_id: disk_id.clone(),
@@ -419,31 +390,4 @@ impl App {
             _ => {}
         }
     }
-}
-
-/// La fenêtre change de langue même si l'enregistrement échoue : seul le prochain lancement l'oublie.
-fn save_language(program: &std::path::Path, value: &str) {
-    let mut command = std::process::Command::new(program);
-    bonk_hal::console::hide_child_console(&mut command);
-    let saved = command
-        .args(["config", "set", "lang", value])
-        .stdin(std::process::Stdio::null())
-        .output();
-    if !saved.as_ref().is_ok_and(|output| output.status.success()) {
-        log::warn!(target: "bonk::gui", "language choice not saved");
-    }
-}
-
-/// Le sélecteur de fichier du système, limité aux formats que Bonk écrit.
-async fn pick_image(lang: Lang) -> Option<PathBuf> {
-    rfd::AsyncFileDialog::new()
-        .set_title(lang.pick("Choose the image to write", "Choisir l'image à écrire"))
-        .add_filter(
-            lang.pick("Disk images", "Images de disque"),
-            &["iso", "img", "raw", "gz", "xz", "zst"],
-        )
-        .add_filter(lang.pick("All files", "Tous les fichiers"), &["*"])
-        .pick_file()
-        .await
-        .map(|file| file.path().to_path_buf())
 }

@@ -128,7 +128,10 @@ fn les_options_se_replient_et_quittent_l_ordre_du_clavier() {
 #[test]
 fn un_seul_disque_propose_se_selectionne_une_fois() {
     let mut app = App {
-        auto_select: true,
+        model: Model {
+            auto_select: true,
+            ..Model::default()
+        },
         ..App::default()
     };
     let _ = app.update(Message::Loaded(Ok(sample())));
@@ -140,9 +143,12 @@ fn un_seul_disque_propose_se_selectionne_une_fois() {
     assert_eq!(app.selected, None);
     // Deux disques : aucun choix à la place de l'utilisateur.
     let mut deux = App {
-        auto_select: true,
-        allow_virtual: false,
-        show_internal: true,
+        model: Model {
+            auto_select: true,
+            allow_virtual: false,
+            show_internal: true,
+            ..Model::default()
+        },
         ..App::default()
     };
     let _ = deux.update(Message::Loaded(Ok(sample())));

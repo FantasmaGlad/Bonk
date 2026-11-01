@@ -83,9 +83,11 @@ fn un_disque_devenu_interdit_n_est_pas_ecrit() {
 
 pub(super) fn app_sur_disque_interne() -> App {
     let mut app = App {
-        show_internal: true,
+        model: Model {
+            show_internal: true,
+            ..Model::default()
+        },
         program: Some(PathBuf::from("/bonk-programme-inexistant")),
-        ..App::default()
     };
     let _ = app.update(Message::Loaded(Ok(vec![disk(
         "sata-x",

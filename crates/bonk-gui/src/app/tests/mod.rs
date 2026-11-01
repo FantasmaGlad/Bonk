@@ -4,6 +4,11 @@ use iced::keyboard::{Key, key::Named};
 use iced_test::Simulator;
 
 use super::navigation::*;
+use std::time::Instant;
+
+use bonk_hal::Disk;
+use bonk_ui::model::ui_event;
+
 use super::*;
 
 mod clavier;
