@@ -14,8 +14,14 @@ use bonk_core::write::Phase;
 use crate::theme;
 use crate::transfer::Outcome;
 
+use super::catalog::{CatalogState, view as catalog_panel};
 use super::navigation::LIST;
 use super::{App, Focus, Message, REFRESH_EVERY, WRITE_DELAY, WriteState};
+
+/// La liste du catalogue, ou rien quand elle est fermée.
+fn catalog_view(state: &CatalogState) -> Element<'_, Message> {
+    catalog_panel(state).unwrap_or_else(|| Column::new().into())
+}
 
 /// Demande de confirmation avant d'effacer un disque interne.
 pub(super) fn internal_dialog(disk: &Disk) -> Element<'_, Message> {
@@ -433,6 +439,14 @@ impl App {
             ]
             .spacing(8)
             .align_y(iced::Center),
+            button(text(match self.catalog {
+                CatalogState::Closed => "Choisir dans le catalogue...",
+                _ => "Fermer le catalogue",
+            }).size(14))
+                .on_press(Message::ToggleCatalog)
+                .padding([6, 14])
+                .style(theme::primary_button),
+            catalog_view(&self.catalog),
             ring(
                 text_input(
                     "Empreinte SHA-256, ou chemin ou adresse de SHA256SUMS (exigée pour une adresse)",

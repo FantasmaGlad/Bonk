@@ -10,6 +10,7 @@ use bonk_core::write::Phase;
 use crate::command::WriteView;
 use crate::transfer;
 
+use super::catalog::{self, CatalogState, ChoiceSource};
 use super::{App, Focus, Message, WRITE_DELAY, WriteState, load};
 
 impl App {
@@ -125,6 +126,41 @@ impl App {
                 Task::none()
             }
             Message::ImagePicked(None) => Task::none(),
+            Message::ToggleCatalog => {
+                if matches!(self.catalog, CatalogState::Closed) {
+                    self.catalog = CatalogState::Loading;
+                    let program = self.program();
+                    Task::perform(
+                        async move { catalog::read(program) },
+                        Message::CatalogLoaded,
+                    )
+                } else {
+                    self.catalog = CatalogState::Closed;
+                    Task::none()
+                }
+            }
+            Message::CatalogLoaded(result) => {
+                // Refermée entre-temps : la réponse n'a plus d'objet.
+                if matches!(self.catalog, CatalogState::Loading) {
+                    self.catalog = match result {
+                        Ok(systems) => CatalogState::Ready(systems),
+                        Err(error) => CatalogState::Failed(error),
+                    };
+                }
+                Task::none()
+            }
+            Message::CatalogChose(choice) => {
+                if let (
+                    WriteState::Draft { image, hash, .. },
+                    ChoiceSource::Download { url, sha256 },
+                ) = (&mut self.write, choice.source)
+                {
+                    *image = url;
+                    *hash = sha256;
+                    self.catalog = CatalogState::Closed;
+                }
+                Task::none()
+            }
             Message::Clock => Task::none(),
             Message::StartWrite => self.start_write(false),
             Message::ConfirmInternal => {
