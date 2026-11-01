@@ -10,6 +10,16 @@ val tokensOutput = layout.buildDirectory.dir("generated/tokens")
 // Seule la clé désignée reçoit l'essai d'écriture : sans cette valeur, le bouton n'existe pas.
 val benchSerial = providers.gradleProperty("benchSerial").getOrElse("")
 
+// La version vient du workspace : une seule à relever pour une release.
+val workspaceVersion =
+    Regex("""(?m)^version = "(\d+)\.(\d+)\.(\d+)"""")
+        .find(rootProject.file("../Cargo.toml").readText())!!
+        .groupValues
+        .drop(1)
+        .map(String::toInt)
+val keystore = providers.environmentVariable("BONK_KEYSTORE_FILE").orNull
+val keystorePassword = providers.environmentVariable("BONK_KEYSTORE_PASSWORD").orNull
+
 android {
     namespace = "app.bonkos.bonk"
     compileSdk = 37
@@ -18,18 +28,29 @@ android {
         applicationId = "app.bonkos.bonk"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.0.4"
+        versionCode = workspaceVersion[0] * 10000 + workspaceVersion[1] * 100 + workspaceVersion[2]
+        versionName = workspaceVersion.joinToString(".")
         buildConfigField("String", "BENCH_SERIAL", "\"$benchSerial\"")
     }
 
+    signingConfigs {
+        if (keystore != null) {
+            create("official") {
+                storeFile = file(keystore)
+                storePassword = keystorePassword
+                keyAlias = "bonk"
+                keyPassword = keystorePassword
+            }
+        }
+    }
+
     buildTypes {
-        // Compose est très lent en débogage. Signée avec la clé de débogage : pour les essais, pas pour publier.
+        // Compose est très lent en débogage. Sans la clé officielle, la clé de débogage suffit aux essais.
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs["debug"]
+            signingConfig = signingConfigs[if (keystore != null) "official" else "debug"]
         }
     }
 

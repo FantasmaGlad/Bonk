@@ -342,8 +342,11 @@ private fun Screen(
                 Primary(panel.optString("close")) { send(message("dismiss")) }
             }
         }
-        HorizontalDivider(color = Color(Tokens.INK))
-        Tests(usb, revision)
+        // Absents de la version publiée : ils ne servent qu'avec la clé de test désignée à la construction.
+        if (BuildConfig.BENCH_SERIAL.isNotEmpty()) {
+            HorizontalDivider(color = Color(Tokens.INK))
+            Tests(usb, revision)
+        }
     }
 }
 
