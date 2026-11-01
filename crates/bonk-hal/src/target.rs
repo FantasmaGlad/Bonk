@@ -44,11 +44,15 @@ pub enum OpenTargetError {
 impl fmt::Display for OpenTargetError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NotFound(id) => write!(f, "disque introuvable : « {id} »"),
-            Self::Refused(verdict) => write!(f, "{}", crate::describe::state_label(verdict)),
+            Self::NotFound(id) => write!(f, "disk not found: '{id}'"),
+            Self::Refused(verdict) => write!(
+                f,
+                "{}",
+                crate::describe::state_label(verdict, crate::describe::Lang::En)
+            ),
             Self::IdentityChanged { expected, actual } => write!(
                 f,
-                "le disque a changé : attendu {} (série {:?}, {} octets), trouvé {} (série {:?}, {} octets)",
+                "the disk changed: expected {} (serial {:?}, {} bytes), found {} (serial {:?}, {} bytes)",
                 expected.id,
                 expected.serial,
                 expected.size_bytes,

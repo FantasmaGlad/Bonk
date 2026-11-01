@@ -39,9 +39,9 @@ impl fmt::Display for BlockError {
         match self {
             Self::InvalidGeometry { size, block_size } => write!(
                 f,
-                "géométrie invalide : taille {size} octets, bloc de {block_size} octets \
-                 (le bloc doit être une puissance de deux d'au moins {DEFAULT_BLOCK_SIZE} \
-                 et diviser la taille)"
+                "invalid geometry: size {size} bytes, block of {block_size} bytes \
+                 (the block must be a power of two of at least {DEFAULT_BLOCK_SIZE} \
+                 and divide the size)"
             ),
             Self::Unaligned {
                 offset,
@@ -49,14 +49,14 @@ impl fmt::Display for BlockError {
                 block_size,
             } => write!(
                 f,
-                "accès non aligné : décalage {offset}, longueur {len}, bloc de {block_size} octets"
+                "unaligned access: offset {offset}, length {len}, block of {block_size} bytes"
             ),
             Self::OutOfRange { offset, len, size } => write!(
                 f,
-                "accès hors des bornes : décalage {offset}, longueur {len}, taille {size} octets"
+                "out of bounds access: offset {offset}, length {len}, size {size} bytes"
             ),
-            Self::ReadOnly => write!(f, "écriture refusée : périphérique en lecture seule"),
-            Self::Io(err) => write!(f, "erreur d'entrée-sortie : {err}"),
+            Self::ReadOnly => write!(f, "write refused: read-only device"),
+            Self::Io(err) => write!(f, "I/O error: {err}"),
         }
     }
 }

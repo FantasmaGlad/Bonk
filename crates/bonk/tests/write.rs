@@ -80,7 +80,7 @@ fn ecriture_simulee_d_une_image_brute_puis_verification() -> Resultat {
     assert!(ecrit[data.len()..].iter().all(|b| *b == 0));
     let out = texte(&sortie.stdout);
     assert!(
-        out.contains("Vérification : réussie") && out.contains("Source :") && out.contains("(raw)"),
+        out.contains("Verification: passed") && out.contains("Source:") && out.contains("(raw)"),
         "{out}"
     );
 
@@ -224,7 +224,7 @@ fn garde_fous_de_la_ligne_de_commande() -> Resultat {
     assert_eq!(sortie.status.code(), Some(6));
     let err = texte(&sortie.stderr);
     assert!(
-        err.contains("décompresser l'image") && err.trim_end().ends_with("[E3002]"),
+        err.contains("decompress the image") && err.trim_end().ends_with("[E3002]"),
         "{err}"
     );
 
@@ -494,7 +494,7 @@ fn une_empreinte_juste_est_acceptee_et_annoncee() -> Resultat {
         "none",
     ])?;
     assert!(sortie.status.success(), "{sortie:?}");
-    assert!(texte(&sortie.stdout).contains("Empreinte du fichier : conforme"));
+    assert!(texte(&sortie.stdout).contains("File hash: matches"));
     Ok(())
 }
 

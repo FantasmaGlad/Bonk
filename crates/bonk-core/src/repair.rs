@@ -73,12 +73,12 @@ impl fmt::Display for RepairError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Device(err) => write!(f, "{err}"),
-            Self::NotGpt => write!(f, "pas de table GPT sur ce support"),
+            Self::NotGpt => write!(f, "no GPT table on this drive"),
             Self::NoValidHeader => write!(
                 f,
-                "aucun en-tête GPT valide (principal et secours sont abîmés) : rien ne peut servir de modèle"
+                "no valid GPT header (primary and backup are damaged): nothing can serve as a model"
             ),
-            Self::TooSmall => write!(f, "support trop petit pour la table GPT et ses partitions"),
+            Self::TooSmall => write!(f, "drive too small for the GPT table and its partitions"),
         }
     }
 }

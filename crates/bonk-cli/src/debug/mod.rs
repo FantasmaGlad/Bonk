@@ -30,23 +30,23 @@ const HEXDUMP_MAX: u64 = 1 << 20;
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum DebugAction {
-    /// Chaque source système lue par l'énumération, avec sa durée (et son contenu avec --content)
+    /// Each system source read by the enumeration, with its duration (and its content with --content)
     Sources(SourcesArgs),
-    /// Rejoue le filtre de sécurité sur un disque, règle par règle, avec les faits lus
+    /// Replay the safety filter on a disk, rule by rule, with the facts read
     Filter(FilterArgs),
-    /// Décode MBR, GPT principal et de secours d'une image, et liste les anomalies
+    /// Decode the MBR, primary and backup GPT of an image, and list the anomalies
     Layout(LayoutArgs),
-    /// Octets bruts d'une image, par lignes de 16
+    /// Raw bytes of an image, in lines of 16
     Hexdump(HexdumpArgs),
 }
 
 #[derive(Debug, Args)]
 #[command(long_about = None)]
 pub(crate) struct SourcesArgs {
-    /// Sortie JSON (contient toujours le contenu des sources)
+    /// JSON output (always contains the source content)
     #[arg(long)]
     json: bool,
-    /// Affiche aussi le contenu de chaque source, tel que lu
+    /// Also show the content of each source, as read
     #[arg(long)]
     content: bool,
 }
@@ -54,15 +54,15 @@ pub(crate) struct SourcesArgs {
 #[derive(Debug, Args)]
 #[command(long_about = None)]
 pub(crate) struct FilterArgs {
-    /// Identifiant stable du disque ou son chemin
+    /// Stable identifier of the disk or its path
     target: String,
-    /// Sortie JSON
+    /// JSON output
     #[arg(long)]
     json: bool,
-    /// Évalue avec les disques internes non système proposés
+    /// Evaluate with internal non-system disks offered
     #[arg(long)]
     show_internal: bool,
-    /// Évalue en mode test : disques virtuels autorisés
+    /// Evaluate in test mode: virtual disks allowed
     #[arg(long)]
     allow_virtual: bool,
 }
@@ -70,9 +70,9 @@ pub(crate) struct FilterArgs {
 #[derive(Debug, Args)]
 #[command(long_about = None)]
 pub(crate) struct LayoutArgs {
-    /// Fichier image ou disque (identifiant ou /dev/...) à décoder ; un disque demande l'autorisation du système
+    /// Image file or disk (identifier or /dev/...) to decode; a disk asks for system authorization
     image: PathBuf,
-    /// Sortie JSON
+    /// JSON output
     #[arg(long)]
     json: bool,
 }
@@ -80,12 +80,12 @@ pub(crate) struct LayoutArgs {
 #[derive(Debug, Args)]
 #[command(long_about = None)]
 pub(crate) struct HexdumpArgs {
-    /// Fichier image ou disque (identifiant ou /dev/...) à lire ; un disque demande l'autorisation du système
+    /// Image file or disk (identifier or /dev/...) to read; a disk asks for system authorization
     image: PathBuf,
-    /// Décalage de départ en octets (décimal ou 0x...)
+    /// Start offset in bytes (decimal or 0x...)
     #[arg(long, default_value = "0", value_parser = parse_number)]
     offset: u64,
-    /// Nombre d'octets (décimal ou 0x...), 4096 par défaut, 1048576 au plus
+    /// Number of bytes (decimal or 0x...), 4096 by default, at most 1048576
     #[arg(long, default_value_t = HEXDUMP_DEFAULT, value_parser = parse_number)]
     len: u64,
 }
@@ -96,7 +96,7 @@ pub(crate) fn parse_number(text: &str) -> Result<u64, String> {
         Some(hex) => u64::from_str_radix(hex, 16),
         None => text.parse(),
     };
-    parsed.map_err(|_| format!("nombre invalide : « {text} » (décimal ou 0x...)"))
+    parsed.map_err(|_| format!("invalid number: '{text}' (decimal or 0x...)"))
 }
 
 /// Ce que `debug` a à dire à l'appelant en plus de la sortie.

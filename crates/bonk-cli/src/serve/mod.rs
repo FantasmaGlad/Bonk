@@ -105,7 +105,7 @@ fn handle(line: &str, cfg: &Config, out: &Out, state: &mut State) {
                 &Value::Null,
                 Err(failure(
                     Code::ProtocolError,
-                    format!("requête illisible : {e}"),
+                    format!("unreadable request: {e}"),
                 )),
             );
             return;
@@ -119,7 +119,7 @@ fn handle(line: &str, cfg: &Config, out: &Out, state: &mut State) {
             Err(failure(
                 Code::ProtocolError,
                 format!(
-                    "méthode inconnue : « {} » (voir la méthode « methods »)",
+                    "unknown method: '{}' (see the 'methods' method)",
                     request.method
                 ),
             )),
@@ -252,27 +252,27 @@ impl Method {
     /// Description rendue par la méthode `methods`.
     fn about(self) -> &'static str {
         match self {
-            Self::Ping => "répond pong",
-            Self::Version => "version de Bonk, système, protocole",
-            Self::Methods => "liste des méthodes",
-            Self::DiskList => "bonk disk list : disques et verdicts",
-            Self::DiskInfo => "bonk disk info : détail d'un disque",
-            Self::Diagnose => "bonk diagnose : rapport de support",
-            Self::Explain => "bonk explain : sens d'un code d'erreur",
-            Self::Schema => "bonk schema : schéma JSON d'une sortie",
+            Self::Ping => "answers pong",
+            Self::Version => "Bonk version, system, protocol",
+            Self::Methods => "list of methods",
+            Self::DiskList => "bonk disk list: disks and verdicts",
+            Self::DiskInfo => "bonk disk info: detail of a disk",
+            Self::Diagnose => "bonk diagnose: support report",
+            Self::Explain => "bonk explain: meaning of an error code",
+            Self::Schema => "bonk schema: JSON Schema of an output",
             Self::ConfigList => "bonk config list",
             Self::ConfigGet => "bonk config get",
             Self::ConfigSet => "bonk config set",
             Self::ConfigReset => "bonk config reset",
-            Self::DebugFilter => "bonk debug filter : règles du filtre",
-            Self::WatchStart => "événements disks_changed à chaque changement de la liste",
-            Self::WatchStop => "arrête la surveillance",
-            Self::Cancel => "annule l'opération d'écriture en cours",
-            Self::DiskWrite => "bonk disk write : écrit une image (opération longue)",
-            Self::DiskVerify => "bonk disk verify : compare sans écrire (opération longue)",
-            Self::DiskRepairGpt => "bonk disk repair-gpt (opération longue)",
-            Self::DiskFormat => "bonk format : table et système de fichiers (opération longue)",
-            Self::Capabilities => "bonk capabilities : ce que cet hôte permet",
+            Self::DebugFilter => "bonk debug filter: filter rules",
+            Self::WatchStart => "disks_changed events on each list change",
+            Self::WatchStop => "stops watching",
+            Self::Cancel => "cancels the running write operation",
+            Self::DiskWrite => "bonk disk write: writes an image (long operation)",
+            Self::DiskVerify => "bonk disk verify: compares without writing (long operation)",
+            Self::DiskRepairGpt => "bonk disk repair-gpt (long operation)",
+            Self::DiskFormat => "bonk format: table and filesystem (long operation)",
+            Self::Capabilities => "bonk capabilities: what this host allows",
         }
     }
 

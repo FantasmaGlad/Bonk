@@ -56,12 +56,12 @@ fn sha256_from_file(location: &str, name: &str) -> Result<String, JobError> {
         bonk_catalog::fetch_text(location).map_err(|failure| download_error(&failure))?
     } else {
         fs::read_to_string(location)
-            .map_err(|failure| error(Code::SourceUnreadable, format!("{location} : {failure}")))?
+            .map_err(|failure| error(Code::SourceUnreadable, format!("{location}: {failure}")))?
     };
     bonk_catalog::find_sha256(&text, name).ok_or_else(|| {
         error(
             Code::InvalidArgument,
-            format!("{location} ne donne aucune empreinte SHA-256 pour {name}"),
+            format!("{location} gives no SHA-256 hash for {name}"),
         )
     })
 }
@@ -95,7 +95,7 @@ fn resolve(
             .ok_or_else(|| {
                 error(
                     Code::InvalidArgument,
-                    format!("{url} : aucun nom de fichier lisible dans l'adresse"),
+                    format!("{url}: no readable file name in the address"),
                 )
             })?
             .to_owned(),
@@ -116,7 +116,7 @@ fn resolve(
     if job.expected_sha256.is_none() && request.sha256_file.is_none() {
         return Err(error(
             Code::InvalidArgument,
-            "une image téléchargée exige son empreinte officielle : --sha256 ou --sha256-file",
+            "a downloaded image requires its official hash: --sha256 or --sha256-file",
         ));
     }
     job::precheck(job, deps)?;
@@ -127,7 +127,7 @@ fn resolve(
     let cache = crate::cache::directory(request.cache_dir).ok_or_else(|| {
         error(
             Code::DownloadFailed,
-            "aucun dossier de cache connu : le donner avec --cache-dir",
+            "no known cache directory: give it with --cache-dir",
         )
     })?;
     let dest = crate::cache::image_path(&cache, &sha256, &name);

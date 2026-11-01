@@ -19,7 +19,7 @@ pub mod safety;
 pub mod target;
 
 pub use describe::{
-    bus_label, exclusion_label, format_size, kind_label, state_label, verdict_badge,
+    Lang, bus_label, exclusion_label, format_size, kind_label, state_label, verdict_badge,
 };
 pub use disk::{Bus, Disk, DiskKind, Partition};
 pub use enumerate::{

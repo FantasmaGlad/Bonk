@@ -97,7 +97,7 @@ pub(super) fn quick(method: Method, params: &Value, cfg: &Config) -> Result<Valu
         | Method::DiskWrite
         | Method::DiskVerify
         | Method::DiskRepairGpt
-        | Method::DiskFormat => unreachable!("traité par `handle`"),
+        | Method::DiskFormat => unreachable!("handled by `handle`"),
     }
 }
 
@@ -108,7 +108,7 @@ pub(super) fn config_method(
 ) -> Result<Value, Failure> {
     let p: ConfigParams = parse(params)?;
     let need = |name: &str, value: Option<String>| {
-        value.ok_or_else(|| failure(Code::ProtocolError, format!("paramètre « {name} » requis")))
+        value.ok_or_else(|| failure(Code::ProtocolError, format!("parameter '{name}' required")))
     };
     let action = match method {
         Method::ConfigList => ConfigAction::List { json: true },

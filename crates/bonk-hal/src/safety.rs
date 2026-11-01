@@ -228,7 +228,7 @@ fn decide(disk: &Disk, options: FilterOptions, tracer: &mut Tracer<'_>) -> Eligi
             if excluded {
                 "not reached (excluded above)"
             } else {
-                crate::describe::verdict_badge(&verdict)
+                crate::describe::verdict_badge(&verdict, crate::describe::Lang::En)
             }
         )
     });
@@ -634,7 +634,7 @@ mod tests {
         assert!(verdict.is_writable());
         assert!(fired(&trace).is_empty());
         let bus = trace.last();
-        assert!(bus.is_some_and(|t| t.rule == "bus" && t.fired && t.facts.contains("PROPOSÉ")));
+        assert!(bus.is_some_and(|t| t.rule == "bus" && t.fired && t.facts.contains("OFFERED")));
         // Une partition non montée est notée comme telle plutôt que passée sous silence.
         assert!(
             trace

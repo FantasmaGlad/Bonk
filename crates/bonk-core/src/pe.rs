@@ -32,17 +32,15 @@ impl Signer {
     pub fn meaning(&self) -> String {
         match self {
             Self::WindowsProductionPca2011 => format!(
-                "chargeur signé par {PCA_2011} : avec Secure Boot, refusé par un PC qui a révoqué ce certificat"
+                "loader signed by {PCA_2011}: with Secure Boot, refused by a PC that revoked this certificate"
             ),
             Self::WindowsUefiCa2023 => format!(
-                "chargeur signé par {UEFI_CA_2023} : avec Secure Boot, refusé par un PC dont le micrologiciel ne connaît pas ce certificat"
+                "loader signed by {UEFI_CA_2023}: with Secure Boot, refused by a PC whose firmware does not know this certificate"
             ),
             Self::Other(name) => {
-                format!(
-                    "chargeur signé par {name} : avec Secure Boot, dépend de ce que le PC accepte"
-                )
+                format!("loader signed by {name}: with Secure Boot, depends on what the PC accepts")
             }
-            Self::Unsigned => "chargeur non signé : refusé avec Secure Boot actif".to_owned(),
+            Self::Unsigned => "unsigned loader: refused with Secure Boot active".to_owned(),
         }
     }
 }
@@ -176,9 +174,7 @@ mod tests {
         );
         assert_eq!(signer(&pe(MACHINE_X86_64, &[])), Some(Signer::Unsigned));
         assert_eq!(signer(b"pas un exe"), None);
-        assert!(
-            signer(&pe(MACHINE_X86_64, &[])).is_some_and(|s| s.meaning().contains("non signé"))
-        );
+        assert!(signer(&pe(MACHINE_X86_64, &[])).is_some_and(|s| s.meaning().contains("unsigned")));
     }
 
     #[test]

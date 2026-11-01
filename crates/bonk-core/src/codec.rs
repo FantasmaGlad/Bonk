@@ -82,10 +82,10 @@ impl fmt::Display for CodecError {
         match self {
             Self::Unsupported(format) => write!(
                 f,
-                "format {format} non pris en charge : décompresser l'image avec un outil du système, \
-                 ou la fournir en .img, .iso, .gz, .xz ou .zst"
+                "format {format} not supported: decompress the image with a system tool, \
+                 or provide it as .img, .iso, .gz, .xz or .zst"
             ),
-            Self::Io(err) => write!(f, "image illisible : {err}"),
+            Self::Io(err) => write!(f, "image unreadable: {err}"),
         }
     }
 }
@@ -99,7 +99,7 @@ impl From<io::Error> for CodecError {
 }
 
 fn zstd_error(err: impl fmt::Display) -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidData, format!("zstd : {err}"))
+    io::Error::new(io::ErrorKind::InvalidData, format!("zstd: {err}"))
 }
 
 /// Toutes les trames d'un flux zstd. `ruzstd::StreamingDecoder` s'arrête à la première et rend une fin de
@@ -152,7 +152,7 @@ impl<R: BufRead> ZstdFrames<R> {
             self.decoder.get_calculated_checksum(),
         ) {
             (Some(read), Some(computed)) if read != computed => {
-                Err(zstd_error("somme de contrôle de la trame incorrecte"))
+                Err(zstd_error("wrong frame checksum"))
             }
             _ => Ok(()),
         }
@@ -415,7 +415,7 @@ mod tests {
         ] {
             let error = open(Cursor::new(head.to_vec()), None).err();
             assert!(matches!(error, Some(CodecError::Unsupported(f)) if f == format));
-            assert!(error.is_some_and(|e| e.to_string().contains("décompresser l'image")));
+            assert!(error.is_some_and(|e| e.to_string().contains("decompress the image")));
         }
     }
 

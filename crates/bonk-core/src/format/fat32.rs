@@ -50,7 +50,7 @@ pub fn geometry(sectors: u64, block: u32) -> Result<Geometry, FormatError> {
     let volume_bytes = sectors.saturating_mul(block64);
     if u32::try_from(sectors).is_err() {
         return Err(FormatError::TooLarge(format!(
-            "FAT32 n'adresse pas {volume_bytes} octets avec des secteurs de {block} octets"
+            "FAT32 cannot address {volume_bytes} bytes with sectors of {block} bytes"
         )));
     }
     let cluster_bytes = cluster_bytes_for(volume_bytes).max(block);
@@ -65,12 +65,12 @@ pub fn geometry(sectors: u64, block: u32) -> Result<Geometry, FormatError> {
     let clusters = sectors.saturating_sub(aligned) / per_cluster;
     if clusters < MIN_CLUSTERS {
         return Err(FormatError::TooSmall(format!(
-            "{volume_bytes} octets : trop petit pour FAT32 ({clusters} clusters, {MIN_CLUSTERS} au minimum)"
+            "{volume_bytes} bytes: too small for FAT32 ({clusters} clusters, at least {MIN_CLUSTERS})"
         )));
     }
     if clusters > MAX_CLUSTERS {
         return Err(FormatError::TooLarge(format!(
-            "{volume_bytes} octets : trop grand pour FAT32"
+            "{volume_bytes} bytes: too large for FAT32"
         )));
     }
     Ok(Geometry {
@@ -252,7 +252,7 @@ fn compare_sector(
         Ok(())
     } else {
         Err(FormatError::Mismatch(format!(
-            "secteur {sector} du volume : la relecture diffère de ce qui a été écrit"
+            "volume sector {sector}: the read-back differs from what was written"
         )))
     }
 }

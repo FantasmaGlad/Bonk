@@ -19,7 +19,7 @@ pub struct Unsupported;
 fn no_raw_access() -> BlockError {
     BlockError::Io(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
-        "accès brut aux disques non disponible sur ce système",
+        "raw disk access is not available on this system",
     ))
 }
 
@@ -44,7 +44,7 @@ impl Platform for Unsupported {
 
     fn unmount(&self, _disk: &Disk, _elevation: Elevation) -> Result<Vec<String>, OpenTargetError> {
         Err(OpenTargetError::Unmount(format!(
-            "démontage non disponible sous {}",
+            "unmounting is not available on {}",
             std::env::consts::OS
         )))
     }
@@ -54,10 +54,7 @@ impl Platform for Unsupported {
             Capability::no(
                 name,
                 Missing::OsUnsupported,
-                format!(
-                    "accès aux disques non disponible sous {}",
-                    std::env::consts::OS
-                ),
+                format!("disk access is not available on {}", std::env::consts::OS),
             )
         };
         let mut all = vec![no("write"), no("elevate"), no("eject"), no("cancel")];

@@ -90,8 +90,8 @@ fn auto_reconnait_une_iso_windows_et_ecrit_un_volume_valide() {
     ]);
     let text = String::from_utf8_lossy(&plan.stdout);
     assert!(plan.status.success(), "{text}");
-    assert!(text.contains("extraction, 4 fichiers"), "{text}");
-    assert!(text.contains("chargeur non signé"), "{text}");
+    assert!(text.contains("extraction, 4 files"), "{text}");
+    assert!(text.contains("unsigned loader"), "{text}");
     assert!(!PathBuf::from(&cle).exists());
 
     let done = bonk(&[

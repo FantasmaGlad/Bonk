@@ -25,20 +25,20 @@ const SCHEMA_VERSION: u32 = 1;
 const SERIAL_MASK: &str = "<serial>";
 const USER_MASK: &str = "<user>";
 
-/// Rapport de support (lecture seule, JSON)
+/// Support report (read-only, JSON)
 #[derive(Debug, Args)]
 // `long_about = None` : sans lui, clap reprendrait le commentaire ci-dessus comme texte long.
 #[command(long_about = None)]
 pub(crate) struct DiagnoseArgs {
-    /// Écrit le rapport dans ce fichier (refuse d'écraser un fichier existant) au lieu de la sortie
-    #[arg(long, value_name = "FICHIER")]
+    /// Write the report to this file (refuses to overwrite an existing file) instead of the output
+    #[arg(long, value_name = "FILE")]
     output: Option<PathBuf>,
 
-    /// Garde les numéros de série et le nom d'utilisateur, masqués par défaut
+    /// Keep serial numbers and the user name, masked by default
     #[arg(long)]
     include_serials: bool,
 
-    /// Joint les sources brutes de l'énumération (anonymisées), rejouables ailleurs avec --fixture
+    /// Attach the raw enumeration sources (anonymized), replayable elsewhere with --fixture
     #[arg(long)]
     capture: bool,
 }
@@ -347,7 +347,7 @@ pub(crate) fn run(
             let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
             serde_json::to_writer_pretty(&mut file, &report).map_err(io::Error::from)?;
             writeln!(file)?;
-            writeln!(out, "Rapport écrit dans {}", path.display())
+            writeln!(out, "Report written to {}", path.display())
         }
     }
 }
@@ -602,7 +602,7 @@ mod tests {
         };
         let mut out = Vec::new();
         run(&with_file, &env(), &Ok(vec![disk()]), None, &mut out)?;
-        assert!(String::from_utf8(out)?.starts_with("Rapport écrit dans "));
+        assert!(String::from_utf8(out)?.starts_with("Report written to "));
         let written: Value = serde_json::from_str(&std::fs::read_to_string(&path)?)?;
         assert_eq!(written["schema_version"], 1);
         // Un second appel ne remplace pas le fichier.

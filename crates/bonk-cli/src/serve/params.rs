@@ -114,7 +114,7 @@ impl TransferParams {
 
     pub(super) fn target(&self) -> Result<Target, Failure> {
         if self.target.is_empty() {
-            return Err(failure(Code::ProtocolError, "paramètre « target » requis"));
+            return Err(failure(Code::ProtocolError, "parameter 'target' required"));
         }
         Ok(if self.simulate {
             Target::Image {
@@ -133,7 +133,7 @@ impl TransferParams {
             Some("data") => Ok(Some(TraceIo::Data)),
             Some(autre) => Err(failure(
                 Code::ProtocolError,
-                format!("trace_io inconnu : « {autre} » (metadata ou data)"),
+                format!("unknown trace_io: '{autre}' (metadata or data)"),
             )),
         }
     }
@@ -145,7 +145,7 @@ impl TransferParams {
             Some("extract") => Ok(WriteMode::Extract),
             Some(autre) => Err(failure(
                 Code::ProtocolError,
-                format!("mode inconnu : « {autre} » (auto ou raw)"),
+                format!("unknown mode: '{autre}' (auto or raw)"),
             )),
         }
     }
@@ -156,7 +156,7 @@ impl TransferParams {
             Some("auto") => Ok(Elevation::Auto),
             Some(autre) => Err(failure(
                 Code::ProtocolError,
-                format!("elevate inconnu : « {autre} » (auto ou never)"),
+                format!("unknown elevate: '{autre}' (auto or never)"),
             )),
         }
     }
@@ -171,7 +171,7 @@ impl TransferParams {
                 .ok_or_else(|| {
                     failure(
                         Code::ProtocolError,
-                        format!("fs inconnu : « {name} » (fat32, exfat, ntfs ou ext4)"),
+                        format!("unknown fs: '{name}' (fat32, exfat, ntfs or ext4)"),
                     )
                 }),
         }
@@ -186,7 +186,7 @@ impl TransferParams {
                 .ok_or_else(|| {
                     failure(
                         Code::ProtocolError,
-                        format!("table inconnue : « {name} » (gpt ou mbr)"),
+                        format!("unknown table: '{name}' (gpt or mbr)"),
                     )
                 }),
         }
@@ -195,6 +195,6 @@ impl TransferParams {
     pub(super) fn source(&self) -> Result<PathBuf, Failure> {
         self.source
             .clone()
-            .ok_or_else(|| failure(Code::ProtocolError, "paramètre « source » requis"))
+            .ok_or_else(|| failure(Code::ProtocolError, "parameter 'source' required"))
     }
 }

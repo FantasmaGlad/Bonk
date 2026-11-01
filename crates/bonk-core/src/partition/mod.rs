@@ -145,7 +145,7 @@ pub fn inspect(dev: &dyn BlockDevice) -> Result<Layout, BlockError> {
         note(
             Severity::Error,
             "too_small",
-            format!("{size} octets : trop petit pour contenir une table de partitions"),
+            format!("{size} bytes: too small to hold a partition table"),
         );
         return Ok(Layout {
             size_bytes: size,
@@ -204,12 +204,12 @@ pub fn inspect(dev: &dyn BlockDevice) -> Result<Layout, BlockError> {
         (None, None) => note(
             Severity::Info,
             "no_partition_table",
-            "ni MBR ni GPT : disque vierge ou système de fichiers sur le disque entier".to_owned(),
+            "neither MBR nor GPT: blank disk or a filesystem on the whole disk".to_owned(),
         ),
         (Some(m), None) if !m.signature_valid => note(
             Severity::Info,
             "no_partition_table",
-            "signature MBR absente et pas de GPT".to_owned(),
+            "MBR signature missing and no GPT".to_owned(),
         ),
         _ => {}
     }
@@ -223,7 +223,7 @@ pub fn inspect(dev: &dyn BlockDevice) -> Result<Layout, BlockError> {
         note(
             Severity::Warning,
             "size_not_multiple_of_block",
-            format!("{size} octets ne sont pas un multiple du secteur de {logical} octets"),
+            format!("{size} bytes are not a multiple of the {logical} byte sector"),
         );
     }
 

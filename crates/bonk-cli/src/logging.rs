@@ -28,17 +28,27 @@ pub(crate) enum LogFormat {
 /// Options de journal communes à toutes les commandes, et à la fenêtre.
 #[derive(Debug, Args)]
 pub(crate) struct LogArgs {
-    /// Journal détaillé (-v), puis très détaillé (-vv) sur la sortie d'erreur
+    /// Detailed log (-v), then very detailed (-vv) on standard error
     #[arg(short = 'v', long = "verbose", action = clap::ArgAction::Count, global = true)]
     verbose: u8,
 
-    /// Écrit aussi le journal dans ce fichier (ajout en fin de fichier)
-    #[arg(long, value_name = "CHEMIN", global = true)]
+    /// Keep only the result: no progress line, and only errors in the log
+    #[arg(short = 'q', long, global = true, conflicts_with = "verbose")]
+    quiet: bool,
+
+    /// Also write the log to this file (appended)
+    #[arg(long, value_name = "PATH", global = true)]
     log_file: Option<PathBuf>,
 
-    /// Format du journal : texte, ou un événement JSON par ligne
+    /// Log format: text, or one JSON event per line
     #[arg(long, value_enum, global = true)]
     log_format: Option<LogFormat>,
+}
+
+impl LogArgs {
+    pub(crate) fn quiet(&self) -> bool {
+        self.quiet
+    }
 }
 
 /// Niveaux par composant. Sans réglage explicite : `-v` donne `debug` à Bonk et `info` au rendu,
@@ -60,6 +70,19 @@ impl Filter {
             1 => (LevelFilter::Debug, LevelFilter::Info),
             _ => (LevelFilter::Trace, LevelFilter::Debug),
         };
+        Self::with_levels(default, render, spec)
+    }
+
+    /// `--quiet` : erreurs seulement. `BONK_LOG`, demandé explicitement, garde le dernier mot.
+    fn quiet(spec: Option<&str>) -> Result<Self, String> {
+        Self::with_levels(LevelFilter::Error, LevelFilter::Error, spec)
+    }
+
+    fn with_levels(
+        default: LevelFilter,
+        render: LevelFilter,
+        spec: Option<&str>,
+    ) -> Result<Self, String> {
         let mut filter = Self {
             default,
             render,
@@ -73,7 +96,7 @@ impl Filter {
                 Some((component, level)) => {
                     if !COMPONENTS.contains(&component) {
                         return Err(format!(
-                            "composant de journal inconnu : « {component} » (attendus : {})",
+                            "unknown log component: '{component}' (expected: {})",
                             COMPONENTS.join(", ")
                         ));
                     }
@@ -115,7 +138,7 @@ impl Filter {
 
 fn parse_level(text: &str) -> Result<LevelFilter, String> {
     text.parse().map_err(|_| {
-        format!("niveau de journal inconnu : « {text} » (attendus : off, error, warn, info, debug, trace)")
+        format!("unknown log level: '{text}' (expected: off, error, warn, info, debug, trace)")
     })
 }
 
@@ -293,7 +316,11 @@ impl Settings {
         default_format: LogFormat,
     ) -> Result<Self, String> {
         Ok(Self {
-            filter: Filter::new(args.verbose, env_spec)?,
+            filter: if args.quiet {
+                Filter::quiet(env_spec)?
+            } else {
+                Filter::new(args.verbose, env_spec)?
+            },
             format: args.log_format.unwrap_or(default_format),
             file: args.log_file.clone(),
         })
@@ -308,9 +335,7 @@ pub(crate) fn install(settings: Settings) -> Result<(), String> {
                 .create(true)
                 .append(true)
                 .open(path)
-                .map_err(|e| {
-                    format!("journal : ouverture de {} impossible : {e}", path.display())
-                })?,
+                .map_err(|e| format!("log: could not open {}: {e}", path.display()))?,
         )),
         None => None,
     };
@@ -325,7 +350,7 @@ pub(crate) fn install(settings: Settings) -> Result<(), String> {
         session: format!("{:x}-{nanos:x}", std::process::id()),
         file,
     };
-    log::set_boxed_logger(Box::new(sink)).map_err(|e| format!("journal déjà installé : {e}"))?;
+    log::set_boxed_logger(Box::new(sink)).map_err(|e| format!("log already installed: {e}"))?;
     log::set_max_level(max);
     Ok(())
 }
@@ -400,11 +425,11 @@ mod tests {
     #[test]
     fn bonk_log_invalide_est_refuse_avec_un_message_clair() {
         let erreur = Filter::new(0, Some("gui=bavard")).err().unwrap_or_default();
-        assert!(erreur.contains("niveau de journal inconnu"), "{erreur}");
+        assert!(erreur.contains("unknown log level"), "{erreur}");
         let erreur = Filter::new(0, Some("disque=debug"))
             .err()
             .unwrap_or_default();
-        assert!(erreur.contains("composant de journal inconnu"), "{erreur}");
+        assert!(erreur.contains("unknown log component"), "{erreur}");
         assert!(erreur.contains("hal"), "{erreur}");
     }
 

@@ -13,21 +13,21 @@ use serde::Serialize;
 
 pub(crate) use bonk_ops::errors::*;
 
-/// Écrit l'erreur sur `err` au format `bonk : erreur : <message> [Exxxx]` et rend le code de sortie.
+/// Écrit l'erreur sur `err` au format `bonk: error: <message> [Exxxx]` et rend le code de sortie.
 pub(crate) fn report(err: &mut dyn Write, code: Code, message: impl Display) -> u8 {
-    let _ = writeln!(err, "bonk : erreur : {message} [{}]", code.id());
+    let _ = writeln!(err, "bonk: error: {message} [{}]", code.id());
     code.exit()
 }
 
-/// Explique un code d'erreur
+/// Explain an error code
 #[derive(Debug, Args)]
 // `long_about = None` : sans lui, clap reprendrait le commentaire ci-dessus comme texte long.
 #[command(long_about = None)]
 pub(crate) struct ExplainArgs {
-    /// Code à expliquer (`E1003`) ; sans code, liste tous les codes
+    /// Code to explain (`E1003`); without a code, list all codes
     code: Option<String>,
 
-    /// Sortie JSON
+    /// JSON output
     #[arg(long)]
     json: bool,
 }
@@ -101,22 +101,18 @@ pub(crate) fn explain(args: &ExplainArgs, out: &mut dyn Write) -> io::Result<boo
     }
     if args.code.is_none() {
         for entry in entries {
-            writeln!(
-                out,
-                "{}  (sortie {})  {}",
-                entry.id, entry.exit, entry.title
-            )?;
+            writeln!(out, "{}  (exit {})  {}", entry.id, entry.exit, entry.title)?;
         }
         return Ok(true);
     }
     for entry in entries {
-        writeln!(out, "{} : {}", entry.id, entry.title)?;
-        writeln!(out, "Code de sortie : {}", entry.exit)?;
-        writeln!(out, "Causes probables :")?;
+        writeln!(out, "{}: {}", entry.id, entry.title)?;
+        writeln!(out, "Exit code: {}", entry.exit)?;
+        writeln!(out, "Likely causes:")?;
         for cause in entry.causes {
             writeln!(out, "  - {cause}")?;
         }
-        writeln!(out, "Remède : {}", entry.remedy)?;
+        writeln!(out, "Remedy: {}", entry.remedy)?;
     }
     Ok(true)
 }
@@ -124,7 +120,7 @@ pub(crate) fn explain(args: &ExplainArgs, out: &mut dyn Write) -> io::Result<boo
 /// Texte d'un code inconnu, avec la liste des codes existants.
 pub(crate) fn unknown_code_message(text: &str) -> String {
     let ids: Vec<&str> = CATALOG.iter().map(|e| e.id).collect();
-    format!("code inconnu : « {text} » (codes : {})", ids.join(", "))
+    format!("unknown code: '{text}' (codes: {})", ids.join(", "))
 }
 
 #[cfg(test)]
@@ -184,11 +180,11 @@ mod tests {
     #[test]
     fn le_code_termine_le_message() {
         let mut err = Vec::new();
-        let exit = report(&mut err, Code::DiskNotFound, "disque introuvable : « x »");
+        let exit = report(&mut err, Code::DiskNotFound, "disk not found: 'x'");
         assert_eq!(exit, EXIT_RUNTIME_ERROR);
         assert_eq!(
             String::from_utf8_lossy(&err),
-            "bonk : erreur : disque introuvable : « x » [E1003]\n"
+            "bonk: error: disk not found: 'x' [E1003]\n"
         );
     }
 
@@ -209,10 +205,10 @@ mod tests {
         assert!(explain(&args, &mut out)?);
         let text = String::from_utf8_lossy(&out).into_owned();
         assert!(
-            text.starts_with("E2001 : Cible refusée par le filtre de sécurité"),
+            text.starts_with("E2001: Target refused by the safety filter"),
             "{text}"
         );
-        assert!(text.contains("Code de sortie : 3"), "{text}");
+        assert!(text.contains("Exit code: 3"), "{text}");
         assert!(text.contains("bonk debug filter"), "{text}");
 
         let mut list = Vec::new();
@@ -225,7 +221,7 @@ mod tests {
         )?;
         let text = String::from_utf8_lossy(&list).into_owned();
         assert_eq!(text.lines().count(), CATALOG.len());
-        assert!(text.contains("E4002  (sortie 4)"), "{text}");
+        assert!(text.contains("E4002  (exit 4)"), "{text}");
 
         let mut json = Vec::new();
         explain(

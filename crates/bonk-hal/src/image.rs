@@ -74,7 +74,7 @@ fn ensure_regular_file(metadata: &fs::Metadata) -> io::Result<()> {
     } else {
         Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "le chemin n'est pas un fichier image ordinaire",
+            "the path is not a regular image file",
         ))
     }
 }

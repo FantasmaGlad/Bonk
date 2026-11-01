@@ -27,7 +27,7 @@ fn help_reussit_et_commence_par_la_description_de_l_outil() -> Resultat {
     let texte = String::from_utf8(sortie.stdout)?;
     assert_eq!(
         texte.lines().next(),
-        Some("Création de supports d'amorçage (clés USB et disques externes)")
+        Some("Create bootable media (USB drives and external disks)")
     );
     Ok(())
 }
@@ -46,7 +46,7 @@ fn sans_argument_et_sans_affichage_renvoie_vers_la_ligne_de_commande() -> Result
     common::assert_code(&sortie, 1);
     let erreur = String::from_utf8(sortie.stderr)?;
     assert!(
-        erreur.starts_with("bonk : erreur : impossible d'ouvrir l'interface graphique"),
+        erreur.starts_with("bonk: error: could not open the graphical interface"),
         "{erreur}"
     );
     assert!(erreur.contains("bonk --help"), "{erreur}");
@@ -92,7 +92,7 @@ fn list_json_reussit_ou_echoue_proprement() -> Resultat {
         Some(1) => {
             assert!(sortie.stdout.is_empty());
             let erreur = String::from_utf8(sortie.stderr)?;
-            assert!(erreur.starts_with("bonk : erreur : "), "{erreur}");
+            assert!(erreur.starts_with("bonk: error: "), "{erreur}");
         }
         autre => panic!("code de sortie inattendu : {autre:?}"),
     }
@@ -106,7 +106,7 @@ fn list_hors_linux_echoue_avec_un_message_clair() -> Resultat {
     let sortie = bonk().arg("list").output()?;
     common::assert_code(&sortie, 1);
     let erreur = String::from_utf8(sortie.stderr)?;
-    assert!(erreur.contains("pas encore disponible"), "{erreur}");
+    assert!(erreur.contains("not available yet"), "{erreur}");
     Ok(())
 }
 
@@ -122,7 +122,7 @@ fn debug_sources_json_reussit_ou_echoue_proprement() -> Resultat {
         }
         Some(1) => {
             let erreur = String::from_utf8(sortie.stderr)?;
-            assert!(erreur.starts_with("bonk : erreur : "), "{erreur}");
+            assert!(erreur.starts_with("bonk: error: "), "{erreur}");
         }
         autre => panic!("code de sortie inattendu : {autre:?}"),
     }
@@ -360,5 +360,52 @@ fn no_gui_affiche_l_aide_et_n_ouvre_jamais_la_fenetre() -> Result<(), Box<dyn st
     common::assert_code(&contradiction, 2);
     let commande = bonk().args(["--no-gui", "explain", "E2001"]).output()?;
     common::assert_code(&commande, 0);
+    Ok(())
+}
+
+/// Couleurs forcées par l'environnement : seule l'option peut alors les retirer.
+fn aide_coloree(options: &[&str]) -> Result<String, std::io::Error> {
+    let sortie = Command::new(env!("CARGO_BIN_EXE_bonk"))
+        .args(options)
+        .arg("--help")
+        .env("CLICOLOR_FORCE", "1")
+        .env_remove("NO_COLOR")
+        .output()?;
+    assert!(sortie.status.success());
+    Ok(String::from_utf8_lossy(&sortie.stdout).into_owned())
+}
+
+#[test]
+fn no_color_retire_les_couleurs_de_l_aide() -> Result<(), std::io::Error> {
+    assert!(aide_coloree(&[])?.contains('\u{1b}'));
+    assert!(!aide_coloree(&["--no-color"])?.contains('\u{1b}'));
+    Ok(())
+}
+
+#[test]
+fn quiet_refuse_verbose_et_tait_les_avertissements() -> Result<(), std::io::Error> {
+    let refus = Command::new(env!("CARGO_BIN_EXE_bonk"))
+        .args(["--quiet", "-v", "explain"])
+        .output()?;
+    assert_eq!(refus.status.code(), Some(2));
+
+    // Une configuration illisible n'est qu'un avertissement : le journal le dit, sauf avec --quiet.
+    let dossier = std::env::temp_dir().join(format!("bonk-quiet-{}", std::process::id()));
+    std::fs::create_dir_all(&dossier)?;
+    let config = dossier.join("config.json");
+    std::fs::write(&config, "{ cassé")?;
+    let lancer = |options: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_bonk"))
+            .args(options)
+            .env("BONK_CONFIG", &config)
+            .env_remove("BONK_LOG")
+            .output()
+    };
+    let bavard = lancer(&["explain", "E1003"])?;
+    assert!(String::from_utf8_lossy(&bavard.stderr).contains("configuration unreadable"));
+    let quiet = lancer(&["--quiet", "explain", "E1003"])?;
+    assert!(quiet.stderr.is_empty(), "{:?}", quiet.stderr);
+    assert!(String::from_utf8_lossy(&quiet.stdout).contains("E1003"));
+    std::fs::remove_dir_all(&dossier)?;
     Ok(())
 }

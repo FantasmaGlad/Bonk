@@ -99,12 +99,12 @@ pub(crate) fn parse_line(line: &str) -> Option<Event> {
 }
 
 /// Échec d'un processus qui n'a pas pu donner son événement `error` (arguments refusés, arrêt brutal),
-/// d'après la sortie d'erreur : la dernière ligne `bonk : erreur : message [Exxxx]`.
+/// d'après la sortie d'erreur : la dernière ligne `bonk: error: message [Exxxx]`.
 pub(crate) fn parse_failure(stderr: &str, status: &str) -> Outcome {
     let line = stderr
         .lines()
         .rev()
-        .find_map(|l| l.strip_prefix("bonk : erreur : "));
+        .find_map(|l| l.strip_prefix("bonk: error: "));
     match line {
         Some(text) => {
             let (message, code) = match text.rsplit_once(" [E") {
@@ -273,7 +273,7 @@ mod tests {
 
     #[test]
     fn echec_d_apres_la_sortie_d_erreur() {
-        let stderr = "2026-10-29T10:00:00.000Z WARN cli quelque chose\nbonk : erreur : disque introuvable : « x » [E1003]\n";
+        let stderr = "2026-10-29T10:00:00.000Z WARN cli quelque chose\nbonk: error: disque introuvable : « x » [E1003]\n";
         assert_eq!(
             parse_failure(stderr, "exit status: 1"),
             Outcome::Failed {
@@ -282,7 +282,7 @@ mod tests {
             }
         );
         assert_eq!(
-            parse_failure("bonk : erreur : sans code\n", "exit status: 1"),
+            parse_failure("bonk: error: sans code\n", "exit status: 1"),
             Outcome::Failed {
                 code: None,
                 message: "sans code".into()
@@ -352,7 +352,7 @@ mod tests {
     #[test]
     fn un_processus_qui_echoue_avec_son_code() {
         let events = iced::futures::executor::block_on(collect(
-            "echo 'bonk : erreur : cible refusée [E2001]' >&2; exit 3",
+            "echo 'bonk: error: cible refusée [E2001]' >&2; exit 3",
         ));
         assert_eq!(
             events.last(),
@@ -363,7 +363,7 @@ mod tests {
         );
         // Un résultat affiché mais un code de sortie non nul reste un échec.
         let events = iced::futures::executor::block_on(collect(
-            r#"echo '{"event":"result","write":{"bytes":1}}'; echo 'bonk : erreur : après coup [E4001]' >&2; exit 1"#,
+            r#"echo '{"event":"result","write":{"bytes":1}}'; echo 'bonk: error: après coup [E4001]' >&2; exit 1"#,
         ));
         assert!(matches!(
             events.last(),

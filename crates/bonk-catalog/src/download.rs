@@ -53,11 +53,11 @@ pub enum DownloadError {
 impl fmt::Display for DownloadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Scheme(url) => write!(f, "{url} : seul https:// est accepté"),
-            Self::Refused { url, status } => write!(f, "{url} : le serveur répond {status}"),
+            Self::Scheme(url) => write!(f, "{url}: only https:// is accepted"),
+            Self::Refused { url, status } => write!(f, "{url}: the server answers {status}"),
             Self::Network(message) | Self::Inconsistent(message) => f.write_str(message),
-            Self::Io(err) => write!(f, "fichier du téléchargement : {err}"),
-            Self::Cancelled => f.write_str("téléchargement annulé, reprenable"),
+            Self::Io(err) => write!(f, "download file: {err}"),
+            Self::Cancelled => f.write_str("download cancelled, can be resumed"),
         }
     }
 }
@@ -148,7 +148,7 @@ pub fn fetch_text(url: &str) -> Result<String, DownloadError> {
     let mut response = agent
         .get(url)
         .call()
-        .map_err(|e| DownloadError::Network(format!("{url} : {e}")))?;
+        .map_err(|e| DownloadError::Network(format!("{url}: {e}")))?;
     let status = response.status();
     if status != StatusCode::OK {
         return Err(DownloadError::Refused {
@@ -161,7 +161,7 @@ pub fn fetch_text(url: &str) -> Result<String, DownloadError> {
         .with_config()
         .limit(TEXT_LIMIT)
         .read_to_string()
-        .map_err(|e| DownloadError::Network(format!("{url} : {e}")))
+        .map_err(|e| DownloadError::Network(format!("{url}: {e}")))
 }
 
 /// Ce que dit le serveur en tête d'une réponse.
@@ -208,7 +208,7 @@ fn read_response(
             request = request.header(header::IF_RANGE, validator);
         }
     }
-    let response = request.call().map_err(|e| format!("{url} : {e}"))?;
+    let response = request.call().map_err(|e| format!("{url}: {e}"))?;
     let headers = response.headers();
     // Une ETag faible ne garantit pas les mêmes octets : `If-Range` ne l'admet pas.
     let validator = header_text(headers, header::ETAG)
@@ -227,9 +227,7 @@ fn read_response(
     let mut reader = body.with_config().limit(u64::MAX).reader();
     loop {
         let mut chunk = vec![0; CHUNK];
-        let n = reader
-            .read(&mut chunk)
-            .map_err(|e| format!("{url} : {e}"))?;
+        let n = reader.read(&mut chunk).map_err(|e| format!("{url}: {e}"))?;
         if n == 0 {
             let _ = sender.send(Event::End);
             return Ok(());
@@ -378,9 +376,13 @@ fn attempt(
     let head = match next_event(&events, hooks)? {
         Next::Event(Event::Head(head)) => head,
         Next::Event(Event::Failed(message)) => return Ok(Attempt::Retry(message)),
-        Next::Silent => return Ok(Attempt::Retry(format!("{url} : le serveur ne répond plus"))),
+        Next::Silent => {
+            return Ok(Attempt::Retry(format!(
+                "{url}: the server no longer answers"
+            )));
+        }
         Next::Event(_) | Next::Gone => {
-            return Ok(Attempt::Retry(format!("{url} : réponse perdue")));
+            return Ok(Attempt::Retry(format!("{url}: response lost")));
         }
     };
     let total = match head.status {
@@ -395,7 +397,7 @@ fn attempt(
             let Some((_, total)) = range.filter(|(start, _)| *start == from) else {
                 partial.restart()?;
                 return Err(DownloadError::Inconsistent(format!(
-                    "{url} : réponse partielle qui ne commence pas à l'octet {from}"
+                    "{url}: partial response not starting at byte {from}"
                 )));
             };
             if partial.validator.is_none() {
@@ -410,12 +412,12 @@ fn attempt(
             }
             partial.restart()?;
             return Ok(Attempt::Retry(format!(
-                "{url} : fichier partiel plus long que l'original"
+                "{url}: partial file longer than the original"
             )));
         }
         status if status >= 500 || status == 408 || status == 429 => {
             return Ok(Attempt::Retry(format!(
-                "{url} : le serveur répond {status}"
+                "{url}: the server answers {status}"
             )));
         }
         status => {
@@ -438,7 +440,7 @@ fn attempt(
             Next::Event(Event::End) => {
                 return Ok(match total {
                     Some(total) if partial.done != total => {
-                        Attempt::Retry(format!("{url} : {} octets reçus sur {total}", partial.done))
+                        Attempt::Retry(format!("{url}: {} bytes received of {total}", partial.done))
                     }
                     _ => Attempt::Complete,
                 });
@@ -446,11 +448,11 @@ fn attempt(
             Next::Event(Event::Failed(message)) => return Ok(Attempt::Retry(message)),
             Next::Silent => {
                 return Ok(Attempt::Retry(format!(
-                    "{url} : le serveur n'envoie plus rien"
+                    "{url}: the server sends nothing more"
                 )));
             }
             Next::Event(Event::Head(_)) | Next::Gone => {
-                return Ok(Attempt::Retry(format!("{url} : réponse perdue")));
+                return Ok(Attempt::Retry(format!("{url}: response lost")));
             }
         }
     }

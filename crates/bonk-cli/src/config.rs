@@ -31,31 +31,31 @@ pub(crate) const KEYS: &[Key] = &[
         name: "lang",
         kind: Kind::Choice(&["fr"]),
         default: "fr",
-        help: "langue de l'interface et des sorties lisibles (l'anglais n'est pas encore livré)",
+        help: "window language (English is not shipped yet); the command line is always in English",
     },
     Key {
         name: "log.format",
         kind: Kind::Choice(&["text", "json"]),
         default: "text",
-        help: "format du journal quand --log-format n'est pas donné",
+        help: "log format when --log-format is not given",
     },
     Key {
         name: "view.show_internal",
         kind: Kind::Bool,
         default: "false",
-        help: "proposer aussi les disques internes non système (fenêtre, list, info)",
+        help: "also offer internal non-system disks (window, list, info)",
     },
     Key {
         name: "view.show_all",
         kind: Kind::Bool,
         default: "false",
-        help: "afficher aussi les disques écartés (fenêtre, list)",
+        help: "also show excluded disks (window, list)",
     },
     Key {
         name: "view.allow_virtual",
         kind: Kind::Bool,
         default: "false",
-        help: "mode test : autoriser les disques virtuels (fenêtre, list, info)",
+        help: "test mode: allow virtual disks (window, list, info)",
     },
 ];
 
@@ -111,7 +111,7 @@ pub(crate) fn normalize(key: &Key, value: &str) -> Result<String, String> {
             "true" | "1" | "oui" | "yes" | "on" => Ok("true".to_owned()),
             "false" | "0" | "non" | "no" | "off" => Ok("false".to_owned()),
             _ => Err(format!(
-                "« {value} » n'est pas un booléen pour {} (true ou false)",
+                "'{value}' is not a boolean for {} (true or false)",
                 key.name
             )),
         },
@@ -121,7 +121,7 @@ pub(crate) fn normalize(key: &Key, value: &str) -> Result<String, String> {
                 Ok(lower)
             } else {
                 Err(format!(
-                    "« {value} » n'est pas une valeur de {} (valeurs : {})",
+                    "'{value}' is not a value of {} (values: {})",
                     key.name,
                     choices.join(", ")
                 ))
@@ -141,21 +141,17 @@ pub(crate) fn default_path(var: &dyn Fn(&str) -> Option<String>) -> Option<PathB
 /// Lit le fichier ; un fichier absent donne une configuration vide.
 pub(crate) fn load(path: &Path) -> Result<Stored, String> {
     match fs::read_to_string(path) {
-        Ok(text) => serde_json::from_str(&text).map_err(|e| {
-            format!(
-                "{} : fichier de configuration illisible : {e}",
-                path.display()
-            )
-        }),
+        Ok(text) => serde_json::from_str(&text)
+            .map_err(|e| format!("{}: unreadable configuration file: {e}", path.display())),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Stored::default()),
-        Err(e) => Err(format!("{} : lecture impossible : {e}", path.display())),
+        Err(e) => Err(format!("{}: could not read: {e}", path.display())),
     }
 }
 
 /// Écrit le fichier d'un seul geste (fichier temporaire puis renommage) : une coupure ne laisse jamais
 /// un fichier à moitié écrit.
 pub(crate) fn save(path: &Path, stored: &Stored) -> Result<(), String> {
-    let fail = |e: io::Error| format!("{} : écriture impossible : {e}", path.display());
+    let fail = |e: io::Error| format!("{}: could not write: {e}", path.display());
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(fail)?;
     }
@@ -219,17 +215,17 @@ pub(crate) fn value_of<'a>(effective: &'a [Effective], key: &str) -> Option<&'a 
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum ConfigAction {
-    /// Liste les réglages avec leur valeur effective et son origine
+    /// List the settings with their effective value and its origin
     List {
-        /// Sortie JSON
+        /// JSON output
         #[arg(long)]
         json: bool,
     },
-    /// Valeur effective d'un réglage
+    /// Effective value of a setting
     Get { key: String },
-    /// Fixe un réglage dans le fichier de configuration
+    /// Set a value in the configuration file
     Set { key: String, value: String },
-    /// Remet un réglage (ou tous) à sa valeur par défaut
+    /// Restore a setting (or all) to its default value
     Reset { key: Option<String> },
 }
 
@@ -257,14 +253,14 @@ pub(crate) fn run(
         find_key(name).ok_or_else(|| {
             let names: Vec<&str> = KEYS.iter().map(|k| k.name).collect();
             invalid(format!(
-                "réglage inconnu : « {name} » (réglages : {})",
+                "unknown setting: '{name}' (settings: {})",
                 names.join(", ")
             ))
         })
     };
     let need_path = || {
         path.ok_or_else(|| {
-            invalid("dossier de configuration introuvable (variable BONK_CONFIG ?)".to_owned())
+            invalid("configuration directory not found (BONK_CONFIG variable?)".to_owned())
         })
     };
     let stored = match path {
@@ -286,8 +282,8 @@ pub(crate) fn run(
                 let width = settings.iter().map(|e| e.key.len()).max().unwrap_or(0);
                 for e in &settings {
                     let origin = match (e.origin, &e.variable) {
-                        (Origin::Default, _) => "défaut".to_owned(),
-                        (Origin::File, _) => "fichier".to_owned(),
+                        (Origin::Default, _) => "default".to_owned(),
+                        (Origin::File, _) => "file".to_owned(),
                         (Origin::Environment, Some(v)) => format!("variable {v}"),
                         (Origin::Environment, None) => "variable".to_owned(),
                     };
@@ -322,7 +318,7 @@ pub(crate) fn run(
                 None => stored.values.clear(),
             }
             save(need_path()?, &stored).map_err(invalid)?;
-            writeln!(out, "Réglages remis à leur valeur par défaut.")?;
+            writeln!(out, "Settings restored to their default values.")?;
         }
     }
     Ok(())
@@ -393,7 +389,7 @@ mod tests {
         let lang = find_key("lang").ok_or("clé")?;
         assert_eq!(normalize(lang, "FR")?, "fr");
         let erreur = normalize(lang, "en").err().unwrap_or_default();
-        assert!(erreur.contains("valeurs : fr"), "{erreur}");
+        assert!(erreur.contains("values: fr"), "{erreur}");
         Ok(())
     }
 
@@ -441,7 +437,7 @@ mod tests {
         // Absent : tout est par défaut, rien n'est créé par une lecture.
         let list = texte(&ConfigAction::List { json: false }, path, &[])?;
         assert!(
-            list.contains("view.show_all") && list.contains("(défaut)"),
+            list.contains("view.show_all") && list.contains("(default)"),
             "{list}"
         );
         assert!(!path.exists());
@@ -467,7 +463,7 @@ mod tests {
         );
         let list = texte(&ConfigAction::List { json: false }, path, &[])?;
         assert!(
-            list.contains("view.show_all") && list.contains("(fichier)"),
+            list.contains("view.show_all") && list.contains("(file)"),
             "{list}"
         );
 
@@ -531,7 +527,7 @@ mod tests {
         )
         .err();
         assert!(
-            erreur.is_some_and(|e| e.contains("réglage inconnu") && e.contains("view.show_all"))
+            erreur.is_some_and(|e| e.contains("unknown setting") && e.contains("view.show_all"))
         );
         let erreur = texte(
             &ConfigAction::Set {
@@ -542,7 +538,7 @@ mod tests {
             &[],
         )
         .err();
-        assert!(erreur.is_some_and(|e| e.contains("valeurs : fr")));
+        assert!(erreur.is_some_and(|e| e.contains("values: fr")));
         assert!(!file.0.exists());
         Ok(())
     }
@@ -553,7 +549,7 @@ mod tests {
         fs::create_dir_all(file.0.parent().ok_or("parent")?)?;
         fs::write(&file.0, "{ pas du json")?;
         let erreur = texte(&ConfigAction::List { json: false }, &file.0, &[]).err();
-        assert!(erreur.is_some_and(|e| e.contains("fichier de configuration illisible")));
+        assert!(erreur.is_some_and(|e| e.contains("unreadable configuration file")));
         // `set` ne remplace pas en silence un fichier qu'il ne comprend pas.
         assert!(
             texte(

@@ -57,7 +57,7 @@ fn formater_sans_confirmation_ou_en_plan_ne_touche_a_rien() {
     let (code, out, err) = scenario.run(&["format", "usb-a", "--dry-run"]);
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("Plan"), "{out}");
-    assert!(out.contains("fat32 (par défaut)"), "{out}");
+    assert!(out.contains("fat32 (default)"), "{out}");
     assert!(scenario.log().is_empty(), "{:?}", scenario.log());
     assert!(scenario.written(1024).iter().all(|b| *b == 0));
 }
@@ -97,7 +97,7 @@ fn exfat_capability(available: bool) -> Capability {
         Capability::no(
             "format.exfat",
             Missing::MissingTool,
-            "outil absent : mkfs.exfat",
+            "tool missing: mkfs.exfat",
         )
     }
 }
@@ -160,7 +160,7 @@ fn exfat_que_le_systeme_ne_reconnait_pas_est_un_echec() {
     ];
     let (code, _, err) = scenario.run(&["format", "usb-a", "--fs", "exfat", "--yes"]);
     assert_eq!(code, 1, "{err}");
-    assert!(err.contains("ne reconnaît pas"), "{err}");
+    assert!(err.contains("does not recognize"), "{err}");
 }
 
 #[test]
@@ -171,7 +171,7 @@ fn capabilities_dit_le_pourquoi() {
     assert_eq!(code, 0);
     assert!(out.contains("write"), "{out}");
     assert!(
-        out.contains("format.exfat   non : outil absent (outil absent : mkfs.exfat)"),
+        out.contains("format.exfat   no: tool missing (tool missing: mkfs.exfat)"),
         "{out}"
     );
     let (code, out, _) = scenario.run(&["capabilities", "--json"]);
@@ -181,14 +181,14 @@ fn capabilities_dit_le_pourquoi() {
     assert_eq!(value["capabilities"][1]["missing"], "missing_tool");
 }
 
-/// FAT32 ne garde pas un fichier de 4 Gio : la sortie le dit et donne le remède ; les autres systèmes
+/// FAT32 ne garde pas un fichier de 4 GiB : la sortie le dit et donne le remède ; les autres systèmes
 /// n'ont pas cette limite à dire.
 #[test]
 fn fat32_dit_sa_limite_par_fichier_et_propose_exfat() {
     let scenario = Scenario::new();
     let (code, out, err) = scenario.run(&["format", "usb-a", "--fs", "fat32", "--dry-run"]);
     assert_eq!((code, err.as_str()), (0, ""), "{out}");
-    assert!(out.contains("4 Gio"), "{out}");
+    assert!(out.contains("4 GiB"), "{out}");
     assert!(out.contains("--fs exfat"), "{out}");
 
     let (code, json, err) =
@@ -201,7 +201,7 @@ fn fat32_dit_sa_limite_par_fichier_et_propose_exfat() {
     scenario.capabilities = vec![exfat_capability(true)];
     let (code, out, err) = scenario.run(&["format", "usb-a", "--fs", "exfat", "--dry-run"]);
     assert_eq!((code, err.as_str()), (0, ""), "{out}");
-    assert!(!out.contains("4 Gio"), "{out}");
+    assert!(!out.contains("4 GiB"), "{out}");
     let (_, json, _) = scenario.run(&["format", "usb-a", "--fs", "exfat", "--dry-run", "--json"]);
     let value: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert!(value["file_size_limit_bytes"].is_null(), "{json}");

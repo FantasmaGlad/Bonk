@@ -53,7 +53,7 @@ pub fn normalize_sha256(text: &str) -> Result<String, JobError> {
     } else {
         Err(fail(
             Code::InvalidArgument,
-            format!("empreinte SHA-256 invalide : « {hex} » (64 caractères hexadécimaux)"),
+            format!("invalid SHA-256 hash: '{hex}' (64 hexadecimal characters)"),
         ))
     }
 }
@@ -75,7 +75,7 @@ fn confirm(job: &WriteJob, chosen: &Chosen) -> Result<(), JobError> {
     if !job.yes && !job.force {
         return Err(fail(
             Code::ConfirmationRequired,
-            "écriture sans confirmation : ajouter --yes ou --force (ou décrire l'opération avec --dry-run)",
+            "write without confirmation: add --yes or --force (or describe the operation with --dry-run)",
         ));
     }
     confirm_internal(chosen, job.options, job.force)
@@ -100,7 +100,7 @@ fn rehearse(
     if let Some(available) = available.filter(|available| len > *available) {
         return Err(fail(
             Code::SourceTooLarge,
-            format!("l'image décompressée fait {len} octets, la cible {available} octets"),
+            format!("the decompressed image is {len} bytes, the target {available} bytes"),
         ));
     }
     check_complete(image, len, mode)
@@ -125,14 +125,14 @@ fn check_sha256(
     )
     .map_err(|e| match e {
         VerifyError::Cancelled => fail(Code::Cancelled, e),
-        _ => fail(Code::SourceUnreadable, format!("{} : {e}", path.display())),
+        _ => fail(Code::SourceUnreadable, format!("{}: {e}", path.display())),
     })?;
     if actual == expected {
         Ok(())
     } else {
         Err(fail(
             Code::SourceHashMismatch,
-            format!("{} : attendu {expected}, calculé {actual}", path.display()),
+            format!("{}: expected {expected}, computed {actual}", path.display()),
         ))
     }
 }
@@ -155,14 +155,14 @@ fn analyze_source(
         .map_err(|e| {
             fail(
                 Code::DecompressionFailed,
-                format!("{} : {e}", path.display()),
+                format!("{}: {e}", path.display()),
             )
         })?;
     // Quel que soit le mode : ne rien écrire et annoncer un succès serait un mensonge.
     if head.is_empty() {
         return Err(fail(
             Code::SourceUnreadable,
-            format!("{} : image vide", path.display()),
+            format!("{}: empty image", path.display()),
         ));
     }
     Ok(analysis::analyze(&head, real_len))
@@ -174,7 +174,7 @@ fn judge_image(report: &ImageReport, mode: WriteMode) -> Result<(), JobError> {
         Some((
             Code::ImageTruncated,
             format!(
-                "l'image annonce {} octets",
+                "the image declares {} bytes",
                 report.declared_bytes.unwrap_or_default()
             ),
         ))
@@ -182,18 +182,18 @@ fn judge_image(report: &ImageReport, mode: WriteMode) -> Result<(), JobError> {
         None
     } else if report.kind == ImageKind::PlainIso {
         let hint = if report.udf {
-            " ; Bonk n'y reconnaît pas une installation de Windows 10 ou 11 x86_64"
+            "; Bonk does not recognize a Windows 10 or 11 x86_64 installation in it"
         } else {
             ""
         };
         Some((
             Code::ImageNotBootable,
-            format!("ISO sans amorçage de disque : elle ne démarrerait pas depuis une clé{hint}"),
+            format!("ISO without disk boot: it would not boot from a USB drive{hint}"),
         ))
     } else {
         Some((
             Code::ImageNotBootable,
-            "aucune structure d'amorçage ni table de partitions reconnue".to_owned(),
+            "no boot structure or partition table recognized".to_owned(),
         ))
     };
     match (problem, mode) {
@@ -221,7 +221,7 @@ fn check_complete(image: &ImageReport, written: u64, mode: WriteMode) -> Result<
         return Ok(());
     };
     let message = format!(
-        "l'image décompressée fait {written} octets et en annonce {declared} : le support est incomplet"
+        "the decompressed image is {written} bytes and declares {declared}: the drive is incomplete"
     );
     match mode {
         WriteMode::Auto | WriteMode::Extract => Err(fail(Code::ImageTruncated, message)),
@@ -256,7 +256,7 @@ pub(super) fn confirm_internal(
     Err(fail(
         Code::InternalConfirmationRequired,
         format!(
-            "{} ({}) est un disque interne : toutes ses données seraient effacées. Ajouter --force pour le confirmer",
+            "{} ({}) is an internal disk: all its data would be erased. Add --force to confirm",
             disk.path, disk.model
         ),
     ))
@@ -308,7 +308,7 @@ fn windows_image(
         return if mode == WriteMode::Extract {
             Err(fail(
                 Code::ImageNotBootable,
-                "--mode extract demande une ISO d'installation de Windows non compressée",
+                "--mode extract requires an uncompressed Windows installation ISO",
             ))
         } else {
             Ok(None)
@@ -318,7 +318,7 @@ fn windows_image(
     if found.is_none() && mode == WriteMode::Extract {
         return Err(fail(
             Code::ImageNotBootable,
-            "ce n'est pas une ISO d'installation de Windows 10 ou 11 x86_64 (UDF, sources/install.wim, efi/boot/bootx64.efi)",
+            "this is not a Windows 10 or 11 x86_64 installation ISO (UDF, sources/install.wim, efi/boot/bootx64.efi)",
         ));
     }
     Ok(found)
@@ -397,7 +397,7 @@ pub fn write(
     {
         return Err(fail(
             Code::SourceTooLarge,
-            format!("l'image fait {needed} octets, la cible {available} octets"),
+            format!("the image is {needed} bytes, the target {available} bytes"),
         ));
     }
 
@@ -448,7 +448,7 @@ pub fn write(
             elapsed_ms: 0,
         };
         if guarded(deps, progress)(&waiting) == Control::Cancel {
-            return Err(fail(Code::Cancelled, "annulée avant l'ouverture du disque"));
+            return Err(fail(Code::Cancelled, "cancelled before opening the disk"));
         }
     }
     let (mut device, info, unmounted) = open_target(

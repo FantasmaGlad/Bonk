@@ -27,9 +27,9 @@ use bonk_ops::job::{
 /// Niveau de `--trace-io` (voir [`TraceIo`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum TraceIoArg {
-    /// Décalage, longueur, durée et somme de contrôle de chaque accès
+    /// Offset, length, duration and checksum of each access
     Metadata,
-    /// Avec les 16 premiers octets : réservé aux fichiers image
+    /// With the first 16 bytes: for image files only
     Data,
 }
 
@@ -45,9 +45,9 @@ impl From<TraceIoArg> for TraceIo {
 /// Valeur de `--elevate` (voir [`Elevation`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum ElevateArg {
-    /// Demande l'autorisation du système au moment d'ouvrir le disque
+    /// Ask for system authorization when opening the disk
     Auto,
-    /// Droits de l'appelant seulement
+    /// The caller's rights only
     Never,
 }
 
@@ -63,11 +63,11 @@ impl From<ElevateArg> for Elevation {
 /// Mode de `--mode` (voir [`WriteMode`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum ModeArg {
-    /// Extrait une ISO Windows ; refuse une image tronquée ou qui ne démarrerait pas écrite telle quelle
+    /// Extract a Windows ISO; refuse a truncated image or one that would not boot as written
     Auto,
-    /// Écrit les octets tels quels, quelle que soit l'analyse
+    /// Write the bytes as they are, whatever the analysis says
     Raw,
-    /// Copie les fichiers d'une ISO d'installation de Windows sur une partition FAT32 ; auto le choisit seul
+    /// Copy the files of a Windows installation ISO to a FAT32 partition; auto chooses it by itself
     Extract,
 }
 
@@ -83,52 +83,52 @@ impl From<ModeArg> for WriteMode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum ProgressMode {
-    /// Une ligne de progression sur la sortie d'erreur si c'est un terminal, rien sinon
+    /// A progress line on standard error if it is a terminal, nothing otherwise
     Auto,
-    /// Un événement JSON par ligne sur la sortie standard
+    /// One JSON event per line on standard output
     Json,
-    /// Aucune progression
+    /// No progress
     None,
 }
 
 /// Options communes aux opérations sur un disque.
 #[derive(Debug, Args)]
 pub(crate) struct CommonArgs {
-    /// Identifiant stable du disque (voir `bonk list`) ; avec --simulate, chemin du fichier image cible
+    /// Stable identifier of the disk (see `bonk list`); with --simulate, path of the target image file
     pub(crate) target: String,
 
-    /// La cible est un fichier image (créé s'il n'existe pas, avec --size) et non un disque : rejoue
-    /// l'opération sans matériel
+    /// The target is an image file (created if missing, with --size), not a disk: replays
+    /// the operation without hardware
     #[arg(long)]
     pub(crate) simulate: bool,
 
-    /// Taille de l'image cible créée par --simulate (décimal ou 0x...) ; par défaut celle de l'image
-    /// source quand elle est brute
-    #[arg(long, value_name = "OCTETS", value_parser = crate::debug::parse_number)]
+    /// Size of the target image created by --simulate (decimal or 0x...); by default that of the source
+    /// image when it is raw
+    #[arg(long, value_name = "BYTES", value_parser = crate::debug::parse_number)]
     size: Option<u64>,
 
-    /// Autorise les disques internes non système (avertissement renforcé)
+    /// Allow internal non-system disks (stronger warning)
     #[arg(long)]
     show_internal: bool,
 
-    /// Mode test : autorise les disques virtuels
+    /// Test mode: allow virtual disks
     #[arg(long)]
     allow_virtual: bool,
 
-    /// Journalise chaque accès bloc (décalage, durée, somme de contrôle) ; `=data` ajoute les
-    /// premiers octets, pour un fichier image seulement
+    /// Log each block access (offset, duration, checksum); `=data` adds the
+    /// first bytes, for an image file only
     #[arg(long, value_enum, num_args = 0..=1, default_missing_value = "metadata", require_equals = true)]
     pub(crate) trace_io: Option<TraceIoArg>,
 
-    /// Droits manquants : auto (demande au système) ou never (droits de l'appelant seulement)
+    /// Missing rights: auto (ask the system) or never (the caller's rights only)
     #[arg(long, value_enum, default_value_t = ElevateArg::Auto)]
     pub(crate) elevate: ElevateArg,
 
-    /// Progression : auto, json (un événement par ligne) ou none
+    /// Progress: auto, json (one event per line) or none
     #[arg(long, value_enum, default_value_t = ProgressMode::Auto)]
     progress: ProgressMode,
 
-    /// Résultat en JSON
+    /// Result as JSON
     #[arg(long)]
     json: bool,
 }
@@ -162,58 +162,58 @@ impl CommonArgs {
     }
 }
 
-/// Écrit une image sur un disque (ou un fichier image avec --simulate), puis la vérifie
+/// Write an image to a disk (or an image file with --simulate), then verify it
 #[derive(Debug, Args)]
 #[command(long_about = None)]
 pub(crate) struct WriteArgs {
     #[command(flatten)]
     common: CommonArgs,
 
-    /// Image à écrire : un fichier (.img, .iso, .gz, .xz, .zst ; le format se reconnaît à son contenu) ou
-    /// une adresse https:// à télécharger, avec son empreinte
+    /// Image to write: a file (.img, .iso, .gz, .xz, .zst; the format is recognized by its content) or
+    /// an https:// address to download, with its hash
     source: PathBuf,
 
-    /// Confirme l'écriture : sans --yes ni --force, Bonk ne fait rien (il ne pose jamais de question)
+    /// Confirm the write: without --yes or --force, Bonk does nothing (it never asks a question)
     #[arg(long)]
     yes: bool,
 
-    /// Décrit ce qui serait fait sans rien écrire sur le support ; une adresse est quand même téléchargée
-    /// dans le cache, l'analyse ayant besoin de l'image
+    /// Describe what would be done without writing to the drive; an address is still downloaded
+    /// into the cache, since the analysis needs the image
     #[arg(long)]
     dry_run: bool,
 
-    /// Empreinte SHA-256 publiée pour ce fichier : contrôlée avant tout geste sur le support
+    /// Published SHA-256 hash of this file: checked before touching the drive
     #[arg(long, value_name = "HEX", conflicts_with = "sha256_file")]
     sha256: Option<String>,
 
-    /// Fichier d'empreintes publié (SHA256SUMS), chemin ou adresse https:// : l'empreinte y est lue au nom de
-    /// l'image
-    #[arg(long, value_name = "CHEMIN_OU_URL")]
+    /// Published hash file (SHA256SUMS), path or https:// address: the hash is read under the name of
+    /// the image
+    #[arg(long, value_name = "PATH_OR_URL")]
     sha256_file: Option<String>,
 
-    /// Dossier des téléchargements ; par défaut le dossier de cache de l'utilisateur
-    #[arg(long, value_name = "DOSSIER")]
+    /// Download directory; by default the user's cache directory
+    #[arg(long, value_name = "DIR")]
     cache_dir: Option<PathBuf>,
 
-    /// auto : analyse l'image, extrait une ISO Windows et refuse ce qui ne démarrerait pas ; raw : écrit les
-    /// octets tels quels ; extract : exige une ISO Windows
+    /// auto: analyze the image, extract a Windows ISO and refuse what would not boot; raw: write the
+    /// bytes as they are; extract: require a Windows ISO
     #[arg(long, value_enum, default_value_t = ModeArg::Auto)]
     mode: ModeArg,
 
-    /// Table de partitions d'une clé Windows ; le démarrage reste en UEFI dans les deux cas
+    /// Partition table of a Windows drive; boot stays UEFI in both cases
     #[arg(long, value_enum, default_value_t = TableArg::Gpt)]
     table: TableArg,
 
-    /// Ne relit pas le support après l'écriture
+    /// Do not read the drive back after writing
     #[arg(long)]
     no_verify: bool,
 
-    /// Ne répare pas le GPT de secours après l'écriture
+    /// Do not repair the backup GPT after writing
     #[arg(long)]
     no_repair_gpt: bool,
 
-    /// Confirme comme --yes, et autorise un disque interne admis par --show-internal, sans question.
-    /// Jamais un disque système : le filtre de sécurité reste souverain
+    /// Confirm like --yes, and allow an internal disk admitted by --show-internal, without a question.
+    /// Never a system disk: the safety filter stays in charge
     #[arg(long)]
     force: bool,
 }
@@ -225,14 +225,14 @@ impl WriteArgs {
     }
 }
 
-/// Compare un disque (ou une image) à une image, sans rien écrire
+/// Compare a disk (or an image) to an image, writing nothing
 #[derive(Debug, Args)]
 #[command(long_about = None)]
 pub(crate) struct VerifyArgs {
     #[command(flatten)]
     common: CommonArgs,
 
-    /// Image de référence
+    /// Reference image
     source: PathBuf,
 }
 
@@ -242,23 +242,23 @@ impl VerifyArgs {
     }
 }
 
-/// Répare le GPT d'un disque (ou d'une image) : secours à la fin du support, principal restauré
+/// Repair the GPT of a disk (or an image): backup at the end of the drive, primary restored
 #[derive(Debug, Args)]
 #[command(long_about = None)]
 pub(crate) struct RepairArgs {
     #[command(flatten)]
     common: CommonArgs,
 
-    /// Confirme la réparation
+    /// Confirm the repair
     #[arg(long)]
     yes: bool,
 
-    /// Dit s'il y a quelque chose à réparer, sans rien écrire
+    /// Say whether there is anything to repair, writing nothing
     #[arg(long)]
     dry_run: bool,
 
-    /// Confirme comme --yes, et autorise un disque interne admis par --show-internal, sans question.
-    /// Jamais un disque système : le filtre de sécurité reste souverain
+    /// Confirm like --yes, and allow an internal disk admitted by --show-internal, without a question.
+    /// Never a system disk: the safety filter stays in charge
     #[arg(long)]
     force: bool,
 }
@@ -329,6 +329,14 @@ pub(crate) fn schema_progress() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(ProgressEvent)).unwrap_or_default()
 }
 
+/// `--quiet` retire la ligne de progression automatique ; `--progress json`, demandé explicitement, reste.
+fn progress_mode(mode: ProgressMode, quiet: bool) -> ProgressMode {
+    match mode {
+        ProgressMode::Auto if quiet => ProgressMode::None,
+        other => other,
+    }
+}
+
 /// Rappel de progression selon le mode choisi.
 fn sink<'a>(
     mode: ProgressMode,
@@ -357,21 +365,21 @@ fn sink<'a>(
                 if boundary || last.elapsed() >= Duration::from_millis(250) {
                     last = Instant::now();
                     let step = match p.phase {
-                        Phase::Download => "téléchargement",
-                        Phase::Authorize => "autorisation du système",
-                        Phase::Source => "contrôle de l'empreinte",
-                        Phase::Write => "écriture",
-                        Phase::Flush => "vidage des tampons",
-                        Phase::Verify => "vérification",
+                        Phase::Download => "download",
+                        Phase::Authorize => "system authorization",
+                        Phase::Source => "hash check",
+                        Phase::Write => "write",
+                        Phase::Flush => "flushing buffers",
+                        Phase::Verify => "verification",
                     };
-                    let total = p
-                        .bytes_total
-                        .map_or_else(String::new, |t| format!(" / {}", format_size(t)));
+                    let total = p.bytes_total.map_or_else(String::new, |t| {
+                        format!(" / {}", format_size(t, bonk_hal::Lang::En))
+                    });
                     let _ = write!(
                         err,
-                        "\r{step} : {}{total} ({}/s)   ",
-                        format_size(p.bytes_done),
-                        format_size(p.bytes_per_second as u64)
+                        "\r{step}: {}{total} ({}/s)   ",
+                        format_size(p.bytes_done, bonk_hal::Lang::En),
+                        format_size(p.bytes_per_second as u64, bonk_hal::Lang::En)
                     );
                     let _ = err.flush();
                 }
@@ -403,18 +411,18 @@ fn print_json(out: &mut dyn Write, value: &impl Serialize, compact: bool) -> io:
 
 pub(crate) fn target_line(info: &job::TargetInfo) -> String {
     match &info.id {
-        Some(id) => format!("disque {id} ({})", info.path),
+        Some(id) => format!("disk {id} ({})", info.path),
         None => format!("image {}", info.path),
     }
 }
 
 fn image_line(report: &ImageReport) -> String {
     let kind = match report.kind {
-        ImageKind::HybridIso => "ISO hybride",
-        ImageKind::BootableDisk => "image de disque amorçable",
-        ImageKind::DataDisk => "image sans amorçage de PC (carte ARM ou données)",
-        ImageKind::PlainIso => "ISO sans amorçage de disque",
-        ImageKind::Unknown => "non reconnue",
+        ImageKind::HybridIso => "hybrid ISO",
+        ImageKind::BootableDisk => "bootable disk image",
+        ImageKind::DataDisk => "image without PC boot (ARM board or data)",
+        ImageKind::PlainIso => "ISO without disk boot",
+        ImageKind::Unknown => "not recognized",
     };
     let boot: Vec<&str> = [(report.bios, "BIOS"), (report.uefi, "UEFI")]
         .into_iter()
@@ -428,7 +436,7 @@ fn image_line(report: &ImageReport) -> String {
 }
 
 fn seconds(ms: u64) -> String {
-    format!("{},{:01} s", ms / 1000, ms % 1000 / 100)
+    format!("{}.{:01} s", ms / 1000, ms % 1000 / 100)
 }
 
 pub(crate) fn finish<T: Serialize>(
@@ -465,6 +473,7 @@ pub(crate) fn finish<T: Serialize>(
 pub(crate) fn run_write(
     args: &WriteArgs,
     deps: &Deps<'_>,
+    quiet: bool,
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> u8 {
@@ -486,7 +495,11 @@ pub(crate) fn run_write(
     };
     log::debug!(target: "bonk::cli", target_kind = if args.common.simulate { "image" } else { "disk" }, dry_run = args.dry_run; "command write");
     let result = {
-        let mut progress = sink(args.common.progress, &mut *out, &mut *err);
+        let mut progress = sink(
+            progress_mode(args.common.progress, quiet),
+            &mut *out,
+            &mut *err,
+        );
         let request = fetch::Request {
             source: &args.source,
             sha256_file: args.sha256_file.as_deref(),
@@ -501,48 +514,49 @@ pub(crate) fn run_write(
         err,
         |outcome, out| match outcome {
             WriteOutcome::Plan(plan) => {
-                writeln!(out, "Plan (rien n'est écrit) :")?;
-                writeln!(out, "  Cible  : {}", target_line(&plan.target))?;
+                writeln!(out, "Plan (nothing is written):")?;
+                writeln!(out, "  Target: {}", target_line(&plan.target))?;
                 writeln!(
                     out,
-                    "  Source : {} ({}{})",
+                    "  Source: {} ({}{})",
                     plan.source.path,
                     plan.source.format,
-                    plan.source
-                        .size_bytes
-                        .map_or_else(String::new, |s| format!(", {}", format_size(s)))
+                    plan.source.size_bytes.map_or_else(String::new, |s| format!(
+                        ", {}",
+                        format_size(s, bonk_hal::Lang::En)
+                    ))
                 )?;
-                writeln!(out, "  Image  : {}", image_line(&plan.image))?;
+                writeln!(out, "  Image: {}", image_line(&plan.image))?;
                 if plan.sha256_checked {
-                    writeln!(out, "  Empreinte du fichier : conforme")?;
+                    writeln!(out, "  File hash: matches")?;
                 }
                 if !plan.unmount.is_empty() {
-                    writeln!(out, "  Démontage : {}", plan.unmount.join(", "))?;
+                    writeln!(out, "  Unmount: {}", plan.unmount.join(", "))?;
                 }
                 if let Some(extraction) = &plan.extraction {
                     extraction_lines(extraction, out)?;
                 }
-                writeln!(out, "  Étapes : {}", plan.steps.join(", "))
+                writeln!(out, "  Steps: {}", plan.steps.join(", "))
             }
             WriteOutcome::Extracted(done) => {
                 writeln!(
                     out,
-                    "Clé Windows écrite : {} en {} ({}/s)",
-                    format_size(done.write.bytes),
+                    "Windows drive written: {} in {} ({}/s)",
+                    format_size(done.write.bytes, bonk_hal::Lang::En),
                     seconds(done.write.elapsed_ms),
-                    format_size(done.write.bytes_per_second as u64)
+                    format_size(done.write.bytes_per_second as u64, bonk_hal::Lang::En)
                 )?;
-                writeln!(out, "  Cible  : {}", target_line(&done.target))?;
+                writeln!(out, "  Target: {}", target_line(&done.target))?;
                 extraction_lines(&done.extraction, out)?;
                 writeln!(
                     out,
-                    "  Vérification : réussie ({} fichiers relus, {} octets)",
+                    "  Verification: passed ({} files read back, {} bytes)",
                     done.verify.files, done.verify.bytes
                 )?;
                 if !done.verify.cache_dropped {
                     writeln!(
                         out,
-                        "  Attention : le cache du système n'a pas pu être vidé, la relecture a pu lire la mémoire et non le support"
+                        "  Warning: the system cache could not be dropped, the read-back may have read memory and not the drive"
                     )?;
                 }
                 Ok(())
@@ -550,36 +564,36 @@ pub(crate) fn run_write(
             WriteOutcome::Done(done) => {
                 writeln!(
                     out,
-                    "Écriture terminée : {} en {} ({}/s)",
-                    format_size(done.write.bytes),
+                    "Write finished: {} in {} ({}/s)",
+                    format_size(done.write.bytes, bonk_hal::Lang::En),
                     seconds(done.write.elapsed_ms),
-                    format_size(done.write.bytes_per_second as u64)
+                    format_size(done.write.bytes_per_second as u64, bonk_hal::Lang::En)
                 )?;
-                writeln!(out, "  Cible  : {}", target_line(&done.target))?;
+                writeln!(out, "  Target: {}", target_line(&done.target))?;
                 writeln!(
                     out,
-                    "  Source : {} ({})",
+                    "  Source: {} ({})",
                     done.source.path, done.source.format
                 )?;
-                writeln!(out, "  Image  : {}", image_line(&done.image))?;
+                writeln!(out, "  Image: {}", image_line(&done.image))?;
                 if done.sha256_checked {
-                    writeln!(out, "  Empreinte du fichier : conforme")?;
+                    writeln!(out, "  File hash: matches")?;
                 }
                 if !done.unmounted.is_empty() {
-                    writeln!(out, "  Démonté : {}", done.unmounted.join(", "))?;
+                    writeln!(out, "  Unmounted: {}", done.unmounted.join(", "))?;
                 }
-                writeln!(out, "  SHA-256 : {}", done.write.sha256)?;
+                writeln!(out, "  SHA-256: {}", done.write.sha256)?;
                 match &done.verify {
                     Some(v) => {
-                        writeln!(out, "  Vérification : réussie ({} octets relus)", v.bytes)?;
+                        writeln!(out, "  Verification: passed ({} bytes read back)", v.bytes)?;
                         cache_warning(v, out)?;
                     }
-                    None => writeln!(out, "  Vérification : non demandée")?,
+                    None => writeln!(out, "  Verification: not requested")?,
                 }
                 match &done.gpt_repair {
-                    Some(r) => writeln!(out, "  GPT : réparé ({})", r.actions.join(", ")),
-                    None if args.no_repair_gpt => writeln!(out, "  GPT : contrôle non demandé"),
-                    None => writeln!(out, "  GPT : rien à réparer"),
+                    Some(r) => writeln!(out, "  GPT: repaired ({})", r.actions.join(", ")),
+                    None if args.no_repair_gpt => writeln!(out, "  GPT: check not requested"),
+                    None => writeln!(out, "  GPT: nothing to repair"),
                 }
             }
         },
@@ -595,8 +609,8 @@ pub(crate) fn run_write(
     {
         let _ = writeln!(
             out,
-            "  Cache des téléchargements : {} (bonk cache clean pour le vider)",
-            format_size(bytes)
+            "  Download cache: {} (bonk cache clean to empty it)",
+            format_size(bytes, bonk_hal::Lang::En)
         );
     }
     code
@@ -606,6 +620,7 @@ pub(crate) fn run_verify(
     args: &VerifyArgs,
     view: &ViewDefaults,
     deps: &Deps<'_>,
+    quiet: bool,
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> u8 {
@@ -618,43 +633,47 @@ pub(crate) fn run_verify(
         elevation: args.common.elevate.into(),
     };
     let result = {
-        let mut progress = sink(args.common.progress, &mut *out, &mut *err);
+        let mut progress = sink(
+            progress_mode(args.common.progress, quiet),
+            &mut *out,
+            &mut *err,
+        );
         job::verify(&job, deps, &mut progress)
     };
     finish(result, &args.common, out, err, |done, out| {
         writeln!(
             out,
-            "Vérification réussie : {} identiques à l'image ({})",
-            format_size(done.verify.bytes),
+            "Verification passed: {} identical to the image ({})",
+            format_size(done.verify.bytes, bonk_hal::Lang::En),
             target_line(&done.target)
         )?;
         if !done.ignored_ranges.is_empty() {
             let octets: u64 = done.ignored_ranges.iter().map(|r| r.length).sum();
             writeln!(
                 out,
-                "  Exclus de la comparaison : {octets} octets de champs du GPT que sa réparation réécrit"
+                "  Excluded from the comparison: {octets} bytes of GPT fields its repair rewrites"
             )?;
         }
         cache_warning(&done.verify, out)?;
-        writeln!(out, "  SHA-256 : {}", done.verify.sha256)
+        writeln!(out, "  SHA-256: {}", done.verify.sha256)
     })
 }
 
 fn extraction_lines(extraction: &job::Extraction, out: &mut dyn Write) -> io::Result<()> {
     writeln!(
         out,
-        "  Mode : extraction, {} fichiers, FAT32 en {}, démarrage UEFI",
+        "  Mode: extraction, {} files, FAT32 on {}, UEFI boot",
         extraction.files,
         extraction.table.name()
     )?;
     if extraction.wim_parts > 0 {
         writeln!(
             out,
-            "  install.wim découpé en {} morceaux .swm, sans recompression",
+            "  install.wim split into {} .swm parts, without recompression",
             extraction.wim_parts
         )?;
     }
-    writeln!(out, "  Secure Boot : {}", extraction.secure_boot)
+    writeln!(out, "  Secure Boot: {}", extraction.secure_boot)
 }
 
 fn cache_warning(report: &VerifyReport, out: &mut dyn Write) -> io::Result<()> {
@@ -663,7 +682,7 @@ fn cache_warning(report: &VerifyReport, out: &mut dyn Write) -> io::Result<()> {
     }
     writeln!(
         out,
-        "  Attention : le cache du système n'a pas pu être vidé, la relecture a pu lire la mémoire et non le support"
+        "  Warning: the system cache could not be dropped, the read-back may have read memory and not the drive"
     )
 }
 
@@ -687,30 +706,30 @@ pub(crate) fn run_repair(
     finish(result, &args.common, out, err, |done, out| {
         writeln!(
             out,
-            "{} : {}",
+            "{}: {}",
             target_line(&done.target),
             if done.needs_repair {
-                "GPT à réparer"
+                "GPT needs repair"
             } else {
-                "GPT en ordre"
+                "GPT in order"
             }
         )?;
         if !done.findings_before.is_empty() {
             writeln!(
                 out,
-                "  Constats avant : {}",
+                "  Findings before: {}",
                 done.findings_before.join(", ")
             )?;
         }
         if let Some(r) = &done.repair {
-            writeln!(out, "  Réparé : {}", r.actions.join(", "))?;
+            writeln!(out, "  Repaired: {}", r.actions.join(", "))?;
         }
         if let Some(after) = &done.findings_after {
             writeln!(
                 out,
-                "  Constats après : {}",
+                "  Findings after: {}",
                 if after.is_empty() {
-                    "aucun".to_owned()
+                    "none".to_owned()
                 } else {
                     after.join(", ")
                 }
@@ -718,4 +737,25 @@ pub(crate) fn run_repair(
         }
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn quiet_retire_seulement_la_progression_automatique() {
+        assert!(matches!(
+            progress_mode(ProgressMode::Auto, true),
+            ProgressMode::None
+        ));
+        assert!(matches!(
+            progress_mode(ProgressMode::Auto, false),
+            ProgressMode::Auto
+        ));
+        assert!(matches!(
+            progress_mode(ProgressMode::Json, true),
+            ProgressMode::Json
+        ));
+    }
 }

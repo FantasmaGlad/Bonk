@@ -124,32 +124,28 @@ pub(super) fn check_gpt_headers(
         None => note(
             Severity::Error,
             "gpt_primary_missing",
-            "en-tête GPT principal (secteur 1) absent ou illisible".to_owned(),
+            "primary GPT header (sector 1) missing or unreadable".to_owned(),
         ),
         Some(h) => {
             if !h.header_crc_ok {
                 note(
                     Severity::Error,
                     "gpt_primary_header_crc",
-                    "somme de contrôle de l'en-tête GPT principal fausse".to_owned(),
+                    "wrong primary GPT header checksum".to_owned(),
                 );
             }
             if !h.entries_crc_ok {
                 note(
                     Severity::Error,
                     "gpt_primary_entries_crc",
-                    "somme de contrôle de la table des partitions principale fausse ou table illisible"
-                        .to_owned(),
+                    "wrong primary partition table checksum or unreadable table".to_owned(),
                 );
             }
             if h.my_lba != 1 {
                 note(
                     Severity::Error,
                     "gpt_primary_wrong_location",
-                    format!(
-                        "l'en-tête principal se dit au secteur {} au lieu de 1",
-                        h.my_lba
-                    ),
+                    format!("the primary header claims sector {} instead of 1", h.my_lba),
                 );
             }
         }
@@ -158,8 +154,8 @@ pub(super) fn check_gpt_headers(
         (None, _) => note(
             Severity::Warning,
             "gpt_backup_missing",
-            "en-tête GPT de secours absent : image tronquée, ou disque plus grand que l'image \
-             écrite (le secours n'est pas à la fin)"
+            "backup GPT header missing: truncated image, or a disk larger than the written \
+             image (the backup is not at the end)"
                 .to_owned(),
         ),
         (Some(b), primary) => {
@@ -167,14 +163,14 @@ pub(super) fn check_gpt_headers(
                 note(
                     Severity::Error,
                     "gpt_backup_header_crc",
-                    "somme de contrôle de l'en-tête GPT de secours fausse".to_owned(),
+                    "wrong backup GPT header checksum".to_owned(),
                 );
             }
             if !b.entries_crc_ok {
                 note(
                     Severity::Error,
                     "gpt_backup_entries_crc",
-                    "somme de contrôle de la table de secours fausse ou table illisible".to_owned(),
+                    "wrong backup table checksum or unreadable table".to_owned(),
                 );
             }
             if b.read_at_lba != last_lba {
@@ -182,8 +178,8 @@ pub(super) fn check_gpt_headers(
                     Severity::Warning,
                     "gpt_backup_not_at_end",
                     format!(
-                        "le GPT de secours est au secteur {} et non au dernier ({last_lba}) : \
-                         disque agrandi après l'écriture de l'image",
+                        "the backup GPT is at sector {}, not the last one ({last_lba}): \
+                         disk larger than the written image",
                         b.read_at_lba
                     ),
                 );
@@ -193,8 +189,7 @@ pub(super) fn check_gpt_headers(
                     note(
                         Severity::Error,
                         "gpt_guid_mismatch",
-                        "le GUID du disque diffère entre le GPT principal et celui de secours"
-                            .to_owned(),
+                        "the disk GUID differs between the primary and backup GPT".to_owned(),
                     );
                 }
                 if p.alternate_lba != b.read_at_lba || b.alternate_lba != 1 {
@@ -202,8 +197,8 @@ pub(super) fn check_gpt_headers(
                         Severity::Warning,
                         "gpt_headers_not_pointing_to_each_other",
                         format!(
-                            "le principal désigne le secteur {} pour le secours (lu en {}), le secours \
-                             désigne le secteur {} pour le principal",
+                            "the primary names sector {} for the backup (read at {}), the backup \
+                             names sector {} for the primary",
                             p.alternate_lba, b.read_at_lba, b.alternate_lba
                         ),
                     );
@@ -230,7 +225,7 @@ pub(super) fn check_gpt_entries(
                 Severity::Error,
                 "gpt_entry_bad_range",
                 format!(
-                    "partition {} : fin ({}) avant le début ({})",
+                    "partition {}: end ({}) before start ({})",
                     entry.index + 1,
                     entry.last_lba,
                     entry.first_lba
@@ -245,7 +240,7 @@ pub(super) fn check_gpt_entries(
                 Severity::Error,
                 "gpt_entry_out_of_range",
                 format!(
-                    "partition {} : secteurs {} à {} hors de la zone utilisable ({first} à {last})",
+                    "partition {}: sectors {} to {} outside the usable area ({first} to {last})",
                     entry.index + 1,
                     entry.first_lba,
                     entry.last_lba
@@ -259,7 +254,7 @@ pub(super) fn check_gpt_entries(
                 Severity::Info,
                 "gpt_entry_unaligned",
                 format!(
-                    "partition {} : début au secteur {}, non aligné sur 1 Mio",
+                    "partition {}: starts at sector {}, not aligned on 1 MiB",
                     entry.index + 1,
                     entry.first_lba
                 ),
@@ -272,11 +267,7 @@ pub(super) fn check_gpt_entries(
                 note(
                     Severity::Error,
                     "gpt_entries_overlap",
-                    format!(
-                        "les partitions {} et {} se chevauchent",
-                        a.index + 1,
-                        b.index + 1
-                    ),
+                    format!("partitions {} and {} overlap", a.index + 1, b.index + 1),
                 );
             }
         }

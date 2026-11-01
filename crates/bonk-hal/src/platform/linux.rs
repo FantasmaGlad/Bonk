@@ -84,7 +84,7 @@ impl Platform for Linux {
         let mut all = vec![
             Capability::yes("write"),
             elevate,
-            Capability::no("eject", Missing::OsUnsupported, "pas encore dans Bonk"),
+            Capability::no("eject", Missing::OsUnsupported, "not in Bonk yet"),
             Capability::yes("cancel"),
         ];
         all.extend(Filesystem::ALL.map(|fs| {
@@ -184,7 +184,7 @@ fn denied(path: &Path) -> BlockError {
     BlockError::Io(io::Error::new(
         io::ErrorKind::PermissionDenied,
         format!(
-            "{} : droits insuffisants, élévation désactivée",
+            "{}: insufficient rights, elevation disabled",
             path.display()
         ),
     ))
@@ -216,13 +216,13 @@ fn unmount_with(
             Ok(output) if output.status.success() => done.push(mount.clone()),
             Ok(output) => {
                 return Err(OpenTargetError::Unmount(format!(
-                    "démontage de {mount} impossible : {}",
+                    "could not unmount {mount}: {}",
                     String::from_utf8_lossy(&output.stderr).trim()
                 )));
             }
             Err(err) => {
                 return Err(OpenTargetError::Unmount(format!(
-                    "démontage de {mount} impossible : {err}"
+                    "could not unmount {mount}: {err}"
                 )));
             }
         }
@@ -304,15 +304,8 @@ mod tests {
 
     #[test]
     fn un_outil_de_demontage_introuvable_est_une_erreur_claire() {
-        let missing = |_: &str| {
-            Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                "umount introuvable",
-            ))
-        };
+        let missing = |_: &str| Err(io::Error::new(io::ErrorKind::NotFound, "umount not found"));
         let error = unmount_with(&["/a".to_owned()], &missing).err();
-        assert!(
-            matches!(error, Some(OpenTargetError::Unmount(ref m)) if m.contains("introuvable"))
-        );
+        assert!(matches!(error, Some(OpenTargetError::Unmount(ref m)) if m.contains("not found")));
     }
 }

@@ -340,7 +340,7 @@ fn info_et_debug_filter() {
 fn erreurs_de_protocole_avec_leur_code() {
     let out = quick_session(&[
         "ceci n'est pas du json",
-        r#"{"id":1,"method":"inconnue"}"#,
+        r#"{"id":1,"method":"unknown"}"#,
         r#"{"id":2,"method":"disk.list","params":{"nimporte":true}}"#,
         r#"{"id":3,"method":"disk.info","params":{}}"#,
         r#"{"id":4,"method":"config.set","params":{"key":"lang"}}"#,
@@ -372,7 +372,7 @@ fn explain_schema_et_configuration() {
             r#"{"id":2,"method":"explain","params":{"code":"E0"}}"#,
             r#"{"id":3,"method":"schema","params":{"name":"write"}}"#,
             r#"{"id":4,"method":"schema"}"#,
-            r#"{"id":5,"method":"config.set","params":{"key":"view.show_all","value":"oui"}}"#,
+            r#"{"id":5,"method":"config.set","params":{"key":"view.show_all","value":"yes"}}"#,
             r#"{"id":6,"method":"config.get","params":{"key":"view.show_all"}}"#,
             r#"{"id":7,"method":"config.list"}"#,
             r#"{"id":8,"method":"config.set","params":{"key":"lang","value":"en"}}"#,
@@ -493,7 +493,7 @@ fn annulation_et_une_seule_operation_a_la_fois() {
         response(&out, 2)["error"]["message"]
             .as_str()
             .unwrap()
-            .contains("déjà en cours")
+            .contains("already running")
     );
     assert_eq!(response(&out, 3)["result"]["cancelling"], true);
     // La première est annulée proprement : code dédié, support partiel.

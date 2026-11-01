@@ -29,7 +29,7 @@ pub fn repair(job: &RepairJob, deps: &Deps<'_>) -> Result<RepairDone, JobError> 
         if !job.dry_run {
             return Err(fail(
                 Code::ConfirmationRequired,
-                "réparation sans confirmation : ajouter --yes ou --force (ou décrire avec --dry-run)",
+                "repair without confirmation: add --yes or --force (or describe it with --dry-run)",
             ));
         }
         let chosen = choose(&job.target, job.options, deps)?;

@@ -24,14 +24,14 @@ pub struct ImageFile {
 impl ImageFile {
     pub fn open(path: &Path) -> Result<Self, JobError> {
         let unreadable =
-            |e: io::Error| fail(Code::SourceUnreadable, format!("{} : {e}", path.display()));
+            |e: io::Error| fail(Code::SourceUnreadable, format!("{}: {e}", path.display()));
         let file = File::open(path).map_err(unreadable)?;
         // Contrôlé sur le descripteur ouvert, pas sur le chemin, qui a pu changer entre-temps.
         let metadata = file.metadata().map_err(unreadable)?;
         if !metadata.is_file() {
             return Err(fail(
                 Code::SourceUnreadable,
-                format!("{} n'est pas un fichier ordinaire", path.display()),
+                format!("{} is not a regular file", path.display()),
             ));
         }
         Ok(Self {
@@ -62,7 +62,7 @@ impl ImageFile {
     pub fn decoded(&self) -> Result<(Source, SourceInfo), JobError> {
         let source = codec::open(self.raw(), Some(self.len)).map_err(|e| match e {
             CodecError::Unsupported(_) => fail(Code::SourceFormatUnsupported, e),
-            CodecError::Io(_) => fail(Code::SourceUnreadable, format!("{} : {e}", self.path)),
+            CodecError::Io(_) => fail(Code::SourceUnreadable, format!("{}: {e}", self.path)),
         })?;
         let info = SourceInfo {
             path: self.path.clone(),

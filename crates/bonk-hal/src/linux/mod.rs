@@ -66,9 +66,7 @@ pub fn enumerate(roots: &LinuxRoots) -> Result<Vec<Disk>, EnumerateError> {
         // Sans base udev, aucune signature RAID, LVM, swap ou ZFS n'est connue : ne rien proposer.
         return Err(EnumerateError::Malformed {
             what: roots.udev_data.display().to_string(),
-            detail:
-                "base udev introuvable : les signatures des disques ne peuvent pas être vérifiées"
-                    .to_owned(),
+            detail: "udev database not found: disk signatures cannot be checked".to_owned(),
         });
     }
 
@@ -188,7 +186,7 @@ fn read_partitions(ctx: &Context<'_>, disk_dir: &Path) -> Result<Vec<Partition>,
         };
         let number: u64 = number.parse().map_err(|_| EnumerateError::Malformed {
             what: dir.join("partition").display().to_string(),
-            detail: format!("numéro de partition illisible : {number:?}"),
+            detail: format!("unreadable partition number: {number:?}"),
         })?;
         let devnum = read_devnum(&dir)?;
         let udev = load_udev(ctx.roots, &devnum)?;

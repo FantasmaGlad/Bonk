@@ -40,14 +40,14 @@ pub(super) fn open_read_only(target: &Path) -> Result<Box<dyn BlockDevice>, (Cod
             .map_err(|erreur| {
                 (
                     Code::RawDiskUnavailable,
-                    format!("{} : {erreur}", path.display()),
+                    format!("{}: {erreur}", path.display()),
                 )
             });
     }
     if !target.exists() && target.to_string_lossy().starts_with("/dev/") {
         return Err((
             Code::RawDiskUnavailable,
-            format!("« {} » n'existe pas", target.display()),
+            format!("'{}' does not exist", target.display()),
         ));
     }
     FileDevice::open(target, Access::ReadOnly, DEFAULT_BLOCK_SIZE)
@@ -55,7 +55,7 @@ pub(super) fn open_read_only(target: &Path) -> Result<Box<dyn BlockDevice>, (Cod
         .map_err(|erreur| {
             (
                 Code::SourceUnreadable,
-                format!("{} : {erreur}", target.display()),
+                format!("{}: {erreur}", target.display()),
             )
         })
 }
@@ -81,7 +81,7 @@ pub(crate) fn layout(args: &LayoutArgs, out: &mut dyn Write) -> io::Result<Outco
         Err(erreur) => {
             return Ok(Outcome::Failed(
                 Code::SourceUnreadable,
-                format!("lecture impossible : {erreur}"),
+                format!("could not read: {erreur}"),
             ));
         }
     };
@@ -102,30 +102,30 @@ pub(crate) fn layout(args: &LayoutArgs, out: &mut dyn Write) -> io::Result<Outco
 }
 
 pub(super) fn write_layout(layout: &Layout, image: &Path, out: &mut dyn Write) -> io::Result<()> {
-    let yes_no = |b: bool| if b { "oui" } else { "NON" };
+    let yes_no = |b: bool| if b { "yes" } else { "NO" };
     writeln!(
         out,
-        "Image : {} ({} octets, secteur logique de {} octets)",
+        "Image: {} ({} bytes, logical sector of {} bytes)",
         image.display(),
         layout.size_bytes,
         layout.logical_block_size
     )?;
     match &layout.mbr {
-        None => writeln!(out, "MBR : aucun")?,
+        None => writeln!(out, "MBR: none")?,
         Some(mbr) => {
             writeln!(
                 out,
-                "MBR : signature 55 AA {}, protection GPT : {}",
+                "MBR: 55 AA signature {}, GPT protection: {}",
                 yes_no(mbr.signature_valid),
-                if mbr.protective { "oui" } else { "non" }
+                if mbr.protective { "yes" } else { "no" }
             )?;
             for e in &mbr.entries {
                 writeln!(
                     out,
-                    "  entrée {} : type 0x{:02X}{}  début {}  {} secteurs",
+                    "  entry {}: type 0x{:02X}{}  start {}  {} sectors",
                     e.index + 1,
                     e.kind,
-                    if e.bootable { " (amorçable)" } else { "" },
+                    if e.bootable { " (bootable)" } else { "" },
                     e.start_lba,
                     e.sectors
                 )?;
@@ -133,16 +133,16 @@ pub(super) fn write_layout(layout: &Layout, image: &Path, out: &mut dyn Write) -
         }
     }
     match &layout.gpt {
-        None => writeln!(out, "GPT : aucun")?,
+        None => writeln!(out, "GPT: none")?,
         Some(gpt) => {
-            for (name, header) in [("principal", &gpt.primary), ("de secours", &gpt.backup)] {
+            for (name, header) in [("primary", &gpt.primary), ("backup", &gpt.backup)] {
                 match header {
-                    None => writeln!(out, "GPT {name} : absent")?,
+                    None => writeln!(out, "GPT {name}: missing")?,
                     Some(h) => writeln!(
                         out,
-                        "GPT {name} : secteur {}, révision 0x{:08X}, en-tête {} octets, somme de l'en-tête {}, \
-                         somme de la table {}, utilisable {} à {}, table au secteur {} ({} entrées de {} octets), \
-                         GUID du disque {}",
+                        "GPT {name}: sector {}, revision 0x{:08X}, header {} bytes, header checksum {}, \
+                         table checksum {}, usable {} to {}, table at sector {} ({} entries of {} bytes), \
+                         disk GUID {}",
                         h.read_at_lba,
                         h.revision,
                         h.header_size,
@@ -162,11 +162,11 @@ pub(super) fn write_layout(layout: &Layout, image: &Path, out: &mut dyn Write) -
                     * u64::from(layout.logical_block_size);
                 writeln!(
                     out,
-                    "  partition {} : secteurs {} à {} ({}), type {}, GUID {}, nom « {} »",
+                    "  partition {}: sectors {} to {} ({}), type {}, GUID {}, name '{}'",
                     e.index + 1,
                     e.first_lba,
                     e.last_lba,
-                    bonk_hal::format_size(bytes),
+                    bonk_hal::format_size(bytes, bonk_hal::Lang::En),
                     e.type_guid,
                     e.unique_guid,
                     e.name
@@ -175,16 +175,16 @@ pub(super) fn write_layout(layout: &Layout, image: &Path, out: &mut dyn Write) -
         }
     }
     if layout.findings.is_empty() {
-        writeln!(out, "Constats : aucun")?;
+        writeln!(out, "Findings: none")?;
     } else {
-        writeln!(out, "Constats :")?;
+        writeln!(out, "Findings:")?;
         for f in &layout.findings {
             let level = match f.severity {
                 Severity::Info => "INFO   ",
-                Severity::Warning => "ATTENTION",
-                Severity::Error => "ERREUR ",
+                Severity::Warning => "WARNING",
+                Severity::Error => "ERROR  ",
             };
-            writeln!(out, "  [{level}] {} : {}", f.code, f.message)?;
+            writeln!(out, "  [{level}] {}: {}", f.code, f.message)?;
         }
     }
     Ok(())

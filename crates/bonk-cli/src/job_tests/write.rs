@@ -28,8 +28,8 @@ fn ecriture_complete_dans_l_ordre_des_garde_fous() {
         ]
     );
     assert_eq!(scenario.written(1 << 20), source.bytes());
-    assert!(out.contains("Démonté : /run/media/u/A"), "{out}");
-    assert!(out.contains("Vérification : réussie"), "{out}");
+    assert!(out.contains("Unmounted: /run/media/u/A"), "{out}");
+    assert!(out.contains("Verification: passed"), "{out}");
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn dry_run_decrit_sans_rien_faire() {
     let (code, out, _) = scenario.run(&["write", "usb-a", &source.arg(), "--dry-run"]);
     assert_eq!(code, 0);
     assert!(
-        out.contains("Plan (rien n'est écrit)") && out.contains("Démontage : /run/media/u/A"),
+        out.contains("Plan (nothing is written)") && out.contains("Unmount: /run/media/u/A"),
         "{out}"
     );
     assert!(
@@ -110,7 +110,7 @@ fn dry_run_decrit_sans_rien_faire() {
 
 #[test]
 fn un_disque_interdit_est_refuse_avant_toute_action() {
-    let source = TempSource::new("interdit", 4096);
+    let source = TempSource::new("forbidden", 4096);
     let scenario = Scenario::new();
     // Même avec --yes et toutes les options ouvertes.
     let (code, out, err) = scenario.run(&[
@@ -126,7 +126,7 @@ fn un_disque_interdit_est_refuse_avant_toute_action() {
         out.is_empty() && err.trim_end().ends_with("[E2001]"),
         "{err}"
     );
-    assert!(err.contains("volume système"), "{err}");
+    assert!(err.contains("system volume"), "{err}");
     assert!(scenario.log().is_empty());
 }
 
@@ -188,7 +188,7 @@ fn un_disque_devenu_interdit_entre_les_deux_enumerations_n_est_pas_ecrit() {
 fn echec_de_demontage_empeche_l_ouverture() {
     let source = TempSource::new("demontage", 4096);
     let mut scenario = Scenario::new();
-    scenario.unmount = Err("démontage de /run/media/u/A impossible : target is busy".to_owned());
+    scenario.unmount = Err("could not unmount /run/media/u/A: target is busy".to_owned());
     let (code, _, err) = scenario.run(&[
         "write",
         "usb-a",
@@ -303,7 +303,7 @@ fn la_commande_verify_compare_sans_ecrire() {
     scenario.log.borrow_mut().clear();
     let (code, out, err) = scenario.run(&["verify", "usb-a", &source.arg(), "--progress", "none"]);
     assert_eq!((code, err.as_str()), (0, ""));
-    assert!(out.contains("Vérification réussie"), "{out}");
+    assert!(out.contains("Verification passed"), "{out}");
     // Relecture seule : pas de démontage, ouverture en lecture.
     assert_eq!(
         scenario.log(),
@@ -375,7 +375,7 @@ fn verify_d_une_image_gpt_reussit_apres_la_reparation_du_gpt() {
         "none",
     ]);
     assert_eq!((code, err.as_str()), (0, ""), "{out}");
-    assert!(out.contains("GPT : réparé"), "{out}");
+    assert!(out.contains("GPT: repaired"), "{out}");
     let (code, out, err) = scenario.run(&["verify", "usb-a", &source.arg(), "--progress", "none"]);
     assert_eq!((code, err.as_str()), (0, ""), "{out}");
     // Un octet modifié hors des champs que la réparation réécrit reste détecté.
@@ -426,11 +426,11 @@ fn la_relecture_de_controle_ne_lit_jamais_le_cache() {
 fn un_refus_d_autorisation_ne_demonte_rien() {
     let source = TempSource::new("refus", 1 << 20);
     let mut scenario = Scenario::new();
-    scenario.prepare = Err("autorisation annulée".to_owned());
+    scenario.prepare = Err("authorization cancelled".to_owned());
     let (code, _, err) = scenario.run(&["write", "usb-a", &source.arg(), "--yes"]);
     assert_eq!(code, 1, "{err}");
     assert!(err.contains("[E4004]"), "{err}");
-    assert!(err.contains("autorisation annulée"), "{err}");
+    assert!(err.contains("authorization cancelled"), "{err}");
     let log = scenario.log.borrow();
     assert_eq!(*log, ["prepare:/dev/sdb"], "ni démontage ni ouverture");
 }
@@ -537,8 +537,8 @@ fn sans_reparation_demandee_le_gpt_n_est_pas_dit_sain() {
     let (code, out, err) =
         Scenario::new().run(&["write", "usb-a", &source.arg(), "--yes", "--no-repair-gpt"]);
     assert_eq!(code, 0, "{err}");
-    assert!(out.contains("GPT : contrôle non demandé"), "{out}");
-    assert!(!out.contains("rien à réparer"), "{out}");
+    assert!(out.contains("GPT: check not requested"), "{out}");
+    assert!(!out.contains("nothing to repair"), "{out}");
 }
 
 /// Le fichier est remplacé après son ouverture : l'empreinte porte sur les octets qui seront écrits,

@@ -80,12 +80,10 @@ pub fn normalize_label(fs: Filesystem, label: &str) -> Result<String, String> {
         Filesystem::Ext4 => label.len(),
     };
     if label.is_empty() || length > limit {
-        return Err(format!(
-            "étiquette « {label} » : de 1 à {limit} caractères pour {fs}"
-        ));
+        return Err(format!("label '{label}': 1 to {limit} characters for {fs}"));
     }
     if label.chars().any(char::is_control) {
-        return Err("étiquette : caractère de contrôle refusé".to_owned());
+        return Err("label: control character refused".to_owned());
     }
     if fs != Filesystem::Fat32 {
         return Ok(label.to_owned());
@@ -93,7 +91,7 @@ pub fn normalize_label(fs: Filesystem, label: &str) -> Result<String, String> {
     const FORBIDDEN: &str = "\"*+,./:;<=>?[\\]|";
     if !label.is_ascii() || label.chars().any(|c| FORBIDDEN.contains(c)) {
         return Err(format!(
-            "étiquette « {label} » : FAT32 n'accepte que l'ASCII, sans {FORBIDDEN}"
+            "label '{label}': FAT32 only accepts ASCII, without {FORBIDDEN}"
         ));
     }
     Ok(label.to_ascii_uppercase())
@@ -152,7 +150,7 @@ impl fmt::Display for FormatError {
             | Self::TooLarge(what)
             | Self::Mismatch(what)
             | Self::Name(what) => f.write_str(what),
-            Self::Source(err) => write!(f, "lecture de l'image : {err}"),
+            Self::Source(err) => write!(f, "reading the image: {err}"),
         }
     }
 }

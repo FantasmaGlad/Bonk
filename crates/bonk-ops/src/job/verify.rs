@@ -62,7 +62,7 @@ pub fn verify(
         return Err(fail(
             Code::SourceTooLarge,
             format!(
-                "l'image fait {len} octets, la cible {} octets",
+                "the image is {len} bytes, the target {} bytes",
                 device.size()
             ),
         ));

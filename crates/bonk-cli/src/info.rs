@@ -14,23 +14,23 @@ use crate::list::Entry;
 /// Version du format de la sortie `--json`, incrémentée à chaque changement incompatible.
 const JSON_SCHEMA_VERSION: u32 = 1;
 
-/// Détail d'un disque (lecture seule)
+/// Detail of a disk (read-only)
 #[derive(Debug, Args)]
 // `long_about = None` : sans lui, clap reprendrait le commentaire ci-dessus comme texte long.
 #[command(long_about = None)]
 pub(crate) struct InfoArgs {
-    /// Identifiant stable du disque (voir `bonk list --all`) ou son chemin (`/dev/sdb`)
+    /// Stable identifier of the disk (see `bonk list --all`) or its path (`/dev/sdb`)
     target: String,
 
-    /// Sortie JSON, pour les scripts
+    /// JSON output, for scripts
     #[arg(long)]
     json: bool,
 
-    /// Évalue le disque en proposant aussi les disques internes non système
+    /// Evaluate the disk also offering internal non-system disks
     #[arg(long)]
     show_internal: bool,
 
-    /// Évalue le disque en mode test : disques virtuels autorisés
+    /// Evaluate the disk in test mode: virtual disks allowed
     #[arg(long)]
     allow_virtual: bool,
 }
@@ -101,28 +101,28 @@ pub(crate) fn run(
     }
 
     let rows = [
-        ("Modèle", disk.model.clone()),
-        ("Identifiant", disk.id.clone()),
-        ("Chemin", disk.path.clone()),
+        ("Model", disk.model.clone()),
+        ("Identifier", disk.id.clone()),
+        ("Path", disk.path.clone()),
         (
-            "Série",
-            disk.serial.clone().unwrap_or_else(|| "inconnue".to_owned()),
+            "Serial",
+            disk.serial.clone().unwrap_or_else(|| "unknown".to_owned()),
         ),
         (
-            "Taille",
+            "Size",
             format!(
-                "{} ({} octets)",
-                format_size(disk.size_bytes),
+                "{} ({} bytes)",
+                format_size(disk.size_bytes, bonk_hal::Lang::En),
                 disk.size_bytes
             ),
         ),
-        ("Bus", bus_label(disk.bus).to_owned()),
-        ("Nature", kind_label(disk.kind).to_owned()),
+        ("Bus", bus_label(disk.bus, bonk_hal::Lang::En).to_owned()),
+        ("Kind", kind_label(disk.kind, bonk_hal::Lang::En).to_owned()),
         (
-            "Drapeau amovible du système",
-            if disk.removable_flag { "oui" } else { "non" }.to_owned(),
+            "System removable flag",
+            if disk.removable_flag { "yes" } else { "no" }.to_owned(),
         ),
-        ("État", state_label(&eligibility)),
+        ("State", state_label(&eligibility, bonk_hal::Lang::En)),
     ];
     let width = rows
         .iter()
@@ -133,36 +133,28 @@ pub(crate) fn run(
         writeln!(out, "{label:<width$}  {value}")?;
     }
     if let Some(signature) = &disk.fs_type {
-        writeln!(out, "{:<width$}  {signature}", "Signature du disque")?;
+        writeln!(out, "{:<width$}  {signature}", "Disk signature")?;
     }
     if !disk.holders.is_empty() {
-        writeln!(
-            out,
-            "{:<width$}  {}",
-            "Utilisé par",
-            disk.holders.join(", ")
-        )?;
+        writeln!(out, "{:<width$}  {}", "Used by", disk.holders.join(", "))?;
     }
     if disk.partitions.is_empty() {
-        writeln!(out, "Aucune partition détectée.")?;
+        writeln!(out, "No partition detected.")?;
     } else {
-        writeln!(out, "Partitions :")?;
+        writeln!(out, "Partitions:")?;
         for partition in &disk.partitions {
             let mounts = if partition.mount_points.is_empty() {
-                "non monté".to_owned()
+                "not mounted".to_owned()
             } else {
-                format!("monté sur {}", partition.mount_points.join(", "))
+                format!("mounted on {}", partition.mount_points.join(", "))
             };
             writeln!(
                 out,
-                "  {}  {}  {}  étiquette : {}  {mounts}",
+                "  {}  {}  {}  label: {}  {mounts}",
                 partition.path,
-                format_size(partition.size_bytes),
-                partition
-                    .fs_type
-                    .as_deref()
-                    .unwrap_or("système de fichiers inconnu"),
-                partition.label.as_deref().unwrap_or("aucune"),
+                format_size(partition.size_bytes, bonk_hal::Lang::En),
+                partition.fs_type.as_deref().unwrap_or("unknown filesystem"),
+                partition.label.as_deref().unwrap_or("none"),
             )?;
         }
     }
