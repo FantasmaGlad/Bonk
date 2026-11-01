@@ -135,6 +135,7 @@ class Actions(
 
     fun write(request: JSONObject) {
         cancelled = false
+        WriteService.start(context)
         thread {
             var downloaded: File? = null
             try {
@@ -165,6 +166,7 @@ class Actions(
                 send(JSONObject().put("type", "failed").put("message", error.message ?: error.toString()))
             } finally {
                 downloaded?.delete()
+                WriteService.stop(context)
             }
         }
     }

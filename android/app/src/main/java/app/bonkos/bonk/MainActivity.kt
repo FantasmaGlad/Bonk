@@ -111,6 +111,10 @@ class MainActivity : ComponentActivity() {
                 screenText = text
                 screen = state
                 keepScreenOn(state.optBoolean("running"))
+                // Le résultat reste lisible après coup, même une fois le panneau refermé.
+                state.optJSONObject("panel")?.takeIf { it.optString("kind") == "finished" }?.let {
+                    Log.i(TAG, it.optString("message"))
+                }
             }
             val effects = answer.optJSONArray("effects") ?: JSONArray()
             for (index in 0 until effects.length()) accomplish(effects.getJSONObject(index))
@@ -303,6 +307,7 @@ private fun Screen(
         when (panel?.optString("kind")) {
             "running" -> Boxed {
                 Body(panel.optString("line"))
+                Small(stringResource(R.string.do_not_unplug))
                 LinearProgressIndicator(
                     progress = { panel.optDouble("fraction").toFloat() },
                     modifier = Modifier.fillMaxWidth(),
