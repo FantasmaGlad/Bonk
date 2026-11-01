@@ -83,10 +83,6 @@ pub(crate) fn schema() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(CacheReport)).unwrap_or_default()
 }
 
-fn is_sha256(name: &str) -> bool {
-    name.len() == 64 && name.bytes().all(|b| b.is_ascii_hexdigit())
-}
-
 /// Dossiers d'empreintes réels, sans suivre de lien : un lien posé là ne mène jamais une suppression ailleurs.
 fn hash_directories(cache: &Path) -> io::Result<Vec<(String, PathBuf)>> {
     let root = cache.join(IMAGES);
@@ -99,7 +95,7 @@ fn hash_directories(cache: &Path) -> io::Result<Vec<(String, PathBuf)>> {
     for entry in reader {
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().into_owned();
-        if is_sha256(&name) && entry.file_type()?.is_dir() {
+        if bonk_catalog::is_sha256(&name) && entry.file_type()?.is_dir() {
             found.push((name, entry.path()));
         }
     }

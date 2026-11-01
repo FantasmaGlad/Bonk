@@ -5,6 +5,7 @@
 //! Écrit sur le support : à n'appeler que sur une cible déjà autorisée (filtre de sécurité,
 //! confirmation) ou sur une image.
 
+use crate::bytes::{put_u32, put_u64};
 use std::fmt;
 use std::ops::Range;
 
@@ -97,14 +98,6 @@ pub struct RepairReport {
     pub actions: Vec<&'static str>,
     pub backup_header_lba: u64,
     pub last_usable_lba: u64,
-}
-
-fn put_u32(buf: &mut [u8], at: usize, value: u32) {
-    buf[at..at + 4].copy_from_slice(&value.to_le_bytes());
-}
-
-fn put_u64(buf: &mut [u8], at: usize, value: u64) {
-    buf[at..at + 8].copy_from_slice(&value.to_le_bytes());
 }
 
 struct Placement {

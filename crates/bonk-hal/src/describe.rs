@@ -119,7 +119,7 @@ pub fn verdict_badge(eligibility: &Eligibility, lang: Lang) -> &'static str {
 }
 
 #[must_use]
-pub fn exclusion_label(reason: &Exclusion, lang: Lang) -> String {
+pub(crate) fn exclusion_label(reason: &Exclusion, lang: Lang) -> String {
     match (reason, lang) {
         (Exclusion::SystemVolume { partition }, Lang::En) => format!("system volume ({partition})"),
         (Exclusion::SystemVolume { partition }, Lang::Fr) => {

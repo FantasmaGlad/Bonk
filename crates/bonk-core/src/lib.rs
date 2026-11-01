@@ -6,6 +6,7 @@
 
 pub mod analysis;
 pub mod block;
+mod bytes;
 pub mod codec;
 pub mod format;
 pub mod msc;

@@ -177,8 +177,12 @@ pub fn run_elevated_helper(client: u32, pipe: &str) -> Result<(), String> {
 }
 
 /// Capacités d'un système où Bonk écrit lui-même, sans outil de formatage de l'hôte.
-#[cfg(any(windows, target_os = "macos"))]
-fn native_capabilities(elevate: Capability) -> Vec<Capability> {
+/// Ce que tout hôte qui écrit annonce ; seuls l'élévation et les formats écrits par l'hôte y varient.
+#[cfg(any(windows, target_os = "macos", target_os = "linux"))]
+fn writing_capabilities(
+    elevate: Capability,
+    hosted_format: impl Fn(Filesystem, &str) -> Capability,
+) -> Vec<Capability> {
     let mut all = vec![
         Capability::yes("write"),
         elevate,
@@ -190,14 +194,21 @@ fn native_capabilities(elevate: Capability) -> Vec<Capability> {
         if fs.is_native() {
             Capability::yes(&name)
         } else {
-            Capability::no(
-                &name,
-                Missing::OsUnsupported,
-                "not in Bonk yet on this system",
-            )
+            hosted_format(fs, &name)
         }
     }));
     all
+}
+
+#[cfg(any(windows, target_os = "macos"))]
+fn native_capabilities(elevate: Capability) -> Vec<Capability> {
+    writing_capabilities(elevate, |_, name| {
+        Capability::no(
+            name,
+            Missing::OsUnsupported,
+            "not in Bonk yet on this system",
+        )
+    })
 }
 
 /// L'implémentation du système en cours.

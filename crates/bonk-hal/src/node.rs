@@ -112,7 +112,11 @@ mod imp {
         ///
         /// # Errors
         /// [`BlockError::Io`] : `InvalidInput` si le descripteur n'est pas ce disque.
-        pub fn from_fd(fd: OwnedFd, path: &Path, access: Access) -> Result<Self, BlockError> {
+        pub(crate) fn from_fd(
+            fd: OwnedFd,
+            path: &Path,
+            access: Access,
+        ) -> Result<Self, BlockError> {
             let resolved = fs::canonicalize(path)?;
             let name = whole_disk_name(&LinuxRoots::system(), &resolved)?;
             let file = fs::File::from(fd);

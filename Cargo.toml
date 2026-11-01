@@ -16,7 +16,6 @@ publish = false
 sys-locale = "0.3"
 bonk-core = { path = "crates/bonk-core" }
 bonk-hal = { path = "crates/bonk-hal" }
-bonk-customizer = { path = "crates/bonk-customizer" }
 bonk-catalog = { path = "crates/bonk-catalog" }
 bonk-ops = { path = "crates/bonk-ops" }
 bonk-cli = { path = "crates/bonk-cli" }

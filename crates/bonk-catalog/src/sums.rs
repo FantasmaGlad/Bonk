@@ -22,7 +22,9 @@ fn parse_line(line: &str) -> Option<(&str, &str)> {
     Some((hex, entry.strip_prefix('*').unwrap_or(entry)))
 }
 
-fn is_sha256(text: &str) -> bool {
+/// Une empreinte SHA-256 écrite en hexadécimal.
+#[must_use]
+pub fn is_sha256(text: &str) -> bool {
     text.len() == 64 && text.bytes().all(|b| b.is_ascii_hexdigit())
 }
 

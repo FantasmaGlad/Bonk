@@ -59,7 +59,7 @@ impl ImageFile {
     }
 
     /// Les octets de l'image, décompressés, depuis le début.
-    pub fn decoded(&self) -> Result<(Source, SourceInfo), JobError> {
+    pub(crate) fn decoded(&self) -> Result<(Source, SourceInfo), JobError> {
         let source = codec::open(self.raw(), Some(self.len)).map_err(|e| match e {
             CodecError::Unsupported(_) => fail(Code::SourceFormatUnsupported, e),
             CodecError::Io(_) => fail(Code::SourceUnreadable, format!("{}: {e}", self.path)),

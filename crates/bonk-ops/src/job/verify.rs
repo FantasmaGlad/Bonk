@@ -4,10 +4,10 @@ use std::path::PathBuf;
 
 use bonk_core::BlockDevice;
 use bonk_core::write::{self as engine, Control, DEFAULT_CHUNK, Progress};
-use bonk_hal::{Access, Elevation, FilterOptions};
+use bonk_hal::{Elevation, FilterOptions};
 
 use super::source::ImageFile;
-use super::target::{OpenRequest, choose, open_target};
+use super::target::open_read_only;
 use super::translate::{guarded, map_verify_error};
 use super::types::{
     Deps, IgnoredRange, JobError, SCHEMA_VERSION, Target, TraceIo, VerifyDone, fail,
@@ -29,19 +29,8 @@ pub fn verify(
 ) -> Result<VerifyDone, JobError> {
     let file = ImageFile::open(&job.source)?;
     let (mut source, source_info) = file.decoded()?;
-    let chosen = choose(&job.target, job.options, deps)?;
-    let (mut device, info, _) = open_target(
-        chosen,
-        &job.target,
-        &OpenRequest {
-            options: job.options,
-            access: Access::ReadOnly,
-            elevation: job.elevation,
-            size_hint: None,
-            trace_io: job.trace_io,
-        },
-        deps,
-    )?;
+    let (mut device, info) =
+        open_read_only(&job.target, job.options, job.elevation, job.trace_io, deps)?;
     let mut report_progress = guarded(deps, progress);
     // Une image GPT posée sur un support plus grand a vu quelques champs réécrits par la réparation du
     // GPT (MBR de protection, positions de l'en-tête) : les comparer à l'image donnerait un faux échec.

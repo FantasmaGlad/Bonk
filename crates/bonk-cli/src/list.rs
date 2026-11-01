@@ -65,19 +65,24 @@ pub(crate) fn schema() -> serde_json::Value {
 }
 
 /// Le rapport `list`, en JSON : même contenu que la sortie `--json`, pour le service.
-pub(crate) fn report_value(
-    options: FilterOptions,
-    all: bool,
-    disks: &[Disk],
-) -> Result<serde_json::Value, serde_json::Error> {
-    let entries: Vec<Entry<'_>> = disks
+/// Les disques à montrer et leur verdict : ceux qu'on peut écrire, ou tous.
+fn selected(disks: &[Disk], options: FilterOptions, all: bool) -> Vec<Entry<'_>> {
+    disks
         .iter()
         .map(|disk| Entry {
             disk,
             eligibility: evaluate(disk, options),
         })
         .filter(|entry| all || entry.eligibility.is_writable())
-        .collect();
+        .collect()
+}
+
+pub(crate) fn report_value(
+    options: FilterOptions,
+    all: bool,
+    disks: &[Disk],
+) -> Result<serde_json::Value, serde_json::Error> {
+    let entries = selected(disks, options, all);
     serde_json::to_value(Report {
         schema_version: JSON_SCHEMA_VERSION,
         disks: entries,
@@ -96,14 +101,7 @@ pub(crate) fn run(
         allow_virtual: args.allow_virtual || defaults.allow_virtual,
     };
     let all = args.all || defaults.show_all;
-    let entries: Vec<Entry<'_>> = disks
-        .iter()
-        .map(|disk| Entry {
-            disk,
-            eligibility: evaluate(disk, options),
-        })
-        .filter(|entry| all || entry.eligibility.is_writable())
-        .collect();
+    let entries = selected(disks, options, all);
 
     if args.json {
         let report = Report {

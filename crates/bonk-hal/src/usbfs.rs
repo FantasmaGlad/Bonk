@@ -33,7 +33,7 @@ pub struct StorageInterface {
 /// Première interface SCSI « bulk-only ». Une clé qui n'expose qu'UAS n'est pas prise en charge. Des
 /// descripteurs tronqués ne donnent rien plutôt qu'une lecture hors bornes.
 #[must_use]
-pub fn find_storage_interface(descriptors: &[u8]) -> Option<StorageInterface> {
+pub(crate) fn find_storage_interface(descriptors: &[u8]) -> Option<StorageInterface> {
     let mut current: Option<u8> = None;
     let (mut endpoint_in, mut endpoint_out) = (None, None);
     let mut rest = descriptors;
@@ -142,7 +142,7 @@ impl UsbfsTransport {
     ///
     /// # Errors
     /// Pas d'interface de stockage « bulk-only », ou réclamation refusée.
-    pub fn from_device(mut device: File) -> io::Result<Self> {
+    pub(crate) fn from_device(mut device: File) -> io::Result<Self> {
         let mut descriptors = Vec::new();
         device.read_to_end(&mut descriptors)?;
         let interface = find_storage_interface(&descriptors).ok_or_else(|| {

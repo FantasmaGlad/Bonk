@@ -50,7 +50,6 @@ fn chaque_crate_ne_depend_que_de_ce_que_permet_sa_couche() {
                 "bonk-cli",
                 "bonk-gui",
                 "bonk-catalog",
-                "bonk-customizer",
                 "libc",
                 "clap",
                 "iced",

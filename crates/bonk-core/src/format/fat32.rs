@@ -3,6 +3,7 @@
 //! Écriture maison plutôt que `fatfs` : un volume vide ne demande que quelques structures fixes, et
 //! `fatfs` ne connaît pas les accès alignés qu'impose `BlockDevice`.
 
+use crate::bytes::{put_u16, put_u32};
 use schemars::JsonSchema;
 use serde::Serialize;
 
@@ -79,14 +80,6 @@ pub fn geometry(sectors: u64, block: u32) -> Result<Geometry, FormatError> {
         reserved_sectors,
         fat_sectors,
     })
-}
-
-fn put_u16(buf: &mut [u8], at: usize, value: u16) {
-    buf[at..at + 2].copy_from_slice(&value.to_le_bytes());
-}
-
-fn put_u32(buf: &mut [u8], at: usize, value: u32) {
-    buf[at..at + 4].copy_from_slice(&value.to_le_bytes());
 }
 
 /// Valeurs bornées par [`geometry`] : la conversion ne peut pas échouer.

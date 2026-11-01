@@ -7,7 +7,7 @@ use std::process::Command;
 use bonk_core::format::Filesystem;
 use bonk_core::{BlockDevice, BlockError};
 
-use super::{Capability, Elevation, Missing, Platform, format_capability, udisks};
+use super::{Capability, Elevation, Missing, Platform, udisks, writing_capabilities};
 use crate::disk::{Disk, Partition};
 use crate::enumerate::{EnumerateError, SourceRead};
 use crate::image::Access;
@@ -81,23 +81,12 @@ impl Platform for Linux {
             Ok(()) => Capability::yes("elevate"),
             Err(detail) => Capability::no("elevate", Missing::MissingTool, detail),
         };
-        let mut all = vec![
-            Capability::yes("write"),
-            elevate,
-            Capability::no("eject", Missing::OsUnsupported, "not in Bonk yet"),
-            Capability::yes("cancel"),
-        ];
-        all.extend(Filesystem::ALL.map(|fs| {
-            let name = format_capability(fs);
-            if fs.is_native() {
-                return Capability::yes(&name);
-            }
+        writing_capabilities(elevate, |fs, name| {
             match udisks::can_format(udisks_type(fs)) {
-                Ok(()) => Capability::yes(&name),
-                Err(detail) => Capability::no(&name, Missing::MissingTool, detail),
+                Ok(()) => Capability::yes(name),
+                Err(detail) => Capability::no(name, Missing::MissingTool, detail),
             }
-        }));
-        all
+        })
     }
 
     fn format_partition(
