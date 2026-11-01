@@ -4,6 +4,7 @@
 
 use std::path::PathBuf;
 
+use bonk_hal::Lang;
 use iced::widget::{button, column, container, image, pick_list, row, scrollable, text};
 use iced::{Element, Length};
 use serde_json::Value;
@@ -15,11 +16,28 @@ use super::Message;
 /// Une version proposée d'un système.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Choice {
+    /// Peut différer du système : Kubuntu est rangé sous Ubuntu.
+    pub(crate) name: String,
     pub(crate) label: String,
     pub(crate) end_of_life: bool,
     /// Ce qu'il faut savoir avant de la choisir (évaluation, CD seulement).
     pub(crate) note: Option<String>,
     pub(crate) source: ChoiceSource,
+}
+
+impl Choice {
+    /// Le libellé vient du catalogue ; ce qu'y ajoute Bonk suit la langue de la fenêtre.
+    pub(crate) fn title(&self, lang: Lang) -> String {
+        if self.end_of_life {
+            format!(
+                "{} {}",
+                self.label,
+                lang.pick("(end of life)", "(fin de vie)")
+            )
+        } else {
+            self.label.clone()
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,11 +77,16 @@ impl MenuFilter {
     }
 }
 
-const ALL_CATEGORIES: &str = "Toutes les catégories";
-const ALL_SYSTEMS: &str = "Tous les systèmes";
+fn all_categories(lang: Lang) -> &'static str {
+    lang.pick("All categories", "Toutes les catégories")
+}
+
+fn all_systems(lang: Lang) -> &'static str {
+    lang.pick("All systems", "Tous les systèmes")
+}
 
 /// Sans catégorie dans le catalogue : un seul groupe, celui de tout le monde.
-const NO_CATEGORY: &str = "Autres";
+const NO_CATEGORY: &str = "Other systems";
 
 #[derive(Debug, Default)]
 pub(crate) enum CatalogState {
@@ -85,10 +108,8 @@ fn label_of(image: &Value) -> Option<String> {
         label.push(' ');
         label.push_str(arch);
     }
-    match image["channel"].as_str() {
-        Some("lts") => label.push_str(" LTS"),
-        Some("end_of_life") => label.push_str(" (fin de vie)"),
-        _ => {}
+    if image["channel"] == "lts" {
+        label.push_str(" LTS");
     }
     Some(label)
 }
@@ -117,6 +138,11 @@ pub(crate) fn parse(report: &Value) -> Vec<System> {
                         }
                     };
                     Some(Choice {
+                        name: image["name"]
+                            .as_str()
+                            .or(family["name"].as_str())
+                            .unwrap_or(id)
+                            .to_owned(),
                         label: label_of(image)?,
                         end_of_life: image["channel"] == "end_of_life",
                         note: image["note"].as_str().map(str::to_owned),
@@ -145,7 +171,7 @@ pub(crate) fn read(program: PathBuf) -> Result<Vec<System>, String> {
         .args(["catalog", "list", "--json"])
         .stdin(std::process::Stdio::null())
         .output()
-        .map_err(|e| format!("{} : lancement impossible : {e}", program.display()))?;
+        .map_err(|e| format!("{}: cannot start: {e}", program.display()))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let line = stderr
@@ -202,6 +228,7 @@ pub(crate) fn menu_button<'a>(
     state: &'a CatalogState,
     image_url: &str,
     open: bool,
+    lang: Lang,
 ) -> Element<'a, Message> {
     let chosen = match state {
         CatalogState::Ready(systems) => find_url(systems, image_url),
@@ -210,16 +237,28 @@ pub(crate) fn menu_button<'a>(
     let content: Element<'a, Message> = match (state, chosen) {
         (_, Some((system, choice))) => row![
             logo(system.icon.as_ref()),
-            text(format!("{} {}", system.name, choice.label)).size(14),
+            text(format!("{} {}", choice.name, choice.title(lang))).size(14),
         ]
         .spacing(8)
         .align_y(iced::Center)
         .into(),
-        (CatalogState::Loading | CatalogState::NotLoaded, _) => {
-            text("Lecture de la liste des systèmes...").size(14).into()
+        (CatalogState::Loading | CatalogState::NotLoaded, _) => text(lang.pick(
+            "Reading the list of systems...",
+            "Lecture de la liste des systèmes...",
+        ))
+        .size(14)
+        .into(),
+        (CatalogState::Failed(_), _) => text(lang.pick(
+            "List of systems unavailable",
+            "Liste des systèmes indisponible",
+        ))
+        .size(14)
+        .into(),
+        (CatalogState::Ready(_), None) => {
+            text(lang.pick("Choose a system...", "Choisir un système..."))
+                .size(14)
+                .into()
         }
-        (CatalogState::Failed(_), _) => text("Liste des systèmes indisponible").size(14).into(),
-        (CatalogState::Ready(_), None) => text("Choisir un système...").size(14).into(),
     };
     let arrow = text(if open { "^" } else { "v" }).size(14);
     button(
@@ -242,10 +281,11 @@ fn without_doubles(mut values: Vec<String>, first: &str) -> Vec<String> {
 }
 
 /// Les deux sélecteurs : une catégorie, ou un seul système et ses versions.
-fn menu_filters<'a>(systems: &[System], filter: &MenuFilter) -> Element<'a, Message> {
+fn menu_filters<'a>(systems: &[System], filter: &MenuFilter, lang: Lang) -> Element<'a, Message> {
+    let (all_cat, all_sys) = (all_categories(lang), all_systems(lang));
     let categories = without_doubles(
         systems.iter().map(|s| s.category.clone()).collect(),
-        ALL_CATEGORIES,
+        all_cat,
     );
     let in_category = MenuFilter {
         category: filter.category.clone(),
@@ -257,23 +297,20 @@ fn menu_filters<'a>(systems: &[System], filter: &MenuFilter) -> Element<'a, Mess
             .iter()
             .map(|s| s.name.clone())
             .collect(),
-        ALL_SYSTEMS,
+        all_sys,
     );
     let category = filter
         .category
         .clone()
-        .unwrap_or_else(|| ALL_CATEGORIES.to_owned());
-    let system = filter
-        .system
-        .clone()
-        .unwrap_or_else(|| ALL_SYSTEMS.to_owned());
+        .unwrap_or_else(|| all_cat.to_owned());
+    let system = filter.system.clone().unwrap_or_else(|| all_sys.to_owned());
     row![
-        pick_list(categories, Some(category), |value: String| {
-            Message::MenuCategory((value != ALL_CATEGORIES).then_some(value))
+        pick_list(categories, Some(category), move |value: String| {
+            Message::MenuCategory((value != all_cat).then_some(value))
         })
         .text_size(13),
-        pick_list(names, Some(system), |value: String| {
-            Message::MenuSystem((value != ALL_SYSTEMS).then_some(value))
+        pick_list(names, Some(system), move |value: String| {
+            Message::MenuSystem((value != all_sys).then_some(value))
         })
         .text_size(13),
     ]
@@ -286,12 +323,13 @@ pub(crate) fn menu_list<'a>(
     systems: &'a [System],
     filter: &MenuFilter,
     highlighted: usize,
+    lang: Lang,
 ) -> Element<'a, Message> {
     let mut index = 0;
     let mut lines = column![].spacing(2);
     for system in filter.apply(systems) {
         for choice in &system.choices {
-            let title = format!("{} {}", system.name, choice.label);
+            let title = format!("{} {}", choice.name, choice.title(lang));
             let line = row![logo(system.icon.as_ref()), text(title).size(14)]
                 .spacing(8)
                 .align_y(iced::Center);
@@ -315,9 +353,12 @@ pub(crate) fn menu_list<'a>(
                     )
                 }
                 ChoiceSource::OfficialPage(page) => {
-                    let note = text(format!("à télécharger sur {page}, puis Autre image"))
-                        .size(12)
-                        .color(theme::SECONDARY);
+                    let note = text(match lang {
+                        Lang::En => format!("download from {page}, then Other image"),
+                        Lang::Fr => format!("à télécharger sur {page}, puis Autre image"),
+                    })
+                    .size(12)
+                    .color(theme::SECONDARY);
                     container(column![line, note]).padding([4, 8]).into()
                 }
                 ChoiceSource::NotForUsb => container(line).padding([4, 8]).into(),
@@ -326,7 +367,7 @@ pub(crate) fn menu_list<'a>(
     }
     // Marge à droite : la barre de défilement ne doit pas couvrir le texte d'une ligne.
     column![
-        menu_filters(systems, filter),
+        menu_filters(systems, filter, lang),
         scrollable(lines.padding(iced::Padding::ZERO.right(16)))
             .id(MENU)
             .height(Length::Fixed(260.0)),
@@ -354,7 +395,7 @@ mod tests {
                 {"family": "ubuntu", "version": "20.04.5", "edition": "desktop", "channel": "end_of_life",
                  "url": "https://u/20.iso", "sha256": "bb"},
                 {"family": "windows", "version": "11", "channel": "stable", "official_page": "https://p/"},
-                {"family": "ubuntu", "version": "1", "channel": "stable", "arch": "aarch64", "usb_boot": false,
+                {"family": "ubuntu", "name": "Kubuntu", "version": "1", "channel": "stable", "arch": "aarch64", "usb_boot": false,
                  "note": "CD", "url": "https://u/cd.iso", "sha256": "cc"}
             ]
         })
@@ -366,7 +407,18 @@ mod tests {
         assert_eq!(systems.len(), 2, "un système sans image n'est pas montré");
         assert_eq!(systems[0].icon, Some(PathBuf::from("/c/u.png")));
         assert_eq!(systems[0].choices[0].label, "26.04.1 desktop LTS");
-        assert_eq!(systems[0].choices[1].label, "20.04.5 desktop (fin de vie)");
+        assert_eq!(
+            systems[0].choices[0].name, "Ubuntu",
+            "sans nom : celui du système"
+        );
+        assert_eq!(
+            systems[0].choices[1].title(Lang::Fr),
+            "20.04.5 desktop (fin de vie)"
+        );
+        assert_eq!(
+            systems[0].choices[1].title(Lang::En),
+            "20.04.5 desktop (end of life)"
+        );
         assert!(systems[0].choices[1].end_of_life);
         assert_eq!(
             systems[1].choices[0].source,
@@ -406,6 +458,7 @@ mod tests {
             ("1 aarch64", ChoiceSource::NotForUsb)
         );
         assert_eq!(cd.note.as_deref(), Some("CD"));
+        assert_eq!(cd.name, "Kubuntu", "une variante garde son propre nom");
     }
 
     #[test]

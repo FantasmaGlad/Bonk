@@ -375,7 +375,7 @@ fn explain_schema_et_configuration() {
             r#"{"id":5,"method":"config.set","params":{"key":"view.show_all","value":"yes"}}"#,
             r#"{"id":6,"method":"config.get","params":{"key":"view.show_all"}}"#,
             r#"{"id":7,"method":"config.list"}"#,
-            r#"{"id":8,"method":"config.set","params":{"key":"lang","value":"en"}}"#,
+            r#"{"id":8,"method":"config.set","params":{"key":"lang","value":"de"}}"#,
             r#"{"id":9,"method":"disk.list"}"#,
         ],
         &fake.cfg,

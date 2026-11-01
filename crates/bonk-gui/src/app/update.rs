@@ -10,6 +10,8 @@ use bonk_core::write::Phase;
 use crate::command::WriteView;
 use crate::transfer;
 
+use bonk_hal::Lang;
+
 use super::catalog::{self, CatalogState, ChoiceSource};
 use super::{App, Focus, Message, WRITE_DELAY, WriteState, load};
 
@@ -118,7 +120,7 @@ impl App {
             }
             Message::BrowseImage => {
                 self.focus = Some(Focus::Browse);
-                Task::perform(pick_image(), Message::ImagePicked)
+                Task::perform(pick_image(self.lang), Message::ImagePicked)
             }
             Message::ImagePicked(Some(path)) => {
                 if let WriteState::Draft { image, .. } = &mut self.write {
@@ -132,6 +134,23 @@ impl App {
             Message::TorDetected(address) => {
                 self.tor = address;
                 Task::none()
+            }
+            Message::SwitchLanguage => {
+                self.lang = match self.lang {
+                    Lang::En => Lang::Fr,
+                    Lang::Fr => Lang::En,
+                };
+                self.focus = Some(Focus::Language);
+                let program = self.program();
+                let value = match self.lang {
+                    Lang::En => "en",
+                    Lang::Fr => "fr",
+                };
+                // Le réglage passe par la ligne de commande, seule propriétaire du fichier de configuration.
+                Task::perform(async move { save_language(&program, value) }, |()| {
+                    Message::Refresh
+                })
+                .discard()
             }
             Message::ToggleTor(on) => {
                 self.use_tor = on && self.tor.is_some();
@@ -391,15 +410,28 @@ impl App {
     }
 }
 
+/// La fenêtre change de langue même si l'enregistrement échoue : seul le prochain lancement l'oublie.
+fn save_language(program: &std::path::Path, value: &str) {
+    let mut command = std::process::Command::new(program);
+    bonk_hal::console::hide_child_console(&mut command);
+    let saved = command
+        .args(["config", "set", "lang", value])
+        .stdin(std::process::Stdio::null())
+        .output();
+    if !saved.as_ref().is_ok_and(|output| output.status.success()) {
+        log::warn!(target: "bonk::gui", "language choice not saved");
+    }
+}
+
 /// Le sélecteur de fichier du système, limité aux formats que Bonk écrit.
-async fn pick_image() -> Option<PathBuf> {
+async fn pick_image(lang: Lang) -> Option<PathBuf> {
     rfd::AsyncFileDialog::new()
-        .set_title("Choisir l'image à écrire")
+        .set_title(lang.pick("Choose the image to write", "Choisir l'image à écrire"))
         .add_filter(
-            "Images de disque",
+            lang.pick("Disk images", "Images de disque"),
             &["iso", "img", "raw", "gz", "xz", "zst"],
         )
-        .add_filter("Tous les fichiers", &["*"])
+        .add_filter(lang.pick("All files", "Tous les fichiers"), &["*"])
         .pick_file()
         .await
         .map(|file| file.path().to_path_buf())

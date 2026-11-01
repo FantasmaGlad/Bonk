@@ -13,6 +13,7 @@ repository = "https://github.com/FantasmaGlad/Bonk"
 publish = false
 
 [workspace.dependencies]
+sys-locale = "0.3"
 bonk-core = { path = "crates/bonk-core" }
 bonk-hal = { path = "crates/bonk-hal" }
 bonk-customizer = { path = "crates/bonk-customizer" }

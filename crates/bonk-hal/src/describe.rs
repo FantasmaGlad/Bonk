@@ -7,14 +7,17 @@ use crate::disk::{Bus, DiskKind};
 use crate::safety::{Eligibility, Exclusion, HiddenReason, Warning};
 
 /// Langue d'un libellé.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Lang {
     En,
+    /// Langue de développement de l'interface ; le lancement réel la choisit toujours explicitement.
+    #[default]
     Fr,
 }
 
 impl Lang {
-    fn pick(self, en: &'static str, fr: &'static str) -> &'static str {
+    #[must_use]
+    pub fn pick(self, en: &'static str, fr: &'static str) -> &'static str {
         match self {
             Self::En => en,
             Self::Fr => fr,

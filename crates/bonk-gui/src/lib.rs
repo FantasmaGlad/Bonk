@@ -7,6 +7,9 @@
 
 mod app;
 mod command;
+pub use errors::french_title;
+mod errors;
+mod locale;
 mod theme;
 mod transfer;
 
@@ -18,14 +21,15 @@ use crate::app::App;
 
 /// Ouvre la fenêtre, avec les réglages d'affichage de départ (`bonk config`), et rend la main à la
 /// fermeture.
-pub fn run(initial: ViewOptions) -> Result<(), String> {
+pub fn run(initial: ViewOptions, lang: Option<bonk_hal::Lang>) -> Result<(), String> {
+    let lang = lang.unwrap_or_else(locale::detect);
     // Iced ne renvoie pas d'erreur sans affichage : il panique. Détection de la fonctionnalité en
     // amont, pour que Bonk redirige proprement vers la ligne de commande (SSH, serveur).
     if !display_available(|name| std::env::var_os(name)) {
         return Err("aucun affichage graphique (ni WAYLAND_DISPLAY ni DISPLAY)".to_owned());
     }
     run_with_fallback(
-        move || launch(initial),
+        move || launch(initial, lang),
         fallback_allowed(|name| std::env::var_os(name)),
         relaunch_with_software_renderer,
     )
@@ -87,8 +91,8 @@ fn window_icon() -> Option<iced::window::Icon> {
     iced::window::icon::from_rgba(pixels, SIDE, SIDE).ok()
 }
 
-fn launch(initial: ViewOptions) -> Result<(), String> {
-    iced::application(move || App::new(initial), App::update, App::view)
+fn launch(initial: ViewOptions, lang: bonk_hal::Lang) -> Result<(), String> {
+    iced::application(move || App::new(initial, lang), App::update, App::view)
         .title("Bonk")
         .theme(App::theme)
         .subscription(App::subscription)

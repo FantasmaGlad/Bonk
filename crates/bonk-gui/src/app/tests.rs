@@ -156,7 +156,7 @@ fn avec_tout_affiche() -> App {
 fn tab_parcourt_les_commandes_puis_les_disques_et_reboucle() {
     let mut app = avec_tout_affiche();
     let mut vus = Vec::new();
-    for _ in 0..9 {
+    for _ in 0..10 {
         nav(&mut app, Nav::Next);
         vus.push(app.focus.clone());
     }
@@ -171,6 +171,7 @@ fn tab_parcourt_les_commandes_puis_les_disques_et_reboucle() {
             Some(Focus::Disk("usb-cle".to_owned())),
             Some(Focus::Disk("sata-libre".to_owned())),
             Some(Focus::Copy),
+            Some(Focus::Language),
             Some(Focus::Refresh),
         ]
     );
@@ -179,6 +180,8 @@ fn tab_parcourt_les_commandes_puis_les_disques_et_reboucle() {
 #[test]
 fn maj_tab_remonte_et_commence_par_le_dernier() {
     let mut app = avec_tout_affiche();
+    nav(&mut app, Nav::Previous);
+    assert_eq!(app.focus, Some(Focus::Language));
     nav(&mut app, Nav::Previous);
     assert_eq!(app.focus, Some(Focus::Copy));
     nav(&mut app, Nav::Previous);
@@ -265,7 +268,7 @@ fn le_focus_quitte_un_disque_qui_disparait() {
     assert_eq!(app.focus, None);
     nav(&mut app, Nav::Next);
     nav(&mut app, Nav::Previous);
-    assert_eq!(app.focus, Some(Focus::Copy));
+    assert_eq!(app.focus, Some(Focus::Language));
 }
 
 #[test]
@@ -595,7 +598,7 @@ fn un_echec_s_affiche_avec_son_code_et_sa_commande_d_aide() {
     })));
     assert!(contient(
         &app,
-        "ÉCHEC : ouverture du disque refusée [E4004] : voir « bonk explain E4004 »"
+        "ÉCHEC : Ouverture du disque refusée (ouverture du disque refusée) [E4004] : voir « bonk explain E4004 »"
     ));
 }
 
@@ -926,7 +929,7 @@ fn le_resultat_reste_jusqu_a_la_fermeture() {
     let _ = app.update(Message::Loaded(Ok(Vec::new())));
     assert!(contient(
         &app,
-        "ÉCHEC : clé débranchée [E4001] : voir « bonk explain E4001 »"
+        "ÉCHEC : Échec de l'écriture (clé débranchée) [E4001] : voir « bonk explain E4001 »"
     ));
     assert!(matches!(app.write, WriteState::Finished { .. }));
     let _ = app.update(Message::Select("sata-libre".to_owned()));
@@ -978,6 +981,7 @@ fn versions_du_catalogue() -> Vec<catalog::System> {
         icon: None,
         choices: vec![
             catalog::Choice {
+                name: "Ubuntu".to_owned(),
                 label: "26.04.1 desktop LTS".to_owned(),
                 end_of_life: false,
                 note: None,
@@ -987,6 +991,7 @@ fn versions_du_catalogue() -> Vec<catalog::System> {
                 },
             },
             catalog::Choice {
+                name: "Ubuntu".to_owned(),
                 label: "24.04.5 desktop LTS".to_owned(),
                 end_of_life: false,
                 note: None,
@@ -996,6 +1001,7 @@ fn versions_du_catalogue() -> Vec<catalog::System> {
                 },
             },
             catalog::Choice {
+                name: "Ubuntu".to_owned(),
                 label: "11".to_owned(),
                 end_of_life: false,
                 note: None,
@@ -1126,4 +1132,18 @@ fn tor_propose_seulement_s_il_est_la_jamais_coche_seul() {
     assert!(!app.use_tor, "détecté n'est pas activé");
     let _ = app.update(Message::ToggleTor(true));
     assert!(app.use_tor);
+}
+
+#[test]
+fn la_langue_change_d_un_clic_et_nomme_l_autre() {
+    let mut app = app_avec_panneau();
+    assert!(app.status_line(1).contains("disque(s)"));
+    let _ = app.update(Message::SwitchLanguage);
+    assert_eq!(app.lang, bonk_hal::Lang::En);
+    assert!(
+        app.status_line(1).contains("disk(s)"),
+        "{}",
+        app.status_line(1)
+    );
+    assert_eq!(app.focus, Some(Focus::Language));
 }

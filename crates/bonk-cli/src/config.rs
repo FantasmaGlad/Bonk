@@ -25,13 +25,13 @@ pub(crate) struct Key {
     pub(crate) help: &'static str,
 }
 
-/// Les réglages existants. Les langues ne comptent que celles qui sont réellement livrées.
+/// Les réglages existants.
 pub(crate) const KEYS: &[Key] = &[
     Key {
         name: "lang",
-        kind: Kind::Choice(&["fr"]),
-        default: "fr",
-        help: "window language (English is not shipped yet); the command line is always in English",
+        kind: Kind::Choice(&["auto", "en", "fr"]),
+        default: "auto",
+        help: "window language; auto follows the system; the command line is always in English",
     },
     Key {
         name: "log.format",
@@ -92,6 +92,8 @@ pub struct ViewDefaults {
     pub show_internal: bool,
     pub show_all: bool,
     pub allow_virtual: bool,
+    /// Langue de la fenêtre ; absente : celle du système.
+    pub lang: Option<bonk_hal::Lang>,
 }
 
 /// Nom de la variable d'environnement d'une clé : `view.show_all` donne `BONK_VIEW_SHOW_ALL`.
@@ -203,6 +205,11 @@ pub(crate) fn view_defaults(effective: &[Effective]) -> ViewDefaults {
         show_internal: on("view.show_internal"),
         show_all: on("view.show_all"),
         allow_virtual: on("view.allow_virtual"),
+        lang: match value_of(effective, "lang") {
+            Some("en") => Some(bonk_hal::Lang::En),
+            Some("fr") => Some(bonk_hal::Lang::Fr),
+            _ => None,
+        },
     }
 }
 
@@ -388,8 +395,9 @@ mod tests {
         assert!(normalize(bool_key, "peut-être").is_err());
         let lang = find_key("lang").ok_or("clé")?;
         assert_eq!(normalize(lang, "FR")?, "fr");
-        let erreur = normalize(lang, "en").err().unwrap_or_default();
-        assert!(erreur.contains("values: fr"), "{erreur}");
+        assert_eq!(normalize(lang, "en")?, "en");
+        let erreur = normalize(lang, "de").err().unwrap_or_default();
+        assert!(erreur.contains("values: auto, en, fr"), "{erreur}");
         Ok(())
     }
 
@@ -416,7 +424,8 @@ mod tests {
             ViewDefaults {
                 show_internal: false,
                 show_all: true,
-                allow_virtual: false
+                allow_virtual: false,
+                lang: None,
             }
         );
     }
@@ -532,13 +541,13 @@ mod tests {
         let erreur = texte(
             &ConfigAction::Set {
                 key: "lang".into(),
-                value: "en".into(),
+                value: "de".into(),
             },
             &file.0,
             &[],
         )
         .err();
-        assert!(erreur.is_some_and(|e| e.contains("values: fr")));
+        assert!(erreur.is_some_and(|e| e.contains("values: auto, en, fr")));
         assert!(!file.0.exists());
         Ok(())
     }
