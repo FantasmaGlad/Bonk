@@ -24,6 +24,8 @@ use crate::target::OpenTargetError;
 /// `_IOR('d', 24, u32)` et `_IOR('d', 25, u64)` de `sys/disk.h`.
 const DKIOCGETBLOCKSIZE: libc::c_ulong = 0x4004_6418;
 const DKIOCGETBLOCKCOUNT: libc::c_ulong = 0x4008_6419;
+/// `_IO('d', 22)` de `sys/disk.h`.
+const DKIOCSYNCHRONIZECACHE: libc::c_ulong = 0x2000_6416;
 
 /// Descripteur obtenu d'`authopen` avant le démontage, repris à l'ouverture : une seule invite.
 static AUTHORIZED: Mutex<Option<(PathBuf, Access, OwnedFd)>> = Mutex::new(None);
@@ -227,8 +229,17 @@ impl BlockDevice for MacDisk {
     }
 
     fn flush(&mut self) -> Result<(), BlockError> {
-        if !self.read_only {
-            self.file.sync_all()?;
+        if self.read_only {
+            return Ok(());
+        }
+        // `sync_all` passe par `F_FULLFSYNC`, que le périphérique brut refuse. Un support sans cache (disque
+        // RAM) n'a rien à vider et le dit par `ENOTTY`.
+        // SAFETY : descripteur valide ; la requête n'a pas d'argument.
+        if unsafe { libc::ioctl(self.file.as_raw_fd(), DKIOCSYNCHRONIZECACHE) } != 0 {
+            let error = io::Error::last_os_error();
+            if error.raw_os_error() != Some(libc::ENOTTY) {
+                return Err(BlockError::Io(error));
+            }
         }
         Ok(())
     }
