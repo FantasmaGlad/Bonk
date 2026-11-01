@@ -397,6 +397,7 @@ dependencies = [
  "log",
  "ring",
  "rustls",
+ "schemars",
  "serde",
  "serde_json",
  "ureq",

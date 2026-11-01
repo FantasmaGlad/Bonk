@@ -12,13 +12,13 @@ use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender};
+use std::sync::{Arc, PoisonError, RwLock};
 use std::time::Duration;
 
-use ureq::Agent;
 use ureq::http::{StatusCode, header};
 use ureq::tls::{RootCerts, TlsConfig};
+use ureq::{Agent, Proxy};
 
 /// Essais sans un octet de plus avant d'abandonner.
 const ATTEMPTS_WITHOUT_PROGRESS: u32 = 5;
@@ -122,6 +122,24 @@ pub fn file_name(url: &str) -> Option<&str> {
     safe.then_some(name)
 }
 
+/// Proxy de tout le processus. Un réglage unique : un téléchargement ne doit pas pouvoir l'oublier.
+static PROXY: RwLock<Option<Proxy>> = RwLock::new(None);
+
+/// Fait passer tout le réseau de Bonk par ce proxy. `socks5h://` seul : avec un autre schéma, les noms seraient
+/// résolus hors du proxy, et l'anonymat promis par Tor serait faux. Un proxy injoignable donne une erreur,
+/// jamais une connexion directe.
+///
+/// # Errors
+/// Adresse mal formée, ou autre schéma que `socks5h://`.
+pub fn set_proxy(url: &str) -> Result<(), String> {
+    if !url.starts_with("socks5h://") {
+        return Err(format!("{url}: only socks5h:// is accepted"));
+    }
+    let proxy = Proxy::new(url).map_err(|e| format!("{url}: {e}"))?;
+    *PROXY.write().unwrap_or_else(PoisonError::into_inner) = Some(proxy);
+    Ok(())
+}
+
 fn agent(https_only: bool) -> Result<Agent, DownloadError> {
     let tls = TlsConfig::builder()
         .root_certs(RootCerts::PlatformVerifier)
@@ -129,6 +147,7 @@ fn agent(https_only: bool) -> Result<Agent, DownloadError> {
         .build();
     Ok(Agent::config_builder()
         .https_only(https_only)
+        .proxy(PROXY.read().unwrap_or_else(PoisonError::into_inner).clone())
         .tls_config(tls)
         .timeout_connect(Some(Duration::from_secs(30)))
         .timeout_recv_response(Some(Duration::from_secs(60)))
@@ -144,6 +163,14 @@ fn agent(https_only: bool) -> Result<Agent, DownloadError> {
 /// # Errors
 /// Adresse refusée, réponse autre que 200, réseau, texte trop long.
 pub fn fetch_text(url: &str) -> Result<String, DownloadError> {
+    String::from_utf8(fetch_bytes(url)?).map_err(|e| DownloadError::Network(format!("{url}: {e}")))
+}
+
+/// Lit un petit fichier tel quel (manifeste, signature, logo).
+///
+/// # Errors
+/// Adresse refusée, réponse autre que 200, réseau, fichier trop long.
+pub fn fetch_bytes(url: &str) -> Result<Vec<u8>, DownloadError> {
     let agent = agent(https_required(url)?)?;
     let mut response = agent
         .get(url)
@@ -160,7 +187,7 @@ pub fn fetch_text(url: &str) -> Result<String, DownloadError> {
         .body_mut()
         .with_config()
         .limit(TEXT_LIMIT)
-        .read_to_string()
+        .read_to_vec()
         .map_err(|e| DownloadError::Network(format!("{url}: {e}")))
 }
 

@@ -86,6 +86,7 @@ enum Method {
     DiskRepairGpt,
     DiskFormat,
     Capabilities,
+    CatalogList,
 }
 
 #[derive(Default)]
@@ -199,7 +200,7 @@ fn read_lines(input: impl BufRead + Send + 'static) -> Receiver<String> {
 }
 
 impl Method {
-    const ALL: [Self; 21] = [
+    const ALL: [Self; 22] = [
         Self::Ping,
         Self::Version,
         Self::Methods,
@@ -221,6 +222,7 @@ impl Method {
         Self::DiskRepairGpt,
         Self::DiskFormat,
         Self::Capabilities,
+        Self::CatalogList,
     ];
 
     fn name(self) -> &'static str {
@@ -246,6 +248,7 @@ impl Method {
             Self::DiskRepairGpt => "disk.repair_gpt",
             Self::DiskFormat => "disk.format",
             Self::Capabilities => "capabilities",
+            Self::CatalogList => "catalog.list",
         }
     }
 
@@ -273,6 +276,7 @@ impl Method {
             Self::DiskRepairGpt => "bonk disk repair-gpt (long operation)",
             Self::DiskFormat => "bonk format: table and filesystem (long operation)",
             Self::Capabilities => "bonk capabilities: what this host allows",
+            Self::CatalogList => "bonk catalog list: images of the signed catalog",
         }
     }
 

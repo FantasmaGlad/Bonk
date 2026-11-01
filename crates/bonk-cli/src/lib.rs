@@ -5,6 +5,7 @@
 //! commande ouvre la fenêtre, et `bonk -v` l'ouvre avec le journal verbeux.
 
 mod cache;
+mod catalog;
 #[cfg(test)]
 mod cli_tests;
 mod commands;
@@ -85,6 +86,11 @@ enum Command {
     Disk {
         #[command(subcommand)]
         action: DiskAction,
+    },
+    /// Images offered by the signed catalog
+    Catalog {
+        #[command(subcommand)]
+        action: catalog::CatalogAction,
     },
     /// Downloaded images: list and cleanup
     Cache {
@@ -208,6 +214,7 @@ fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
         | Command::Explain(_)
         | Command::Config { .. }
         | Command::Cache { .. }
+        | Command::Catalog { .. }
         | Command::Schema(_)
         | Command::Completions { .. }
         | Command::Serve
@@ -384,6 +391,11 @@ where
     };
 
     let no_gui = cli.no_gui;
+    if let Some(proxy) = cli.global.proxy(&env.vars)
+        && let Err(erreur) = bonk_catalog::set_proxy(&proxy)
+    {
+        return report(err, Code::InvalidArgument, erreur);
+    }
     let quiet = cli.log.quiet();
     let (view, default_format, config_error) = stored_settings(env);
 
@@ -450,6 +462,7 @@ where
         Some(Command::List(args)) => run_list(&args, &view, out, err, enumerate),
         Some(Command::Info(args)) => run_info(&args, &view, out, err, enumerate),
         Some(Command::Config { action }) => run_config(&action, env, out, err),
+        Some(Command::Catalog { action }) => catalog::run(&action, out, err),
         Some(Command::Cache { action }) => cache::run(&action, out, err),
         Some(Command::Schema(args)) => run_schema(&args, out, err),
         Some(Command::Completions { shell }) => run_completions(shell, out, err),

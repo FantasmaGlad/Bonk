@@ -18,9 +18,23 @@ pub(crate) struct GlobalArgs {
     /// reads, `--dry-run` and `--simulate` only, never a write to a disk
     #[arg(long, value_name = "FILE", global = true)]
     fixture: Option<PathBuf>,
+
+    /// Send all network traffic through this proxy (`BONK_PROXY`): socks5h:// only, such as Tor at
+    /// socks5h://127.0.0.1:9050. If it cannot be reached, Bonk fails instead of connecting directly
+    #[arg(long, value_name = "URL", global = true)]
+    proxy: Option<String>,
 }
 
 impl GlobalArgs {
+    /// L'option, sinon la variable : un réglage oublié ne doit pas pouvoir faire sortir en direct.
+    pub(crate) fn proxy(&self, vars: &[(String, String)]) -> Option<String> {
+        self.proxy.clone().or_else(|| {
+            vars.iter()
+                .find(|(name, _)| name == "BONK_PROXY")
+                .map(|(_, value)| value.clone())
+        })
+    }
+
     pub(crate) fn path(&self) -> Option<&Path> {
         self.fixture.as_deref()
     }

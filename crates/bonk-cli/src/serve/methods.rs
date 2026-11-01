@@ -7,7 +7,9 @@ use crate::config::{self, ConfigAction, ConfigError};
 use crate::errors::{self, Code};
 use crate::{debug, diagnose, format, info, list, schema};
 
-use super::params::{ConfigParams, DiagnoseParams, NameParams, TargetParams, ViewParams};
+use super::params::{
+    CatalogParams, ConfigParams, DiagnoseParams, NameParams, TargetParams, ViewParams,
+};
 use super::protocol::{Failure, disk_not_found, failure, json_error, parse};
 use super::{Config, Method, PROTOCOL};
 
@@ -30,6 +32,15 @@ pub(super) fn quick(method: Method, params: &Value, cfg: &Config) -> Result<Valu
                 .map(|m| json!({"method": m.name(), "about": m.about()}))
                 .collect(),
         )),
+        Method::CatalogList => {
+            let p: CatalogParams = parse(params)?;
+            crate::catalog::report_value(
+                p.catalog_url.as_deref(),
+                p.cache_dir.as_deref(),
+                p.family.as_deref(),
+            )
+            .map_err(|e| failure(e.code, e.message))
+        }
         Method::DiskList => {
             let p: ViewParams = parse(params)?;
             let options = FilterOptions {

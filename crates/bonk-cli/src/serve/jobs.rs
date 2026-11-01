@@ -75,8 +75,16 @@ pub(super) fn prepare(kind: Kind, params: &Value, cfg: &Config) -> Result<Task, 
     let mode = p.mode()?;
     let elevation = p.elevation()?;
     let (filesystem, table) = (p.filesystem()?, p.table()?);
-    let source = match kind {
-        Kind::Repair | Kind::Format => PathBuf::new(),
+    let mut sha256 = p.sha256.clone();
+    let source = match (kind, &p.image) {
+        (Kind::Repair | Kind::Format, _) => PathBuf::new(),
+        (Kind::Write, Some(id)) => {
+            let (source, hash) =
+                crate::catalog::image_source(id, p.catalog_url.as_deref(), p.cache_dir.as_deref())
+                    .map_err(|e| failure(e.code, e.message))?;
+            sha256 = Some(hash);
+            source
+        }
         _ => p.source()?,
     };
     Ok(match kind {
@@ -90,7 +98,7 @@ pub(super) fn prepare(kind: Kind, params: &Value, cfg: &Config) -> Result<Task, 
                 trace_io: trace,
                 dry_run: p.dry_run,
                 yes: p.yes,
-                expected_sha256: p.sha256,
+                expected_sha256: sha256,
                 mode,
                 table,
                 elevation,

@@ -60,11 +60,24 @@ pub(super) struct WatchParams {
     pub(super) allow_virtual: bool,
 }
 
+/// Paramètres de `catalog.list`.
+#[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub(super) struct CatalogParams {
+    pub(super) family: Option<String>,
+    pub(super) catalog_url: Option<String>,
+    pub(super) cache_dir: Option<PathBuf>,
+}
+
 #[derive(Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub(super) struct TransferParams {
     pub(super) target: String,
     pub(super) source: Option<PathBuf>,
+    /// Image du catalogue signé, à la place de `source`.
+    pub(super) image: Option<String>,
+    /// Adresse du catalogue ; sa signature est contrôlée d'où qu'il vienne.
+    pub(super) catalog_url: Option<String>,
     /// La cible est un fichier image (créé avec `size` s'il n'existe pas).
     pub(super) simulate: bool,
     pub(super) size: Option<u64>,
