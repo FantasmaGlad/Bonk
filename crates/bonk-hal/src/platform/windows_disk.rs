@@ -22,7 +22,7 @@ use windows_sys::Win32::System::Ioctl::{
     IOCTL_DISK_UPDATE_PROPERTIES,
 };
 
-use super::windows::{ioctl_raw, read_volumes};
+use super::windows_query::{ioctl_raw, read_volumes};
 use crate::image::Access;
 use crate::target::OpenTargetError;
 use crate::windows_facts::{disk_number, partition_numbers};

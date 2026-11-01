@@ -106,6 +106,30 @@ pub enum ImageSource {
     OfficialPage { official_page: String },
 }
 
+/// A system in the report of `bonk catalog list --json`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct FamilyEntry {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub category: Option<String>,
+    /// Logo checked by its hash, in the local cache; absent if it could not be read.
+    #[serde(default)]
+    pub icon_path: Option<std::path::PathBuf>,
+}
+
+/// Report of `bonk catalog list --json`: what interfaces read, one type for both sides.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct CatalogReport {
+    pub schema_version: u32,
+    pub sequence: u64,
+    pub expires_unix: u64,
+    /// Saved copy, because the network was missing.
+    pub saved_copy: bool,
+    pub families: Vec<FamilyEntry>,
+    pub images: Vec<Image>,
+}
+
 /// Le manifeste, une fois vérifié.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Catalog {

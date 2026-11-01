@@ -19,6 +19,8 @@ mod windows;
 mod windows_disk;
 #[cfg(windows)]
 mod windows_helper;
+#[cfg(windows)]
+mod windows_query;
 
 use std::path::{Path, PathBuf};
 

@@ -38,8 +38,9 @@ use windows_sys::Win32::UI::Shell::{
 use windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE;
 
 use super::Platform;
-use super::windows::{Windows, wide};
+use super::windows::Windows;
 use super::windows_disk;
+use super::windows_query::wide;
 use crate::disk::Disk;
 use crate::image::Access;
 use crate::safety::{Eligibility, Exclusion, FilterOptions, evaluate};

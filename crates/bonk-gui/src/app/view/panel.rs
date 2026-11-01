@@ -8,9 +8,9 @@ use iced::widget::{button, checkbox, column, progress_bar, row, text, text_input
 
 use bonk_core::write::Phase;
 
-use crate::errors::failure_text;
 use crate::theme;
 use crate::transfer::Outcome;
+use bonk_ui::errors::failure_text;
 
 use super::super::catalog::{CatalogState, find_url, menu_button, menu_list};
 use super::super::{App, Focus, Message, WRITE_DELAY, WriteState};

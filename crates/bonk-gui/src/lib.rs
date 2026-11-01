@@ -6,14 +6,12 @@
 //! n'est utilisable.
 
 mod app;
-mod command;
-pub use errors::french_title;
-mod errors;
+pub use bonk_ui::french_title;
 mod locale;
 mod theme;
 mod transfer;
 
-pub use command::{ViewOptions, WriteView, equivalent_commands};
+pub use bonk_ui::command::{ViewOptions, WriteView, equivalent_commands};
 
 use iced::Size;
 

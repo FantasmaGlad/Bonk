@@ -48,7 +48,7 @@ pub fn french_title(code: &str) -> Option<&'static str> {
         .map(|(_, title)| *title)
 }
 
-pub(crate) fn failure_text(lang: Lang, code: Option<&str>, message: &str) -> String {
+pub fn failure_text(lang: Lang, code: Option<&str>, message: &str) -> String {
     match (lang, code.and_then(french_title)) {
         (Lang::Fr, Some(title)) => format!("{title} ({message})"),
         _ => message.to_owned(),

@@ -61,6 +61,10 @@ fn chaque_crate_ne_depend_que_de_ce_que_permet_sa_couche() {
         ),
         ("bonk-ops", &["bonk-cli", "bonk-gui", "clap", "iced"][..]),
         ("bonk-cli", &["bonk-gui", "iced"][..]),
+        (
+            "bonk-ui",
+            &["bonk-cli", "bonk-gui", "clap", "iced", "rfd", "libc"][..],
+        ),
         ("bonk-gui", &["bonk-cli", "clap", "libc"][..]),
     ] {
         let deps = dependencies(name);

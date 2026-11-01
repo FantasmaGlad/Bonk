@@ -4,11 +4,12 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use bonk_catalog::manifest::{self, Catalog, Channel, Image, ImageSource, Loaded, TRUSTED_KEYS};
+use bonk_catalog::manifest::{
+    self, Catalog, CatalogReport, Channel, FamilyEntry, Image, ImageSource, Loaded, TRUSTED_KEYS,
+};
 use bonk_hal::{Lang, format_size};
 use clap::{Args, Subcommand, ValueEnum};
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::errors::{Code, report};
 use bonk_ops::job::{self, JobError};
@@ -238,28 +239,8 @@ fn channel_label(channel: Channel) -> &'static str {
     }
 }
 
-#[derive(Serialize, JsonSchema)]
-struct FamilyEntry {
-    id: String,
-    name: String,
-    category: Option<String>,
-    /// Logo checked by its hash, in the local cache; absent if it could not be read.
-    icon_path: Option<PathBuf>,
-}
-
-#[derive(Serialize, JsonSchema)]
-struct Report {
-    schema_version: u32,
-    sequence: u64,
-    expires_unix: u64,
-    /// Saved copy, because the network was missing.
-    saved_copy: bool,
-    families: Vec<FamilyEntry>,
-    images: Vec<Image>,
-}
-
 pub(crate) fn schema() -> serde_json::Value {
-    serde_json::to_value(schemars::schema_for!(Report)).unwrap_or_default()
+    serde_json::to_value(schemars::schema_for!(CatalogReport)).unwrap_or_default()
 }
 
 /// Le rapport JSON, partagé avec le service.
@@ -272,7 +253,7 @@ pub(crate) fn report_value(
     let base = base_url(url, std::env::var("BONK_CATALOG_URL").ok());
     let fetch = |address: &str| bonk_catalog::fetch_bytes(address).map_err(|e| e.to_string());
     let catalog = &loaded.catalog;
-    let report = Report {
+    let report = CatalogReport {
         schema_version: job::SCHEMA_VERSION,
         sequence: catalog.sequence,
         expires_unix: catalog.expires_unix,

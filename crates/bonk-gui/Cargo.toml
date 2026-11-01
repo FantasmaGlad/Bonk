@@ -12,6 +12,7 @@ publish.workspace = true
 bonk-core.workspace = true
 bonk-hal.workspace = true
 bonk-catalog.workspace = true
+bonk-ui.workspace = true
 sys-locale.workspace = true
 serde_json.workspace = true
 iced.workspace = true

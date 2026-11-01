@@ -439,6 +439,7 @@ dependencies = [
  "bonk-catalog",
  "bonk-core",
  "bonk-hal",
+ "bonk-ui",
  "iced",
  "iced_test",
  "image",
@@ -471,6 +472,17 @@ dependencies = [
  "log",
  "schemars",
  "serde",
+]
+
+[[package]]
+name = "bonk-ui"
+version = "0.0.4"
+dependencies = [
+ "bonk-catalog",
+ "bonk-core",
+ "bonk-hal",
+ "log",
+ "serde_json",
 ]
 
 [[package]]
