@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use bonk_core::BlockDevice;
 use bonk_core::write::{self as engine, Control, DEFAULT_CHUNK, Progress};
-use bonk_hal::{Access, Elevation, FilterOptions};
+use bonk_hal::{Elevation, FilterOptions};
 
 use super::source::ImageFile;
 use super::target::open_read_only;

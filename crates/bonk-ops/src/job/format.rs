@@ -42,7 +42,7 @@ pub struct FormatJob {
 
 /// Système de fichiers choisi quand rien n'est demandé.
 #[must_use]
-pub(crate) fn default_filesystem(size: u64) -> Filesystem {
+pub fn default_filesystem(size: u64) -> Filesystem {
     if size <= FAT32_DEFAULT_LIMIT {
         Filesystem::Fat32
     } else {
