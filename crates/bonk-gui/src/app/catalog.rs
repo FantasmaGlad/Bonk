@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{button, column, container, row, scrollable, svg, text};
+use iced::widget::{button, column, container, image, row, scrollable, text};
 use iced::{Element, Length};
 use serde_json::Value;
 
@@ -126,7 +126,7 @@ pub(crate) fn read(program: PathBuf) -> Result<Vec<System>, String> {
 
 fn logo(icon: Option<&PathBuf>) -> Element<'_, Message> {
     match icon {
-        Some(path) => svg(svg::Handle::from_path(path))
+        Some(path) => image(image::Handle::from_path(path))
             .width(Length::Fixed(24.0))
             .height(Length::Fixed(24.0))
             .into(),
@@ -205,7 +205,7 @@ mod tests {
     fn report() -> Value {
         json!({
             "families": [
-                {"id": "ubuntu", "name": "Ubuntu", "icon_path": "/c/u.svg"},
+                {"id": "ubuntu", "name": "Ubuntu", "icon_path": "/c/u.png"},
                 {"id": "vide", "name": "Vide"},
                 {"id": "windows", "name": "Windows"}
             ],
@@ -223,7 +223,7 @@ mod tests {
     fn systemes_avec_logo_et_versions_dans_l_ordre_recu() {
         let systems = parse(&report());
         assert_eq!(systems.len(), 2, "un système sans image n'est pas montré");
-        assert_eq!(systems[0].icon, Some(PathBuf::from("/c/u.svg")));
+        assert_eq!(systems[0].icon, Some(PathBuf::from("/c/u.png")));
         assert_eq!(systems[0].choices[0].label, "26.04.1 desktop LTS");
         assert_eq!(systems[0].choices[1].label, "20.04.5 desktop (fin de vie)");
         assert!(systems[0].choices[1].end_of_life);

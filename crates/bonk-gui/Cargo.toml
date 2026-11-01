@@ -13,6 +13,8 @@ bonk-core.workspace = true
 bonk-hal.workspace = true
 serde_json.workspace = true
 iced.workspace = true
+# Active le décodeur PNG des logos pour Iced, qui le reçoit par unification des fonctionnalités.
+image.workspace = true
 rfd.workspace = true
 log.workspace = true
 
