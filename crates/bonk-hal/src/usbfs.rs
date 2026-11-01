@@ -12,6 +12,11 @@ use bonk_core::msc::{BulkError, BulkTransport, Direction};
 /// Sans réponse dans ce délai, la clé est tenue pour perdue. Vider son cache peut prendre longtemps.
 const TIMEOUT_MS: u32 = 60_000;
 
+/// Taille d'un transfert. Le noyau réserve son tampon d'un seul bloc : sur un téléphone dont la mémoire est
+/// fragmentée, 1 Mio finit par être refusé alors qu'il reste de la place, et l'écriture s'arrêtait là.
+const TRANSFER_START: usize = 256 << 10;
+const TRANSFER_MIN: usize = 16 << 10;
+
 const CLASS_STORAGE: u8 = 0x08;
 const SUBCLASS_SCSI: u8 = 0x06;
 const PROTOCOL_BULK_ONLY: u8 = 0x50;
@@ -114,6 +119,24 @@ const USBDEVFS_CLEAR_HALT: u64 = request(READ, 21, size_of::<u32>());
 const USBDEVFS_DISCONNECT: u64 = request(0, 22, 0);
 const USBDEVFS_CONNECT: u64 = request(0, 23, 0);
 
+/// Lance un transfert d'au plus `*limit` octets. Sans mémoire, le noyau refuse avant de toucher au bus : on
+/// recommence plus petit, et la taille réduite vaut pour la suite.
+fn with_shrinking_limit(
+    limit: &mut usize,
+    wanted: usize,
+    mut transfer: impl FnMut(usize) -> io::Result<usize>,
+) -> io::Result<usize> {
+    loop {
+        match transfer(wanted.min(*limit)) {
+            Err(error) if error.raw_os_error() == Some(libc::ENOMEM) && *limit > TRANSFER_MIN => {
+                *limit = (*limit / 2).max(TRANSFER_MIN);
+                log::debug!(target: "bonk::usbfs", limit = *limit; "transfer size reduced");
+            }
+            result => return result,
+        }
+    }
+}
+
 fn bulk_error(error: io::Error) -> BulkError {
     match error.raw_os_error() {
         Some(libc::EPIPE) => BulkError::Stall,
@@ -129,6 +152,7 @@ pub struct UsbfsTransport {
     interface: StorageInterface,
     /// L'interface a été réclamée ici, et se rend ici. Sous Android, c'est l'application qui la tient.
     claimed_here: bool,
+    transfer_limit: usize,
 }
 
 impl UsbfsTransport {
@@ -154,6 +178,7 @@ impl UsbfsTransport {
             device,
             interface,
             claimed_here: true,
+            transfer_limit: TRANSFER_START,
         };
         let mut detach = InterfaceIoctl {
             interface: libc::c_int::from(interface.number),
@@ -184,6 +209,7 @@ impl UsbfsTransport {
             device,
             interface,
             claimed_here: false,
+            transfer_limit: TRANSFER_START,
         })
     }
 
@@ -195,16 +221,19 @@ impl UsbfsTransport {
     }
 
     fn bulk(&mut self, endpoint: u8, data: *mut u8, length: usize) -> Result<usize, BulkError> {
-        let length = u32::try_from(length)
-            .map_err(|_| BulkError::Other(io::Error::other("transfer too large")))?;
-        let mut transfer = BulkTransfer {
-            endpoint: u32::from(endpoint),
-            length,
-            timeout_ms: TIMEOUT_MS,
-            data: data.cast(),
-        };
-        self.ioctl(USBDEVFS_BULK, (&raw mut transfer).cast())
-            .map_err(bulk_error)
+        let mut limit = self.transfer_limit;
+        let result = with_shrinking_limit(&mut limit, length, |size| {
+            let mut transfer = BulkTransfer {
+                endpoint: u32::from(endpoint),
+                // `size` ne dépasse jamais `TRANSFER_START`.
+                length: size as u32,
+                timeout_ms: TIMEOUT_MS,
+                data: data.cast(),
+            };
+            self.ioctl(USBDEVFS_BULK, (&raw mut transfer).cast())
+        });
+        self.transfer_limit = limit;
+        result.map_err(bulk_error)
     }
 }
 
@@ -345,6 +374,42 @@ mod tests {
         assert_eq!(USBDEVFS_CLEAR_HALT, 0x8004_5515);
         assert_eq!(USBDEVFS_DISCONNECT, 0x5516);
         assert_eq!(USBDEVFS_CONNECT, 0x5517);
+    }
+
+    #[test]
+    fn sans_memoire_le_transfert_recommence_plus_petit_et_le_reste() -> io::Result<()> {
+        let mut limit = TRANSFER_START;
+        let mut sizes = Vec::new();
+        let done = with_shrinking_limit(&mut limit, 1 << 20, |size| {
+            sizes.push(size);
+            if size > 64 << 10 {
+                Err(io::Error::from_raw_os_error(libc::ENOMEM))
+            } else {
+                Ok(size)
+            }
+        })?;
+        assert_eq!(sizes, [256 << 10, 128 << 10, 64 << 10]);
+        assert_eq!((done, limit), (64 << 10, 64 << 10));
+        Ok(())
+    }
+
+    #[test]
+    fn au_plus_petit_le_manque_de_memoire_remonte() {
+        let mut limit = TRANSFER_MIN;
+        let result = with_shrinking_limit(&mut limit, 1 << 20, |_| {
+            Err(io::Error::from_raw_os_error(libc::ENOMEM))
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn une_autre_erreur_ne_reduit_rien() {
+        let mut limit = TRANSFER_START;
+        let result = with_shrinking_limit(&mut limit, 1 << 20, |_| {
+            Err(io::Error::from_raw_os_error(libc::EPIPE))
+        });
+        assert!(result.is_err());
+        assert_eq!(limit, TRANSFER_START);
     }
 
     #[test]
