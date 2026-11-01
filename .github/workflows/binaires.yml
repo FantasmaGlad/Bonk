@@ -18,6 +18,7 @@ on:
       - "rust-toolchain.toml"
       - ".github/workflows/binaires.yml"
       - ".github/pip/ziglang.txt"
+      - "android/**"
     tags: ["v*.*.*"]
   # Une modification du workflow est validée par sa propre PR (construction sans attestation).
   pull_request:
@@ -366,10 +367,59 @@ jobs:
       artifact-metadata: write
 
   # Release en brouillon : la publication reste une décision du mainteneur.
+  # Application Android. Signée par la clé officielle sur un tag seulement : une PR construit sans secret.
+  android:
+    name: android
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Plateforme Android
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" > /dev/null
+          rustup target add aarch64-linux-android
+      - name: Clé de signature
+        if: github.ref_type == 'tag'
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+        run: |
+          printf '%s' "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/bonk.p12"
+          echo "BONK_KEYSTORE_FILE=$RUNNER_TEMP/bonk.p12" >> "$GITHUB_ENV"
+      - name: Construire
+        working-directory: android
+        env:
+          BONK_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: ./gradlew --no-daemon :app:assembleRelease
+      - name: Nommer et contrôler
+        run: |
+          version=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
+          mkdir dist
+          cp android/app/build/outputs/apk/release/app-release.apk "dist/bonk-$version-android-arm64.apk"
+          "$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)" verify --print-certs "dist/bonk-$version-android-arm64.apk"
+          (cd dist && sha256sum -- *.apk > "bonk-$version-android-arm64.apk.sha256")
+      - name: Attestation de provenance
+        if: github.event_name != 'pull_request' && !github.event.repository.private
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/*.apk
+      - name: Conserver l'application
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: binaire-android
+          path: dist/bonk-*
+          if-no-files-found: error
+          retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
+
   publication:
     name: release (brouillon)
     if: github.ref_type == 'tag'
-    needs: [construire, compatibilite, paquets, sbom]
+    needs: [construire, compatibilite, paquets, sbom, android]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -385,7 +435,7 @@ jobs:
         working-directory: dist
         run: |
           for f in *.sha256; do sha256sum --check "$f"; done
-          sha256sum -- *.tar.gz *.zip *.exe *.dmg *.deb *.rpm *.pkg.tar.zst *.json > SHA256SUMS
+          sha256sum -- *.tar.gz *.zip *.exe *.dmg *.deb *.rpm *.pkg.tar.zst *.apk *.json > SHA256SUMS
           cat SHA256SUMS
       - name: Créer la release en brouillon
         env:
@@ -399,4 +449,4 @@ jobs:
             echo "Empreintes : SHA256SUMS. SBOM : bonk.cdx.json."
           } > notes.md
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "$TAG" --notes-file notes.md \
-            dist/*.tar.gz dist/*.zip dist/*.exe dist/*.dmg dist/*.deb dist/*.rpm dist/*.pkg.tar.zst dist/bonk.cdx.json dist/SHA256SUMS
+            dist/*.tar.gz dist/*.zip dist/*.exe dist/*.dmg dist/*.deb dist/*.rpm dist/*.pkg.tar.zst dist/*.apk dist/bonk.cdx.json dist/SHA256SUMS
