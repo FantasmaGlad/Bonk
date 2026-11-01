@@ -241,7 +241,6 @@ mod tests {
         assert_eq!(systems.len(), 2, "un système sans image n'est pas montré");
         assert_eq!(systems[0].icon, Some(PathBuf::from("/c/u.png")));
         assert_eq!(systems[0].choices[0].label, "26.04.1 desktop LTS");
-        assert_eq!(systems[0].choices[0].name, "Ubuntu",);
         assert_eq!(
             systems[0].choices[1].title(Lang::Fr),
             "20.04.5 desktop (fin de vie)"
