@@ -4,6 +4,7 @@
 mod download;
 pub mod manifest;
 mod sums;
+pub mod tor;
 
 pub use download::{
     Advance, DownloadError, Hooks, SILENCE_LIMIT, download, fetch_bytes, fetch_text, file_name,

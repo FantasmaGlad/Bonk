@@ -129,6 +129,15 @@ impl App {
                 Task::none()
             }
             Message::ImagePicked(None) => Task::none(),
+            Message::TorDetected(address) => {
+                self.tor = address;
+                Task::none()
+            }
+            Message::ToggleTor(on) => {
+                self.use_tor = on && self.tor.is_some();
+                self.focus = Some(Focus::Tor);
+                Task::none()
+            }
             Message::ToggleMenu => {
                 self.focus = Some(Focus::Menu);
                 self.menu_open = !self.menu_open;
@@ -260,10 +269,13 @@ impl App {
         }
         self.catalog = CatalogState::Loading;
         let program = self.program();
-        Task::perform(
-            async move { catalog::read(program) },
-            Message::CatalogLoaded,
-        )
+        Task::batch([
+            Task::perform(
+                async move { catalog::read(program) },
+                Message::CatalogLoaded,
+            ),
+            Task::perform(async { bonk_catalog::tor::detect() }, Message::TorDetected),
+        ])
     }
 
     /// Fait suivre le panneau d'écriture à la sélection : il s'ouvre sur un disque proposé, se referme
@@ -331,6 +343,7 @@ impl App {
             },
             self.view_options(),
             internal_confirmed,
+            self.tor.as_deref().filter(|_| self.use_tor),
         );
         log::info!(target: "bonk::gui", disk = disk_id.as_str(); "starting the write");
         let receiver = transfer::spawn(&self.program(), &args);

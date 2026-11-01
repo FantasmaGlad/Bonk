@@ -487,6 +487,17 @@ impl App {
                         self.has_focus(Focus::Hash),
                     ),
                     ring(
+                        checkbox(self.use_tor)
+                            .label(match &self.tor {
+                                Some(_) => "Télécharger par Tor : plus lent, sans montrer votre adresse à l'éditeur",
+                                None => "Télécharger par Tor : aucun Tor détecté sur cet ordinateur",
+                            })
+                            .on_toggle_maybe(self.tor.is_some().then_some(Message::ToggleTor))
+                            .size(16)
+                            .text_size(13),
+                        self.has_focus(Focus::Tor),
+                    ),
+                    ring(
                         checkbox(raw)
                             .label("Écrire les octets tels quels, sans refuser une image non amorçable")
                             .on_toggle(Message::ToggleRaw)

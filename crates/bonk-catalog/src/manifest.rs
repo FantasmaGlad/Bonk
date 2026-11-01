@@ -80,6 +80,9 @@ pub struct Image {
     /// The file boots once written to a USB drive. False: CD or virtual machine only.
     #[serde(default = "boots_from_usb")]
     pub usb_boot: bool,
+    /// Other addresses of the same file: same hash, same size. `.onion` ones may be plain http.
+    #[serde(default)]
+    pub mirrors: Vec<String>,
     #[serde(flatten)]
     pub source: ImageSource,
 }
@@ -213,6 +216,15 @@ fn check_family(family: &Family) -> Result<(), &'static str> {
     Ok(())
 }
 
+/// Un service onion chiffre déjà tout le chemin : c'est le seul `http://` admis.
+fn is_mirror(address: &str) -> bool {
+    let onion = address
+        .strip_prefix("http://")
+        .and_then(|rest| rest.split('/').next())
+        .is_some_and(|host| host.ends_with(".onion"));
+    address.starts_with("https://") || onion
+}
+
 fn check_image(image: &Image) -> Result<(), &'static str> {
     if !is_identifier(&image.id) {
         return Err("identifier must be lowercase ASCII");
@@ -222,6 +234,9 @@ fn check_image(image: &Image) -> Result<(), &'static str> {
     }
     if !image.homepage.starts_with("https://") {
         return Err("homepage must be https");
+    }
+    if !image.mirrors.iter().all(|mirror| is_mirror(mirror)) {
+        return Err("mirror must be https or an onion address");
     }
     match &image.source {
         ImageSource::Download { url, sha256, .. } => {
@@ -682,6 +697,15 @@ mod tests {
         assert_eq!(catalog.images[1].channel, Channel::EndOfLife);
         assert_eq!(catalog.images[1].family, catalog.images[0].family);
         Ok(())
+    }
+
+    #[test]
+    fn un_miroir_est_https_ou_onion() {
+        assert!(is_mirror("https://m/x.iso"));
+        assert!(is_mirror("http://abc.onion/x.iso"));
+        assert!(!is_mirror("http://m/x.iso"));
+        assert!(!is_mirror("http://onion.evil/abc.onion"));
+        assert!(!is_mirror("ftp://abc.onion/x.iso"));
     }
 
     #[test]

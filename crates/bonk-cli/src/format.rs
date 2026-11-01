@@ -176,7 +176,25 @@ pub(crate) fn schema_capabilities() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(CapabilitiesReport)).unwrap_or_default()
 }
 
+/// Ajoute ce que ne dit pas la plateforme : un Tor local, proposé par `--proxy`, jamais activé seul.
+fn with_tor(mut capabilities: Vec<Capability>) -> Vec<Capability> {
+    capabilities.push(Capability {
+        name: "proxy.tor".to_owned(),
+        available: false,
+        missing: None,
+        detail: Some("no Tor listening on 127.0.0.1:9050 or :9150".to_owned()),
+    });
+    if let Some(address) = bonk_catalog::tor::detect()
+        && let Some(tor) = capabilities.last_mut()
+    {
+        tor.available = true;
+        tor.detail = Some(format!("use it with --proxy {address}"));
+    }
+    capabilities
+}
+
 pub(crate) fn report_value(capabilities: Vec<Capability>) -> serde_json::Result<serde_json::Value> {
+    let capabilities = with_tor(capabilities);
     serde_json::to_value(CapabilitiesReport {
         schema_version: job::SCHEMA_VERSION,
         os: std::env::consts::OS,
@@ -190,7 +208,7 @@ fn reason(missing: Option<Missing>) -> &'static str {
         Some(Missing::MissingTool) => "tool missing",
         Some(Missing::OsUnsupported) => "not supported",
         Some(Missing::NoPermission) => "permission denied",
-        None => "indisponible",
+        None => "not available",
     }
 }
 
@@ -204,7 +222,7 @@ fn write_capabilities(
         serde_json::to_writer_pretty(&mut *out, &value).map_err(io::Error::from)?;
         return writeln!(out);
     }
-    for capability in capabilities {
+    for capability in with_tor(capabilities) {
         if capability.available {
             writeln!(out, "{:<14} yes", capability.name)?;
         } else {
