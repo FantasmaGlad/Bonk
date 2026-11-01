@@ -105,9 +105,14 @@ fn aucun_fichier_de_production_ne_depasse_le_plafond() {
                 if !nom.ends_with("job_tests") && !nom.ends_with("target") {
                     parcourir(&chemin, trouves);
                 }
-            } else if nom.ends_with(".rs") && !nom.ends_with("tests.rs") && !nom.contains("/tests/")
+            } else if nom.ends_with(".rs")
+                && !nom.ends_with("tests.rs")
+                && !chemin.components().any(|c| c.as_os_str() == "tests")
             {
-                let texte = std::fs::read_to_string(&chemin).unwrap_or_default();
+                // Windows extrait les sources avec des fins de ligne CRLF.
+                let texte = std::fs::read_to_string(&chemin)
+                    .unwrap_or_default()
+                    .replace("\r\n", "\n");
                 let production = texte
                     .split("#[cfg(test)]\nmod tests")
                     .next()
