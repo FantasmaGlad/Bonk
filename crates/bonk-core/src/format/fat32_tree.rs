@@ -182,35 +182,32 @@ fn short_entry(short: &[u8; 11], attributes: u8, cluster: u32, size: u32) -> [u8
 const DOT: [u8; 11] = *b".          ";
 const DOT_DOT: [u8; 11] = *b"..         ";
 
-/// Calcule la place de tout : refuse ce qui ne tient pas avant le premier octet écrit.
-///
-/// # Errors
-/// Volume trop petit, fichier de 4 Gio ou plus, nom refusé, doublon.
-pub fn layout(
-    volume: &Volume<'_>,
-    block: u32,
-    files: &[NewFile],
-    extra_directories: &[Vec<String>],
-) -> Result<Layout, FormatError> {
-    let geometry = fat32::geometry(volume.sectors, block)?;
-    let cluster = u64::from(geometry.cluster_bytes);
+type Children = BTreeMap<Vec<String>, Vec<Child>>;
+type Encoded = BTreeMap<Vec<String>, Vec<Row>>;
+type PlacedDirs = BTreeMap<Vec<String>, (u32, u32)>;
 
-    let mut children: BTreeMap<Vec<String>, Vec<Child>> = BTreeMap::new();
-    children.insert(Vec::new(), Vec::new());
-    let add_directory = |children: &mut BTreeMap<Vec<String>, Vec<Child>>, path: &[String]| {
-        for depth in 1..=path.len() {
-            let here = path[..depth].to_vec();
-            if !children.contains_key(&here) {
-                children.insert(here.clone(), Vec::new());
-                if let Some(parent) = children.get_mut(&path[..depth - 1]) {
-                    parent.push(Child {
-                        name: path[depth - 1].clone(),
-                        kind: ChildKind::Directory(here),
-                    });
-                }
+fn add_directory(children: &mut Children, path: &[String]) {
+    for depth in 1..=path.len() {
+        let here = path[..depth].to_vec();
+        if !children.contains_key(&here) {
+            children.insert(here.clone(), Vec::new());
+            if let Some(parent) = children.get_mut(&path[..depth - 1]) {
+                parent.push(Child {
+                    name: path[depth - 1].clone(),
+                    kind: ChildKind::Directory(here),
+                });
             }
         }
-    };
+    }
+}
+
+/// L'arbre des dossiers : chacun et ce qu'il contient.
+fn collect_children(
+    files: &[NewFile],
+    extra_directories: &[Vec<String>],
+) -> Result<Children, FormatError> {
+    let mut children = Children::new();
+    children.insert(Vec::new(), Vec::new());
     for path in extra_directories {
         add_directory(&mut children, path);
     }
@@ -234,10 +231,13 @@ pub fn layout(
             });
         }
     }
+    Ok(children)
+}
 
-    // Une première passe donne le nombre d'entrées de chaque dossier, donc ses clusters.
-    let mut encoded: BTreeMap<Vec<String>, Vec<Row>> = BTreeMap::new();
-    for (path, list) in &children {
+/// Une première passe donne le nombre d'entrées de chaque dossier, donc ses clusters.
+fn encode_names(children: &Children) -> Result<Encoded, FormatError> {
+    let mut encoded = Encoded::new();
+    for (path, list) in children {
         let mut taken = BTreeSet::new();
         let mut seen = BTreeSet::new();
         let mut rows = Vec::with_capacity(list.len());
@@ -258,46 +258,24 @@ pub fn layout(
         }
         encoded.insert(path.clone(), rows);
     }
+    Ok(encoded)
+}
 
-    let mut next = u64::from(ROOT_CLUSTER);
-    let mut placed_dirs: BTreeMap<Vec<String>, (u32, u32)> = BTreeMap::new();
-    let has_label = volume.label.is_some();
-    for (path, rows) in &encoded {
-        let specials =
-            usize::from(path.is_empty() && has_label) + if path.is_empty() { 0 } else { 2 };
-        let entries: usize = rows
-            .iter()
-            .map(|(long, _, _)| long.len() + 1)
-            .sum::<usize>()
-            + specials;
-        let clusters = ((entries * ENTRY) as u64).div_ceil(cluster).max(1);
-        placed_dirs.insert(path.clone(), (narrow(next)?, narrow(clusters)?));
-        next += clusters;
-    }
-    let mut placed_files = Vec::with_capacity(files.len());
-    for file in files {
-        let clusters = file.size.div_ceil(cluster);
-        placed_files.push(Placed {
-            first_cluster: if clusters == 0 { 0 } else { narrow(next)? },
-            clusters: narrow(clusters)?,
-        });
-        next += clusters;
-    }
-    let used = next - u64::from(ROOT_CLUSTER);
-    if used > geometry.clusters {
-        return Err(FormatError::TooSmall(format!(
-            "{} bytes to store: the drive only has {} data bytes",
-            used * cluster,
-            geometry.clusters * cluster
-        )));
-    }
-
+/// Le contenu de chaque dossier, une fois tout placé.
+fn directory_bytes(
+    label: Option<&str>,
+    files: &[NewFile],
+    children: &Children,
+    encoded: &Encoded,
+    placed_dirs: &PlacedDirs,
+    placed_files: &[Placed],
+) -> Result<Vec<(u32, u32, Vec<u8>)>, FormatError> {
     let mut directories = Vec::with_capacity(encoded.len());
-    for (path, rows) in &encoded {
+    for (path, rows) in encoded {
         let (first, clusters) = placed_dirs[path];
         let mut bytes = Vec::new();
         if path.is_empty() {
-            if let Some(label) = volume.label {
+            if let Some(label) = label {
                 bytes.extend_from_slice(&short_entry(
                     &fat32::label_field(Some(label)),
                     ATTR_LABEL,
@@ -334,6 +312,64 @@ pub fn layout(
         }
         directories.push((first, clusters, bytes));
     }
+    Ok(directories)
+}
+
+/// Calcule la place de tout : refuse ce qui ne tient pas avant le premier octet écrit.
+///
+/// # Errors
+/// Volume trop petit, fichier de 4 Gio ou plus, nom refusé, doublon.
+pub fn layout(
+    volume: &Volume<'_>,
+    block: u32,
+    files: &[NewFile],
+    extra_directories: &[Vec<String>],
+) -> Result<Layout, FormatError> {
+    let geometry = fat32::geometry(volume.sectors, block)?;
+    let cluster = u64::from(geometry.cluster_bytes);
+    let children = collect_children(files, extra_directories)?;
+    let encoded = encode_names(&children)?;
+
+    let mut next = u64::from(ROOT_CLUSTER);
+    let mut placed_dirs = PlacedDirs::new();
+    let has_label = volume.label.is_some();
+    for (path, rows) in &encoded {
+        let specials =
+            usize::from(path.is_empty() && has_label) + if path.is_empty() { 0 } else { 2 };
+        let entries: usize = rows
+            .iter()
+            .map(|(long, _, _)| long.len() + 1)
+            .sum::<usize>()
+            + specials;
+        let clusters = ((entries * ENTRY) as u64).div_ceil(cluster).max(1);
+        placed_dirs.insert(path.clone(), (narrow(next)?, narrow(clusters)?));
+        next += clusters;
+    }
+    let mut placed_files = Vec::with_capacity(files.len());
+    for file in files {
+        let clusters = file.size.div_ceil(cluster);
+        placed_files.push(Placed {
+            first_cluster: if clusters == 0 { 0 } else { narrow(next)? },
+            clusters: narrow(clusters)?,
+        });
+        next += clusters;
+    }
+    let used = next - u64::from(ROOT_CLUSTER);
+    if used > geometry.clusters {
+        return Err(FormatError::TooSmall(format!(
+            "{} bytes to store: the drive only has {} data bytes",
+            used * cluster,
+            geometry.clusters * cluster
+        )));
+    }
+    let directories = directory_bytes(
+        volume.label,
+        files,
+        &children,
+        &encoded,
+        &placed_dirs,
+        &placed_files,
+    )?;
     Ok(Layout {
         geometry,
         first_lba: volume.first_lba,

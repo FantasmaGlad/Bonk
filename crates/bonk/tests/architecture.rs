@@ -92,3 +92,35 @@ fn le_code_propre_a_un_systeme_reste_dans_bonk_hal() {
         }
     }
 }
+
+/// Un fichier qui dépasse ce plafond, tests à part, se découpe : c'est là que naissent les fichiers fourre-tout.
+#[test]
+fn aucun_fichier_de_production_ne_depasse_le_plafond() {
+    const PLAFOND: usize = 700;
+    fn parcourir(dossier: &std::path::Path, trouves: &mut Vec<(usize, String)>) {
+        for entree in std::fs::read_dir(dossier).into_iter().flatten().flatten() {
+            let chemin = entree.path();
+            let nom = chemin.to_string_lossy().into_owned();
+            if chemin.is_dir() {
+                if !nom.ends_with("job_tests") && !nom.ends_with("target") {
+                    parcourir(&chemin, trouves);
+                }
+            } else if nom.ends_with(".rs") && !nom.ends_with("tests.rs") && !nom.contains("/tests/")
+            {
+                let texte = std::fs::read_to_string(&chemin).unwrap_or_default();
+                let production = texte
+                    .split("#[cfg(test)]\nmod tests")
+                    .next()
+                    .unwrap_or_default();
+                let lignes = production.lines().count();
+                if lignes > PLAFOND {
+                    trouves.push((lignes, nom));
+                }
+            }
+        }
+    }
+    let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let mut trouves = Vec::new();
+    parcourir(&crates, &mut trouves);
+    assert!(trouves.is_empty(), "{trouves:?}");
+}

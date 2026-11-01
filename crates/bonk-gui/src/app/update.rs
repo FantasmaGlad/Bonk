@@ -16,6 +16,8 @@ use super::catalog::{self, CatalogState, ChoiceSource};
 use super::{App, Focus, Message, WRITE_DELAY, WriteState, load};
 
 impl App {
+    // Un aiguillage plat, un bras par message : le découper le rendrait plus difficile à parcourir.
+    #[allow(clippy::too_many_lines)]
     pub(super) fn apply(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Refresh => {
