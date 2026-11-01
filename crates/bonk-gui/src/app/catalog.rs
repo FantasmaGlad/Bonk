@@ -275,8 +275,10 @@ mod tests {
     fn le_menu_clavier_ne_compte_que_ce_qui_s_ecrit_et_retrouve_un_choix() {
         let systems = parse(&report());
         assert_eq!(writable(&systems).len(), 2);
-        let (system, choice) = find_url(&systems, "https://u/20.iso").expect("trouvé");
-        assert_eq!((system.name.as_str(), choice.end_of_life), ("Ubuntu", true));
+        assert!(matches!(
+            find_url(&systems, "https://u/20.iso"),
+            Some((system, choice)) if system.name == "Ubuntu" && choice.end_of_life
+        ));
         assert!(find_url(&systems, "https://ailleurs/").is_none());
     }
 

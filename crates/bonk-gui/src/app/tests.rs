@@ -1038,7 +1038,10 @@ fn le_menu_s_ouvre_nomme_les_versions_et_un_choix_regle_tout() {
         contient(&app, "Ubuntu 26.04.1 desktop LTS"),
         "le choix reste nommé"
     );
-    assert!(contient(&app, "Lien officiel et empreinte du catalogue signé : rien à régler."));
+    assert!(contient(
+        &app,
+        "Lien officiel et empreinte du catalogue signé : rien à régler."
+    ));
 }
 
 #[test]
