@@ -17,6 +17,8 @@ mod unsupported;
 mod windows;
 #[cfg(windows)]
 mod windows_disk;
+#[cfg(windows)]
+mod windows_helper;
 
 use std::path::{Path, PathBuf};
 
@@ -149,6 +151,22 @@ pub trait Platform: Send + Sync {
 
     /// Version du noyau, pour le rapport de diagnostic, quand le système la donne.
     fn kernel_release(&self) -> Option<String>;
+}
+
+/// Point d'entrée du helper élevé (`bonk elevated-helper`), qui n'existe que sous Windows.
+///
+/// # Errors
+/// Tube inutilisable, ou client qui n'est pas celui annoncé ; hors Windows, toujours.
+pub fn run_elevated_helper(client: u32, pipe: &str) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        windows_helper::serve(client, pipe)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (client, pipe);
+        Err("the elevated helper only exists on Windows".to_owned())
+    }
 }
 
 /// Capacités d'un système où Bonk écrit lui-même, sans outil de formatage de l'hôte.

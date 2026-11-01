@@ -24,14 +24,24 @@ try {
 
     & $bonk write $virtuel[0].id $image --allow-virtual --mode raw --yes
     if ($LASTEXITCODE -ne 0) { throw "write : $LASTEXITCODE" }
-    # Un VHD n'a pas de numéro de série : son identifiant vient de sa table, que l'écriture a remplacée.
-    $apres = & $bonk list --all --allow-virtual --json | ConvertFrom-Json
-    $relu = @($apres.disks | Where-Object { $_.path -eq $virtuel[0].path })
-    & $bonk verify $relu[0].id $image --allow-virtual
+    # L'identifiant survit à l'écriture, qui a pourtant remplacé la table.
+    & $bonk verify $virtuel[0].id $image --allow-virtual
     if ($LASTEXITCODE -ne 0) { throw "verify : $LASTEXITCODE" }
 
+    # Même parcours par le helper élevé : poignée reçue, verrous tenus par lui.
+    $env:BONK_WINDOWS_HELPER = 'always'
+    & $bonk write $virtuel[0].id $image --allow-virtual --mode raw --yes
+    if ($LASTEXITCODE -ne 0) { throw "write par le helper : $LASTEXITCODE" }
+    & $bonk verify $virtuel[0].id $image --allow-virtual
+    if ($LASTEXITCODE -ne 0) { throw "verify par le helper : $LASTEXITCODE" }
     & $bonk write $systeme[0].id $image --allow-virtual --mode raw --yes
     if ($LASTEXITCODE -ne 3) { throw "disque système : code $LASTEXITCODE au lieu de 3" }
+    # Formatage par le helper, identifiant inchangé : FAT32 par Bonk, exFAT et NTFS par le système.
+    foreach ($fs in 'fat32', 'exfat', 'ntfs') {
+        & $bonk format $virtuel[0].id --fs $fs --label ESSAI --allow-virtual --yes
+        if ($LASTEXITCODE -ne 0) { throw "format $fs : $LASTEXITCODE" }
+    }
+    Remove-Item Env:BONK_WINDOWS_HELPER
 }
 finally {
     "select vdisk file=`"$vhd`"`ndetach vdisk" | Set-Content $script -Encoding ascii

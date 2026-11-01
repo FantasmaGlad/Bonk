@@ -130,6 +130,14 @@ enum Command {
     Serve,
     /// Open the window (like `bonk` alone)
     Gui,
+    /// Windows: the elevated side of an authorization, started by Bonk itself
+    #[command(hide = true)]
+    ElevatedHelper {
+        #[arg(long)]
+        client_pid: u32,
+        #[arg(long)]
+        pipe: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -171,6 +179,7 @@ fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
             action: DiskAction::RepairGpt(a),
         } if a.touches_real_disk() => Some(DISK),
         Command::Format(a) if a.touches_real_disk() => Some(DISK),
+        Command::ElevatedHelper { .. } => Some(DISK),
         Command::Debug {
             action: debug::DebugAction::Sources(_),
         } => Some("debug sources reads the real system: incompatible with --fixture"),
@@ -444,6 +453,12 @@ where
         Some(Command::Cache { action }) => cache::run(&action, out, err),
         Some(Command::Schema(args)) => run_schema(&args, out, err),
         Some(Command::Completions { shell }) => run_completions(shell, out, err),
+        Some(Command::ElevatedHelper { client_pid, pipe }) => {
+            match bonk_hal::platform::run_elevated_helper(client_pid, &pipe) {
+                Ok(()) => 0,
+                Err(erreur) => report(err, Code::DeviceOpenDenied, erreur),
+            }
+        }
         Some(Command::Serve) => run_serve(fixture_reads.as_deref(), env, view),
         Some(Command::Debug { action }) => run_debug(action, out, err, enumerate),
         Some(Command::Explain(args)) => run_explain(&args, out, err),

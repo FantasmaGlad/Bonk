@@ -48,8 +48,9 @@ pub struct RawDisk {
     pub product: Option<String>,
     pub serial: Option<String>,
     pub size_bytes: u64,
-    /// GUID du disque (GPT) ou signature (MBR) : survit à un rebranchement, pas le numéro.
-    pub disk_id: Option<String>,
+    /// Chemin d'instance du périphérique. Survit à une réécriture, contrairement à tout ce que porte la
+    /// table, et à un rebranchement, contrairement au numéro.
+    pub instance: Option<String>,
     pub partitions: Vec<RawPartition>,
 }
 
@@ -120,13 +121,30 @@ fn is_on_drive(mount: &str, drive: &str) -> bool {
         && matches!(&mount[drive.len()..], "" | "\\" | "/")
 }
 
+/// `\\\\?\\usbstor#disk&ven_x#7&1&0#{guid}` devient `usbstor-disk-ven_x-7-1-0` : lisible, sans rien que
+/// le shell interprète. Le GUID final est celui de la classe, commun à tous.
+fn instance_id(instance: &str) -> String {
+    let path = instance.strip_prefix(r"\\?\").unwrap_or(instance);
+    let path = path.rsplit_once("#{").map_or(path, |(head, _)| head);
+    path.to_ascii_lowercase()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect()
+}
+
 fn stable_id(disk: &RawDisk, bus: Bus) -> String {
-    let base = match (&disk.serial, &disk.disk_id) {
+    let base = match (&disk.serial, &disk.instance) {
         (Some(serial), _) => format!(
             "{}-{serial}",
             crate::describe::bus_label(bus, crate::describe::Lang::En)
         ),
-        (None, Some(id)) => format!("disk-{id}"),
+        (None, Some(instance)) => format!("disk-{}", instance_id(instance)),
         (None, None) => format!("physicaldrive{}", disk.number),
     };
     base.split_whitespace().collect::<Vec<_>>().join("_")
@@ -247,6 +265,16 @@ pub fn disk_number(path: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
+/// Numéros du disque et de la partition de `\\\\.\\PhysicalDriveN\\PartitionM`.
+#[must_use]
+pub fn partition_numbers(path: &str) -> Option<(u32, u32)> {
+    let (disk, part) = path.rsplit_once(r"\Partition")?;
+    if part.is_empty() || !part.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    Some((disk_number(disk)?, part.parse().ok()?))
+}
+
 /// La lecture de la capture qui porte ces faits, s'il y en a une.
 pub(crate) fn from_capture(reads: &[SourceRead]) -> Option<Result<Vec<Disk>, EnumerateError>> {
     let read = reads.iter().find(|read| read.path == SOURCE)?;
@@ -273,7 +301,7 @@ pub fn sanitize(content: &str) -> String {
     };
     for disk in &mut facts.disks {
         disk.serial = disk.serial.as_ref().map(|_| "<masked>".to_owned());
-        disk.disk_id = disk.disk_id.as_ref().map(|_| "<masked>".to_owned());
+        disk.instance = disk.instance.as_ref().map(|_| "<masked>".to_owned());
     }
     for volume in &mut facts.volumes {
         volume.label = volume.label.as_ref().map(|_| "<masked>".to_owned());
@@ -357,6 +385,12 @@ mod tests {
         ] {
             assert_eq!(disk_number(refuse), None, "{refuse}");
         }
+        assert_eq!(
+            partition_numbers(r"\\.\PhysicalDrive2\Partition1"),
+            Some((2, 1))
+        );
+        assert_eq!(partition_numbers(r"\\.\PhysicalDrive2"), None);
+        assert_eq!(partition_numbers(r"\\.\PhysicalDrive2\Partition1;x"), None);
     }
 
     #[test]
@@ -454,9 +488,13 @@ mod tests {
     fn identifiants_sans_serie_et_doublons() -> Result<(), EnumerateError> {
         let mut facts = poste();
         facts.disks[1].serial = None;
-        facts.disks[1].disk_id = Some("abcd".to_owned());
-        assert_eq!(normalize(&facts)?[1].id, "disk-abcd");
-        facts.disks[1].disk_id = None;
+        facts.disks[1].instance =
+            Some(r"\\?\SCSI#Disk&Ven_Msft&Prod_VD#2&1f&0&000#{53f56307-b6bf}".to_owned());
+        assert_eq!(
+            normalize(&facts)?[1].id,
+            "disk-scsi-disk-ven_msft-prod_vd-2-1f-0-000"
+        );
+        facts.disks[1].instance = None;
         assert_eq!(normalize(&facts)?[1].id, "physicaldrive1");
         // Deux ponts USB au même numéro de série.
         let mut clone = facts.disks[1].clone();
