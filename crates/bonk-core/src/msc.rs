@@ -60,6 +60,8 @@ pub trait BulkTransport {
     fn reset(&mut self) -> Result<(), BulkError>;
 }
 
+const SENSE_ILLEGAL_REQUEST: u8 = 5;
+
 /// Ce que dit la clé d'une commande refusée : clé de sens, code et qualificatif SCSI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Sense {
@@ -371,8 +373,15 @@ impl<T: BulkTransport> MassStorage<T> {
     }
 
     fn synchronize(&mut self) -> Result<(), MscError> {
-        self.command(&[0x35, 0, 0, 0, 0, 0, 0, 0, 0, 0], Data::None)?;
-        Ok(())
+        match self.command(&[0x35, 0, 0, 0, 0, 0, 0, 0, 0, 0], Data::None) {
+            // Des clés sans cache d'écriture rejettent cette commande comme invalide : il n'y a rien à
+            // vider, et la relecture après écriture reste le vrai contrôle. Tout autre refus est une erreur.
+            Err(MscError::Check(Some(Sense {
+                key: SENSE_ILLEGAL_REQUEST,
+                ..
+            }))) => Ok(()),
+            result => result.map(|_| ()),
+        }
     }
 }
 
@@ -489,11 +498,13 @@ mod tests {
         stall_out: bool,
         commands: Vec<u8>,
         max_blocks: usize,
+        sense_key: u8,
     }
 
     impl Fake {
         fn new(blocks: usize) -> Self {
             Self {
+                sense_key: 6,
                 storage: vec![0; blocks * BLOCK],
                 huge: false,
                 fault: (0, Fault::None),
@@ -578,7 +589,7 @@ mod tests {
                     }
                     0x03 => {
                         let mut sense = vec![0u8; 18];
-                        sense[2] = 0x06;
+                        sense[2] = self.sense_key;
                         sense[12] = 0x28;
                         self.pending_in = sense;
                     }
@@ -761,6 +772,22 @@ mod tests {
                 ..
             })))
         ));
+        Ok(())
+    }
+
+    #[test]
+    fn une_cle_sans_cache_peut_refuser_de_le_vider() -> Result<(), BlockError> {
+        let mut fake = Fake::new(16);
+        fake.fault = (0x35, Fault::Check);
+        fake.sense_key = SENSE_ILLEGAL_REQUEST;
+        UsbDisk::open(&mut fake)?.flush()
+    }
+
+    #[test]
+    fn tout_autre_refus_de_vider_le_cache_reste_une_erreur() -> Result<(), BlockError> {
+        let mut fake = Fake::new(16);
+        fake.fault = (0x35, Fault::Check);
+        assert!(UsbDisk::open(&mut fake)?.flush().is_err());
         Ok(())
     }
 
