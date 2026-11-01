@@ -33,6 +33,9 @@ pub struct RawMedia {
     pub internal: bool,
     pub removable: bool,
     pub name: Option<String>,
+    /// Numéro de série : `ioreg`, `diskutil` ne le donne pas.
+    #[serde(default)]
+    pub serial: Option<String>,
     pub size_bytes: u64,
     /// Type de contenu : `EFI`, `Apple_APFS`, `Microsoft Basic Data`...
     pub content: Option<String>,
@@ -67,6 +70,7 @@ pub fn media_from_info(info: &Value) -> Result<RawMedia, EnumerateError> {
         internal: flag("Internal"),
         removable: flag("RemovableMediaOrExternalDevice") || flag("Removable"),
         name: text("MediaName").or_else(|| text("IORegistryEntryName")),
+        serial: None,
         size_bytes: info["TotalSize"]
             .as_u64()
             .or_else(|| info["Size"].as_u64())
@@ -110,7 +114,10 @@ fn is_system_mount(mount: &str) -> bool {
 fn stable_id(whole: &RawMedia, bus: Bus) -> String {
     let name = whole.name.as_deref().unwrap_or("disk");
     let bus = crate::describe::bus_label(bus, crate::describe::Lang::En);
-    let id = format!("{bus}-{name}-{}", whole.size_bytes);
+    let id = match &whole.serial {
+        Some(serial) => format!("{bus}-{serial}"),
+        None => format!("{bus}-{name}-{}", whole.size_bytes),
+    };
     id.split_whitespace().collect::<Vec<_>>().join("_")
 }
 
@@ -152,7 +159,7 @@ pub fn normalize(media: &[RawMedia]) -> Result<Vec<Disk>, EnumerateError> {
                 id: stable_id(whole, bus),
                 path: format!("/dev/{}", whole.device),
                 model: whole.name.clone().unwrap_or_default(),
-                serial: None,
+                serial: whole.serial.clone(),
                 size_bytes: whole.size_bytes,
                 bus,
                 kind,
@@ -194,6 +201,43 @@ pub fn normalize(media: &[RawMedia]) -> Result<Vec<Disk>, EnumerateError> {
     Ok(disks)
 }
 
+/// Numéros de série dans le texte de `ioreg -r -l -w0 -c <classe>` : chaque bloc de premier niveau est un
+/// périphérique, et les disques entiers qu'il porte y figurent par `"BSD Name"`. Rend `(disque, série)`.
+#[must_use]
+pub fn serials_from_ioreg(text: &str) -> Vec<(String, String)> {
+    /// Valeur entre guillemets qui suit `key`, avec ou sans espaces autour du `=`.
+    fn value_after<'a>(line: &'a str, key: &str) -> Option<&'a str> {
+        let rest = line.split_once(key)?.1.trim_start().strip_prefix('=')?;
+        let rest = rest.trim_start().strip_prefix('"')?;
+        Some(rest.split_once('"')?.0.trim())
+    }
+    let mut found = Vec::new();
+    let mut serial: Option<String> = None;
+    for line in text.lines() {
+        if line.starts_with("+-o ") {
+            serial = None;
+        }
+        let read = [
+            "\"USB Serial Number\"",
+            "\"kUSBSerialNumberString\"",
+            "\"Serial Number\"",
+        ]
+        .iter()
+        .find_map(|key| value_after(line, key));
+        if serial.is_none()
+            && let Some(value) = read.filter(|v| !v.is_empty())
+        {
+            serial = Some(value.to_owned());
+        }
+        if let (Some(serial), Some(device)) = (&serial, value_after(line, "\"BSD Name\""))
+            && raw_disk_path(&format!("/dev/{device}")).is_some()
+        {
+            found.push((device.to_owned(), serial.clone()));
+        }
+    }
+    found
+}
+
 /// Chemin brut d'un disque entier : `/dev/disk2` donne `/dev/rdisk2`. Ni partition, ni autre périphérique.
 #[must_use]
 pub fn raw_disk_path(path: &str) -> Option<String> {
@@ -227,6 +271,7 @@ pub fn sanitize(content: &str) -> String {
     };
     for item in &mut media {
         item.label = item.label.as_ref().map(|_| "<masked>".to_owned());
+        item.serial = item.serial.as_ref().map(|_| "<masked>".to_owned());
         if let Some(mount) = &item.mount
             && mount.starts_with("/Volumes/")
         {
@@ -333,6 +378,43 @@ mod tests {
         for refuse in ["/dev/disk2s1", "/dev/disk", "/dev/rdisk2", "/tmp/disk2"] {
             assert_eq!(raw_disk_path(refuse), None, "{refuse}");
         }
+    }
+
+    #[test]
+    fn serie_lue_dans_ioreg_et_utilisee_comme_identifiant() -> Result<(), EnumerateError> {
+        let usb = r#"
++-o UDisk@01100000  <class IOUSBHostDevice>
+  | {
+  |   "USB Serial Number" = "ABC 123"
+  | }
+  +-o IOMedia  <class IOMedia>
+      {
+        "BSD Name" = "disk2"
+      }
+      +-o partition
+          {
+            "BSD Name" = "disk2s1"
+          }
++-o Sans  <class IOUSBHostDevice>
+  +-o IOMedia  <class IOMedia>
+        "BSD Name" = "disk3"
+"#;
+        assert_eq!(
+            serials_from_ioreg(usb),
+            [("disk2".to_owned(), "ABC 123".to_owned())]
+        );
+        let interne = r#"+-o NVMe  <class IOBlockStorageDevice>
+    "Device Characteristics" = {"Product Name"="X","Serial Number"="S0"}
+    "BSD Name" = "disk0""#;
+        assert_eq!(
+            serials_from_ioreg(interne),
+            [("disk0".to_owned(), "S0".to_owned())]
+        );
+
+        let mut media = mac();
+        media[5].serial = Some("ABC 123".to_owned());
+        assert_eq!(normalize(&media)?[1].id, "usb-ABC_123");
+        Ok(())
     }
 
     #[test]

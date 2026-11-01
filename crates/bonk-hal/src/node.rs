@@ -41,6 +41,7 @@ mod imp {
     use std::os::unix::fs::{FileExt, FileTypeExt, MetadataExt, OpenOptionsExt};
 
     use super::*;
+    use crate::linux::LinuxRoots;
     use bonk_core::{check_access, check_geometry};
 
     fn invalid(message: &str) -> BlockError {
@@ -51,15 +52,26 @@ mod imp {
     }
 
     /// Taille de secteur logique du disque d'après le noyau ; 512 si elle n'est pas lisible.
-    fn logical_block_size(name: &str) -> u32 {
-        fs::read_to_string(format!("/sys/class/block/{name}/queue/logical_block_size"))
-            .ok()
-            .and_then(|text| text.trim().parse().ok())
-            .unwrap_or(512)
+    fn logical_block_size(roots: &LinuxRoots, name: &str) -> u32 {
+        fs::read_to_string(
+            roots
+                .sys
+                .join(format!("class/block/{name}/queue/logical_block_size")),
+        )
+        .ok()
+        .and_then(|text| text.trim().parse().ok())
+        .unwrap_or(512)
+    }
+
+    fn is_partition(roots: &LinuxRoots, name: &str) -> bool {
+        roots
+            .sys
+            .join(format!("class/block/{name}/partition"))
+            .exists()
     }
 
     /// Le nom noyau du périphérique, s'il s'agit d'un disque entier : jamais une partition ni un fichier.
-    fn whole_disk_name(resolved: &Path) -> Result<String, BlockError> {
+    fn whole_disk_name(roots: &LinuxRoots, resolved: &Path) -> Result<String, BlockError> {
         if !fs::metadata(resolved)?.file_type().is_block_device() {
             return Err(invalid("the path is not a block device"));
         }
@@ -69,7 +81,7 @@ mod imp {
             .ok_or_else(|| invalid("unreadable device name"))?
             .to_owned();
         // Une partition porte un fichier `partition` dans sysfs : on n'écrit que des disques entiers.
-        if Path::new(&format!("/sys/class/block/{name}/partition")).exists() {
+        if is_partition(roots, &name) {
             return Err(invalid("the path is a partition, not a whole disk"));
         }
         Ok(name)
@@ -84,7 +96,7 @@ mod imp {
         /// est utilisé.
         pub fn open(path: &Path, access: Access) -> Result<Self, BlockError> {
             let resolved = fs::canonicalize(path)?;
-            let name = whole_disk_name(&resolved)?;
+            let name = whole_disk_name(&LinuxRoots::system(), &resolved)?;
             let read_only = access == Access::ReadOnly;
             let mut options = OpenOptions::new();
             options.read(true).write(!read_only);
@@ -102,7 +114,7 @@ mod imp {
         /// [`BlockError::Io`] : `InvalidInput` si le descripteur n'est pas ce disque.
         pub fn from_fd(fd: OwnedFd, path: &Path, access: Access) -> Result<Self, BlockError> {
             let resolved = fs::canonicalize(path)?;
-            let name = whole_disk_name(&resolved)?;
+            let name = whole_disk_name(&LinuxRoots::system(), &resolved)?;
             let file = fs::File::from(fd);
             let (held, expected) = (file.metadata()?, fs::metadata(&resolved)?);
             if !held.file_type().is_block_device() || held.rdev() != expected.rdev() {
@@ -119,7 +131,7 @@ mod imp {
         ) -> Result<Self, BlockError> {
             // La taille d'un périphérique bloc ne se lit pas dans ses métadonnées.
             let size = file.seek(SeekFrom::End(0))?;
-            let block_size = logical_block_size(&name);
+            let block_size = logical_block_size(&LinuxRoots::system(), &name);
             check_geometry(size, block_size)?;
             log::debug!(
                 target: "bonk_hal::node",
@@ -184,6 +196,30 @@ mod imp {
             } else {
                 Err(BlockError::Io(std::io::Error::from_raw_os_error(code)))
             }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn taille_de_secteur_et_partition_lues_sous_la_racine_donnee() -> io::Result<()> {
+            let racine = std::env::temp_dir().join(format!("bonk-node-{}", std::process::id()));
+            let disque = racine.join("class/block/sdz");
+            fs::create_dir_all(disque.join("queue"))?;
+            fs::create_dir_all(racine.join("class/block/sdz1"))?;
+            fs::write(disque.join("queue/logical_block_size"), "4096\n")?;
+            fs::write(racine.join("class/block/sdz1/partition"), "1\n")?;
+            let roots = LinuxRoots {
+                sys: racine.clone(),
+                ..LinuxRoots::system()
+            };
+            assert_eq!(logical_block_size(&roots, "sdz"), 4096);
+            assert_eq!(logical_block_size(&roots, "absent"), 512);
+            assert!(is_partition(&roots, "sdz1"));
+            assert!(!is_partition(&roots, "sdz"));
+            fs::remove_dir_all(&racine)
         }
     }
 }

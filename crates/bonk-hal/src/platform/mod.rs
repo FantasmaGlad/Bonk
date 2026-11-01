@@ -153,6 +153,13 @@ pub trait Platform: Send + Sync {
     fn kernel_release(&self) -> Option<String>;
 }
 
+/// Ce chemin désigne-t-il un périphérique, sur n'importe quel système ? Lu dans sa forme : `debug layout` doit
+/// le dire même quand il n'existe pas.
+#[must_use]
+pub fn is_device_path(path: &str) -> bool {
+    path.starts_with("/dev/") || path.starts_with(r"\\.\")
+}
+
 /// Point d'entrée du helper élevé (`bonk elevated-helper`), qui n'existe que sous Windows.
 ///
 /// # Errors
@@ -263,6 +270,14 @@ mod tests {
                 .find(|(key, _)| *key == name)
                 .map(|(_, value)| (*value).to_owned())
         }
+    }
+
+    #[test]
+    fn un_peripherique_se_reconnait_a_sa_forme() {
+        assert!(is_device_path("/dev/sdb"));
+        assert!(is_device_path(r"\\.\PhysicalDrive1"));
+        assert!(!is_device_path("image.img"));
+        assert!(!is_device_path(r"C:\image.img"));
     }
 
     #[test]

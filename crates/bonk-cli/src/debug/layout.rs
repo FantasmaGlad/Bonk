@@ -26,7 +26,12 @@ pub(super) fn open_read_only(target: &Path) -> Result<Box<dyn BlockDevice>, (Cod
         platform
             .enumerate()
             .ok()
-            .and_then(|disks| disks.into_iter().find(|d| d.id == wanted))
+            .and_then(|disks| {
+                disks
+                    .into_iter()
+                    // Sous Windows, un disque désigné par son chemin n'« existe » pas pour le fichier.
+                    .find(|d| d.id == wanted || d.path.eq_ignore_ascii_case(&wanted))
+            })
             .map(|d| PathBuf::from(d.path))
     };
     if let Some(path) = disk_path {
@@ -44,7 +49,7 @@ pub(super) fn open_read_only(target: &Path) -> Result<Box<dyn BlockDevice>, (Cod
                 )
             });
     }
-    if !target.exists() && target.to_string_lossy().starts_with("/dev/") {
+    if !target.exists() && bonk_hal::platform::is_device_path(&target.to_string_lossy()) {
         return Err((
             Code::RawDiskUnavailable,
             format!("'{}' does not exist", target.display()),
