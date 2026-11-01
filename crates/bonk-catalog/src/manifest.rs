@@ -4,6 +4,7 @@
 //! contrôlée sur les octets exacts avec une clé embarquée dans le binaire, donne confiance. Rien n'est lu
 //! avant ce contrôle. Fonctions pures : le réseau et l'horloge viennent de l'appelant.
 
+use crate::sums::is_sha256;
 use std::collections::HashSet;
 use std::fmt;
 use std::fs;
@@ -169,10 +170,6 @@ pub struct Trust<'a> {
     pub keys: &'a [[u8; 32]],
     pub now_unix: u64,
     pub seen_sequence: u64,
-}
-
-fn is_sha256(text: &str) -> bool {
-    text.len() == 64 && text.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 fn is_identifier(text: &str) -> bool {

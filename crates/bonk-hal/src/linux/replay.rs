@@ -12,7 +12,7 @@ use super::{LinuxRoots, enumerate};
 
 /// Rejoue une capture : reconstruit sous un dossier temporaire l'arborescence que les lectures ont
 /// vue (fichiers, liens de `/sys/block`), énumère dessus, puis la supprime.
-pub fn enumerate_from_reads(reads: &[SourceRead]) -> Result<Vec<Disk>, EnumerateError> {
+pub(crate) fn enumerate_from_reads(reads: &[SourceRead]) -> Result<Vec<Disk>, EnumerateError> {
     struct Cleanup(PathBuf);
     impl Drop for Cleanup {
         fn drop(&mut self) {

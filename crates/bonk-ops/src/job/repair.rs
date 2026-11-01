@@ -4,7 +4,7 @@ use bonk_core::partition::inspect;
 use bonk_core::repair::{RepairError, needs_repair, repair_gpt};
 use bonk_hal::{Access, Elevation, FilterOptions};
 
-use super::target::{OpenRequest, choose, open_target};
+use super::target::{OpenRequest, choose, open_read_only, open_target};
 use super::types::{Deps, JobError, RepairDone, SCHEMA_VERSION, Target, TraceIo, fail};
 use super::write::confirm_internal;
 use crate::errors::Code;
@@ -32,19 +32,8 @@ pub fn repair(job: &RepairJob, deps: &Deps<'_>) -> Result<RepairDone, JobError> 
                 "repair without confirmation: add --yes or --force (or describe it with --dry-run)",
             ));
         }
-        let chosen = choose(&job.target, job.options, deps)?;
-        let (device, info, _) = open_target(
-            chosen,
-            &job.target,
-            &OpenRequest {
-                options: job.options,
-                access: Access::ReadOnly,
-                elevation: job.elevation,
-                size_hint: None,
-                trace_io: job.trace_io,
-            },
-            deps,
-        )?;
+        let (device, info) =
+            open_read_only(&job.target, job.options, job.elevation, job.trace_io, deps)?;
         let layout = inspect(&*device).map_err(|e| fail(Code::GptRepairFailed, e))?;
         return Ok(RepairDone {
             schema_version: SCHEMA_VERSION,

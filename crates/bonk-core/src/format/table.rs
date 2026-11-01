@@ -1,5 +1,6 @@
 //! Écriture d'une table MBR ou GPT à une seule partition, alignée sur 1 Mio.
 
+use crate::bytes::{put_u32, put_u64};
 use schemars::JsonSchema;
 use serde::Serialize;
 
@@ -99,14 +100,6 @@ pub fn plan(size: u64, block: u32, kind: TableKind) -> Result<PartitionPlan, For
             "drive of {size} bytes too small for a table and a partition"
         ))),
     }
-}
-
-fn put_u32(buf: &mut [u8], at: usize, value: u32) {
-    buf[at..at + 4].copy_from_slice(&value.to_le_bytes());
-}
-
-fn put_u64(buf: &mut [u8], at: usize, value: u64) {
-    buf[at..at + 8].copy_from_slice(&value.to_le_bytes());
 }
 
 /// Un secteur 0 : la signature et une seule entrée, sans code d'amorçage (support de stockage).

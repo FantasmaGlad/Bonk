@@ -125,7 +125,7 @@ pub(super) fn traced_list(path: &Path) -> io::Result<Vec<String>> {
 }
 
 /// Énumère comme [`enumerate`] et rend aussi toutes les lectures de sources, pour `bonk debug sources`.
-pub fn enumerate_recorded(
+pub(crate) fn enumerate_recorded(
     roots: &LinuxRoots,
 ) -> (Result<Vec<Disk>, EnumerateError>, Vec<SourceRead>) {
     RECORDER.with(|recorder| *recorder.borrow_mut() = Some(Vec::new()));

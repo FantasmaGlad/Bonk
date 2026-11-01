@@ -433,13 +433,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bonk-customizer"
-version = "0.0.4"
-dependencies = [
- "bonk-core",
-]
-
-[[package]]
 name = "bonk-gui"
 version = "0.0.4"
 dependencies = [

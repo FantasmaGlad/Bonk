@@ -143,7 +143,7 @@ pub fn read_header(header: &[u8]) -> Result<Header, WimError> {
 ///
 /// # Errors
 /// Table mal formée.
-pub fn has_solid_resources(lookup: &[u8]) -> Result<bool, WimError> {
+pub(crate) fn has_solid_resources(lookup: &[u8]) -> Result<bool, WimError> {
     if !lookup.len().is_multiple_of(ENTRY_LEN) {
         return Err(WimError::Malformed("resource table"));
     }

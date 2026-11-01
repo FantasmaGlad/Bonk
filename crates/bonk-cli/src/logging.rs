@@ -156,7 +156,6 @@ fn component_of(target: &str) -> &'static str {
         "bonk_gui" => "gui",
         "bonk_hal" => "hal",
         "bonk_core" => "io",
-        "bonk_customizer" => "write",
         "bonk_catalog" => "net",
         _ => "render",
     }

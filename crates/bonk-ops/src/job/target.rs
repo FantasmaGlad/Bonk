@@ -122,6 +122,30 @@ pub(super) struct OpenRequest {
     pub(super) trace_io: Option<TraceIo>,
 }
 
+/// Choisit et ouvre la cible en lecture seule : rien à démonter, rien à écrire.
+pub(super) fn open_read_only(
+    target: &Target,
+    options: FilterOptions,
+    elevation: Elevation,
+    trace_io: Option<TraceIo>,
+    deps: &Deps<'_>,
+) -> Result<(Box<dyn BlockDevice>, TargetInfo), JobError> {
+    let chosen = choose(target, options, deps)?;
+    let (device, info, _) = open_target(
+        chosen,
+        target,
+        &OpenRequest {
+            options,
+            access: Access::ReadOnly,
+            elevation,
+            size_hint: None,
+            trace_io,
+        },
+        deps,
+    )?;
+    Ok((device, info))
+}
+
 /// Ouvre la cible choisie et rend le périphérique, ses informations et les points démontés.
 pub(super) fn open_target(
     chosen: Chosen,

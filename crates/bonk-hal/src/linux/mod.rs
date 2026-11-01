@@ -36,8 +36,8 @@ use sources::{
 };
 use udev::{UdevRecord, load_udev};
 
-pub use replay::enumerate_from_reads;
-pub use sources::enumerate_recorded;
+pub(crate) use replay::enumerate_from_reads;
+pub(crate) use sources::enumerate_recorded;
 
 /// Type de partition GPT « EFI System Partition ».
 const GPT_ESP: &str = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b";
