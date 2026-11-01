@@ -392,6 +392,10 @@ fn debug_filter_suit_les_reglages_et_refuse_un_inconnu() {
 /// tout autre fil qui journalise (énumération, minuteur) sous `bonk -v`.
 #[test]
 fn un_autre_fil_peut_journaliser_pendant_que_la_fenetre_est_ouverte() {
+    // Élevé (runner Windows), la fenêtre refuse de s'ouvrir avant d'atteindre ce qu'on teste ici.
+    if bonk_hal::platform::current().is_privileged() {
+        return;
+    }
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let code = run(["bonk", "-v", "gui"], |_| {

@@ -1,4 +1,5 @@
-//! Windows : collecte des faits sur les disques et les volumes, en lecture seule.
+//! Windows : collecte des faits sur les disques et les volumes, en lecture seule. L'accès brut est dans
+//! `windows_disk`.
 //!
 //! Les poignées s'ouvrent sans droit d'accès : les requêtes de propriétés n'en demandent aucun, et la
 //! liste des disques n'exige donc pas d'être administrateur. L'interprétation vit dans
@@ -33,7 +34,9 @@ use windows_sys::Win32::System::Ioctl::{
 };
 use windows_sys::core::GUID;
 
-use super::{Capability, Elevation, Platform, Unsupported};
+use super::{
+    Capability, Elevation, Missing, Platform, Unsupported, native_capabilities, windows_disk,
+};
 use crate::disk::Disk;
 use crate::enumerate::{EnumerateError, SourceRead};
 use crate::image::Access;
@@ -45,7 +48,8 @@ use crate::windows_facts::{
 /// Au-delà, Windows ne numérote pas de disques en pratique ; les numéros peuvent avoir des trous.
 const MAX_DISKS: u32 = 128;
 
-/// Les fonctions d'écriture restent celles d'un système sans accès brut jusqu'à leur arrivée.
+/// L'invite d'élévation et les outils de formatage de l'hôte n'existent pas encore : l'écriture demande de
+/// lancer la commande en administrateur, et seul FAT32 se formate.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Windows;
 
@@ -104,8 +108,17 @@ fn has_code(error: &io::Error, codes: &[u32]) -> bool {
         .is_some_and(|code| codes.contains(&code))
 }
 
-/// Tampon aligné pour les structures de Windows, qui contiennent des entiers de 64 bits.
+/// Requête sans entrée sur une poignée déjà ouverte.
+pub(super) fn ioctl_raw(handle: HANDLE, code: u32, capacity: usize) -> io::Result<Vec<u64>> {
+    ioctl_on(handle, code, &[], capacity)
+}
+
 fn ioctl(handle: &Handle, code: u32, input: &[u8], capacity: usize) -> io::Result<Vec<u64>> {
+    ioctl_on(handle.0, code, input, capacity)
+}
+
+/// Tampon aligné pour les structures de Windows, qui contiennent des entiers de 64 bits.
+fn ioctl_on(handle: HANDLE, code: u32, input: &[u8], capacity: usize) -> io::Result<Vec<u64>> {
     let mut size = capacity;
     loop {
         let mut output = vec![0u64; size.div_ceil(8)];
@@ -113,7 +126,7 @@ fn ioctl(handle: &Handle, code: u32, input: &[u8], capacity: usize) -> io::Resul
         // SAFETY : entrée et sortie valides pour les tailles annoncées ; la poignée vit le temps de l'appel.
         let done = unsafe {
             DeviceIoControl(
-                handle.0,
+                handle,
                 code,
                 input.as_ptr().cast::<c_void>(),
                 u32::try_from(input.len()).unwrap_or(u32::MAX),
@@ -354,7 +367,7 @@ fn volume_information(volume: &str) -> (Option<String>, Option<String>) {
     )
 }
 
-fn read_volumes() -> io::Result<Vec<RawVolume>> {
+pub(super) fn read_volumes() -> io::Result<Vec<RawVolume>> {
     let mut name = [0u16; 64];
     // SAFETY : tampon valide pour la longueur annoncée.
     let find = unsafe { FindFirstVolumeW(name.as_mut_ptr(), 64) };
@@ -458,32 +471,36 @@ impl Platform for Windows {
         })
     }
 
-    fn unmount(&self, disk: &Disk, elevation: Elevation) -> Result<Vec<String>, OpenTargetError> {
-        Unsupported.unmount(disk, elevation)
+    fn unmount(&self, disk: &Disk, _elevation: Elevation) -> Result<Vec<String>, OpenTargetError> {
+        windows_disk::unmount(&disk.path)
     }
 
     fn prepare_access(
         &self,
         path: &Path,
         access: Access,
-        elevation: Elevation,
-        cancelled: &dyn Fn() -> bool,
+        _elevation: Elevation,
+        _cancelled: &dyn Fn() -> bool,
     ) -> Result<(), BlockError> {
-        Unsupported.prepare_access(path, access, elevation, cancelled)
+        windows_disk::prepare(path, access)
     }
 
     fn open_disk(
         &self,
         path: &Path,
         access: Access,
-        elevation: Elevation,
-        cancelled: &dyn Fn() -> bool,
+        _elevation: Elevation,
+        _cancelled: &dyn Fn() -> bool,
     ) -> Result<Box<dyn BlockDevice>, BlockError> {
-        Unsupported.open_disk(path, access, elevation, cancelled)
+        Ok(Box::new(windows_disk::open(path, access)?))
     }
 
     fn capabilities(&self) -> Vec<Capability> {
-        Unsupported.capabilities()
+        native_capabilities(Capability::no(
+            "elevate",
+            Missing::OsUnsupported,
+            "run the command as administrator",
+        ))
     }
 
     fn format_partition(
@@ -496,15 +513,43 @@ impl Platform for Windows {
         Unsupported.format_partition(partition, fs, label, elevation)
     }
 
-    fn rescan(&self, disk: &Path, elevation: Elevation) -> Result<(), BlockError> {
-        Unsupported.rescan(disk, elevation)
+    fn rescan(&self, disk: &Path, _elevation: Elevation) -> Result<(), BlockError> {
+        windows_disk::rescan(disk)
     }
 
     fn is_privileged(&self) -> bool {
-        false
+        is_elevated()
     }
 
     fn kernel_release(&self) -> Option<String> {
         None
     }
+}
+
+/// Le processus tourne-t-il élevé ? Illisible : non, la fenêtre s'ouvre et l'écriture sera refusée.
+fn is_elevated() -> bool {
+    use windows_sys::Win32::Security::{
+        GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation,
+    };
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+    let mut token = null_mut();
+    // SAFETY : pseudo-poignée du processus ; `token` reçoit une poignée fermée par `Handle`.
+    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &raw mut token) } == 0 {
+        return false;
+    }
+    let token = Handle(token);
+    let mut elevation = TOKEN_ELEVATION::default();
+    let mut returned = 0u32;
+    // SAFETY : sortie valide pour la taille annoncée.
+    let done = unsafe {
+        GetTokenInformation(
+            token.0,
+            TokenElevation,
+            (&raw mut elevation).cast(),
+            u32::try_from(size_of::<TOKEN_ELEVATION>()).unwrap_or(0),
+            &raw mut returned,
+        )
+    };
+    done != 0 && elevation.TokenIsElevated != 0
 }

@@ -8,11 +8,15 @@
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(target_os = "macos")]
+mod macos_disk;
 #[cfg(target_os = "linux")]
 mod udisks;
 mod unsupported;
 #[cfg(windows)]
 mod windows;
+#[cfg(windows)]
+mod windows_disk;
 
 use std::path::{Path, PathBuf};
 
@@ -145,6 +149,30 @@ pub trait Platform: Send + Sync {
 
     /// Version du noyau, pour le rapport de diagnostic, quand le système la donne.
     fn kernel_release(&self) -> Option<String>;
+}
+
+/// Capacités d'un système où Bonk écrit lui-même, sans outil de formatage de l'hôte.
+#[cfg(any(windows, target_os = "macos"))]
+fn native_capabilities(elevate: Capability) -> Vec<Capability> {
+    let mut all = vec![
+        Capability::yes("write"),
+        elevate,
+        Capability::no("eject", Missing::OsUnsupported, "not in Bonk yet"),
+        Capability::yes("cancel"),
+    ];
+    all.extend(Filesystem::ALL.map(|fs| {
+        let name = format_capability(fs);
+        if fs.is_native() {
+            Capability::yes(&name)
+        } else {
+            Capability::no(
+                &name,
+                Missing::OsUnsupported,
+                "not in Bonk yet on this system",
+            )
+        }
+    }));
+    all
 }
 
 /// L'implémentation du système en cours.

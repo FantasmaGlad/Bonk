@@ -1,4 +1,5 @@
-//! macOS : collecte des faits sur les disques par `diskutil`, en lecture seule.
+//! macOS : collecte des faits sur les disques par `diskutil`, en lecture seule. L'accès brut est dans
+//! `macos_disk`.
 //!
 //! `diskutil` est présent sur tout macOS et ne demande aucun droit pour lire ; passer par lui évite une
 //! dépendance et du code `unsafe`. `plutil` convertit sa sortie en JSON. L'interprétation vit dans
@@ -13,14 +14,14 @@ use bonk_core::format::Filesystem;
 use bonk_core::{BlockDevice, BlockError};
 use serde_json::Value;
 
-use super::{Capability, Elevation, Platform, Unsupported};
+use super::{Capability, Elevation, Platform, Unsupported, macos_disk, native_capabilities};
 use crate::disk::Disk;
 use crate::enumerate::{EnumerateError, SourceRead};
 use crate::image::Access;
 use crate::macos_facts::{RawMedia, SOURCE, media_from_info, normalize};
 use crate::target::OpenTargetError;
 
-/// Les fonctions d'écriture restent celles d'un système sans accès brut jusqu'à leur arrivée.
+/// Les outils de formatage de l'hôte n'existent pas encore : seul FAT32 se formate.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Macos;
 
@@ -124,8 +125,8 @@ impl Platform for Macos {
         })
     }
 
-    fn unmount(&self, disk: &Disk, elevation: Elevation) -> Result<Vec<String>, OpenTargetError> {
-        Unsupported.unmount(disk, elevation)
+    fn unmount(&self, disk: &Disk, _elevation: Elevation) -> Result<Vec<String>, OpenTargetError> {
+        macos_disk::unmount(disk)
     }
 
     fn prepare_access(
@@ -135,7 +136,7 @@ impl Platform for Macos {
         elevation: Elevation,
         cancelled: &dyn Fn() -> bool,
     ) -> Result<(), BlockError> {
-        Unsupported.prepare_access(path, access, elevation, cancelled)
+        macos_disk::prepare(path, access, elevation, cancelled)
     }
 
     fn open_disk(
@@ -145,11 +146,13 @@ impl Platform for Macos {
         elevation: Elevation,
         cancelled: &dyn Fn() -> bool,
     ) -> Result<Box<dyn BlockDevice>, BlockError> {
-        Unsupported.open_disk(path, access, elevation, cancelled)
+        Ok(Box::new(macos_disk::open(
+            path, access, elevation, cancelled,
+        )?))
     }
 
     fn capabilities(&self) -> Vec<Capability> {
-        Unsupported.capabilities()
+        native_capabilities(Capability::yes("elevate"))
     }
 
     fn format_partition(
@@ -162,8 +165,9 @@ impl Platform for Macos {
         Unsupported.format_partition(partition, fs, label, elevation)
     }
 
-    fn rescan(&self, disk: &Path, elevation: Elevation) -> Result<(), BlockError> {
-        Unsupported.rescan(disk, elevation)
+    fn rescan(&self, _disk: &Path, _elevation: Elevation) -> Result<(), BlockError> {
+        // macOS relit la table de lui-même à la fermeture du disque.
+        Ok(())
     }
 
     fn is_privileged(&self) -> bool {
