@@ -1,6 +1,6 @@
 [package]
 name = "bonk-core"
-description = "Cœur pur de Bonk : partitionnement, écriture brute, vérification, sans E/S système."
+description = "Pure core of Bonk: partitioning, raw writing, verification, image analysis."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

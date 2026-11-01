@@ -12,17 +12,17 @@ const COMMON_NAME_OID: [u8; 5] = [0x06, 0x03, 0x55, 0x04, 0x03];
 const PCA_2011: &str = "Microsoft Windows Production PCA 2011";
 const UEFI_CA_2023: &str = "Windows UEFI CA 2023";
 
-/// Autorité du certificat du chargeur.
+/// Authority of the loader certificate.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Signer {
-    /// Ancien certificat : refusé par un PC qui l'a révoqué.
+    /// Old certificate: refused by a PC that revoked it.
     WindowsProductionPca2011,
-    /// Nouveau certificat : refusé par un PC dont le micrologiciel ne le connaît pas encore.
+    /// New certificate: refused by a PC whose firmware does not know it yet.
     WindowsUefiCa2023,
-    /// Autre autorité, nommée.
+    /// Another authority, named.
     Other(String),
-    /// Aucune signature : refusé avec Secure Boot actif.
+    /// No signature: refused with Secure Boot active.
     Unsigned,
 }
 

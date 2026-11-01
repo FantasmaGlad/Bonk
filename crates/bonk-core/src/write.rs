@@ -20,17 +20,17 @@ pub const DEFAULT_CHUNK: usize = 4 << 20;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Phase {
-    /// Téléchargement de l'image, avant tout geste sur le support.
+    /// Download of the image, before touching the drive.
     Download,
-    /// En attente de l'autorisation du système.
+    /// Waiting for system authorization.
     Authorize,
-    /// Contrôle de l'empreinte de l'image, avant tout geste sur le support.
+    /// Check of the image hash, before touching the drive.
     Source,
-    /// Écriture de l'image.
+    /// Writing the image.
     Write,
-    /// Vidage des tampons jusqu'au support.
+    /// Flushing buffers to the drive.
     Flush,
-    /// Relecture et comparaison.
+    /// Read-back and comparison.
     Verify,
 }
 
@@ -39,7 +39,7 @@ pub enum Phase {
 pub struct Progress {
     pub phase: Phase,
     pub bytes_done: u64,
-    /// Total quand on le connaît (image brute, ou écriture déjà faite pour la vérification).
+    /// Total when known (raw image, or write already done for the verification).
     pub bytes_total: Option<u64>,
     pub bytes_per_second: f64,
     pub elapsed_ms: u64,
@@ -100,11 +100,11 @@ impl From<BlockError> for WriteError {
 
 #[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
 pub struct WriteReport {
-    /// Octets de l'image écrits.
+    /// Image bytes written.
     pub bytes: u64,
-    /// Octets réellement envoyés au support : l'image arrondie au secteur, le complément est à zéro.
+    /// Bytes really sent to the drive: the image rounded up to the sector, the remainder is zero.
     pub padded_bytes: u64,
-    /// SHA-256 des octets de l'image, en hexadécimal.
+    /// SHA-256 of the image bytes, in hexadecimal.
     pub sha256: String,
     pub elapsed_ms: u64,
     pub bytes_per_second: f64,
@@ -143,8 +143,7 @@ impl From<BlockError> for VerifyError {
 #[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
 pub struct VerifyReport {
     pub bytes: u64,
-    /// Le cache du système a été vidé avant la relecture. Faux : la relecture a pu lire la mémoire du
-    /// système et non le support.
+    /// The system cache was dropped before the read-back. False: the read-back may have read system memory and not the drive.
     pub cache_dropped: bool,
     pub sha256: String,
     pub elapsed_ms: u64,

@@ -1,6 +1,6 @@
 [package]
 name = "bonk-catalog"
-description = "Catalogue signé, téléchargements reprenables, empreintes."
+description = "Signed catalog, resumable downloads, hashes."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

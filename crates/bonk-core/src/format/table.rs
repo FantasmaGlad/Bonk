@@ -26,7 +26,7 @@ impl TableKind {
     }
 }
 
-/// La partition que portera le support.
+/// The partition the drive will carry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct PartitionPlan {
     pub first_lba: u64,

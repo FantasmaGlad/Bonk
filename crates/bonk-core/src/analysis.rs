@@ -22,35 +22,35 @@ const ISO_DESCRIPTORS_SCANNED: usize = 16;
 const ESP_GUID: &str = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B";
 const MBR_ESP: u8 = 0xEF;
 
-/// Ce qu'est l'image, écrite telle quelle sur une clé.
+/// What the image is, written as is to a drive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ImageKind {
-    /// ISO 9660 qui porte aussi un amorçage de disque : démarre écrite telle quelle.
+    /// ISO 9660 that also carries disk boot: boots when written as is.
     HybridIso,
-    /// Image de disque avec amorçage BIOS ou partition système EFI.
+    /// Disk image with BIOS boot or an EFI system partition.
     BootableDisk,
-    /// Table de partitions sans amorçage de PC : carte ARM, ou simples données.
+    /// Partition table without PC boot: ARM board, or plain data.
     DataDisk,
-    /// ISO 9660 sans amorçage de disque : démarre sur un DVD, pas écrite telle quelle sur une clé.
+    /// ISO 9660 without disk boot: boots from a DVD, not when written as is to a drive.
     PlainIso,
-    /// Rien de reconnu.
+    /// Nothing recognized.
     Unknown,
 }
 
-/// Résultat de l'analyse.
+/// Result of the analysis.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct ImageReport {
     pub kind: ImageKind,
-    /// Le micrologiciel BIOS trouvera du code d'amorçage.
+    /// The BIOS firmware will find boot code.
     pub bios: bool,
-    /// Le micrologiciel UEFI trouvera une partition système EFI.
+    /// The UEFI firmware will find an EFI system partition.
     pub uefi: bool,
-    /// Présence de descripteurs UDF, typique des ISO d'installation de Windows.
+    /// Presence of UDF descriptors, typical of Windows installation ISOs.
     pub udf: bool,
-    /// Taille que la structure de l'image annonce, si elle en annonce une.
+    /// Size the image structure declares, if it declares one.
     pub declared_bytes: Option<u64>,
-    /// L'image est plus courte que ce qu'elle annonce (`None` : taille réelle inconnue, image compressée).
+    /// The image is shorter than it declares (`None`: real size unknown, compressed image).
     pub truncated: Option<bool>,
 }
 

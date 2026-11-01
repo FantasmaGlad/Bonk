@@ -65,7 +65,7 @@ pub(crate) struct Entry {
     name: String,
     sha256: String,
     bytes: u64,
-    /// Téléchargement inachevé, repris à la prochaine écriture.
+    /// Incomplete download, resumed on the next write.
     partial: bool,
 }
 
@@ -75,7 +75,7 @@ pub(crate) struct CacheReport {
     directory: String,
     entries: Vec<Entry>,
     total_bytes: u64,
-    /// Octets supprimés ; nul pour une liste.
+    /// Bytes removed; null for a list.
     removed_bytes: Option<u64>,
 }
 

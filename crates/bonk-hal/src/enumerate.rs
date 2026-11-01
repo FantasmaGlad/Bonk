@@ -52,18 +52,17 @@ pub fn enumerate_disks() -> Result<Vec<Disk>, EnumerateError> {
     crate::platform::current().enumerate()
 }
 
-/// Une lecture d'une source système, telle qu'elle s'est passée.
+/// A read of a system source, as it happened.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SourceRead {
     pub path: String,
-    /// `file` (contenu lu), `dir` (liste des entrées) ou `link` (lien résolu : le contenu est la cible
-    /// canonique relative à `/sys`).
+    /// `file` (content read), `dir` (list of entries) or `link` (resolved link: the content is the canonical target relative to `/sys`).
     pub kind: String,
     pub ok: bool,
     pub bytes: Option<usize>,
     pub error: Option<String>,
     pub micros: u64,
-    /// Contenu (fichier) ou entrées (répertoire), tronqué ; seulement quand on enregistre.
+    /// Content (file) or entries (directory), truncated; only when recording.
     pub content: Option<String>,
 }
 

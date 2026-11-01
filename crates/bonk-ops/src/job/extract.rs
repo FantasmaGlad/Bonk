@@ -36,20 +36,20 @@ const MIN_SIMULATED: u64 = 128 << 20;
 /// Marge sous la limite de FAT32 : un morceau reste un fichier valide, arrondi compris.
 const PART_LIMIT: u64 = MAX_FILE_BYTES - (1 << 20);
 
-/// Ce que la clé recevra, décrit dans le plan et dans le résultat.
+/// What the drive will receive, described in the plan and in the result.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct Extraction {
     pub table: TableKind,
     pub files: usize,
     pub bytes: u64,
-    /// Morceaux `.swm` ; 0 : le WIM tient tel quel.
+    /// `.swm` parts; 0: the WIM fits as is.
     pub wim_parts: usize,
     pub signer: Signer,
-    /// Ce que ce certificat implique, en une phrase.
+    /// What this certificate implies, in one sentence.
     pub secure_boot: String,
 }
 
-/// Résultat de la copie.
+/// Result of the copy.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ExtractReport {
     pub bytes: u64,
@@ -57,7 +57,7 @@ pub struct ExtractReport {
     pub bytes_per_second: f64,
 }
 
-/// Résultat de la relecture : tous les fichiers, chacun par son empreinte.
+/// Result of the read-back: all files, each by its hash.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ExtractVerify {
     pub bytes: u64,
@@ -65,7 +65,7 @@ pub struct ExtractVerify {
     pub cache_dropped: bool,
 }
 
-/// Résultat d'une clé Windows écrite.
+/// Result of a written Windows drive.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct ExtractDone {
     pub schema_version: u32,
@@ -76,7 +76,7 @@ pub struct ExtractDone {
     pub unmounted: Vec<String>,
     pub write: ExtractReport,
     pub verify: ExtractVerify,
-    /// Toujours nul ici : présent pour les lecteurs du résultat d'une écriture.
+    /// Always null here: present for readers of a write result.
     pub gpt_repair: Option<()>,
 }
 

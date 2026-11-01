@@ -278,7 +278,7 @@ impl RepairArgs {
     }
 }
 
-/// Événement de progression, tel qu'il sort en `--progress json`.
+/// Progress event, as it comes out in `--progress json`.
 #[derive(Serialize, JsonSchema)]
 pub(crate) struct ProgressEvent<'a> {
     schema_version: u32,
@@ -287,8 +287,7 @@ pub(crate) struct ProgressEvent<'a> {
     progress: &'a Progress,
 }
 
-/// Dernier événement du flux `--progress json` quand l'opération échoue : un lecteur du flux n'a pas à
-/// interpréter le texte de la sortie d'erreur.
+/// Last event of the `--progress json` stream when the operation fails: a reader of the stream does not have to interpret the standard error text.
 #[derive(Serialize, JsonSchema)]
 pub(crate) struct ErrorEvent<'a> {
     schema_version: u32,

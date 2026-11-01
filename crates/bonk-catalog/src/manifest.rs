@@ -43,29 +43,29 @@ pub struct Family {
     pub icon_sha256: String,
 }
 
-/// Cycle de vie d'une version : ce qui signale une version ancienne.
+/// Life cycle of a version: what marks an old version.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Channel {
-    /// Maintenue longtemps par l'éditeur (Ubuntu 26.04 LTS).
+    /// Long-term maintained by the publisher (Ubuntu 26.04 LTS).
     Lts,
-    /// Version courante.
+    /// Current version.
     Stable,
-    /// Encore proposée, plus maintenue par l'éditeur : l'interface le dit.
+    /// Still offered, no longer maintained by the publisher: the interface says so.
     EndOfLife,
 }
 
-/// Une image proposée.
+/// An offered image.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Image {
-    /// Identifiant stable : `debian-13-netinst-x86_64`.
+    /// Stable identifier: `debian-13-netinst-x86_64`.
     pub id: String,
-    /// Identifiant de la [`Family`].
+    /// Identifier of the [`Family`].
     pub family: String,
     pub name: String,
     pub version: String,
     pub channel: Channel,
-    /// Date de sortie `AAAA-MM-JJ`, pour ranger les versions.
+    /// Release date `YYYY-MM-DD`, to sort versions.
     pub released: String,
     #[serde(default)]
     pub edition: Option<String>,
@@ -79,13 +79,13 @@ pub struct Image {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
 pub enum ImageSource {
-    /// Lien officiel, empreinte relue chez l'éditeur.
+    /// Official link, hash read from the publisher.
     Download {
         url: String,
         sha256: String,
         size_bytes: u64,
     },
-    /// Éditeur sans lien stable (Windows) : l'utilisateur télécharge lui-même.
+    /// Publisher without a stable link (Windows): the user downloads it.
     OfficialPage { official_page: String },
 }
 

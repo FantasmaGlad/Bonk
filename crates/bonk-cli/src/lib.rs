@@ -265,7 +265,7 @@ fn split_words(line: &str) -> Result<Vec<String>, String> {
         }
     }
     if quote.is_some() {
-        return Err("guillemet non fermé".to_owned());
+        return Err("unclosed quote".to_owned());
     }
     if in_word {
         words.push(current);

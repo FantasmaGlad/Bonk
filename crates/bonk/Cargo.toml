@@ -1,6 +1,6 @@
 [package]
 name = "bonk"
-description = "Point d'entrée unique de Bonk : interface graphique ou ligne de commande."
+description = "Single entry point of Bonk: window or command line."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -43,7 +43,7 @@ depends = "libc6"
 # Écriture sans sudo : UDisks2 ouvre le disque, polkit demande l'autorisation. `policykit-1` est l'ancien
 # nom du paquet de polkit.
 recommends = "udisks2, polkitd | policykit-1"
-extended-description = "Création de supports d'amorçage (clés USB et disques externes), interface graphique et ligne de commande."
+extended-description = "Bootable media writer for USB drives and external disks, with a window and a command line."
 assets = [
     ["target/release/bonk", "usr/bin/", "755"],
     ["../../LICENSE", "usr/share/doc/bonk/copyright", "644"],

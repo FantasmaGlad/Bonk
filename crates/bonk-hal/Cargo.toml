@@ -1,6 +1,6 @@
 [package]
 name = "bonk-hal"
-description = "Accès aux disques par système d'exploitation : énumération, filtre de sécurité, privilèges."
+description = "Disk access per operating system: enumeration, safety filter, privileges."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -142,7 +142,7 @@ pub enum Target {
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct TargetInfo {
-    /// `disk` ou `image`.
+    /// `disk` or `image`.
     pub kind: &'static str,
     pub id: Option<String>,
     pub path: String,
@@ -153,11 +153,11 @@ pub struct TargetInfo {
 pub struct SourceInfo {
     pub path: String,
     pub format: Format,
-    /// Taille connue d'avance (image brute seulement).
+    /// Size known in advance (raw image only).
     pub size_bytes: Option<u64>,
 }
 
-/// Ce que fera une écriture, sans rien faire (`--dry-run`).
+/// What a write will do, without doing it (`--dry-run`).
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct Plan {
     pub schema_version: u32,
@@ -166,16 +166,16 @@ pub struct Plan {
     pub target: TargetInfo,
     pub source: SourceInfo,
     pub image: ImageReport,
-    /// L'empreinte fournie a été contrôlée et correspond.
+    /// The given hash was checked and matches.
     pub sha256_checked: bool,
-    /// Points de montage qui seront démontés.
+    /// Mount points that will be unmounted.
     pub unmount: Vec<String>,
     pub steps: Vec<&'static str>,
-    /// Clé Windows : ce qu'elle recevra. Nul pour une écriture brute.
+    /// Windows drive: what it will receive. Null for a raw write.
     pub extraction: Option<super::extract::Extraction>,
 }
 
-/// Résultat d'une écriture.
+/// Result of a write.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct WriteDone {
     pub schema_version: u32,
@@ -183,7 +183,7 @@ pub struct WriteDone {
     pub target: TargetInfo,
     pub source: SourceInfo,
     pub image: ImageReport,
-    /// L'empreinte fournie a été contrôlée et correspond.
+    /// The given hash was checked and matches.
     pub sha256_checked: bool,
     pub unmounted: Vec<String>,
     pub write: WriteReport,
@@ -191,7 +191,7 @@ pub struct WriteDone {
     pub gpt_repair: Option<RepairReport>,
 }
 
-/// Résultat d'une vérification sans écriture.
+/// Result of a verification without writing.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct VerifyDone {
     pub schema_version: u32,
@@ -199,22 +199,21 @@ pub struct VerifyDone {
     pub target: TargetInfo,
     pub source: SourceInfo,
     pub verify: VerifyReport,
-    /// Octets exclus de la comparaison (`sha256` est alors l'empreinte de l'image avec ces octets remis
-    /// à zéro). Vide pour une image sans GPT ou aussi grande que le support.
+    /// Bytes excluded from the comparison (`sha256` is then the image hash with these bytes zeroed). Empty for an image without GPT or as large as the drive.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub ignored_ranges: Vec<IgnoredRange>,
 }
 
-/// Plage d'octets exclue d'une comparaison, avec la raison.
+/// Byte range excluded from a comparison, with the reason.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct IgnoredRange {
     pub offset: u64,
     pub length: u64,
-    /// `gpt_repair` : champs que la réparation du GPT réécrit sur un support plus grand que l'image.
+    /// `gpt_repair`: fields the GPT repair rewrites on a drive larger than the image.
     pub reason: &'static str,
 }
 
-/// Résultat (ou plan) d'une réparation du GPT.
+/// Result (or plan) of a GPT repair.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct RepairDone {
     pub schema_version: u32,
@@ -222,34 +221,34 @@ pub struct RepairDone {
     pub dry_run: bool,
     pub target: TargetInfo,
     pub needs_repair: bool,
-    /// Codes des constats avant et après.
+    /// Codes of the findings before and after.
     pub findings_before: Vec<String>,
     pub repair: Option<RepairReport>,
     pub findings_after: Option<Vec<String>>,
 }
 
-/// Ce que fera un formatage, sans rien faire (`--dry-run`), ou ce qu'il a fait.
+/// What a format will do, without doing it (`--dry-run`), or what it did.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct FormatDone {
     pub schema_version: u32,
-    /// `plan` ou `result`.
+    /// `plan` or `result`.
     pub event: &'static str,
     pub dry_run: bool,
     pub target: TargetInfo,
     pub table: TableKind,
     pub filesystem: Filesystem,
-    /// Le système de fichiers a été choisi par défaut, d'après la taille du support.
+    /// The filesystem was chosen by default, from the size of the drive.
     pub filesystem_defaulted: bool,
-    /// Taille maximale d'un fichier sur ce système, quand elle peut gêner ; `--fs exfat` la lève.
+    /// Maximum file size on this filesystem, when it can get in the way; `--fs exfat` lifts it.
     pub file_size_limit_bytes: Option<u64>,
     pub label: Option<String>,
     pub partition: PartitionPlan,
-    /// Écrit par Bonk (`bonk`) ou par les outils de l'hôte (`system`).
+    /// Written by Bonk (`bonk`) or by host tools (`system`).
     pub written_by: &'static str,
     pub cluster_bytes: Option<u32>,
-    /// Points de montage démontés, ou qui le seraient.
+    /// Mount points unmounted, or that would be.
     pub unmounted: Vec<String>,
-    /// Table et structures relues après écriture.
+    /// Table and structures read back after writing.
     pub verified: bool,
 }
 

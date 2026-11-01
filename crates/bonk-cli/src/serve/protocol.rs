@@ -10,10 +10,10 @@ use serde_json::{Value, json};
 
 use crate::errors::Code;
 
-/// Une requête du protocole.
+/// A protocol request.
 #[derive(Debug, Deserialize, JsonSchema)]
 pub(crate) struct Request {
-    /// Identifiant libre, rendu tel quel dans la réponse.
+    /// Free identifier, returned as is in the response.
     #[serde(default)]
     pub(super) id: Value,
     pub(super) method: String,
@@ -21,16 +21,16 @@ pub(crate) struct Request {
     pub(super) params: Value,
 }
 
-/// Erreur d'une réponse.
+/// Error of a response.
 #[derive(Debug, Serialize, JsonSchema)]
 pub(crate) struct ErrorBody {
-    /// Code stable (`bonk explain <code>`).
+    /// Stable code (`bonk explain <code>`).
     pub(super) code: &'static str,
     pub(super) exit_code: u8,
     pub(super) message: String,
 }
 
-/// Une réponse : `result` ou `error`.
+/// A response: `result` or `error`.
 #[derive(Debug, Serialize, JsonSchema)]
 pub(crate) struct Response {
     pub(super) id: Value,

@@ -56,7 +56,7 @@ pub enum Severity {
     Error,
 }
 
-/// Un constat de l'inspection, identifié par un code stable.
+/// A finding of the inspection, identified by a stable code.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct Finding {
     pub severity: Severity,
@@ -68,7 +68,7 @@ pub struct Finding {
 pub struct MbrEntry {
     pub index: u8,
     pub bootable: bool,
-    /// Type de partition (`0xEE` : MBR de protection d'un GPT).
+    /// Partition type (`0xEE`: protective MBR of a GPT).
     pub kind: u8,
     pub start_lba: u32,
     pub sectors: u32,
@@ -76,7 +76,7 @@ pub struct MbrEntry {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct Mbr {
-    /// Les octets `55 AA` en fin de premier secteur.
+    /// The `55 AA` bytes at the end of the first sector.
     pub signature_valid: bool,
     pub protective: bool,
     pub entries: Vec<MbrEntry>,
@@ -84,7 +84,7 @@ pub struct Mbr {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct GptHeader {
-    /// Secteur où l'en-tête a été lu.
+    /// Sector where the header was read.
     pub read_at_lba: u64,
     pub revision: u32,
     pub header_size: u32,
@@ -115,14 +115,14 @@ pub struct GptEntry {
 pub struct Gpt {
     pub primary: Option<GptHeader>,
     pub backup: Option<GptHeader>,
-    /// Entrées de la table principale si elle est lisible, sinon de la table de secours.
+    /// Entries of the primary table if readable, otherwise of the backup table.
     pub entries: Vec<GptEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct Layout {
     pub size_bytes: u64,
-    /// Taille de secteur logique retenue (512 ou 4096) d'après la place de l'en-tête GPT.
+    /// Logical sector size retained (512 or 4096), from the position of the GPT header.
     pub logical_block_size: u32,
     pub mbr: Option<Mbr>,
     pub gpt: Option<Gpt>,

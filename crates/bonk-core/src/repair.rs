@@ -93,7 +93,7 @@ impl From<BlockError> for RepairError {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct RepairReport {
-    /// Ce qui a été réécrit, par identifiants stables.
+    /// What was rewritten, by stable identifiers.
     pub actions: Vec<&'static str>,
     pub backup_header_lba: u64,
     pub last_usable_lba: u64,

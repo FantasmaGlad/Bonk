@@ -1,6 +1,6 @@
 [package]
 name = "bonk-customizer"
-description = "Personnalisation des supports : fichiers de réponse Windows, persistance Live."
+description = "Media customization: Windows answer files, Live persistence."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
