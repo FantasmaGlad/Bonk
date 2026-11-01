@@ -38,10 +38,7 @@ pub(crate) fn spawn(program: &Path, args: &[String]) -> UnboundedReceiver<Event>
         {
             Ok(child) => child,
             Err(e) => {
-                return failed(format!(
-                    "{} : lancement impossible : {e}",
-                    program.display()
-                ));
+                return failed(format!("{}: cannot start: {e}", program.display()));
             }
         };
         let _ = sender.unbounded_send(Event::Started(child.id()));
@@ -284,7 +281,7 @@ mod tests {
                 .await
         });
         assert!(
-            matches!(events.as_slice(), [Event::Finished(Outcome::Failed { message, .. })] if message.contains("lancement impossible"))
+            matches!(events.as_slice(), [Event::Finished(Outcome::Failed { message, .. })] if message.contains("cannot start"))
         );
         // L'annulation envoie SIGTERM au processus.
         let mut stream = spawn(

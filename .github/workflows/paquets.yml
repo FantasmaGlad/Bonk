@@ -1,6 +1,5 @@
 # Paquets natifs construits à partir des binaires de `binaires` (appelé par lui, même exécution).
 # Faits : .deb et .rpm (Linux x86_64 et aarch64), binaire macOS universel (lipo) et son .dmg.
-# Pas encore : AppImage, MSI (choix de format et outils à valider).
 name: paquets
 
 on:

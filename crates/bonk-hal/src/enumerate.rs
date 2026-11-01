@@ -24,7 +24,7 @@ pub enum EnumerateError {
     Io { what: String, source: io::Error },
     /// Une source système est lisible mais son contenu n'a pas la forme attendue.
     Malformed { what: String, detail: String },
-    /// Pas encore d'énumération pour ce système d'exploitation.
+    /// Pas d'énumération pour ce système d'exploitation.
     Unsupported { os: &'static str },
 }
 
@@ -67,7 +67,7 @@ pub struct SourceRead {
 }
 
 /// Comme [`enumerate_disks`], et rend aussi chaque lecture de source système avec son contenu, pour
-/// `bonk debug sources`. Hors Linux, aucune lecture n'est enregistrée (pas encore d'énumération).
+/// `bonk debug sources`.
 pub fn enumerate_disks_recorded() -> (Result<Vec<Disk>, EnumerateError>, Vec<SourceRead>) {
     crate::platform::current().enumerate_recorded()
 }
