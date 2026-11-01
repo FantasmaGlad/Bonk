@@ -962,3 +962,56 @@ fn empreinte_et_mode_brut_arrivent_dans_la_commande() {
         "{commandes}"
     );
 }
+
+fn versions_du_catalogue() -> Vec<catalog::System> {
+    vec![catalog::System {
+        name: "Ubuntu".to_owned(),
+        icon: None,
+        choices: vec![
+            catalog::Choice {
+                label: "26.04.1 desktop LTS".to_owned(),
+                end_of_life: false,
+                source: catalog::ChoiceSource::Download {
+                    url: "https://u/26.iso".to_owned(),
+                    sha256: "a".repeat(64),
+                },
+            },
+            catalog::Choice {
+                label: "11".to_owned(),
+                end_of_life: false,
+                source: catalog::ChoiceSource::OfficialPage("https://p/".to_owned()),
+            },
+        ],
+    }]
+}
+
+#[test]
+fn choisir_une_version_remplit_l_adresse_et_l_empreinte() {
+    let mut app = app_avec_panneau();
+    app.catalog = catalog::CatalogState::Loading;
+    let _ = app.update(Message::CatalogLoaded(Ok(versions_du_catalogue())));
+    assert!(contient(&app, "Ubuntu"));
+    assert!(contient(&app, "26.04.1 desktop LTS"));
+    assert!(contient(&app, "11 : à télécharger sur https://p/"));
+
+    let systemes = versions_du_catalogue();
+    let _ = app.update(Message::CatalogChose(systemes[0].choices[0].clone()));
+    assert!(matches!(
+        &app.write,
+        WriteState::Draft { image, hash, .. } if image == "https://u/26.iso" && hash.len() == 64
+    ));
+    assert!(matches!(app.catalog, catalog::CatalogState::Closed));
+}
+
+#[test]
+fn un_catalogue_refuse_le_dit_et_une_reponse_tardive_est_ignoree() {
+    let mut app = app_avec_panneau();
+    app.catalog = catalog::CatalogState::Loading;
+    let _ = app.update(Message::CatalogLoaded(Err("expired".to_owned())));
+    assert!(contient(&app, "Catalogue indisponible : expired"));
+
+    let _ = app.update(Message::ToggleCatalog);
+    assert!(matches!(app.catalog, catalog::CatalogState::Closed));
+    let _ = app.update(Message::CatalogLoaded(Ok(versions_du_catalogue())));
+    assert!(matches!(app.catalog, catalog::CatalogState::Closed));
+}

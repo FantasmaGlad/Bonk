@@ -29,7 +29,7 @@ log = { version = "0.4", features = ["kv", "std"] }
 # le thème de Bonk est fixe (charte monochrome), la détection ne ferait qu'ajouter des dépendances.
 # `smol` plutôt que `thread-pool` : seul un exécuteur (tokio ou smol) fournit `iced::time::every`, utilisé pour
 # l'actualisation automatique de la liste des disques ; smol est le plus léger des deux.
-iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia", "crisp", "web-colors", "smol", "x11", "wayland"] }
+iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia", "crisp", "web-colors", "smol", "x11", "wayland", "svg"] }
 iced_test = "0.14"
 # Sélecteur de fichier du système : portail du bureau sous Linux (libdbus chargée à l'exécution, repli
 # `zenity`), dialogue natif sous Windows et macOS.

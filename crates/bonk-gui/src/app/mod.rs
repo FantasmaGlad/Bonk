@@ -6,6 +6,7 @@
 //! séparé (voir `transfer`), avec tous ses garde-fous. Le disque doit être proposé, un récapitulatif est
 //! affiché et le bouton ne s'active qu'après trois secondes.
 
+mod catalog;
 mod navigation;
 #[cfg(test)]
 mod tests;
@@ -59,6 +60,11 @@ pub(crate) enum Message {
     BrowseImage,
     /// Réponse du sélecteur ; `None` : fermé sans choix.
     ImagePicked(Option<PathBuf>),
+    /// Ouvre ou referme la liste des systèmes du catalogue.
+    ToggleCatalog,
+    CatalogLoaded(Result<Vec<catalog::System>, String>),
+    /// Une version choisie : remplit l'adresse et l'empreinte.
+    CatalogChose(catalog::Choice),
     /// Battement qui rafraîchit le décompte avant d'autoriser l'écriture.
     Clock,
     /// Lance l'écriture (après le délai de réflexion).
@@ -153,6 +159,7 @@ pub(crate) struct App {
     write: WriteState,
     /// La demande de confirmation d'un disque interne est à l'écran.
     confirming_internal: bool,
+    catalog: catalog::CatalogState,
     /// Programme lancé pour écrire : `bonk` lui-même, sauf dans les tests.
     program: Option<PathBuf>,
 }
@@ -189,12 +196,18 @@ fn ui_event(message: &Message) -> Option<(&'static str, String)> {
             "image_picked",
             if path.is_some() { "choisie" } else { "aucune" }.to_owned(),
         ),
+        Message::ToggleCatalog => ("click_catalog", String::new()),
+        Message::CatalogChose(choice) => ("catalog_chose", choice.label.clone()),
         Message::StartWrite => ("click_write", String::new()),
         Message::CancelWrite => ("click_cancel_write", String::new()),
         Message::DismissWrite => ("click_close_write", String::new()),
         Message::ConfirmInternal => ("click_confirm_internal", String::new()),
         Message::CloseInternal => ("click_close_internal", String::new()),
-        Message::Tick | Message::Clock | Message::Loaded(_) | Message::Write(_) => return None,
+        Message::Tick
+        | Message::Clock
+        | Message::Loaded(_)
+        | Message::Write(_)
+        | Message::CatalogLoaded(_) => return None,
     })
 }
 
