@@ -18,16 +18,16 @@ const ZSTD: [u8; 4] = [0x28, 0xB5, 0x2F, 0xFD];
 const BZIP2: [u8; 3] = *b"BZh";
 const ZIP: [u8; 4] = [b'P', b'K', 0x03, 0x04];
 
-/// Format d'une image, d'après ses premiers octets.
+/// Format of an image, from its first bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Format {
-    /// Image brute (`.img`, `.iso`, ou tout ce qui n'a pas de signature de compression).
+    /// Raw image (`.img`, `.iso`, or anything without a compression signature).
     Raw,
     Gzip,
     Xz,
     Zstd,
-    /// Reconnu mais non pris en charge : demande à l'utilisateur de décompresser d'abord.
+    /// Recognized but not supported: asks the user to decompress first.
     Bzip2,
     Zip,
 }

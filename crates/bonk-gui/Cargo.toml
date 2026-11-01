@@ -1,6 +1,6 @@
 [package]
 name = "bonk-gui"
-description = "Interface graphique de Bonk (Iced)."
+description = "Bonk window (Iced)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

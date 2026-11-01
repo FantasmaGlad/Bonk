@@ -44,22 +44,22 @@ pub enum Elevation {
     Never,
 }
 
-/// Pourquoi une fonction manque.
+/// Why a function is missing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Missing {
-    /// Un outil de l'hôte manque : `detail` le nomme.
+    /// A host tool is missing: `detail` names it.
     MissingTool,
-    /// Ce système ne le permet pas, ou Bonk ne le sait pas encore sur lui.
+    /// This system does not allow it, or Bonk does not know how yet.
     OsUnsupported,
-    /// Le système refuse à cet utilisateur.
+    /// The system refuses this user.
     NoPermission,
 }
 
-/// Une fonction que l'hôte permet, ou pourquoi il ne la permet pas.
+/// A function the host allows, or why it does not.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct Capability {
-    /// Nom stable : `write`, `format.fat32`...
+    /// Stable name: `write`, `format.fat32`...
     pub name: String,
     pub available: bool,
     pub missing: Option<Missing>,

@@ -1,6 +1,6 @@
 [package]
 name = "bonk-cli"
-description = "Ligne de commande de Bonk : arguments, sortie texte et JSON, codes de sortie."
+description = "Bonk command line: arguments, text and JSON output, stable exit codes."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

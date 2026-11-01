@@ -38,67 +38,67 @@ const AGGREGATE_SIGNATURES: [&str; 8] = [
 /// Signatures d'espace d'échange ou de reprise de mise en veille.
 const SWAP_SIGNATURES: [&str; 2] = ["swap", "swsuspend"];
 
-/// Réglages explicites de l'utilisateur ; tout est refusé par défaut.
+/// Explicit user settings; everything is refused by default.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, default)]
 pub struct FilterOptions {
-    /// Afficher aussi les disques internes non système, avec un avertissement renforcé.
+    /// Show internal non-system disks too, with a stronger warning.
     pub show_internal: bool,
-    /// Mode test explicite : autoriser les disques virtuels (loop, zram, disque de VM).
+    /// Explicit test mode: allow virtual disks (loop, zram, VM disk).
     pub allow_virtual: bool,
 }
 
-/// Avertissement attaché à un disque proposé.
+/// Warning attached to an offered disk.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Warning {
     None,
-    /// Disque interne non système, affiché sur demande : confirmation renforcée.
+    /// Internal non-system disk, shown on request: stronger confirmation.
     InternalDisk,
-    /// Disque virtuel, autorisé par le mode test.
+    /// Virtual disk, allowed by test mode.
     VirtualDisk,
 }
 
-/// Pourquoi un disque non interdit n'est pas affiché.
+/// Why a non-forbidden disk is hidden.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HiddenReason {
-    /// Bus non amovible (ou inconnu) et l'option d'affichage des disques internes est désactivée.
+    /// Non-removable (or unknown) bus, and the option to show internal disks is off.
     InternalBus,
 }
 
-/// Motif d'exclusion : le disque n'est jamais proposé ni écrivable.
+/// Exclusion reason: the disk is never offered or writable.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(tag = "reason", rename_all = "snake_case")]
 pub enum Exclusion {
-    /// Volume système de l'hôte (racine, `%SystemDrive%`, volume de démarrage).
+    /// Host system volume (root, `%SystemDrive%`, boot volume).
     SystemVolume { partition: String },
-    /// Partition EFI dont l'hôte a démarré.
+    /// EFI partition the host booted from.
     ActiveEsp { partition: String },
-    /// Espace d'échange ou de reprise de mise en veille.
+    /// Swap or resume-from-sleep space.
     Swap { partition: String },
-    /// Monté par le système hors des points de montage utilisateur.
+    /// Mounted by the system outside user mount points.
     MountedOutsideUserPaths { partition: String, mount: String },
-    /// Membre d'un RAID, LVM, ZFS ou Storage Spaces.
+    /// Member of a RAID, LVM, ZFS or Storage Spaces.
     AggregateMember { device: String, signature: String },
-    /// Un autre périphérique est empilé dessus (RAID actif, LVM, volume chiffré déverrouillé).
+    /// Another device is stacked on it (active RAID, LVM, unlocked encrypted volume).
     Stacked {
         device: String,
         holders: Vec<String>,
     },
-    /// Disque virtuel de l'hôte, hors mode test.
+    /// Host virtual disk, outside test mode.
     VirtualDisk { kind: DiskKind },
 }
 
-/// Verdict du filtre pour un disque.
+/// Filter verdict for a disk.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(tag = "verdict", rename_all = "snake_case")]
 pub enum Eligibility {
-    /// Proposé à l'utilisateur et écrivable.
+    /// Offered to the user and writable.
     Offered { warning: Warning },
-    /// Pas interdit, mais non affiché avec les réglages actuels.
+    /// Not forbidden, but hidden with the current settings.
     Hidden { reason: HiddenReason },
-    /// Jamais proposé, jamais écrivable. Tous les motifs sont listés, pour pouvoir les expliquer.
+    /// Never offered, never writable. All reasons are listed, so they can be explained.
     Excluded { reasons: Vec<Exclusion> },
 }
 
@@ -126,16 +126,16 @@ pub fn evaluate_traced(disk: &Disk, options: FilterOptions) -> (Eligibility, Vec
     (verdict, trace)
 }
 
-/// Examen d'une règle du filtre sur un disque ou une partition.
+/// Examination of a filter rule on a disk or partition.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct RuleTrace {
-    /// Identifiant stable de la règle (le même que le motif d'exclusion qu'elle produit).
+    /// Stable identifier of the rule (the same as the exclusion reason it produces).
     pub rule: &'static str,
-    /// Ce qui est examiné : chemin du disque ou de la partition.
+    /// What is examined: path of the disk or partition.
     pub subject: String,
-    /// Les faits lus par la règle.
+    /// The facts read by the rule.
     pub facts: String,
-    /// La règle a produit une exclusion (pour `bus`, elle a décidé de la proposition du disque).
+    /// The rule produced an exclusion (for `bus`, it decided whether the disk is offered).
     pub fired: bool,
 }
 

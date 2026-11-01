@@ -81,7 +81,7 @@ pub(crate) struct Effective {
     pub(crate) key: &'static str,
     pub(crate) value: String,
     pub(crate) origin: Origin,
-    /// Nom de la variable d'environnement qui l'impose, quand l'origine est `environment`.
+    /// Name of the environment variable that imposes it, when the origin is `environment`.
     pub(crate) variable: Option<String>,
     pub(crate) help: &'static str,
 }
@@ -232,7 +232,7 @@ pub(crate) enum ConfigAction {
 #[derive(Serialize, JsonSchema)]
 pub(crate) struct ListReport {
     schema_version: u32,
-    /// Fichier de configuration utilisé.
+    /// Configuration file used.
     file: Option<String>,
     settings: Vec<Effective>,
 }

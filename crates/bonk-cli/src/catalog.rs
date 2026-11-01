@@ -153,7 +153,7 @@ fn channel_label(channel: Channel) -> &'static str {
 struct FamilyEntry {
     id: String,
     name: String,
-    /// Logo contrôlé par son empreinte, dans le cache local ; absent s'il n'a pas pu être lu.
+    /// Logo checked by its hash, in the local cache; absent if it could not be read.
     icon_path: Option<PathBuf>,
 }
 
@@ -162,7 +162,7 @@ struct Report {
     schema_version: u32,
     sequence: u64,
     expires_unix: u64,
-    /// Copie gardée, le réseau ayant manqué.
+    /// Saved copy, because the network was missing.
     saved_copy: bool,
     families: Vec<FamilyEntry>,
     images: Vec<Image>,

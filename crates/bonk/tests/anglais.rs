@@ -137,6 +137,20 @@ fn toutes_les_sorties_sont_en_anglais() -> Result<(), Box<dyn std::error::Error>
             }
         }
     }
+    // Les schémas JSON font partie de la sortie : leurs descriptions aussi.
+    let noms = Command::new(env!("CARGO_BIN_EXE_bonk"))
+        .arg("schema")
+        .output()?;
+    let noms = String::from_utf8_lossy(&noms.stdout).into_owned();
+    assert!(noms.lines().count() > 10, "{noms}");
+    for nom in noms.lines() {
+        let sortie = Command::new(env!("CARGO_BIN_EXE_bonk"))
+            .args(["schema", nom])
+            .output()?;
+        if let Some(ligne) = francais(&String::from_utf8_lossy(&sortie.stdout)) {
+            fautes.push(format!("bonk schema {nom} : {ligne}"));
+        }
+    }
     std::fs::remove_dir_all(&dossier)?;
     assert!(fautes.is_empty(), "{}", fautes.join("\n"));
     Ok(())

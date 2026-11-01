@@ -7,25 +7,23 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// Bus par lequel le disque est relié à l'hôte.
+/// Bus connecting the disk to the host.
 ///
-/// La sécurité se fonde sur le bus et non sur le drapeau « amovible » : sous Windows, un disque dur
-/// USB est souvent signalé « fixe ».
+/// Safety relies on the bus and not on the "removable" flag: on Windows, a USB hard disk is often reported as "fixed".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Bus {
     Usb,
-    /// Lecteur de carte SD ou MMC.
+    /// SD or MMC card reader.
     Sd,
-    /// Thunderbolt **externe** : un adaptateur ne doit rapporter ce bus que pour un boîtier branché, pas
-    /// pour un SSD interne qui passerait par la même interface.
+    /// **External** Thunderbolt: an adapter must report this bus only for a connected enclosure, not for an internal SSD going through the same interface.
     Thunderbolt,
     Sata,
     Nvme,
     Scsi,
-    /// Bus d'un disque virtuel de l'hôte (loop, zram, disque de VM).
+    /// Bus of a host virtual disk (loop, zram, VM disk).
     Virtual,
-    /// Bus que l'adaptateur n'a pas su déterminer : traité comme interne, par prudence.
+    /// Bus the adapter could not determine: treated as internal, to be safe.
     Unknown,
 }
 
@@ -37,54 +35,51 @@ impl Bus {
     }
 }
 
-/// Nature du disque du point de vue de l'hôte.
+/// Nature of the disk from the host point of view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DiskKind {
     Physical,
-    /// Périphérique loop adossé à un fichier.
+    /// Loop device backed by a file.
     Loop,
     Zram,
-    /// Disque virtuel d'une machine virtuelle monté par l'hôte.
+    /// Virtual machine disk mounted by the host.
     HostVirtual,
 }
 
-/// Partition (ou volume) d'un disque.
+/// Partition (or volume) of a disk.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Partition {
-    /// Chemin système, par exemple `/dev/sdb1`.
+    /// System path, such as `/dev/sdb1`.
     pub path: String,
     #[serde(default)]
     pub label: Option<String>,
-    /// Signature de système de fichiers ou de conteneur telle que la rapporte l'OS (`ext4`, `vfat`,
-    /// `swap`, `LVM2_member`, `linux_raid_member`, `zfs_member`, `crypto_LUKS`...).
+    /// Filesystem or container signature as reported by the OS (`ext4`, `vfat`, `swap`, `LVM2_member`, `linux_raid_member`, `zfs_member`, `crypto_LUKS`...).
     #[serde(default)]
     pub fs_type: Option<String>,
     pub size_bytes: u64,
-    /// Points de montage en vigueur (`/`, `/run/media/alice/CLE`, `E:\`).
+    /// Current mount points (`/`, `/run/media/alice/KEY`, `E:\`).
     #[serde(default)]
     pub mount_points: Vec<String>,
-    /// Périphériques empilés par-dessus (RAID `md0`, LVM ou volume chiffré déverrouillé `dm-0`).
+    /// Devices stacked on top (RAID `md0`, LVM or unlocked encrypted volume `dm-0`).
     #[serde(default)]
     pub holders: Vec<String>,
-    /// Volume système de l'hôte : `%SystemDrive%` sous Windows, volume de démarrage sous macOS,
-    /// racine sous Linux.
+    /// Host system volume: `%SystemDrive%` on Windows, boot volume on macOS, root on Linux.
     #[serde(default)]
     pub is_system_volume: bool,
-    /// Partition système EFI **dont l'hôte a démarré** (pas toute partition de type ESP).
+    /// EFI system partition **the host booted from** (not every ESP-type partition).
     #[serde(default)]
     pub is_active_esp: bool,
 }
 
-/// Disque tel que rapporté par l'énumération d'un OS.
+/// Disk as reported by the enumeration of an OS.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Disk {
-    /// Identifiant stable entre deux branchements : numéro de série ou chemin `by-id`.
-    /// Jamais `/dev/sdX` seul, qui change d'un branchement à l'autre.
+    /// Stable identifier between two connections: serial number or `by-id` path. Never `/dev/sdX` alone, which changes between connections.
     pub id: String,
-    /// Chemin système courant, pour l'affichage et l'ouverture.
+    /// Current system path, for display and opening.
     pub path: String,
     pub model: String,
     #[serde(default)]
@@ -92,13 +87,13 @@ pub struct Disk {
     pub size_bytes: u64,
     pub bus: Bus,
     pub kind: DiskKind,
-    /// Drapeau « amovible » du système, **non fiable** : informatif seulement.
+    /// System "removable" flag, **not reliable**: informative only.
     #[serde(default)]
     pub removable_flag: bool,
-    /// Signature portée par le disque entier, sans table de partitions (volume physique LVM nu...).
+    /// Signature on the whole disk, without a partition table (bare LVM physical volume...).
     #[serde(default)]
     pub fs_type: Option<String>,
-    /// Périphériques empilés directement sur le disque entier.
+    /// Devices stacked directly on the whole disk.
     #[serde(default)]
     pub holders: Vec<String>,
     #[serde(default)]

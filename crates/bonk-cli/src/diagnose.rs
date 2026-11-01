@@ -62,11 +62,11 @@ struct Report<'a> {
     graphics: Graphics,
     redaction: Redaction,
     enumeration: Enumeration<'a>,
-    /// Sources brutes de l'énumération, quand `--capture` est demandé.
+    /// Raw enumeration sources, when `--capture` is requested.
     capture: Option<Capture>,
 }
 
-/// Lectures des sources système, au format que rejoue `--fixture`.
+/// Reads of the system sources, in the format `--fixture` replays.
 #[derive(Serialize, JsonSchema)]
 struct Capture {
     schema_version: u32,
@@ -84,11 +84,11 @@ struct System {
     os: &'static str,
     family: &'static str,
     arch: &'static str,
-    /// Version du noyau, quand le système la donne.
+    /// Kernel version, when the system gives it.
     kernel: Option<String>,
 }
 
-/// Session graphique : on dit si les variables existent, jamais leur valeur.
+/// Graphical session: says whether the variables exist, never their value.
 #[derive(Serialize, JsonSchema)]
 struct Graphics {
     wayland_display: bool,
@@ -105,7 +105,7 @@ struct Redaction {
 struct Enumeration<'a> {
     ok: bool,
     error: Option<String>,
-    /// Tous les disques, avec leur verdict et tous leurs motifs (comme `bonk list --all`).
+    /// All disks, with their verdict and all their reasons (like `bonk list --all`).
     disks: Vec<Entry<'a>>,
 }
 

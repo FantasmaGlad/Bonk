@@ -1,6 +1,6 @@
 [package]
 name = "bonk-ops"
-description = "Opérations de Bonk : garde-fous d'écriture, vérification, codes d'erreur stables, sans interface."
+description = "Bonk operations: write safeguards, verification, error codes."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
