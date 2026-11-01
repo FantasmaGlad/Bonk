@@ -75,7 +75,13 @@ pub fn enumerate_disks_recorded() -> (Result<Vec<Disk>, EnumerateError>, Vec<Sou
 
 /// Énumère les disques à partir d'une capture de sources (`bonk diagnose --capture`), sans toucher au
 /// système : sert à rejouer ailleurs un cas de support (`--fixture`) et à écrire des tests sur de vraies
-/// machines. Seules les captures d'un Linux se rejouent, sur Linux.
+/// machines. Une capture de Windows ou de macOS se rejoue partout ; celle d'un Linux, sur Linux.
 pub fn enumerate_disks_from_capture(reads: &[SourceRead]) -> Result<Vec<Disk>, EnumerateError> {
+    if let Some(result) = crate::windows_facts::from_capture(reads) {
+        return result;
+    }
+    if let Some(result) = crate::macos_facts::from_capture(reads) {
+        return result;
+    }
     crate::platform::current().enumerate_from_capture(reads)
 }

@@ -24,7 +24,8 @@ const USER_MOUNT_PREFIXES: [&str; 3] = ["/media/", "/run/media/", "/Volumes/"];
 /// Signatures de membres de RAID, LVM, ZFS et Storage Spaces, en minuscules. Les
 /// adaptateurs d'OS ramènent leur vocabulaire à celui de `blkid`/`lsblk` ; Storage Spaces n'en a pas,
 /// d'où `storage_spaces_member`.
-const AGGREGATE_SIGNATURES: [&str; 7] = [
+const AGGREGATE_SIGNATURES: [&str; 8] = [
+    "ldm_member",
     "linux_raid_member",
     "ddf_raid_member",
     "isw_raid_member",

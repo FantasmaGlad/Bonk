@@ -91,8 +91,8 @@ pub const CATALOG: &[Entry] = &[
         id: "E1002",
         exit: EXIT_RUNTIME_ERROR,
         title: "Disk detection is not available on this system",
-        causes: &["enumeration only exists on Linux in this version"],
-        remedy: "Use a Linux host, or replay a Linux capture with `--fixture`.",
+        causes: &["enumeration does not exist on this system in this version"],
+        remedy: "Use a Linux, Windows or macOS host, or replay a capture with `--fixture`.",
     },
     Entry {
         code: Code::DiskNotFound,

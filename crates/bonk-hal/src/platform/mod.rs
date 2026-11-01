@@ -6,9 +6,13 @@
 
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
 #[cfg(target_os = "linux")]
 mod udisks;
 mod unsupported;
+#[cfg(windows)]
+mod windows;
 
 use std::path::{Path, PathBuf};
 
@@ -150,7 +154,15 @@ pub fn current() -> &'static dyn Platform {
     {
         &linux::Linux
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(windows)]
+    {
+        &windows::Windows
+    }
+    #[cfg(target_os = "macos")]
+    {
+        &macos::Macos
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
     {
         &Unsupported
     }
