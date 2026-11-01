@@ -184,7 +184,7 @@ impl App {
             .width(Fill)
             .into()
         } else if entries.is_empty() {
-            let message = if self.loading {
+            let message = if self.loading && !self.answered {
                 lang.pick("Detecting...", "Détection en cours...")
             } else if self.show_all {
                 lang.pick("No disk detected.", "Aucun disque détecté.")

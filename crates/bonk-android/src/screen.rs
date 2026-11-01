@@ -436,6 +436,22 @@ mod tests {
         assert!(matches!(model.write, WriteState::Running { .. }));
     }
 
+    /// Une ligne qui change de hauteur à chaque détection fait sauter tout l'écran.
+    #[test]
+    fn la_detection_periodique_ne_change_pas_l_etat_affiche() {
+        let mut model = Model {
+            auto_select: true,
+            ..Model::default()
+        };
+        let _ = model.update(Message::Loaded(Ok(Vec::new())));
+        let before = state(&model);
+        let _ = model.update(Message::Tick);
+        assert!(model.loading);
+        assert_eq!(state(&model), before);
+        let _ = model.update(Message::Loaded(Ok(Vec::new())));
+        assert_eq!(state(&model), before);
+    }
+
     #[test]
     fn une_cle_de_taille_inconnue_n_est_pas_un_disque() {
         assert!(disk_of(&json!({"device": "d", "model": "m"})).is_none());

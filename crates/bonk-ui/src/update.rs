@@ -193,6 +193,7 @@ impl Model {
     fn on_disks_loaded(&mut self, disks: Vec<Disk>) -> Effects {
         log::debug!(target: "bonk::gui", disks = disks.len(); "enumeration result received");
         self.loading = false;
+        self.answered = true;
         self.error = None;
         if self
             .selected
