@@ -1,5 +1,6 @@
-//! L'écriture sur le téléphone : le moteur et les contrôles de la ligne de commande, sur la clé qu'Android a
-//! confiée à l'application. Seul l'accès au matériel change.
+//! L'écriture sur le téléphone : le moteur de la ligne de commande, sur la clé qu'Android a confiée à
+//! l'application. L'accès au matériel change, et avec lui la revérification d'identité : la liste vient de
+//! l'écran, donc la clé ouverte est comparée au disque choisi par `same_drive`, et sa taille par le moteur.
 
 use std::path::Path;
 use std::sync::atomic::Ordering;
@@ -61,10 +62,31 @@ fn finished(result: Result<WriteOutcome, job::JobError>) -> Event {
 
 pub(crate) struct Request<'a> {
     pub(crate) disk_id: &'a str,
+    /// Ce que l'application a réellement ouvert : nom du périphérique USB et sa série (vide sans série).
+    pub(crate) device: &'a str,
+    pub(crate) serial: &'a str,
     pub(crate) source: &'a str,
     pub(crate) sha256: Option<String>,
     pub(crate) raw: bool,
     pub(crate) mbr: bool,
+}
+
+/// La revérification du moteur compare la liste à elle-même sur Android (l'énumération est celle de l'écran) :
+/// seule cette comparaison lie le disque choisi au périphérique que l'application vient d'ouvrir.
+fn same_drive(disks: &[Disk], disk_id: &str, device: &str, serial: &str) -> Result<(), String> {
+    let chosen = disks
+        .iter()
+        .find(|disk| disk.id == disk_id)
+        .ok_or_else(|| format!("{disk_id} is no longer connected"))?;
+    if chosen.path != device || chosen.serial.as_deref().unwrap_or("") != serial {
+        return Err(format!(
+            "{disk_id} was chosen at {}, serial {}; the drive opened is at {device}, serial {}",
+            chosen.path,
+            chosen.serial.as_deref().unwrap_or("none"),
+            if serial.is_empty() { "none" } else { serial },
+        ));
+    }
+    Ok(())
 }
 
 /// Écrit et vérifie, de bout en bout. Bloque : l'application l'appelle hors du fil de l'écran, et lit la
@@ -77,6 +99,13 @@ pub(crate) fn write(
         .lock()
         .map(|model| model.disks.clone())
         .unwrap_or_default();
+    if let Err(message) = same_drive(&disks, request.disk_id, request.device, request.serial) {
+        push(Event::Finished(Outcome::Failed {
+            code: Some(bonk_ops::errors::Code::IdentityChanged.id().to_owned()),
+            message,
+        }));
+        return;
+    }
     let io = android_io(open);
     let enumerate = move || Ok(disks.clone());
     let deps = Deps {
@@ -120,4 +149,50 @@ pub(crate) fn write(
         }
     };
     push(finished(job::write(&job, &deps, &mut progress)));
+}
+
+#[cfg(test)]
+mod tests {
+    use bonk_hal::{Bus, DiskKind};
+
+    use super::*;
+
+    fn disk(path: &str, serial: Option<&str>) -> Disk {
+        Disk {
+            id: format!("usb-{}", serial.unwrap_or(path)),
+            path: path.to_owned(),
+            model: "UDisk".to_owned(),
+            serial: serial.map(str::to_owned),
+            size_bytes: 32_000_000_000,
+            bus: Bus::Usb,
+            kind: DiskKind::Physical,
+            removable_flag: true,
+            fs_type: None,
+            holders: Vec::new(),
+            partitions: Vec::new(),
+        }
+    }
+
+    /// La clé ouverte par l'application doit être celle que l'écran a montrée : même branchement, même série.
+    #[test]
+    fn la_cle_ouverte_doit_etre_celle_choisie() {
+        let disks = [disk("/dev/bus/usb/001/002", Some("S1"))];
+        assert!(same_drive(&disks, "usb-S1", "/dev/bus/usb/001/002", "S1").is_ok());
+        // Une autre clé arrivée au même endroit, ou la clé choisie rebranchée ailleurs.
+        assert!(same_drive(&disks, "usb-S1", "/dev/bus/usb/001/002", "S2").is_err());
+        assert!(same_drive(&disks, "usb-S1", "/dev/bus/usb/001/003", "S1").is_err());
+        // Le disque choisi n'est plus dans la liste.
+        assert!(same_drive(&disks, "usb-S9", "/dev/bus/usb/001/002", "S1").is_err());
+        // Sans série, le branchement seul départage.
+        let anonymous = [disk("/dev/bus/usb/001/004", None)];
+        assert!(
+            same_drive(
+                &anonymous,
+                "usb-/dev/bus/usb/001/004",
+                "/dev/bus/usb/001/004",
+                ""
+            )
+            .is_ok()
+        );
+    }
 }
