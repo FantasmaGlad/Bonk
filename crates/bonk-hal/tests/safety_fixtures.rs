@@ -1,6 +1,6 @@
 //! Le filtre de sécurité face aux jeux d'énumération de `tests/fixtures/`.
 //!
-//! Chaque fichier décrit des disques et, pour chaque jeu de réglages, le verdict attendu de **chacun**
+//! Chaque fichier décrit des disques et, pour chaque jeu de réglages, le verdict attendu de chacun
 //! : un disque sans verdict attendu fait échouer le test, pour qu'aucun cas ne soit ajouté sans être
 //! vérifié. Le verdict réel est comparé en JSON, donc ce test fige aussi le format des verdicts que
 //! rend `bonk list --json`.

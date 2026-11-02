@@ -2,10 +2,10 @@
 //! programme (outil de support, orchestrateur, test) pilote Bonk par un protocole JSON, une ligne par
 //! message, sur l'entrée et la sortie standard.
 //!
-//! - **Requête** : `{"id": 1, "method": "disk.list", "params": {"all": true}}`.
-//! - **Réponse** : `{"id": 1, "result": {...}}` ou `{"id": 1, "error": {"code": "E1003", ...}}`, avec
+//! - Requête : `{"id": 1, "method": "disk.list", "params": {"all": true}}`.
+//! - Réponse : `{"id": 1, "result": {...}}` ou `{"id": 1, "error": {"code": "E1003", ...}}`, avec
 //!   les mêmes codes d'erreur et les mêmes formats que la CLI en `--json`.
-//! - **Événements** (sans `id`) : `ready` au démarrage, `job_started`, `progress` (avec `request_id`)
+//! - Événements (sans `id`) : `ready` au démarrage, `job_started`, `progress` (avec `request_id`)
 //!   pendant une écriture, `disks_changed` quand la liste des disques change (`watch.start`).
 //!
 //! Les méthodes portent le nom de la commande : `disk.list` est `bonk disk list`. Une seule opération

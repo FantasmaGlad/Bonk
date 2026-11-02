@@ -111,7 +111,7 @@ pub trait Platform: Send + Sync {
     /// Avec [`Elevation::Never`], aucune autorisation n'est demandée au système.
     fn unmount(&self, disk: &Disk, elevation: Elevation) -> Result<Vec<String>, OpenTargetError>;
 
-    /// Obtient le droit d'ouvrir le disque, sans le garder ouvert. **Appelé avant tout démontage** : un
+    /// Obtient le droit d'ouvrir le disque, sans le garder ouvert. Appelé avant tout démontage : un
     /// refus ne doit laisser aucune trace sur la clé.
     fn prepare_access(
         &self,

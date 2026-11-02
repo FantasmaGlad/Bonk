@@ -18,7 +18,7 @@ use crate::errors::Code;
 pub(super) type OpenedTarget = (Box<dyn BlockDevice>, TargetInfo, Vec<String>);
 
 /// Cible reconnue : informations, disque s'il y en a un, et ce qui sera démonté. Son identité est
-/// fixée **une fois**, au choix : c'est elle que l'on revérifie avant d'ouvrir, jamais celle d'une
+/// fixée une fois, au choix : c'est elle que l'on revérifie avant d'ouvrir, jamais celle d'une
 /// énumération plus récente (sinon un disque remplacé entre-temps serait accepté sans le dire).
 pub(super) struct Chosen {
     pub(super) info: TargetInfo,

@@ -1,7 +1,7 @@
 //! Choix et préparation d'une cible d'écriture.
 //!
 //! Trois garde-fous, dans cet ordre : le filtre de sécurité décide que la cible est écrivable ;
-//! les partitions montées sont démontées ; **juste avant** l'ouverture, on ré-énumère et on vérifie que
+//! les partitions montées sont démontées ; juste avant l'ouverture, on ré-énumère et on vérifie que
 //! c'est bien le même disque (identifiant, numéro de série, taille), pour qu'un disque débranché puis
 //! remplacé entre-temps ne soit jamais écrit à la place de l'autre.
 
@@ -68,7 +68,7 @@ impl fmt::Display for OpenTargetError {
 impl std::error::Error for OpenTargetError {}
 
 /// Retrouve la cible par son identifiant stable dans une énumération fraîche, la fait juger par le
-/// filtre et vérifie son identité, sans rien toucher : appelée au choix puis **de nouveau** juste avant
+/// filtre et vérifie son identité, sans rien toucher : appelée au choix puis de nouveau juste avant
 /// l'ouverture. Seul le verdict « proposé » autorise la cible.
 pub fn reverify<'a>(
     expected: &TargetIdentity,

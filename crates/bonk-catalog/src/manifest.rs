@@ -387,7 +387,7 @@ fn replace(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     fs::rename(&partial, path)
 }
 
-/// Lit le catalogue sous `base`, ou, **si le réseau seul a manqué**, la dernière copie vérifiée. Un fichier
+/// Lit le catalogue sous `base`, ou, si le réseau seul a manqué, la dernière copie vérifiée. Un fichier
 /// reçu mais refusé reste une erreur : se rabattre en silence masquerait une falsification.
 ///
 /// # Errors

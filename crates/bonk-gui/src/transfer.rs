@@ -1,7 +1,7 @@
 //! Écriture d'une image depuis la fenêtre, par la ligne de commande.
 //!
 //! La fenêtre ne contient aucune logique d'écriture : elle lance `bonk write ... --progress json` dans
-//! un **processus séparé** et traduit ses lignes JSON en barre de progression. Conséquence voulue :
+//! un processus séparé et traduit ses lignes JSON en barre de progression. Conséquence voulue :
 //! l'interface ne tourne jamais avec des droits élevés ; seul ce processus a besoin des droits
 //! d'écriture, et tous les garde-fous (filtre, confirmation, identité, démontage, vérification) sont
 //! ceux de la CLI.
