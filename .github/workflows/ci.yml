@@ -86,8 +86,8 @@ jobs:
           rustup target add x86_64-pc-windows-gnu x86_64-apple-darwin aarch64-linux-android
           cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-gnu -- -D warnings
           cargo clippy --workspace --all-targets --locked --target x86_64-apple-darwin -- -D warnings
-          # Android : le cœur pur et la ligne de commande doivent rester compilables ; la fenêtre et l'accès USB viendront avec l'application.
-          cargo clippy -p bonk-core -p bonk-ops -p bonk-cli --all-targets --locked --target aarch64-linux-android -- -D warnings
+          # Android : la bibliothèque de l'application et ce qu'elle partage avec l'ordinateur ; la fenêtre Iced n'y est pas construite.
+          cargo clippy -p bonk-core -p bonk-ops -p bonk-cli -p bonk-android -p bonk-ui --all-targets --locked --target aarch64-linux-android -- -D warnings
       - name: Tests
         run: cargo test --workspace --locked
       # La version sans fenêtre ne doit pas casser sans bruit, ni tirer Iced par un autre chemin.
