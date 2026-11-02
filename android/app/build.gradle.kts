@@ -30,6 +30,8 @@ android {
         targetSdk = 36
         versionCode = workspaceVersion[0] * 10000 + workspaceVersion[1] * 100 + workspaceVersion[2]
         versionName = workspaceVersion.joinToString(".")
+        // Sans ce filtre, les bibliothèques d'AndroidX font croire que l'application tourne sur d'autres puces.
+        ndk { abiFilters += "arm64-v8a" }
         buildConfigField("String", "BENCH_SERIAL", "\"$benchSerial\"")
     }
 
