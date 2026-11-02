@@ -19,6 +19,9 @@ private const val CHANNEL = "write"
 private const val NOTIFICATION = 1
 private const val REQUEST = "request"
 
+/** Filet si le service ne relâchait jamais le verrou : aucune écriture ne dure six heures. */
+private const val WAKE_LOCK_MS = 6 * 60 * 60 * 1000L
+
 /**
  * Porte l'écriture : sans service, Android peut figer le processus dès qu'on quitte l'application, et
  * l'écriture s'arrête à mi-chemin. Elle vit ici, et non dans l'écran, pour que fermer l'écran ne la tue pas.
@@ -48,7 +51,7 @@ class WriteService : Service() {
             wakeLock =
                 getSystemService(PowerManager::class.java)
                     .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "bonk:write")
-                    .apply { acquire() }
+                    .apply { acquire(WAKE_LOCK_MS) }
         }
         // Premier plan d'abord : un échec immédiat de l'écriture arrête alors un service déjà au premier plan,
         // ce qu'Android accepte, et jamais l'inverse.
