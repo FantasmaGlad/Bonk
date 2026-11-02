@@ -211,6 +211,8 @@ pub extern "system" fn Java_app_bonkos_bonk_Native_write<'caller>(
     fd: jint,
     descriptors: JByteArray<'caller>,
     disk_id: JString<'caller>,
+    device: JString<'caller>,
+    serial: JString<'caller>,
     source: JString<'caller>,
     sha256: JString<'caller>,
     raw: jboolean,
@@ -219,10 +221,14 @@ pub extern "system" fn Java_app_bonkos_bonk_Native_write<'caller>(
     env.with_env(|env| -> Result<_, Error> {
         let descriptors = env.convert_byte_array(&descriptors)?;
         let disk_id = text_of(env, &disk_id)?;
+        let device = text_of(env, &device)?;
+        let serial = text_of(env, &serial)?;
         let source = text_of(env, &source)?;
         let sha256 = text_of(env, &sha256)?;
         let request = writer::Request {
             disk_id: &disk_id,
+            device: &device,
+            serial: &serial,
             source: &source,
             sha256: (!sha256.is_empty()).then_some(sha256.clone()),
             raw,

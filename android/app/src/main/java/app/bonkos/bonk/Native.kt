@@ -14,11 +14,16 @@ object Native {
     /** Vérifie la signature ; sans octets, reprend la dernière copie vérifiée. */
     external fun loadCatalog(directory: String, catalog: ByteArray, signature: ByteArray): String
 
-    /** Écrit et vérifie. Bloque : hors du fil de l'écran. La progression arrive par [dispatch]. */
+    /**
+     * Écrit et vérifie. Bloque : hors du fil de l'écran. La progression arrive par [dispatch]. `device` et
+     * `serial` sont ceux du périphérique ouvert : Rust refuse s'ils ne sont pas ceux du disque choisi.
+     */
     external fun write(
         fd: Int,
         descriptors: ByteArray,
         diskId: String,
+        device: String,
+        serial: String,
         source: String,
         sha256: String,
         raw: Boolean,

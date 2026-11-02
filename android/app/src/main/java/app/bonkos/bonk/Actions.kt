@@ -158,6 +158,8 @@ class Actions(
                     fd,
                     raw,
                     request.getString("disk_id"),
+                    device.deviceName,
+                    device.serialNumber.orEmpty(),
                     source,
                     hash,
                     request.getBoolean("raw"),
