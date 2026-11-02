@@ -125,5 +125,135 @@
       "message": "404",
       "type": "catalog_failed"
     }
+  ],
+  "states": [
+    {
+      "disks": [],
+      "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
+      "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
+      "language": "English",
+      "panel": null,
+      "running": false,
+      "show_all": false,
+      "show_all_label": "Afficher aussi les disques écartés",
+      "status": "0 disque(s) affiché(s) sur 0 détecté(s). Actualisation automatique toutes les 2 s."
+    },
+    {
+      "disks": [
+        {
+          "badge": "PROPOSÉ",
+          "device": "/dev/bus/usb/001/002",
+          "facts": "32,0 Go  S1  /dev/bus/usb/001/002",
+          "id": "usb-S1-001-002",
+          "model": "UDisk",
+          "selected": true,
+          "state": "proposé"
+        }
+      ],
+      "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
+      "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
+      "language": "English",
+      "panel": {
+        "advanced": false,
+        "advanced_button": "Autre image ou options...",
+        "button": "Écrire et effacer ce disque",
+        "enabled": true,
+        "hash": "",
+        "hash_hint": "Empreinte SHA-256 (exigée pour une adresse)",
+        "image": "/x.iso",
+        "image_hint": "Adresse https:// de l'image",
+        "kind": "draft",
+        "mbr": false,
+        "mbr_label": "Clé Windows (extraction, FAT32, démarrage UEFI) : table MBR au lieu de GPT",
+        "menu": {
+          "all_categories": "Toutes les catégories",
+          "all_systems": "Tous les systèmes",
+          "button": "Choisir un système...",
+          "categories": [
+            "Debian derivatives"
+          ],
+          "category": null,
+          "open": true,
+          "ready": true,
+          "rows": [
+            {
+              "index": 0,
+              "note": null,
+              "title": "Debian 13.7.0 netinst"
+            },
+            {
+              "index": null,
+              "note": "à télécharger sur https://www.debian.org/, puis Autre image",
+              "title": "Debian DVD"
+            }
+          ],
+          "system": null,
+          "systems": [
+            "Debian"
+          ]
+        },
+        "pick": "Choisir l'image...",
+        "raw": false,
+        "raw_label": "Écrire les octets tels quels, sans refuser une image non amorçable",
+        "summary": "UDisk  série S1  32,0 Go  0 partition(s)",
+        "title": "ÉCRIRE UNE IMAGE SUR CE DISQUE",
+        "warning": "Toutes les données de ce disque seront effacées. Cette action est irréversible."
+      },
+      "running": false,
+      "show_all": false,
+      "show_all_label": "Afficher aussi les disques écartés",
+      "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s."
+    },
+    {
+      "disks": [
+        {
+          "badge": "PROPOSÉ",
+          "device": "/dev/bus/usb/001/002",
+          "facts": "32,0 Go  S1  /dev/bus/usb/001/002",
+          "id": "usb-S1-001-002",
+          "model": "UDisk",
+          "selected": true,
+          "state": "proposé"
+        }
+      ],
+      "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
+      "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
+      "language": "English",
+      "panel": {
+        "cancel": "Annuler",
+        "fraction": 0.25,
+        "kind": "running",
+        "line": "Écriture : 1,0 Mo sur 4,1 Mo  (1,0 Mo/s)"
+      },
+      "running": true,
+      "show_all": false,
+      "show_all_label": "Afficher aussi les disques écartés",
+      "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s."
+    },
+    {
+      "disks": [
+        {
+          "badge": "PROPOSÉ",
+          "device": "/dev/bus/usb/001/002",
+          "facts": "32,0 Go  S1  /dev/bus/usb/001/002",
+          "id": "usb-S1-001-002",
+          "model": "UDisk",
+          "selected": true,
+          "state": "proposé"
+        }
+      ],
+      "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
+      "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
+      "language": "English",
+      "panel": {
+        "close": "Fermer",
+        "kind": "finished",
+        "message": "ÉCHEC : L'identité du disque a changé avant l'écriture (the drive changed) [E2002] : voir « bonk explain E2002 »"
+      },
+      "running": false,
+      "show_all": false,
+      "show_all_label": "Afficher aussi les disques écartés",
+      "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s."
+    }
   ]
 }
