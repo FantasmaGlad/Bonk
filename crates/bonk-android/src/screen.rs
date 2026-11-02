@@ -25,8 +25,19 @@ pub(crate) static MODEL: LazyLock<Mutex<Model>> =
 fn disk_of(value: &Value) -> Option<Disk> {
     let serial = value["serial"].as_str().filter(|s| !s.is_empty());
     let name = value["device"].as_str()?;
+    // La série seule ne suffit pas : des clés clones la partagent, et la carte touchée désignerait alors la
+    // première de la liste. Le point de branchement la départage ; rebrancher la clé change donc son
+    // identifiant, et le brouillon repart de zéro (image vide, nouveau délai) au lieu de viser ce qui
+    // occupe la place.
+    let port = name
+        .strip_prefix("/dev/bus/usb/")
+        .unwrap_or(name)
+        .replace('/', "-");
     Some(Disk {
-        id: format!("usb-{}", serial.unwrap_or(name)),
+        id: match serial {
+            Some(serial) => format!("usb-{serial}-{port}"),
+            None => format!("usb-{port}"),
+        },
         path: name.to_owned(),
         model: value["model"].as_str()?.to_owned(),
         serial: serial.map(str::to_owned),
@@ -397,7 +408,7 @@ mod tests {
     #[test]
     fn la_cle_passe_le_meme_filtre_que_sur_pc_et_se_selectionne() {
         let model = loaded();
-        assert_eq!(model.selected.as_deref(), Some("usb-S1"));
+        assert_eq!(model.selected.as_deref(), Some("usb-S1-001-002"));
         let state = state(&model);
         assert_eq!(state["disks"][0]["model"], "UDisk");
         assert_eq!(state["panel"]["kind"], "draft");
@@ -452,6 +463,41 @@ mod tests {
         assert_eq!(state(&model), before);
         let _ = model.update(Message::Loaded(Ok(Vec::new())));
         assert_eq!(state(&model), before);
+    }
+
+    /// Deux clés clones ont souvent la même série : chacune doit garder sa propre carte, et toucher la
+    /// seconde doit faire écrire la seconde, jamais la première de la liste.
+    #[test]
+    fn deux_cles_de_meme_serie_restent_distinctes() {
+        let mut model = Model {
+            auto_select: false,
+            ..Model::default()
+        };
+        let mut b = usb();
+        b["device"] = json!("/dev/bus/usb/001/003");
+        let disks: Vec<Disk> = [usb(), b].iter().filter_map(disk_of).collect();
+        let _ = model.update(Message::Loaded(Ok(disks)));
+        let shown = disks_state(&model);
+        assert_eq!(shown.len(), 2);
+        assert_ne!(shown[0]["id"], shown[1]["id"]);
+        let second = shown
+            .iter()
+            .find(|disk| disk["device"] == "/dev/bus/usb/001/003")
+            .and_then(|disk| disk["id"].as_str())
+            .map(str::to_owned)
+            .unwrap_or_default();
+        let _ = model.update(Message::Select(second));
+        let selected: Vec<Value> = disks_state(&model)
+            .into_iter()
+            .filter(|disk| disk["selected"] == true)
+            .map(|disk| disk["device"].clone())
+            .collect();
+        assert_eq!(selected, vec![json!("/dev/bus/usb/001/003")]);
+        let _ = model.update(Message::ImageInput("/x.iso".to_owned()));
+        assert_eq!(
+            draft_of(&model).map(|draft| draft["device"].clone()),
+            Some(json!("/dev/bus/usb/001/003"))
+        );
     }
 
     #[test]
