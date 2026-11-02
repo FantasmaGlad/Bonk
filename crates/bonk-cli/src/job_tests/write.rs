@@ -264,7 +264,7 @@ fn annulation_avant_toute_ecriture() {
 fn une_relecture_fausse_fait_echouer_la_verification() {
     let source = TempSource::new("defectueux", 1 << 20);
     let mut scenario = Scenario::new();
-    scenario.faulty_reads = true;
+    scenario.faults.reads = true;
     let (code, _, err) = scenario.run(&[
         "write",
         "usb-a",
@@ -905,4 +905,55 @@ fn le_cache_se_liste_et_se_vide_sans_toucher_au_reste() {
     assert!(!images.join(&sha).exists());
     assert!(images.join("a-moi.txt").exists());
     assert!(images.join("autre").exists());
+}
+
+/// Un vidage refusé laisse les données dans un cache qui peut ne jamais atteindre le support : l'écriture
+/// échoue, même si la relecture, servie par ce même cache, semblerait juste.
+#[test]
+fn un_vidage_refuse_fait_echouer_l_ecriture() {
+    let source = TempSource::new("vidage", 1 << 20);
+    let mut scenario = Scenario::new();
+    scenario.faults.flush = true;
+    let (code, out, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &source.arg(),
+        "--yes",
+        "--progress",
+        "none",
+    ]);
+    assert_ne!(code, 0, "{out}");
+    assert!(err.contains("SYNCHRONIZE CACHE refused"), "{err}");
+    assert!(
+        err.trim_end().ends_with(']'),
+        "code d'erreur attendu : {err}"
+    );
+}
+
+/// La clé arrachée en pleine écriture : échec immédiat, jamais de relecture ni de réparation de la table
+/// sur un support absent, et un message qui dit ce qui s'est passé.
+#[test]
+fn une_cle_debranchee_en_ecriture_arrete_tout() {
+    let source = TempSource::new("debranchee", 8 << 20);
+    let mut scenario = Scenario::new();
+    scenario.faults.unplugged_after = Some(4 << 20);
+    let (code, out, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &source.arg(),
+        "--yes",
+        "--progress",
+        "none",
+    ]);
+    assert_ne!(code, 0, "{out}");
+    assert!(err.contains("device disconnected"), "{err}");
+    assert!(
+        err.trim_end().ends_with(']'),
+        "code d'erreur attendu : {err}"
+    );
+    assert!(
+        !scenario.log().iter().any(|entry| entry == "drop_cache"),
+        "relecture tentée après le débranchement : {:?}",
+        scenario.log()
+    );
 }

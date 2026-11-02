@@ -98,27 +98,57 @@ impl BlockDevice for Logged {
     }
 }
 
-/// Périphérique dont les relectures sont fausses : simule un support défectueux.
-struct Faulty(Shared);
+/// Les défaillances d'un vrai support, que la mémoire ne connaît pas.
+#[derive(Clone, Copy, Default)]
+struct Faults {
+    /// Relectures fausses : support défectueux.
+    reads: bool,
+    /// Vidage du cache refusé (`SYNCHRONIZE CACHE`, `fsync`) : les données peuvent ne jamais atteindre le support.
+    flush: bool,
+    /// Clé débranchée une fois ce nombre d'octets écrit : toute écriture suivante échoue.
+    unplugged_after: Option<u64>,
+}
+
+struct Faulty {
+    inner: Shared,
+    faults: Faults,
+    written: u64,
+}
 
 impl BlockDevice for Faulty {
     fn size(&self) -> u64 {
-        self.0.size()
+        self.inner.size()
     }
     fn block_size(&self) -> u32 {
         512
     }
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), BlockError> {
-        self.0.read_at(offset, buf)?;
-        if offset == 0 {
+        self.inner.read_at(offset, buf)?;
+        if self.faults.reads && offset == 0 {
             buf[0] ^= 0xFF;
         }
         Ok(())
     }
     fn write_at(&mut self, offset: u64, data: &[u8]) -> Result<(), BlockError> {
-        self.0.write_at(offset, data)
+        if self
+            .faults
+            .unplugged_after
+            .is_some_and(|limit| self.written >= limit)
+        {
+            return Err(BlockError::Io(io::Error::new(
+                io::ErrorKind::NotConnected,
+                "device disconnected",
+            )));
+        }
+        self.written += data.len() as u64;
+        self.inner.write_at(offset, data)
     }
     fn flush(&mut self) -> Result<(), BlockError> {
+        if self.faults.flush {
+            return Err(BlockError::Io(io::Error::other(
+                "SYNCHRONIZE CACHE refused",
+            )));
+        }
         Ok(())
     }
 }
@@ -213,7 +243,7 @@ struct Scenario {
     prepare: Result<(), String>,
     unmount: Result<Vec<String>, String>,
     open: Result<(), io::ErrorKind>,
-    faulty_reads: bool,
+    faults: Faults,
     rescan_fails: bool,
     cancel: bool,
     /// Annulation demandée pendant l'attente de l'autorisation.
@@ -234,7 +264,7 @@ impl Scenario {
             prepare: Ok(()),
             unmount: Ok(vec!["/run/media/u/A".to_owned()]),
             open: Ok(()),
-            faulty_reads: false,
+            faults: Faults::default(),
             rescan_fails: false,
             cancel: false,
             cancel_on_prepare: false,
@@ -261,7 +291,7 @@ impl Scenario {
         let unmount = self.unmount.clone();
         let log_unmount = Rc::clone(&self.log);
         let device = self.device.clone();
-        let (open, faulty) = (self.open, self.faulty_reads);
+        let (open, faults) = (self.open, self.faults);
         let cancel = self.cancel;
         let cancel_on_prepare = self.cancel_on_prepare;
         let capabilities = self.capabilities.clone();
@@ -298,11 +328,11 @@ impl Scenario {
                 match open {
                     Err(kind) => Err(BlockError::Io(io::Error::new(kind, "refusé"))),
                     Ok(()) => {
-                        let inner: Box<dyn BlockDevice> = if faulty {
-                            Box::new(Faulty(device.clone()))
-                        } else {
-                            Box::new(device.clone())
-                        };
+                        let inner: Box<dyn BlockDevice> = Box::new(Faulty {
+                            inner: device.clone(),
+                            faults,
+                            written: 0,
+                        });
                         open_devices.set(open_devices.get() + 1);
                         Ok(Box::new(Logged {
                             inner,
