@@ -1,12 +1,38 @@
 # Construit l'application Android et sa bibliothèque Rust. Aucun secret : version de débogage, jamais publiée.
 name: android
 
+# Chemins : l'application, sa bibliothèque Rust et tout ce dont elle dépend ; une PR de bonk-ui ou de bonk-ops
+# peut casser l'APK sans toucher à android/.
 on:
   pull_request:
-    paths: ["android/**", "crates/bonk-android/**", "crates/bonk-hal/src/usbfs.rs", "crates/bonk-core/src/msc.rs", "design/**", ".github/workflows/android.yml"]
+    paths:
+      - "android/**"
+      - "design/**"
+      - "crates/bonk-android/**"
+      - "crates/bonk-core/**"
+      - "crates/bonk-hal/**"
+      - "crates/bonk-ops/**"
+      - "crates/bonk-ui/**"
+      - "crates/bonk-catalog/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/android.yml"
   push:
     branches: [main]
-    paths: ["android/**", "crates/bonk-android/**", "design/**"]
+    paths:
+      - "android/**"
+      - "design/**"
+      - "crates/bonk-android/**"
+      - "crates/bonk-core/**"
+      - "crates/bonk-hal/**"
+      - "crates/bonk-ops/**"
+      - "crates/bonk-ui/**"
+      - "crates/bonk-catalog/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/android.yml"
   workflow_dispatch:
 
 permissions:
