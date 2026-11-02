@@ -43,7 +43,9 @@ pub trait BulkTransport {
     /// # Errors
     /// Arrêt du point de terminaison, débranchement ou erreur du système.
     fn send(&mut self, data: &[u8]) -> Result<(), BulkError>;
-    /// Reçoit au plus `buf.len()` octets et rend le nombre reçu.
+    /// Reçoit au plus `buf.len()` octets et rend le nombre reçu. En rendre moins signifie que le périphérique
+    /// a terminé le transfert (paquet court) : un transport qui découpe ses transferts doit enchaîner les
+    /// morceaux jusqu'à remplir `buf` ou rencontrer ce paquet court.
     ///
     /// # Errors
     /// Arrêt du point de terminaison, débranchement ou erreur du système.
@@ -179,9 +181,15 @@ impl<T: BulkTransport> MassStorage<T> {
             Data::None => {}
             Data::In(buf) => {
                 while done < buf.len() {
+                    let asked = buf.len() - done;
                     match self.transport.receive(&mut buf[done..]) {
-                        Ok(0) => break,
-                        Ok(read) => done += read,
+                        Ok(read) => {
+                            done += read;
+                            // Moins que demandé : la clé a fini par un paquet court, le statut vient ensuite.
+                            if read < asked {
+                                break;
+                            }
+                        }
                         Err(BulkError::Stall) => {
                             self.transport.clear_halt(Direction::In)?;
                             break;
@@ -499,6 +507,8 @@ mod tests {
         commands: Vec<u8>,
         max_blocks: usize,
         sense_key: u8,
+        /// Octets que la clé rend à `INQUIRY` : moins que les 36 demandés, elle termine par un paquet court.
+        inquiry_len: usize,
     }
 
     impl Fake {
@@ -523,6 +533,7 @@ mod tests {
                 stall_out: false,
                 commands: Vec::new(),
                 max_blocks: 0,
+                inquiry_len: 36,
             }
         }
 
@@ -597,6 +608,8 @@ mod tests {
                         let mut reply = vec![b' '; 36];
                         reply[8..15].copy_from_slice(b"General");
                         reply[16..21].copy_from_slice(b"UDisk");
+                        reply.truncate(self.inquiry_len);
+                        self.residue = u32::try_from(36 - self.inquiry_len).unwrap_or(0);
                         self.pending_in = reply;
                     }
                     0x25 => {
@@ -691,6 +704,12 @@ mod tests {
                 self.stall_status = false;
                 return Err(BulkError::Stall);
             }
+            // Le statut ne tient pas dans un tampon de données plus petit : le noyau rend alors EOVERFLOW.
+            if buf.len() < CSW_LEN {
+                return Err(BulkError::Other(io::Error::other(
+                    "babble: status in data buffer",
+                )));
+            }
             let csw = self.pending_csw.take().ok_or(BulkError::Stall)?;
             buf[..CSW_LEN].copy_from_slice(&csw);
             Ok(CSW_LEN)
@@ -709,6 +728,23 @@ mod tests {
 
     fn random(len: usize) -> Vec<u8> {
         (0..len).map(|i| (i * 31 % 251) as u8).collect()
+    }
+
+    /// Une clé peut rendre moins que demandé et terminer par un paquet court : la phase de données s'arrête
+    /// là, et le statut qui suit n'est pas lu comme des données.
+    #[test]
+    fn une_reponse_courte_n_avale_pas_le_statut() -> Result<(), MscError> {
+        for len in [34, 32] {
+            let mut fake = Fake::new(64);
+            fake.inquiry_len = len;
+            let mut msc = MassStorage::new(&mut fake);
+            let inquiry = msc.inquiry()?;
+            assert_eq!(inquiry.vendor, "General", "{len} octets");
+            assert_eq!(inquiry.product, "UDisk", "{len} octets");
+            // L'échange suivant reste aligné : même statut, même étiquette.
+            assert_eq!(msc.capacity()?, (64, BLOCK as u32), "{len} octets");
+        }
+        Ok(())
     }
 
     #[test]

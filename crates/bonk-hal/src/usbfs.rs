@@ -257,7 +257,18 @@ impl BulkTransport for UsbfsTransport {
     }
 
     fn receive(&mut self, buf: &mut [u8]) -> Result<usize, BulkError> {
-        self.bulk(self.interface.endpoint_in, buf.as_mut_ptr(), buf.len())
+        // Un transfert est plafonné à `transfer_limit` : enchaîner jusqu'au tampon plein ou au paquet court,
+        // seul signe que la clé a fini (contrat de `BulkTransport::receive`).
+        let mut done = 0;
+        while done < buf.len() {
+            let asked = (buf.len() - done).min(self.transfer_limit);
+            let read = self.bulk(self.interface.endpoint_in, buf[done..].as_mut_ptr(), asked)?;
+            done += read;
+            if read < asked.min(self.transfer_limit) {
+                break;
+            }
+        }
+        Ok(done)
     }
 
     fn clear_halt(&mut self, direction: Direction) -> Result<(), BulkError> {
