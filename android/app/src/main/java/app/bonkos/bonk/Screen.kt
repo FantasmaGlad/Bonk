@@ -33,8 +33,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.json.JSONArray
-import org.json.JSONObject
 
 /* L'écran, dessiné depuis l'état que rend Rust ; chaque geste devient un message typé (Protocol.kt). */
 
@@ -42,7 +40,7 @@ private const val MENU_HEIGHT_DP = 360
 
 @Composable
 internal fun Screen(
-    state: JSONObject,
+    state: ScreenState,
     usb: UsbManager,
     revision: Int,
     errors: Map<String, String>,
@@ -56,10 +54,10 @@ internal fun Screen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("BONK", fontSize = Tokens.TEXT_TITLE.sp, modifier = Modifier.weight(1f))
-            Secondary(state.optString("language")) { send(SwitchLanguage) }
+            Secondary(state.language) { send(SwitchLanguage) }
         }
-        Small(state.optString("intro"))
-        Small(state.optString("status"))
+        Small(state.intro)
+        Small(state.status)
         val waiting = remember(revision, errors) { usb.drives().filterNot(usb::hasPermission) }
         waiting.forEach { device -> AskAccess(usb, device) }
         errors.forEach { (device, error) ->
@@ -68,31 +66,34 @@ internal fun Screen(
                 Small(error, Tokens.INK)
             }
         }
-        val disks = state.optJSONArray("disks") ?: JSONArray()
-        if (disks.length() == 0 && waiting.isEmpty() && errors.isEmpty()) Body(state.optString("empty"))
-        val panel = state.optJSONObject("panel")
-        for (index in 0 until disks.length()) {
-            val disk = disks.getJSONObject(index)
+        if (state.disks.isEmpty() && waiting.isEmpty() && errors.isEmpty()) Body(state.empty)
+        val panel = state.panel
+        state.disks.forEach { disk ->
             DiskCard(disk, send)
-            if (disk.optBoolean("selected") && panel?.optString("kind") == "draft") {
-                DraftPanel(panel, send)
-            }
+            if (disk.selected && panel is DraftPanel) Draft(panel, send)
         }
-        when (panel?.optString("kind")) {
-            "running" -> Boxed {
-                Body(panel.optString("line"))
+        when (panel) {
+            is RunningPanel -> Boxed {
+                Body(panel.line)
                 Small(stringResource(R.string.do_not_unplug))
-                LinearProgressIndicator(
-                    progress = { panel.optDouble("fraction").toFloat() },
-                    modifier = Modifier.fillMaxWidth(),
-                    color = Color(Tokens.INK),
-                )
-                Primary(panel.optString("cancel")) { send(Cancel) }
+                // Sans total connu, la barre défile au lieu de mentir sur l'avancement.
+                val fraction = panel.fraction
+                if (fraction == null) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Color(Tokens.INK))
+                } else {
+                    LinearProgressIndicator(
+                        progress = { fraction },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(Tokens.INK),
+                    )
+                }
+                Primary(panel.cancel) { send(Cancel) }
             }
-            "finished" -> Boxed {
-                Body(panel.optString("message"))
-                Primary(panel.optString("close")) { send(Dismiss) }
+            is FinishedPanel -> Boxed {
+                Body(panel.message)
+                Primary(panel.close) { send(Dismiss) }
             }
+            is DraftPanel, null -> {}
         }
         // Absents de la version publiée : ils ne servent qu'avec la clé de test désignée à la construction.
         if (BuildConfig.BENCH_SERIAL.isNotEmpty()) {
@@ -113,15 +114,15 @@ private fun AskAccess(usb: UsbManager, device: UsbDevice) {
 }
 
 @Composable
-private fun DiskCard(disk: JSONObject, send: (ToRust) -> Unit) {
-    val modifier = Modifier.clickable { send(Select(disk.getString("id"))) }
-    Boxed(modifier, disk.optBoolean("selected")) {
+private fun DiskCard(disk: DiskView, send: (ToRust) -> Unit) {
+    val modifier = Modifier.clickable { send(Select(disk.id)) }
+    Boxed(modifier, disk.selected) {
         Row {
-            Text(disk.optString("model"), fontSize = Tokens.TEXT_BODY.sp, modifier = Modifier.weight(1f))
-            Small(disk.optString("badge"), Tokens.INK)
+            Text(disk.model, fontSize = Tokens.TEXT_BODY.sp, modifier = Modifier.weight(1f))
+            Small(disk.badge, Tokens.INK)
         }
-        Small(disk.optString("facts"))
-        Small(disk.optString("state"))
+        Small(disk.facts)
+        Small(disk.state)
     }
 }
 
@@ -145,87 +146,67 @@ private fun Picker(selected: String, options: List<String>, all: String, filter:
     }
 }
 
-private fun JSONArray?.strings(): List<String> =
-    if (this == null) emptyList() else List(length()) { getString(it) }
-
 @Composable
-private fun Menu(menu: JSONObject, send: (ToRust) -> Unit) {
-    if (!menu.optBoolean("ready")) {
-        Small(menu.optString("line"))
+private fun Menu(menu: MenuView, send: (ToRust) -> Unit) {
+    if (!menu.ready) {
+        Small(menu.line)
         return
     }
-    Secondary(menu.optString("button")) { send(ToggleMenu) }
-    if (!menu.optBoolean("open")) return
+    Secondary(menu.button) { send(ToggleMenu) }
+    if (!menu.open) return
     Row(horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp)) {
-        Picker(
-            menu.optString("category").takeUnless { menu.isNull("category") }.orEmpty(),
-            menu.optJSONArray("categories").strings(),
-            menu.optString("all_categories"),
-            ::CategoryFilter,
-            send,
-        )
-        Picker(
-            menu.optString("system").takeUnless { menu.isNull("system") }.orEmpty(),
-            menu.optJSONArray("systems").strings(),
-            menu.optString("all_systems"),
-            ::SystemFilter,
-            send,
-        )
+        Picker(menu.category.orEmpty(), menu.categories, menu.allCategories, ::CategoryFilter, send)
+        Picker(menu.system.orEmpty(), menu.systems, menu.allSystems, ::SystemFilter, send)
     }
-    val rows = menu.optJSONArray("rows") ?: JSONArray()
+    val rows = menu.rows
     // Seules les lignes visibles sont dessinées : le catalogue en compte plus de cent cinquante.
     LazyColumn(
         Modifier.fillMaxWidth().height(MENU_HEIGHT_DP.dp),
         verticalArrangement = Arrangement.spacedBy(Tokens.SPACE_SMALL.dp),
     ) {
-        items(rows.length()) { position ->
-            val row = rows.getJSONObject(position)
-            val usable = !row.isNull("index")
-            val modifier =
-                if (usable) {
-                    Modifier.clickable { send(Choose(row.getInt("index"))) }
-                } else {
-                    Modifier
-                }
+        items(rows.size) { position ->
+            val row = rows[position]
+            val index = row.index
+            val modifier = if (index != null) Modifier.clickable { send(Choose(index)) } else Modifier
             Boxed(modifier = modifier) {
-                Small(row.optString("title"), if (usable) Tokens.INK else Tokens.SECONDARY)
-                if (!row.isNull("note")) Small(row.optString("note"))
+                Small(row.title, if (index != null) Tokens.INK else Tokens.SECONDARY)
+                row.note?.let { Small(it) }
             }
         }
     }
 }
 
 @Composable
-private fun DraftPanel(panel: JSONObject, send: (ToRust) -> Unit) {
+private fun Draft(panel: DraftPanel, send: (ToRust) -> Unit) {
     Boxed {
-        Body(panel.optString("title"))
-        Small(panel.optString("summary"), Tokens.INK)
-        Small(panel.optString("warning"))
-        panel.optJSONObject("menu")?.let { Menu(it, send) }
-        Secondary(panel.optString("advanced_button")) { send(ToggleAdvanced) }
-        if (panel.optBoolean("advanced")) {
+        Body(panel.title)
+        panel.summary?.let { Small(it, Tokens.INK) }
+        Small(panel.warning)
+        Menu(panel.menu, send)
+        Secondary(panel.advancedButton) { send(ToggleAdvanced) }
+        if (panel.advanced) {
             OutlinedTextField(
-                value = panel.optString("image"),
+                value = panel.image,
                 onValueChange = { send(ImageInput(it)) },
-                label = { Small(panel.optString("image_hint")) },
+                label = { Small(panel.imageHint) },
                 modifier = Modifier.fillMaxWidth(),
             )
-            Secondary(panel.optString("pick")) { send(Browse) }
+            Secondary(panel.pick) { send(Browse) }
             OutlinedTextField(
-                value = panel.optString("hash"),
+                value = panel.hash,
                 onValueChange = { send(HashInput(it)) },
-                label = { Small(panel.optString("hash_hint")) },
+                label = { Small(panel.hashHint) },
                 modifier = Modifier.fillMaxWidth(),
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(panel.optBoolean("raw"), { send(Raw(it)) })
-                Small(panel.optString("raw_label"), Tokens.INK)
+                Checkbox(panel.raw, { send(Raw(it)) })
+                Small(panel.rawLabel, Tokens.INK)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(panel.optBoolean("mbr"), { send(Mbr(it)) })
-                Small(panel.optString("mbr_label"), Tokens.INK)
+                Checkbox(panel.mbr, { send(Mbr(it)) })
+                Small(panel.mbrLabel, Tokens.INK)
             }
         }
-        Primary(panel.optString("button"), panel.optBoolean("enabled")) { send(Start) }
+        Primary(panel.button, panel.enabled) { send(Start) }
     }
 }

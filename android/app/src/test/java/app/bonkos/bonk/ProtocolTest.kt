@@ -2,6 +2,8 @@ package app.bonkos.bonk
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
@@ -73,6 +75,30 @@ class ProtocolTest {
         sent.zip(expected).forEach { (message, sample) ->
             assertEquals(sample, Json.parseToJsonElement(Protocol.encode(message)), "$message")
         }
+    }
+
+    @Test
+    fun chaqueFormeDeLEtatDEcranSeLitEnType() {
+        val states =
+            samples.getValue("states").jsonArray.map {
+                Protocol.answer(JsonObject(mapOf("state" to it)).toString()).state
+            }
+        assertEquals(4, states.size)
+        val (idle, draft, running, finished) = states
+        assertEquals(null, idle.panel)
+        assertEquals(emptyList(), idle.disks)
+
+        val panel = assertIs<DraftPanel>(draft.panel)
+        assertTrue(draft.disks.single().selected)
+        assertTrue(panel.enabled)
+        assertTrue(panel.menu.ready && panel.menu.open)
+        assertEquals(listOf(0, null), panel.menu.rows.map { it.index })
+        assertEquals(null, panel.menu.category)
+
+        assertTrue(running.running)
+        assertEquals(0.25f, assertIs<RunningPanel>(running.panel).fraction)
+
+        assertTrue("E2002" in assertIs<FinishedPanel>(finished.panel).message)
     }
 
     @Test

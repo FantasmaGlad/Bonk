@@ -582,6 +582,62 @@ mod tests {
         Ok(())
     }
 
+    /// Chaque forme de l'état d'écran : rien en cours, brouillon avec le menu ouvert, écriture, résultat.
+    fn state_samples() -> Vec<Value> {
+        use bonk_ui::catalog::{Choice, System};
+
+        let mut samples = vec![state(&Model::default())];
+        let mut model = loaded();
+        model.catalog = CatalogState::Ready(vec![System {
+            name: "Debian".to_owned(),
+            category: "Debian derivatives".to_owned(),
+            icon: None,
+            choices: vec![
+                Choice {
+                    name: "Debian".to_owned(),
+                    label: "13.7.0 netinst".to_owned(),
+                    end_of_life: false,
+                    note: None,
+                    source: ChoiceSource::Download {
+                        url: "https://cdimage.debian.org/x.iso".to_owned(),
+                        sha256: "ab".repeat(32),
+                    },
+                },
+                Choice {
+                    name: "Debian".to_owned(),
+                    label: "DVD".to_owned(),
+                    end_of_life: false,
+                    note: Some("évaluation".to_owned()),
+                    source: ChoiceSource::OfficialPage("https://www.debian.org/".to_owned()),
+                },
+            ],
+        }]);
+        let _ = model.update(Message::ToggleMenu);
+        let _ = model.update(Message::ImageInput("/x.iso".to_owned()));
+        // Le libellé du bouton compte les secondes de réflexion : l'échantillon les veut écoulées.
+        if let WriteState::Draft { opened, .. } = &mut model.write {
+            *opened = Instant::now()
+                .checked_sub(Duration::from_secs(4))
+                .unwrap_or(*opened);
+        }
+        samples.push(state(&model));
+        let _ = model.update(Message::StartWrite);
+        let _ = model.update(Message::Write(Event::Started(0)));
+        let _ = model.update(Message::Write(Event::Progress {
+            phase: Phase::Write,
+            done: 1 << 20,
+            total: Some(4 << 20),
+            rate: 1_048_576.0,
+        }));
+        samples.push(state(&model));
+        let _ = model.update(Message::Write(Event::Finished(Outcome::Failed {
+            code: Some("E2002".to_owned()),
+            message: "the drive changed".to_owned(),
+        })));
+        samples.push(state(&model));
+        samples
+    }
+
     /// Le contrat entre Rust et l'application, écrit dans un fichier que les tests Kotlin relisent : les effets
     /// tels que Rust les émet, les messages tels qu'il les accepte. Un changement d'un côté casse l'autre en CI.
     /// `BONK_UPDATE_PROTOCOL=1 cargo test -p bonk-android` réécrit le fichier après un changement voulu.
@@ -637,9 +693,10 @@ mod tests {
                 "refusé par Rust : {message}"
             );
         }
-        let text =
-            serde_json::to_string_pretty(&json!({"effects": effects, "messages": messages}))?
-                + "\n";
+        let states = state_samples();
+        let text = serde_json::to_string_pretty(
+            &json!({"effects": effects, "messages": messages, "states": states}),
+        )? + "\n";
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../android/app/src/test/resources/protocole.json");
         if std::env::var_os("BONK_UPDATE_PROTOCOL").is_some() {

@@ -27,7 +27,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import java.util.Locale
 import kotlinx.coroutines.delay
-import org.json.JSONObject
 
 private const val TAG = "Bonk"
 private const val CLOCK_MS = 500L
@@ -36,8 +35,7 @@ private const val NO_EFFECT = "\"effects\":[]"
 
 class MainActivity : ComponentActivity() {
     private var revision by mutableIntStateOf(0)
-    private var screen by mutableStateOf(JSONObject())
-    private var screenText = ""
+    private var screen by mutableStateOf(ScreenState())
     private var lastAnswer = ""
     private var keepingOn = false
     private var driveErrors by mutableStateOf(mapOf<String, String>())
@@ -76,22 +74,16 @@ class MainActivity : ComponentActivity() {
             runCatching { Protocol.answer(raw) }
                 .onFailure { Log.e(TAG, "unreadable answer from the native library", it) }
                 .getOrElse { return }
-        val stateText = answer.state.toString()
-        val effects = answer.effects
+        val state = answer.state
         runOnUiThread {
             // Redessiner ou toucher à la fenêtre sans changement fait tressauter l'écran.
-            if (stateText != screenText) {
-                screenText = stateText
-                // L'écran lit encore l'état champ par champ : sa forme suit les règles d'écran de Rust.
-                val state = JSONObject(stateText)
+            if (state != screen) {
                 screen = state
-                keepScreenOn(state.optBoolean("running"))
+                keepScreenOn(state.running)
                 // Le résultat reste lisible après coup, même une fois le panneau refermé.
-                state.optJSONObject("panel")?.takeIf { it.optString("kind") == "finished" }?.let {
-                    Log.i(TAG, it.optString("message"))
-                }
+                (state.panel as? FinishedPanel)?.let { Log.i(TAG, it.message) }
             }
-            effects.forEach(::accomplish)
+            answer.effects.forEach(::accomplish)
         }
     }
 
