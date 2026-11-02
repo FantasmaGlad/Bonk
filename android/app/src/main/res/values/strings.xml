@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Bonk</string>
+    <string name="app_name" translatable="false">Bonk</string>
     <string name="allow">Allow access</string>
     <string name="read_test">Read test</string>
     <string name="write_test">Write test (64 MB, restored)</string>

@@ -60,6 +60,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import java.util.Locale
 import kotlin.concurrent.thread
 import kotlinx.coroutines.delay
@@ -152,7 +153,7 @@ class MainActivity : ComponentActivity() {
             "pick" -> pickFile.launch(arrayOf("*/*"))
             "write" -> actions.write(effect)
             "save_language" ->
-                getPreferences(MODE_PRIVATE).edit().putString("lang", effect.getString("value")).apply()
+                getPreferences(MODE_PRIVATE).edit { putString("lang", effect.getString("value")) }
         }
     }
 
@@ -264,7 +265,7 @@ private fun Secondary(label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Boxed(selected: Boolean = false, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+private fun Boxed(modifier: Modifier = Modifier, selected: Boolean = false, content: @Composable () -> Unit) {
     OutlinedCard(
         shape = RoundedCornerShape(Tokens.RADIUS.dp),
         border = BorderStroke(if (selected) 3.dp else 1.dp, Color(Tokens.INK)),
@@ -357,7 +358,7 @@ private fun AskAccess(usb: UsbManager, device: UsbDevice) {
 @Composable
 private fun DiskCard(disk: JSONObject, send: (JSONObject) -> Unit) {
     val modifier = Modifier.clickable { send(message("select").put("id", disk.getString("id"))) }
-    Boxed(disk.optBoolean("selected"), modifier) {
+    Boxed(modifier, disk.optBoolean("selected")) {
         Row {
             Text(disk.optString("model"), fontSize = Tokens.TEXT_BODY.sp, modifier = Modifier.weight(1f))
             Small(disk.optString("badge"), Tokens.INK)
