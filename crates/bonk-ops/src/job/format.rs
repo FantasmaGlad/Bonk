@@ -130,7 +130,7 @@ fn check_table(dev: &dyn BlockDevice, part: PartitionPlan) -> Result<(), JobErro
     }
 }
 
-/// Attend que le système montre **la nouvelle** partition, reconnue à sa taille : il peut garder un moment
+/// Attend que le système montre la nouvelle partition, reconnue à sa taille : il peut garder un moment
 /// l'ancienne table, et formater une ancienne partition de la même place détruirait la mauvaise zone.
 fn wait_for_partition(
     id: &str,

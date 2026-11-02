@@ -63,7 +63,7 @@ pub(super) fn unescape_octal(raw: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// Montages indexés par numéro de périphérique **et** par nom.
+/// Montages indexés par numéro de périphérique et par nom.
 ///
 /// Le numéro seul ne suffit pas : btrfs rapporte un numéro anonyme (`0:50`) et seule la source
 /// (`/dev/sdc1`) désigne le vrai périphérique.

@@ -1,7 +1,7 @@
 //! Périphérique bloc réel ouvert pour lecture ou écriture brute (Linux).
 //!
 //! Complément de [`crate::image::FileDevice`], qui refuse tout ce qui n'est pas un fichier ordinaire :
-//! `BlockNode` n'accepte, lui, **que** un disque entier (jamais une partition, jamais un fichier). Il
+//! `BlockNode` n'accepte, lui, que un disque entier (jamais une partition, jamais un fichier). Il
 //! n'est construit qu'après les contrôles de sécurité de [`crate::target`] (filtre, identité,
 //! démontage). À l'ouverture en écriture, `O_EXCL` fait refuser par le noyau un disque encore utilisé
 //! (monté, ou ouvert par un autre programme) : dernier garde-fou, indépendant de nos propres contrôles.

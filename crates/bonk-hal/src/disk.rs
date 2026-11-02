@@ -1,6 +1,6 @@
 //! Modèle de disque commun aux systèmes.
 //!
-//! Les adaptateurs d'OS le remplissent de **faits bruts**, sans interprétation. La décision de
+//! Les adaptateurs d'OS le remplissent de faits bruts, sans interprétation. La décision de
 //! proposer, cacher ou interdire un disque revient à la fonction pure de [`crate::safety`], testable
 //! sans matériel et identique sur tous les systèmes.
 
@@ -16,7 +16,7 @@ pub enum Bus {
     Usb,
     /// SD or MMC card reader.
     Sd,
-    /// **External** Thunderbolt: an adapter must report this bus only for a connected enclosure, not for an internal SSD going through the same interface.
+    /// External Thunderbolt: an adapter must report this bus only for a connected enclosure, not for an internal SSD going through the same interface.
     Thunderbolt,
     Sata,
     Nvme,
@@ -68,7 +68,7 @@ pub struct Partition {
     /// Host system volume: `%SystemDrive%` on Windows, boot volume on macOS, root on Linux.
     #[serde(default)]
     pub is_system_volume: bool,
-    /// EFI system partition **the host booted from** (not every ESP-type partition).
+    /// EFI system partition the host booted from (not every ESP-type partition).
     #[serde(default)]
     pub is_active_esp: bool,
 }
@@ -87,7 +87,7 @@ pub struct Disk {
     pub size_bytes: u64,
     pub bus: Bus,
     pub kind: DiskKind,
-    /// System "removable" flag, **not reliable**: informative only.
+    /// System "removable" flag, not reliable: informative only.
     #[serde(default)]
     pub removable_flag: bool,
     /// Signature on the whole disk, without a partition table (bare LVM physical volume...).

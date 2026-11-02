@@ -2,7 +2,7 @@
 //!
 //! # Contrat
 //!
-//! Les accès sont **positionnels** (décalage absolu en octets, pas de curseur partagé) et **alignés** :
+//! Les accès sont positionnels (décalage absolu en octets, pas de curseur partagé) et alignés :
 //! le décalage et la longueur sont des multiples de [`BlockDevice::block_size`]. Un fichier image
 //! accepterait n'importe quel accès, mais un périphérique brut (`O_DIRECT`, `\\.\PhysicalDriveN`,
 //! `/dev/rdiskN`) refuse les accès non alignés : imposer l'alignement partout révèle l'erreur en test

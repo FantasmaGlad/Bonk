@@ -1,7 +1,7 @@
 //! Fichier image exposé comme périphérique bloc.
 //!
 //! Seuls les fichiers ordinaires sont acceptés : un périphérique (`/dev/sdX`, `\\.\PhysicalDriveN`), un
-//! répertoire ou un tube est refusé **avant** toute ouverture, pour qu'une faute de frappe en test ne
+//! répertoire ou un tube est refusé avant toute ouverture, pour qu'une faute de frappe en test ne
 //! puisse pas écrire sur un disque réel. Les disques réels passent par [`crate::BlockNode`], derrière le
 //! filtre de sécurité.
 

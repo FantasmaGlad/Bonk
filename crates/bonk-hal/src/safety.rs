@@ -1,6 +1,6 @@
 //! Filtre de sécurité des disques.
 //!
-//! [`evaluate`] est une **fonction pure** : elle ne lit que le [`Disk`] qu'on lui donne. Elle ne
+//! [`evaluate`] est une fonction pure : elle ne lit que le [`Disk`] qu'on lui donne. Elle ne
 //! touche ni le système ni le réseau, donc elle se teste sur des jeux de données capturés (voir
 //! `tests/fixtures/`) et donne le même verdict sur les trois OS. C'est la seule porte vers
 //! l'écriture : la CLI comme la GUI proposent un disque si et seulement si le verdict est
@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use crate::disk::{Bus, Disk, DiskKind, Partition};
 
 /// Chemins de montage réservés à l'utilisateur sous Unix. Le montage doit être
-/// **sous** ce chemin : `/media` lui-même ne compte pas.
+/// sous ce chemin : `/media` lui-même ne compte pas.
 const USER_MOUNT_PREFIXES: [&str; 3] = ["/media/", "/run/media/", "/Volumes/"];
 
 /// Signatures de membres de RAID, LVM, ZFS et Storage Spaces, en minuscules. Les

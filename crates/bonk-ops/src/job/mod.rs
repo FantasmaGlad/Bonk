@@ -6,7 +6,7 @@
 //!
 //! Ordre d'une écriture sur un disque : le filtre juge la cible ; sans `--yes` ou `--force` rien ne
 //! bouge, et un disque interne exige `--force` ; le droit d'ouvrir est obtenu ; les partitions sont
-//! démontées ; **juste avant l'ouverture**, le disque est ré-énuméré et son identité revérifiée ; le
+//! démontées ; juste avant l'ouverture, le disque est ré-énuméré et son identité revérifiée ; le
 //! noyau refuse enfin un disque encore utilisé (`O_EXCL`). Les tests injectent ces dépendances
 //! ([`Deps`]) et n'ouvrent jamais de vrai disque.
 

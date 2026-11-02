@@ -1,6 +1,6 @@
 //! Énumération des disques de l'hôte.
 //!
-//! [`enumerate_disks`] renvoie des **faits bruts** ([`Disk`]) ; la décision de proposer ou d'écarter
+//! [`enumerate_disks`] renvoie des faits bruts ([`Disk`]) ; la décision de proposer ou d'écarter
 //! un disque appartient à [`crate::safety::evaluate`].
 //!
 //! # Échouer plutôt que deviner

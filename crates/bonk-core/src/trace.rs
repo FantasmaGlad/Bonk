@@ -1,5 +1,5 @@
 //! Trace des accès bloc (`--trace-io`) : décalage, longueur, durée et somme de contrôle de chaque
-//! accès, **jamais les données**, qu'un disque réel peut porter de personnelles. Le début des données
+//! accès, jamais les données, qu'un disque réel peut porter de personnelles. Le début des données
 //! n'est joint que sur demande explicite, pour un fichier image.
 
 use std::time::Instant;
