@@ -1,4 +1,4 @@
-# Construit l'application Android (débogage) et sa bibliothèque Rust, puis passe Android Lint sur la version publiée. Aucun secret.
+# Construit l'application Android (débogage) et sa bibliothèque Rust, lance ses tests JVM, puis Android Lint sur la version publiée. Aucun secret.
 name: android
 
 # Chemins : l'application, sa bibliothèque Rust et tout ce dont elle dépend ; une PR de bonk-ui ou de bonk-ops
@@ -58,6 +58,10 @@ jobs:
       - name: Construire
         working-directory: android
         run: ./gradlew --no-daemon :app:assembleDebug
+      # Tests JVM : le protocole avec Rust relu sur les échantillons que les tests Rust maintiennent.
+      - name: Tests
+        working-directory: android
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
       # Android Lint sur la version publiée : une erreur arrête la CI ; les avertissements restent au rapport.
       - name: Lint
         working-directory: android

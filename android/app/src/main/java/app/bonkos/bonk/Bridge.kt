@@ -3,7 +3,6 @@ package app.bonkos.bonk
 import android.os.ParcelFileDescriptor
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
-import org.json.JSONObject
 
 /**
  * Le lien avec Rust, à l'échelle du processus et non de l'écran : une écriture continue quand on ferme
@@ -24,9 +23,9 @@ object Bridge {
 
     private var picked: ParcelFileDescriptor? = null
 
-    fun send(message: JSONObject) {
-        if (message.optString("type") == "cancel") cancelled = true
-        val text = message.toString()
+    fun send(message: ToRust) {
+        if (message == Cancel) cancelled = true
+        val text = Protocol.encode(message)
         worker.execute {
             val answer = Native.dispatch(text)
             listener?.invoke(answer)
