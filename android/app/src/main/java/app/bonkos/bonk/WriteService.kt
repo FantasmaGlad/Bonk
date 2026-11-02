@@ -11,16 +11,21 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import androidx.core.content.ContextCompat
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
+import org.json.JSONObject
 
 private const val CHANNEL = "write"
 private const val NOTIFICATION = 1
+private const val REQUEST = "request"
 
 /**
- * Tient l'application en vie pendant une écriture : sans service, Android peut figer le processus dès
- * qu'on la quitte, et l'écriture s'arrête à mi-chemin.
+ * Porte l'écriture : sans service, Android peut figer le processus dès qu'on quitte l'application, et
+ * l'écriture s'arrête à mi-chemin. Elle vit ici, et non dans l'écran, pour que fermer l'écran ne la tue pas.
  */
 class WriteService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
+    private val writing = AtomicBoolean(false)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -45,6 +50,21 @@ class WriteService : Service() {
                     .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "bonk:write")
                     .apply { acquire() }
         }
+        // Premier plan d'abord : un échec immédiat de l'écriture arrête alors un service déjà au premier plan,
+        // ce qu'Android accepte, et jamais l'inverse.
+        val request = intent?.getStringExtra(REQUEST)?.let(::JSONObject)
+        if (request == null || !writing.compareAndSet(false, true)) {
+            if (!writing.get()) stopSelf()
+            return START_NOT_STICKY
+        }
+        thread {
+            try {
+                Actions(this, Bridge::send) { _, _ -> }.runWrite(request)
+            } finally {
+                writing.set(false)
+                stopSelf()
+            }
+        }
         return START_NOT_STICKY
     }
 
@@ -54,12 +74,9 @@ class WriteService : Service() {
     }
 
     companion object {
-        fun start(context: Context) {
-            ContextCompat.startForegroundService(context, Intent(context, WriteService::class.java))
-        }
-
-        fun stop(context: Context) {
-            context.stopService(Intent(context, WriteService::class.java))
+        fun start(context: Context, request: JSONObject) {
+            val intent = Intent(context, WriteService::class.java).putExtra(REQUEST, request.toString())
+            ContextCompat.startForegroundService(context, intent)
         }
     }
 }
