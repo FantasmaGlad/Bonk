@@ -8,7 +8,6 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.net.Uri
 import android.os.Bundle
-import android.os.ParcelFileDescriptor
 import android.util.Log
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -62,7 +61,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import java.util.Locale
-import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 import kotlinx.coroutines.delay
 import org.json.JSONArray
@@ -80,10 +78,8 @@ class MainActivity : ComponentActivity() {
     private var screen by mutableStateOf(JSONObject())
     private var screenText = ""
     private var lastAnswer = ""
-    private val worker = Executors.newSingleThreadExecutor()
     private var keepingOn = false
     private var driveErrors by mutableStateOf(mapOf<String, String>())
-    private var picked: ParcelFileDescriptor? = null
     private lateinit var actions: Actions
 
     private val usbEvents =
@@ -99,39 +95,36 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
             uri?.let {
                 // Le chemin du descripteur se lit comme un fichier : le moteur reste celui de l'ordinateur.
-                picked?.close()
-                picked = contentResolver.openFileDescriptor(it, "r")
-                picked?.let { file ->
-                    send(JSONObject().put("type", "picked").put("value", "/proc/self/fd/${file.fd}"))
+                Bridge.pick(contentResolver.openFileDescriptor(it, "r"))?.let { path ->
+                    send(JSONObject().put("type", "picked").put("value", path))
                 }
             }
         }
 
-    /** Rust et JSON hors du fil de l'écran : un clic ne doit jamais attendre le battement précédent. */
-    private fun send(message: JSONObject) {
-        if (message.optString("type") == "cancel") actions.cancelled = true
-        val text = message.toString()
-        worker.execute {
-            val raw = Native.dispatch(text)
-            if (raw == lastAnswer && raw.contains(NO_EFFECT)) return@execute
-            lastAnswer = raw
-            val answer = JSONObject(raw)
-            val state = answer.optJSONObject("state") ?: JSONObject()
-            val stateText = state.toString()
-            val effects = answer.optJSONArray("effects") ?: JSONArray()
-            runOnUiThread {
-                // Redessiner ou toucher à la fenêtre sans changement fait tressauter l'écran.
-                if (stateText != screenText) {
-                    screenText = stateText
-                    screen = state
-                    keepScreenOn(state.optBoolean("running"))
-                    // Le résultat reste lisible après coup, même une fois le panneau refermé.
-                    state.optJSONObject("panel")?.takeIf { it.optString("kind") == "finished" }?.let {
-                        Log.i(TAG, it.optString("message"))
-                    }
+    private fun send(message: JSONObject) = Bridge.send(message)
+
+    /** Une réponse de Rust, sur le fil du pont : seul l'écran vivant la reçoit. */
+    private val answered: (String) -> Unit = { raw -> show(raw) }
+
+    private fun show(raw: String) {
+        if (raw == lastAnswer && raw.contains(NO_EFFECT)) return
+        lastAnswer = raw
+        val answer = JSONObject(raw)
+        val state = answer.optJSONObject("state") ?: JSONObject()
+        val stateText = state.toString()
+        val effects = answer.optJSONArray("effects") ?: JSONArray()
+        runOnUiThread {
+            // Redessiner ou toucher à la fenêtre sans changement fait tressauter l'écran.
+            if (stateText != screenText) {
+                screenText = stateText
+                screen = state
+                keepScreenOn(state.optBoolean("running"))
+                // Le résultat reste lisible après coup, même une fois le panneau refermé.
+                state.optJSONObject("panel")?.takeIf { it.optString("kind") == "finished" }?.let {
+                    Log.i(TAG, it.optString("message"))
                 }
-                for (index in 0 until effects.length()) accomplish(effects.getJSONObject(index))
             }
+            for (index in 0 until effects.length()) accomplish(effects.getJSONObject(index))
         }
     }
 
@@ -169,11 +162,12 @@ class MainActivity : ComponentActivity() {
         val bars = SystemBarStyle.light(Tokens.PAPER.toInt(), Tokens.INK.toInt())
         enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
         actions =
-            Actions(this, ::send) { device, error ->
+            Actions(this, Bridge::send) { device, error ->
                 runOnUiThread {
                     driveErrors = if (error == null) driveErrors - device else driveErrors + (device to error)
                 }
             }
+        Bridge.listener = answered
         val saved = getPreferences(MODE_PRIVATE).getString("lang", null)
         Native.setLanguage((saved ?: Locale.getDefault().language) == "fr")
         val filter =
@@ -204,8 +198,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         unregisterReceiver(usbEvents)
-        picked?.close()
-        worker.shutdown()
+        // Une écriture en cours continue dans le service ; l'écran suivant relira l'état auprès de Rust.
+        if (Bridge.listener === answered) Bridge.listener = null
         super.onDestroy()
     }
 }

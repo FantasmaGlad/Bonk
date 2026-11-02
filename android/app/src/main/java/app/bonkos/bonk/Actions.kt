@@ -31,8 +31,6 @@ class Actions(
     private val failedAt = HashMap<String, Long>()
     private val enumerating = AtomicBoolean(false)
 
-    @Volatile var cancelled = false
-
     private fun size(device: UsbDevice): Long? {
         sizes[device.deviceName]?.let { return it }
         // Réessayer sans répit retirerait sans cesse la clé au système.
@@ -111,7 +109,7 @@ class Actions(
             target.outputStream().use { output ->
                 val buffer = ByteArray(BUFFER)
                 while (true) {
-                    check(!cancelled) { "cancelled" }
+                    check(!Bridge.cancelled) { "cancelled" }
                     val count = input.read(buffer)
                     if (count < 0) break
                     output.write(buffer, 0, count)
@@ -133,41 +131,44 @@ class Actions(
         return target
     }
 
+    /** L'écriture appartient au service : fermer l'écran ne l'interrompt pas. */
     fun write(request: JSONObject) {
-        cancelled = false
-        WriteService.start(context)
-        thread {
-            var downloaded: File? = null
-            try {
-                val device =
-                    usb.drives().first { it.deviceName == request.getString("device") }
-                val image = request.getString("image")
-                val hash = request.getString("hash")
-                check(!image.startsWith("http") || hash.isNotEmpty()) { "an address needs a SHA-256 hash" }
-                val source =
-                    if (image.startsWith("http")) {
-                        download(image).also { downloaded = it }.path
-                    } else {
-                        image
-                    }
-                usb.withDrive(device) { fd, raw ->
-                    Native.write(
-                        fd,
-                        raw,
-                        request.getString("disk_id"),
-                        source,
-                        hash,
-                        request.getBoolean("raw"),
-                        request.getBoolean("mbr"),
-                    )
+        Bridge.cancelled = false
+        WriteService.start(context, request)
+    }
+
+    /** Écrit et vérifie, de bout en bout. Bloque : appelé par le service, hors du fil de l'écran. */
+    fun runWrite(request: JSONObject) {
+        var downloaded: File? = null
+        try {
+            val device =
+                usb.drives().firstOrNull { it.deviceName == request.getString("device") }
+                    ?: error("the drive is no longer connected")
+            val image = request.getString("image")
+            val hash = request.getString("hash")
+            check(!image.startsWith("http") || hash.isNotEmpty()) { "an address needs a SHA-256 hash" }
+            val source =
+                if (image.startsWith("http")) {
+                    download(image).also { downloaded = it }.path
+                } else {
+                    image
                 }
-                send(JSONObject())
-            } catch (error: Exception) {
-                send(JSONObject().put("type", "failed").put("message", error.message ?: error.toString()))
-            } finally {
-                downloaded?.delete()
-                WriteService.stop(context)
+            usb.withDrive(device) { fd, raw ->
+                Native.write(
+                    fd,
+                    raw,
+                    request.getString("disk_id"),
+                    source,
+                    hash,
+                    request.getBoolean("raw"),
+                    request.getBoolean("mbr"),
+                )
             }
+            send(JSONObject())
+        } catch (error: Exception) {
+            send(JSONObject().put("type", "failed").put("message", error.message ?: error.toString()))
+        } finally {
+            downloaded?.delete()
         }
     }
 }
