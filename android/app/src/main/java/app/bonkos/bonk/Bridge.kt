@@ -1,6 +1,7 @@
 package app.bonkos.bonk
 
 import android.os.ParcelFileDescriptor
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import org.json.JSONObject
 
@@ -17,6 +18,9 @@ object Bridge {
 
     /** Lu par le téléchargement, que Rust ne voit pas ; Rust arrête l'écriture de son côté. */
     @Volatile var cancelled = false
+
+    /** Clés touchées par une écriture : leur sonde en cache décrit une table qui n'existe plus. */
+    val written: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     private var picked: ParcelFileDescriptor? = null
 
