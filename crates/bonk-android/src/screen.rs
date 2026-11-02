@@ -582,6 +582,79 @@ mod tests {
         Ok(())
     }
 
+    /// Le contrat entre Rust et l'application, écrit dans un fichier que les tests Kotlin relisent : les effets
+    /// tels que Rust les émet, les messages tels qu'il les accepte. Un changement d'un côté casse l'autre en CI.
+    /// `BONK_UPDATE_PROTOCOL=1 cargo test -p bonk-android` réécrit le fichier après un changement voulu.
+    #[test]
+    fn le_protocole_avec_kotlin_suit_ses_echantillons() -> Result<(), Box<dyn std::error::Error>> {
+        let mut model = loaded();
+        let _ = model.update(Message::ImageInput("/x.iso".to_owned()));
+        let draft = draft_of(&model);
+        let effects = effects_out(
+            &mut model,
+            vec![
+                Effect::Enumerate,
+                Effect::LoadCatalog,
+                Effect::PickImage,
+                Effect::SaveLanguage(Lang::Fr),
+                Effect::StartWrite(Vec::new()),
+            ],
+            draft,
+        );
+        let messages = vec![
+            json!({"type": "disks", "disks": [{
+                "device": "/dev/bus/usb/001/002", "model": "Generic UDisk", "serial": "S1",
+                "size_bytes": 32_000_000_000_u64,
+                "partitions": [{"label": "ESP", "size_bytes": 1_048_576}, {"label": null, "size_bytes": 2_097_152}],
+            }]}),
+            json!({"type": "tick"}),
+            json!({"type": "clock"}),
+            json!({"type": "select", "id": "usb-S1-001-002"}),
+            json!({"type": "language"}),
+            json!({"type": "menu"}),
+            json!({"type": "category", "value": "Servers"}),
+            json!({"type": "category"}),
+            json!({"type": "system", "value": "debian"}),
+            json!({"type": "choose", "index": 0}),
+            json!({"type": "advanced"}),
+            json!({"type": "image", "value": "/x.iso"}),
+            json!({"type": "hash", "value": "abc"}),
+            json!({"type": "raw", "on": true}),
+            json!({"type": "mbr", "on": false}),
+            json!({"type": "browse"}),
+            json!({"type": "picked", "value": "/proc/self/fd/42"}),
+            json!({"type": "start"}),
+            json!({"type": "cancel"}),
+            json!({"type": "dismiss"}),
+            json!({"type": "download", "done": 1024, "total": 4096, "rate": 512.0}),
+            json!({"type": "failed", "message": "the drive is no longer connected"}),
+            json!({"type": "catalog_failed", "message": "404"}),
+        ];
+        // `choose` n'a de sens qu'avec un catalogue chargé : son échantillon fixe la forme seulement.
+        for message in messages.iter().filter(|m| m["type"] != "choose") {
+            assert!(
+                message_of(message, &model).is_some(),
+                "refusé par Rust : {message}"
+            );
+        }
+        let text =
+            serde_json::to_string_pretty(&json!({"effects": effects, "messages": messages}))?
+                + "\n";
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../android/app/src/test/resources/protocole.json");
+        if std::env::var_os("BONK_UPDATE_PROTOCOL").is_some() {
+            std::fs::create_dir_all(path.parent().ok_or("chemin sans dossier")?)?;
+            std::fs::write(&path, &text)?;
+        }
+        let written = std::fs::read_to_string(&path).unwrap_or_default();
+        assert!(
+            written == text,
+            "{} n'est plus à jour : BONK_UPDATE_PROTOCOL=1 cargo test -p bonk-android",
+            path.display()
+        );
+        Ok(())
+    }
+
     #[test]
     fn une_cle_de_taille_inconnue_n_est_pas_un_disque() {
         assert!(disk_of(&json!({"device": "d", "model": "m"})).is_none());

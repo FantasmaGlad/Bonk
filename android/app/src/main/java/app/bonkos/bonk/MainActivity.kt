@@ -87,7 +87,7 @@ class MainActivity : ComponentActivity() {
         object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 revision++
-                send(JSONObject().put("type", "tick"))
+                send(Tick)
                 actions.enumerate()
             }
         }
@@ -97,12 +97,12 @@ class MainActivity : ComponentActivity() {
             uri?.let {
                 // Le chemin du descripteur se lit comme un fichier : le moteur reste celui de l'ordinateur.
                 Bridge.pick(contentResolver.openFileDescriptor(it, "r"))?.let { path ->
-                    send(JSONObject().put("type", "picked").put("value", path))
+                    send(Picked(path))
                 }
             }
         }
 
-    private fun send(message: JSONObject) = Bridge.send(message)
+    private fun send(message: ToRust) = Bridge.send(message)
 
     /** Une réponse de Rust, sur le fil du pont : seul l'écran vivant la reçoit. */
     private val answered: (String) -> Unit = { raw -> show(raw) }
@@ -110,14 +110,20 @@ class MainActivity : ComponentActivity() {
     private fun show(raw: String) {
         if (raw == lastAnswer && raw.contains(NO_EFFECT)) return
         lastAnswer = raw
-        val answer = JSONObject(raw)
-        val state = answer.optJSONObject("state") ?: JSONObject()
-        val stateText = state.toString()
-        val effects = answer.optJSONArray("effects") ?: JSONArray()
+        // Frontière avec Rust : une réponse illisible serait un défaut de protocole, pas une raison de tuer
+        // l'application ; elle est journalisée et l'écran garde l'état précédent.
+        val answer =
+            runCatching { Protocol.answer(raw) }
+                .onFailure { Log.e(TAG, "unreadable answer from the native library", it) }
+                .getOrElse { return }
+        val stateText = answer.state.toString()
+        val effects = answer.effects
         runOnUiThread {
             // Redessiner ou toucher à la fenêtre sans changement fait tressauter l'écran.
             if (stateText != screenText) {
                 screenText = stateText
+                // L'écran lit encore l'état champ par champ : sa forme suit les règles d'écran de Rust.
+                val state = JSONObject(stateText)
                 screen = state
                 keepScreenOn(state.optBoolean("running"))
                 // Le résultat reste lisible après coup, même une fois le panneau refermé.
@@ -125,7 +131,7 @@ class MainActivity : ComponentActivity() {
                     Log.i(TAG, it.optString("message"))
                 }
             }
-            for (index in 0 until effects.length()) accomplish(effects.getJSONObject(index))
+            effects.forEach(::accomplish)
         }
     }
 
@@ -146,14 +152,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun accomplish(effect: JSONObject) {
-        when (effect.getString("do")) {
-            "enumerate" -> actions.enumerate()
-            "catalog" -> actions.catalog()
-            "pick" -> pickFile.launch(arrayOf("*/*"))
-            "write" -> actions.write(effect)
-            "save_language" ->
-                getPreferences(MODE_PRIVATE).edit { putString("lang", effect.getString("value")) }
+    private fun accomplish(effect: Effect) {
+        when (effect) {
+            Enumerate -> actions.enumerate()
+            LoadCatalog -> actions.catalog()
+            PickImage -> pickFile.launch(arrayOf("*/*"))
+            is Write -> actions.write(effect)
+            is SaveLanguage -> getPreferences(MODE_PRIVATE).edit { putString("lang", effect.value) }
         }
     }
 
@@ -188,7 +193,7 @@ class MainActivity : ComponentActivity() {
                         while (true) {
                             delay(CLOCK_MS)
                             ticks = (ticks + 1) % TICKS_PER_REFRESH
-                            send(JSONObject().put("type", if (ticks == 0) "tick" else "clock"))
+                            send(if (ticks == 0) Tick else Clock)
                         }
                     }
                     Screen(screen, usb, revision, driveErrors, ::send)
@@ -281,15 +286,13 @@ private fun Boxed(modifier: Modifier = Modifier, selected: Boolean = false, cont
     }
 }
 
-private fun message(type: String) = JSONObject().put("type", type)
-
 @Composable
 private fun Screen(
     state: JSONObject,
     usb: UsbManager,
     revision: Int,
     errors: Map<String, String>,
-    send: (JSONObject) -> Unit,
+    send: (ToRust) -> Unit,
 ) {
     Column(
         Modifier.safeDrawingPadding()
@@ -299,7 +302,7 @@ private fun Screen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("BONK", fontSize = Tokens.TEXT_TITLE.sp, modifier = Modifier.weight(1f))
-            Secondary(state.optString("language")) { send(message("language")) }
+            Secondary(state.optString("language")) { send(SwitchLanguage) }
         }
         Small(state.optString("intro"))
         Small(state.optString("status"))
@@ -330,11 +333,11 @@ private fun Screen(
                     modifier = Modifier.fillMaxWidth(),
                     color = Color(Tokens.INK),
                 )
-                Primary(panel.optString("cancel")) { send(message("cancel")) }
+                Primary(panel.optString("cancel")) { send(Cancel) }
             }
             "finished" -> Boxed {
                 Body(panel.optString("message"))
-                Primary(panel.optString("close")) { send(message("dismiss")) }
+                Primary(panel.optString("close")) { send(Dismiss) }
             }
         }
         // Absents de la version publiée : ils ne servent qu'avec la clé de test désignée à la construction.
@@ -356,8 +359,8 @@ private fun AskAccess(usb: UsbManager, device: UsbDevice) {
 }
 
 @Composable
-private fun DiskCard(disk: JSONObject, send: (JSONObject) -> Unit) {
-    val modifier = Modifier.clickable { send(message("select").put("id", disk.getString("id"))) }
+private fun DiskCard(disk: JSONObject, send: (ToRust) -> Unit) {
+    val modifier = Modifier.clickable { send(Select(disk.getString("id"))) }
     Boxed(modifier, disk.optBoolean("selected")) {
         Row {
             Text(disk.optString("model"), fontSize = Tokens.TEXT_BODY.sp, modifier = Modifier.weight(1f))
@@ -369,19 +372,19 @@ private fun DiskCard(disk: JSONObject, send: (JSONObject) -> Unit) {
 }
 
 @Composable
-private fun Picker(selected: String, options: List<String>, all: String, type: String, send: (JSONObject) -> Unit) {
+private fun Picker(selected: String, options: List<String>, all: String, filter: (String?) -> ToRust, send: (ToRust) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         Secondary(selected.ifEmpty { all }) { open = true }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(text = { Body(all) }, onClick = {
                 open = false
-                send(message(type))
+                send(filter(null))
             })
             options.forEach { option ->
                 DropdownMenuItem(text = { Body(option) }, onClick = {
                     open = false
-                    send(message(type).put("value", option))
+                    send(filter(option))
                 })
             }
         }
@@ -392,26 +395,26 @@ private fun JSONArray?.strings(): List<String> =
     if (this == null) emptyList() else List(length()) { getString(it) }
 
 @Composable
-private fun Menu(menu: JSONObject, send: (JSONObject) -> Unit) {
+private fun Menu(menu: JSONObject, send: (ToRust) -> Unit) {
     if (!menu.optBoolean("ready")) {
         Small(menu.optString("line"))
         return
     }
-    Secondary(menu.optString("button")) { send(message("menu")) }
+    Secondary(menu.optString("button")) { send(ToggleMenu) }
     if (!menu.optBoolean("open")) return
     Row(horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp)) {
         Picker(
             menu.optString("category").takeUnless { menu.isNull("category") }.orEmpty(),
             menu.optJSONArray("categories").strings(),
             menu.optString("all_categories"),
-            "category",
+            ::CategoryFilter,
             send,
         )
         Picker(
             menu.optString("system").takeUnless { menu.isNull("system") }.orEmpty(),
             menu.optJSONArray("systems").strings(),
             menu.optString("all_systems"),
-            "system",
+            ::SystemFilter,
             send,
         )
     }
@@ -426,7 +429,7 @@ private fun Menu(menu: JSONObject, send: (JSONObject) -> Unit) {
             val usable = !row.isNull("index")
             val modifier =
                 if (usable) {
-                    Modifier.clickable { send(message("choose").put("index", row.getInt("index"))) }
+                    Modifier.clickable { send(Choose(row.getInt("index"))) }
                 } else {
                     Modifier
                 }
@@ -439,37 +442,37 @@ private fun Menu(menu: JSONObject, send: (JSONObject) -> Unit) {
 }
 
 @Composable
-private fun DraftPanel(panel: JSONObject, send: (JSONObject) -> Unit) {
+private fun DraftPanel(panel: JSONObject, send: (ToRust) -> Unit) {
     Boxed {
         Body(panel.optString("title"))
         Small(panel.optString("summary"), Tokens.INK)
         Small(panel.optString("warning"))
         panel.optJSONObject("menu")?.let { Menu(it, send) }
-        Secondary(panel.optString("advanced_button")) { send(message("advanced")) }
+        Secondary(panel.optString("advanced_button")) { send(ToggleAdvanced) }
         if (panel.optBoolean("advanced")) {
             OutlinedTextField(
                 value = panel.optString("image"),
-                onValueChange = { send(message("image").put("value", it)) },
+                onValueChange = { send(ImageInput(it)) },
                 label = { Small(panel.optString("image_hint")) },
                 modifier = Modifier.fillMaxWidth(),
             )
-            Secondary(panel.optString("pick")) { send(message("browse")) }
+            Secondary(panel.optString("pick")) { send(Browse) }
             OutlinedTextField(
                 value = panel.optString("hash"),
-                onValueChange = { send(message("hash").put("value", it)) },
+                onValueChange = { send(HashInput(it)) },
                 label = { Small(panel.optString("hash_hint")) },
                 modifier = Modifier.fillMaxWidth(),
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(panel.optBoolean("raw"), { send(message("raw").put("on", it)) })
+                Checkbox(panel.optBoolean("raw"), { send(Raw(it)) })
                 Small(panel.optString("raw_label"), Tokens.INK)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(panel.optBoolean("mbr"), { send(message("mbr").put("on", it)) })
+                Checkbox(panel.optBoolean("mbr"), { send(Mbr(it)) })
                 Small(panel.optString("mbr_label"), Tokens.INK)
             }
         }
-        Primary(panel.optString("button"), panel.optBoolean("enabled")) { send(message("start")) }
+        Primary(panel.optString("button"), panel.optBoolean("enabled")) { send(Start) }
     }
 }
 

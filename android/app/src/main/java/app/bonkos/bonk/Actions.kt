@@ -9,8 +9,6 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
-import org.json.JSONArray
-import org.json.JSONObject
 
 private const val CATALOG = "https://catalog.bonk-os.app/v1/catalog.json"
 private const val BUFFER = 1 shl 20
@@ -23,16 +21,16 @@ private fun fetchOrEmpty(address: String): ByteArray =
 /** Ce que Rust demande et que seul Android sait faire : voir l'USB, le réseau, les fichiers. */
 class Actions(
     private val context: Context,
-    private val send: (JSONObject) -> Unit,
+    private val send: (ToRust) -> Unit,
     private val driveError: (String, String?) -> Unit,
 ) {
     private val usb = context.getSystemService(UsbManager::class.java)
     /** Réponse de la sonde par clé : taille et partitions. */
-    private val probes = HashMap<String, JSONObject>()
+    private val probes = HashMap<String, Probe>()
     private val failedAt = HashMap<String, Long>()
     private val enumerating = AtomicBoolean(false)
 
-    private fun probe(device: UsbDevice): JSONObject? {
+    private fun probe(device: UsbDevice): Probe? {
         // Une clé écrite depuis la dernière sonde a changé de table : la relire.
         if (Bridge.written.remove(device.deviceName)) probes.remove(device.deviceName)
         probes[device.deviceName]?.let { return it }
@@ -40,8 +38,8 @@ class Actions(
         val failed = failedAt[device.deviceName]
         if (failed != null && System.currentTimeMillis() - failed < RETRY_MS) return null
         return runCatching {
-            val answer = JSONObject(usb.withDrive(device) { fd, raw -> Native.probe(fd, raw) })
-            check(!answer.has("error")) { answer.getString("error") }
+            val answer = Protocol.probe(usb.withDrive(device) { fd, raw -> Native.probe(fd, raw) })
+            check(answer.error == null) { answer.error.orEmpty() }
             answer
         }.onSuccess {
             probes[device.deviceName] = it
@@ -59,24 +57,23 @@ class Actions(
         if (!enumerating.compareAndSet(false, true)) return
         thread {
             try {
-                val disks = JSONArray()
                 val drives = usb.drives()
-                drives.filter(usb::hasPermission).forEach { device ->
-                    probe(device)?.let {
-                        disks.put(
-                            JSONObject()
-                                .put("device", device.deviceName)
-                                .put("model", "${device.manufacturerName.orEmpty()} ${device.productName.orEmpty()}".trim())
-                                .put("serial", device.serialNumber.orEmpty())
-                                .put("size_bytes", it.getLong("size_bytes"))
-                                .put("partitions", it.getJSONArray("partitions")),
-                        )
+                val disks =
+                    drives.filter(usb::hasPermission).mapNotNull { device ->
+                        probe(device)?.let {
+                            Drive(
+                                device = device.deviceName,
+                                model = "${device.manufacturerName.orEmpty()} ${device.productName.orEmpty()}".trim(),
+                                serial = device.serialNumber.orEmpty(),
+                                sizeBytes = it.sizeBytes,
+                                partitions = it.partitions,
+                            )
+                        }
                     }
-                }
                 val present = drives.map { it.deviceName }.toSet()
                 probes.keys.retainAll(present)
                 failedAt.keys.retainAll(present)
-                send(JSONObject().put("type", "disks").put("disks", disks))
+                send(Disks(disks))
             } finally {
                 enumerating.set(false)
             }
@@ -86,18 +83,14 @@ class Actions(
     fun catalog() {
         thread {
             val answer =
-                JSONObject(
+                Protocol.outcome(
                     Native.loadCatalog(
                         File(context.filesDir, "catalog").path,
                         fetchOrEmpty(CATALOG),
                         fetchOrEmpty("$CATALOG.sig"),
                     ),
                 )
-            val message = JSONObject()
-            if (answer.has("error")) {
-                message.put("type", "catalog_failed").put("message", answer.getString("error"))
-            }
-            send(message)
+            send(answer.error?.let(::CatalogFailed) ?: Refresh)
         }
     }
 
@@ -121,13 +114,8 @@ class Actions(
                     if (done - reported > 16 * BUFFER) {
                         reported = done
                         val seconds = (System.nanoTime() - started) / 1e9
-                        send(
-                            JSONObject()
-                                .put("type", "download")
-                                .put("done", done)
-                                .put("total", total)
-                                .put("rate", done / seconds),
-                        )
+                        // Une taille inconnue vaut -1 pour le système : Rust attend alors l'absence de total.
+                        send(Download(done, total.takeIf { it >= 0 }, done / seconds))
                     }
                 }
             }
@@ -136,20 +124,20 @@ class Actions(
     }
 
     /** L'écriture appartient au service : fermer l'écran ne l'interrompt pas. */
-    fun write(request: JSONObject) {
+    fun write(request: Write) {
         Bridge.cancelled = false
         WriteService.start(context, request)
     }
 
     /** Écrit et vérifie, de bout en bout. Bloque : appelé par le service, hors du fil de l'écran. */
-    fun runWrite(request: JSONObject) {
+    fun runWrite(request: Write) {
         var downloaded: File? = null
         try {
             val device =
-                usb.drives().firstOrNull { it.deviceName == request.getString("device") }
+                usb.drives().firstOrNull { it.deviceName == request.device }
                     ?: error("the drive is no longer connected")
-            val image = request.getString("image")
-            val hash = request.getString("hash")
+            val image = request.image
+            val hash = request.hash
             check(!image.startsWith("http") || hash.isNotEmpty()) { "an address needs a SHA-256 hash" }
             val source =
                 if (image.startsWith("http")) {
@@ -161,18 +149,18 @@ class Actions(
                 Native.write(
                     fd,
                     raw,
-                    request.getString("disk_id"),
+                    request.diskId,
                     device.deviceName,
                     device.serialNumber.orEmpty(),
                     source,
                     hash,
-                    request.getBoolean("raw"),
-                    request.getBoolean("mbr"),
+                    request.raw,
+                    request.mbr,
                 )
             }
-            send(JSONObject())
+            send(Refresh)
         } catch (error: Exception) {
-            send(JSONObject().put("type", "failed").put("message", error.message ?: error.toString()))
+            send(Failed(error.message ?: error.toString()))
         } finally {
             downloaded?.delete()
         }

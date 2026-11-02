@@ -1,0 +1,129 @@
+{
+  "effects": [
+    {
+      "do": "enumerate"
+    },
+    {
+      "do": "catalog"
+    },
+    {
+      "do": "pick"
+    },
+    {
+      "do": "save_language",
+      "value": "fr"
+    },
+    {
+      "device": "/dev/bus/usb/001/002",
+      "disk_id": "usb-S1-001-002",
+      "do": "write",
+      "hash": "",
+      "image": "/x.iso",
+      "mbr": false,
+      "raw": false
+    }
+  ],
+  "messages": [
+    {
+      "disks": [
+        {
+          "device": "/dev/bus/usb/001/002",
+          "model": "Generic UDisk",
+          "partitions": [
+            {
+              "label": "ESP",
+              "size_bytes": 1048576
+            },
+            {
+              "label": null,
+              "size_bytes": 2097152
+            }
+          ],
+          "serial": "S1",
+          "size_bytes": 32000000000
+        }
+      ],
+      "type": "disks"
+    },
+    {
+      "type": "tick"
+    },
+    {
+      "type": "clock"
+    },
+    {
+      "id": "usb-S1-001-002",
+      "type": "select"
+    },
+    {
+      "type": "language"
+    },
+    {
+      "type": "menu"
+    },
+    {
+      "type": "category",
+      "value": "Servers"
+    },
+    {
+      "type": "category"
+    },
+    {
+      "type": "system",
+      "value": "debian"
+    },
+    {
+      "index": 0,
+      "type": "choose"
+    },
+    {
+      "type": "advanced"
+    },
+    {
+      "type": "image",
+      "value": "/x.iso"
+    },
+    {
+      "type": "hash",
+      "value": "abc"
+    },
+    {
+      "on": true,
+      "type": "raw"
+    },
+    {
+      "on": false,
+      "type": "mbr"
+    },
+    {
+      "type": "browse"
+    },
+    {
+      "type": "picked",
+      "value": "/proc/self/fd/42"
+    },
+    {
+      "type": "start"
+    },
+    {
+      "type": "cancel"
+    },
+    {
+      "type": "dismiss"
+    },
+    {
+      "done": 1024,
+      "rate": 512.0,
+      "total": 4096,
+      "type": "download"
+    },
+    {
+      "message": "the drive is no longer connected",
+      "type": "failed"
+    },
+    {
+      "message": "404",
+      "type": "catalog_failed"
+    }
+  ]
+}

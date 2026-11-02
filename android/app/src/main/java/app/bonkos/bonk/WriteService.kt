@@ -13,7 +13,6 @@ import android.os.PowerManager
 import androidx.core.content.ContextCompat
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
-import org.json.JSONObject
 
 private const val CHANNEL = "write"
 private const val NOTIFICATION = 1
@@ -55,7 +54,7 @@ class WriteService : Service() {
         }
         // Premier plan d'abord : un échec immédiat de l'écriture arrête alors un service déjà au premier plan,
         // ce qu'Android accepte, et jamais l'inverse.
-        val request = intent?.getStringExtra(REQUEST)?.let(::JSONObject)
+        val request = intent?.getStringExtra(REQUEST)?.let(Protocol::decodeWrite)
         if (request == null || !writing.compareAndSet(false, true)) {
             if (!writing.get()) stopSelf()
             return START_NOT_STICKY
@@ -64,7 +63,7 @@ class WriteService : Service() {
             try {
                 Actions(this, Bridge::send) { _, _ -> }.runWrite(request)
             } finally {
-                Bridge.written.add(request.getString("device"))
+                request.device?.let(Bridge.written::add)
                 writing.set(false)
                 stopSelf()
             }
@@ -78,8 +77,8 @@ class WriteService : Service() {
     }
 
     companion object {
-        fun start(context: Context, request: JSONObject) {
-            val intent = Intent(context, WriteService::class.java).putExtra(REQUEST, request.toString())
+        fun start(context: Context, request: Write) {
+            val intent = Intent(context, WriteService::class.java).putExtra(REQUEST, Protocol.encodeWrite(request))
             ContextCompat.startForegroundService(context, intent)
         }
     }
