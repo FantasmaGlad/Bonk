@@ -1,4 +1,7 @@
 import groovy.json.JsonSlurper
+import java.awt.RenderingHints
+import java.awt.image.BufferedImage
+import javax.imageio.ImageIO
 
 plugins {
     id("com.android.application")
@@ -8,6 +11,7 @@ plugins {
 
 val jniOutput = layout.buildDirectory.dir("native/jniLibs")
 val tokensOutput = layout.buildDirectory.dir("generated/tokens")
+val iconsOutput = layout.buildDirectory.dir("generated/icons")
 // Seule la clé désignée reçoit l'essai d'écriture : sans cette valeur, le bouton n'existe pas.
 val benchSerial = providers.gradleProperty("benchSerial").getOrElse("")
 
@@ -64,6 +68,7 @@ android {
 
     sourceSets["main"].jniLibs.directories.add(jniOutput.get().asFile.path)
     sourceSets["main"].kotlin.directories.add(tokensOutput.get().asFile.path)
+    sourceSets["main"].res.directories.add(iconsOutput.get().asFile.path)
 }
 
 // La charte vient du même fichier que celle de la fenêtre de bureau.
@@ -95,12 +100,43 @@ val generateTokens by tasks.registering {
     }
 }
 
+// L'icône vient du même dessin que celle du bureau : une seule source, réduite à chaque densité d'Android.
+val generateIcons by tasks.registering {
+    val input = rootProject.file("../crates/bonk/assets/icons/512x512/bonk.png")
+    val densities = mapOf("mdpi" to 48, "hdpi" to 72, "xhdpi" to 96, "xxhdpi" to 144, "xxxhdpi" to 192)
+    val output = iconsOutput.get().asFile
+    inputs.file(input)
+    outputs.dir(output)
+    doLast {
+        val source = ImageIO.read(input)
+        densities.forEach { (density, size) ->
+            // Réduction par moitiés successives : un seul pas de 512 à 48 crénelle le contour.
+            var image: BufferedImage = source
+            while (image.width / 2 >= size) image = scaled(image, image.width / 2)
+            image = scaled(image, size)
+            val file = File(output, "mipmap-$density/ic_launcher.png")
+            file.parentFile.mkdirs()
+            ImageIO.write(image, "png", file)
+        }
+    }
+}
+
+fun scaled(image: BufferedImage, size: Int): BufferedImage {
+    val result = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
+    val graphics = result.createGraphics()
+    graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+    graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+    graphics.drawImage(image, 0, 0, size, size, null)
+    graphics.dispose()
+    return result
+}
+
 val buildNative by tasks.registering(Exec::class) {
     commandLine(rootProject.file("build-native.sh").path, jniOutput.get().asFile.path)
 }
 
 tasks.named("preBuild") {
-    dependsOn(generateTokens, buildNative)
+    dependsOn(generateTokens, generateIcons, buildNative)
 }
 
 dependencies {
