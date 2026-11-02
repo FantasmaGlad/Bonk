@@ -64,6 +64,7 @@ class WriteService : Service() {
             try {
                 Actions(this, Bridge::send) { _, _ -> }.runWrite(request)
             } finally {
+                Bridge.written.add(request.getString("device"))
                 writing.set(false)
                 stopSelf()
             }

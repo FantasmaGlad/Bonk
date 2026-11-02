@@ -27,21 +27,24 @@ class Actions(
     private val driveError: (String, String?) -> Unit,
 ) {
     private val usb = context.getSystemService(UsbManager::class.java)
-    private val sizes = HashMap<String, Long>()
+    /** Réponse de la sonde par clé : taille et partitions. */
+    private val probes = HashMap<String, JSONObject>()
     private val failedAt = HashMap<String, Long>()
     private val enumerating = AtomicBoolean(false)
 
-    private fun size(device: UsbDevice): Long? {
-        sizes[device.deviceName]?.let { return it }
+    private fun probe(device: UsbDevice): JSONObject? {
+        // Une clé écrite depuis la dernière sonde a changé de table : la relire.
+        if (Bridge.written.remove(device.deviceName)) probes.remove(device.deviceName)
+        probes[device.deviceName]?.let { return it }
         // Réessayer sans répit retirerait sans cesse la clé au système.
         val failed = failedAt[device.deviceName]
         if (failed != null && System.currentTimeMillis() - failed < RETRY_MS) return null
         return runCatching {
             val answer = JSONObject(usb.withDrive(device) { fd, raw -> Native.probe(fd, raw) })
             check(!answer.has("error")) { answer.getString("error") }
-            answer.getLong("blocks") * answer.getLong("block_size")
+            answer
         }.onSuccess {
-            sizes[device.deviceName] = it
+            probes[device.deviceName] = it
             failedAt.remove(device.deviceName)
             driveError(device.deviceName, null)
         }.onFailure {
@@ -59,18 +62,19 @@ class Actions(
                 val disks = JSONArray()
                 val drives = usb.drives()
                 drives.filter(usb::hasPermission).forEach { device ->
-                    size(device)?.let {
+                    probe(device)?.let {
                         disks.put(
                             JSONObject()
                                 .put("device", device.deviceName)
                                 .put("model", "${device.manufacturerName.orEmpty()} ${device.productName.orEmpty()}".trim())
                                 .put("serial", device.serialNumber.orEmpty())
-                                .put("size_bytes", it),
+                                .put("size_bytes", it.getLong("size_bytes"))
+                                .put("partitions", it.getJSONArray("partitions")),
                         )
                     }
                 }
                 val present = drives.map { it.deviceName }.toSet()
-                sizes.keys.retainAll(present)
+                probes.keys.retainAll(present)
                 failedAt.keys.retainAll(present)
                 send(JSONObject().put("type", "disks").put("disks", disks))
             } finally {

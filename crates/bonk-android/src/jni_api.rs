@@ -5,8 +5,8 @@ use std::fs::File;
 use std::os::fd::{FromRawFd, RawFd};
 
 use bonk_catalog::manifest::{self, CatalogReport, FamilyEntry, TRUSTED_KEYS};
-use bonk_core::msc::{BulkTransport, MassStorage, UsbDisk};
-use bonk_core::{BlockDevice, BlockError};
+use bonk_core::msc::{BulkTransport, UsbDisk};
+use bonk_core::{BlockDevice, BlockError, partition};
 use bonk_hal::usbfs::UsbfsTransport;
 use jni::errors::Error;
 use jni::objects::{JByteArray, JClass, JString};
@@ -40,16 +40,13 @@ fn answer<'caller>(
     env.new_string(value.to_string())
 }
 
+/// Taille et partitions : ce que l'écran montre de la clé avant de proposer de l'effacer.
 fn probe(fd: RawFd, descriptors: &[u8]) -> Result<serde_json::Value, String> {
-    let mut storage = MassStorage::new(transport(fd, descriptors)?);
-    let inquiry = storage.inquiry().map_err(|error| error.to_string())?;
-    storage.wait_ready().map_err(|error| error.to_string())?;
-    let (blocks, block) = storage.capacity().map_err(|error| error.to_string())?;
+    let disk = UsbDisk::open(transport(fd, descriptors)?).map_err(|error| error.to_string())?;
+    let layout = partition::inspect(&disk).map_err(|error| error.to_string())?;
     Ok(serde_json::json!({
-        "vendor": inquiry.vendor,
-        "product": inquiry.product,
-        "blocks": blocks,
-        "block_size": block,
+        "size_bytes": disk.size(),
+        "partitions": screen::partitions_of(&layout),
     }))
 }
 

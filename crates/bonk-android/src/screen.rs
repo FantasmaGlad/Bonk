@@ -5,8 +5,9 @@ use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, Mutex};
 
+use bonk_core::partition::Layout;
 use bonk_core::write::Phase;
-use bonk_hal::{Bus, Disk, DiskKind, Lang, format_size, state_label, verdict_badge};
+use bonk_hal::{Bus, Disk, DiskKind, Lang, Partition, format_size, state_label, verdict_badge};
 use bonk_ui::catalog::{CatalogState, ChoiceSource, all_categories, all_systems, writable};
 use bonk_ui::command::ViewOptions;
 use bonk_ui::event::{Event, Outcome};
@@ -47,7 +48,52 @@ fn disk_of(value: &Value) -> Option<Disk> {
         removable_flag: true,
         fs_type: None,
         holders: Vec::new(),
-        partitions: Vec::new(),
+        partitions: value["partitions"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .enumerate()
+            .filter_map(partition_of)
+            .collect(),
+    })
+}
+
+/// Les partitions lues sur la clé, telles que la sonde les rend à l'application : sans elles, le récapitulatif
+/// avant effacement présenterait une clé pleine comme vide. GPT d'abord ; sinon MBR hors table protectrice.
+pub(crate) fn partitions_of(layout: &Layout) -> Vec<Value> {
+    let block = u64::from(layout.logical_block_size);
+    if let Some(gpt) = layout.gpt.as_ref().filter(|gpt| !gpt.entries.is_empty()) {
+        return gpt
+            .entries
+            .iter()
+            .map(|entry| {
+                json!({
+                    "label": (!entry.name.is_empty()).then(|| entry.name.clone()),
+                    "size_bytes": (entry.last_lba.saturating_sub(entry.first_lba) + 1).saturating_mul(block),
+                })
+            })
+            .collect();
+    }
+    layout
+        .mbr
+        .iter()
+        .filter(|mbr| mbr.signature_valid && !mbr.protective)
+        .flat_map(|mbr| &mbr.entries)
+        .filter(|entry| entry.kind != 0)
+        .map(|entry| json!({"label": null, "size_bytes": u64::from(entry.sectors).saturating_mul(block)}))
+        .collect()
+}
+
+fn partition_of((index, value): (usize, &Value)) -> Option<Partition> {
+    Some(Partition {
+        path: format!("{}", index + 1),
+        label: value["label"].as_str().map(str::to_owned),
+        fs_type: None,
+        size_bytes: value["size_bytes"].as_u64()?,
+        mount_points: Vec::new(),
+        holders: Vec::new(),
+        is_system_volume: false,
+        is_active_esp: false,
     })
 }
 
@@ -498,6 +544,42 @@ mod tests {
             draft_of(&model).map(|draft| draft["device"].clone()),
             Some(json!("/dev/bus/usb/001/003"))
         );
+    }
+
+    /// Le récapitulatif avant effacement dit ce que contient la clé : une table lue, jamais « 0 » par défaut.
+    #[test]
+    fn le_recapitulatif_compte_les_partitions_lues_sur_la_cle()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use bonk_core::MemoryDevice;
+        use bonk_core::format::table::{TableKind, write_table};
+        use bonk_core::format::{Filesystem, Ids};
+
+        let mut dev = MemoryDevice::new(64 << 20, 512)?;
+        write_table(
+            &mut dev,
+            TableKind::Gpt,
+            Filesystem::Fat32,
+            Some("DONNEES"),
+            &Ids::from_seed(b"cle"),
+        )?;
+        let partitions = partitions_of(&bonk_core::partition::inspect(&dev)?);
+        assert_eq!(partitions.len(), 1);
+        let mut value = usb();
+        value["partitions"] = json!(partitions);
+        let mut model = Model {
+            auto_select: true,
+            ..Model::default()
+        };
+        let _ = model.update(Message::Loaded(Ok(disk_of(&value).into_iter().collect())));
+        let recap = state(&model)["panel"]["summary"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned();
+        assert!(recap.contains("1 partition(s)"), "{recap}");
+        // Une clé vierge n'a vraiment aucune partition.
+        let blank = MemoryDevice::new(64 << 20, 512)?;
+        assert!(partitions_of(&bonk_core::partition::inspect(&blank)?).is_empty());
+        Ok(())
     }
 
     #[test]
