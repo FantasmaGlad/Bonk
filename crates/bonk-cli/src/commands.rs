@@ -3,7 +3,7 @@
 use std::io::{self, Write};
 use std::sync::Arc;
 
-use bonk_hal::{Disk, EnumerateError, SourceRead, enumerate_disks};
+use bonk_hal::{Disk, EnumerateError, enumerate_disks};
 use bonk_ops::job;
 use clap::CommandFactory;
 
@@ -84,16 +84,9 @@ pub(crate) fn run_completions<O: Write, E: Write>(
     }
 }
 
-pub(crate) fn run_serve(fixture_reads: Option<&[SourceRead]>, env: &Env, view: ViewDefaults) -> u8 {
-    let enumerate_fn: serve::EnumerateFn = match fixture_reads {
-        Some(reads) => {
-            let reads = reads.to_vec();
-            Arc::new(move || bonk_hal::enumerate_disks_from_capture(&reads))
-        }
-        None => Arc::new(enumerate_disks),
-    };
+pub(crate) fn run_serve(env: &Env, view: ViewDefaults) -> u8 {
     let cfg = serve::Config {
-        enumerate: enumerate_fn,
+        enumerate: Arc::new(enumerate_disks),
         make_io: Arc::new(|cancel| job::Io::with_cancel(Some(cancel))),
         config_path: env.config_path.clone(),
         vars: env.vars.clone(),

@@ -377,6 +377,30 @@ fn fixture_refuse_la_lecture_brute_d_un_disque() -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
+/// Le service écrit sur les disques qu'il énumère : sous `--fixture`, il prendrait les disques de la capture
+/// pour vrais et ouvrirait le vrai `/dev/<nom>` du même nom, sans que le filtre ait jugé ce disque-là.
+#[test]
+fn fixture_refuse_le_service() -> Result<(), Box<dyn std::error::Error>> {
+    let dossier = std::env::temp_dir().join(format!("bonk-fixture-serve-{}", std::process::id()));
+    std::fs::create_dir_all(&dossier)?;
+    let capture = dossier.join("capture.json");
+    std::fs::write(
+        &capture,
+        r#"{"reads":[{"path":"/proc/swaps","kind":"file","ok":true,"bytes":3,"error":null,"micros":1,"content":"x\n"}]}"#,
+    )?;
+    let refus = bonk()
+        .arg("--fixture")
+        .arg(&capture)
+        .arg("serve")
+        .output()?;
+    common::assert_code(&refus, 2);
+    let erreur = String::from_utf8_lossy(&refus.stderr);
+    assert!(erreur.contains("--fixture"), "{erreur}");
+    assert!(erreur.trim_end().ends_with("[E5005]"), "{erreur}");
+    std::fs::remove_dir_all(&dossier)?;
+    Ok(())
+}
+
 /// `--no-gui` : un script n'ouvre jamais de fenêtre par accident, même sous un affichage.
 #[test]
 fn no_gui_affiche_l_aide_et_n_ouvre_jamais_la_fenetre() -> Result<(), Box<dyn std::error::Error>> {
