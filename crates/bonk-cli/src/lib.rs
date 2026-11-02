@@ -192,6 +192,11 @@ fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
         Command::Diagnose(a) if a.capture() => {
             Some("--capture reads the real system: incompatible with --fixture")
         }
+        // Le service écrit, formate et répare les disques qu'il énumère : il jugerait ceux de la capture et
+        // ouvrirait les vrais disques du même nom.
+        Command::Serve => {
+            Some("bonk serve writes to the disks it lists: incompatible with --fixture")
+        }
         Command::Format(_)
         | Command::Capabilities(_)
         | Command::Write(_)
@@ -217,7 +222,6 @@ fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
         | Command::Catalog { .. }
         | Command::Schema(_)
         | Command::Completions { .. }
-        | Command::Serve
         | Command::Gui => None,
     }
 }
@@ -472,7 +476,7 @@ where
                 Err(erreur) => report(err, Code::DeviceOpenDenied, erreur),
             }
         }
-        Some(Command::Serve) => run_serve(fixture_reads.as_deref(), env, view),
+        Some(Command::Serve) => run_serve(env, view),
         Some(Command::Debug { action }) => run_debug(action, out, err, enumerate),
         Some(Command::Explain(args)) => run_explain(&args, out, err),
         Some(Command::Diagnose(args)) => run_diagnose(&args, out, err, enumerate),
