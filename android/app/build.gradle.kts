@@ -35,8 +35,6 @@ android {
         targetSdk = 36
         versionCode = workspaceVersion[0] * 10000 + workspaceVersion[1] * 100 + workspaceVersion[2]
         versionName = workspaceVersion.joinToString(".")
-        // Sans ce filtre, les bibliothèques d'AndroidX font croire que l'application tourne sur d'autres puces.
-        ndk { abiFilters += "arm64-v8a" }
         buildConfigField("String", "BENCH_SERIAL", "\"$benchSerial\"")
     }
 
@@ -58,6 +56,17 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs[if (keystore != null) "official" else "debug"]
+        }
+    }
+
+    // Un APK par puce : le téléphone ne reçoit pas la bibliothèque de l'autre. Seules ces deux puces sont
+    // construites ; sans cette liste, les bibliothèques d'AndroidX feraient annoncer armv7 et x86 sans Bonk.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "x86_64")
+            isUniversalApk = false
         }
     }
 
