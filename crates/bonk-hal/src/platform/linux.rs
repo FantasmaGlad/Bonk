@@ -131,13 +131,34 @@ fn udisks_type(fs: Filesystem) -> &'static str {
     }
 }
 
+/// Ce que le démontage demande au système, séparé pour l'éprouver sans disque ni droits.
+struct System<'a> {
+    umount: &'a dyn Fn(&str) -> io::Result<std::process::Output>,
+    mounts_table: &'a dyn Fn() -> io::Result<String>,
+    udisks: &'a dyn Fn(&Path) -> Result<(), BlockError>,
+}
+
 /// Démonte tout ce que porte le disque et rend les points démontés ; les suivants ne sont pas tentés
 /// après un échec.
 fn unmount_all(disk: &Disk, elevation: Elevation) -> Result<Vec<String>, OpenTargetError> {
+    unmount_all_with(
+        disk,
+        elevation,
+        &System {
+            umount: &|mount| Command::new("umount").arg("--").arg(mount).output(),
+            mounts_table: &|| std::fs::read_to_string("/proc/self/mounts"),
+            udisks: &|partition| udisks::unmount(partition),
+        },
+    )
+}
+
+fn unmount_all_with(
+    disk: &Disk,
+    elevation: Elevation,
+    system: &System<'_>,
+) -> Result<Vec<String>, OpenTargetError> {
     let mounts = mount_points(disk);
-    let error = match unmount_with(&mounts, &|mount| {
-        Command::new("umount").arg("--").arg(mount).output()
-    }) {
+    let error = match unmount_with(&mounts, system.umount) {
         Ok(done) => return Ok(done),
         Err(error) => error,
     };
@@ -151,22 +172,30 @@ fn unmount_all(disk: &Disk, elevation: Elevation) -> Result<Vec<String>, OpenTar
         .iter()
         .filter(|p| !p.mount_points.is_empty())
     {
-        if !still_mounted(partition) {
+        if !still_mounted(partition, (system.mounts_table)()) {
             continue;
         }
-        if udisks::unmount(Path::new(&partition.path)).is_err() {
-            return Err(error);
+        if let Err(service) = (system.udisks)(Path::new(&partition.path)) {
+            return Err(OpenTargetError::Unmount(format!(
+                "{error}; UDisks2: {service}"
+            )));
         }
     }
     Ok(mounts)
 }
 
 /// Un point de la partition est-il encore monté ? `umount` a pu en démonter une partie avant d'échouer.
-fn still_mounted(partition: &Partition) -> bool {
-    let table = std::fs::read_to_string("/proc/self/mounts").unwrap_or_default();
-    table
-        .lines()
-        .any(|line| line.split_whitespace().next() == Some(partition.path.as_str()))
+/// Une table illisible ne prouve rien : la partition est tenue pour montée, et le service essaie.
+fn still_mounted(partition: &Partition, table: io::Result<String>) -> bool {
+    match table {
+        Ok(table) => table
+            .lines()
+            .any(|line| line.split_whitespace().next() == Some(partition.path.as_str())),
+        Err(error) => {
+            log::warn!(target: "bonk_hal::target", error = error.to_string().as_str(); "mount table unreadable: assuming still mounted");
+            true
+        }
+    }
 }
 
 fn denied(path: &Path) -> BlockError {
@@ -289,6 +318,69 @@ mod tests {
             unmount_all(&disk, Elevation::Never),
             Err(OpenTargetError::Unmount(_))
         ));
+    }
+
+    fn cle_montee() -> Disk {
+        Disk {
+            id: "usb-a".to_owned(),
+            path: "/dev/sdz".to_owned(),
+            model: "Cle".to_owned(),
+            serial: None,
+            size_bytes: 1 << 20,
+            bus: crate::disk::Bus::Usb,
+            kind: crate::disk::DiskKind::Physical,
+            removable_flag: true,
+            fs_type: None,
+            holders: vec![],
+            partitions: vec![Partition {
+                path: "/dev/sdz1".to_owned(),
+                label: None,
+                fs_type: None,
+                size_bytes: 1 << 20,
+                mount_points: vec!["/run/media/u/CLE".to_owned()],
+                holders: vec![],
+                is_system_volume: false,
+                is_active_esp: false,
+            }],
+        }
+    }
+
+    /// `umount` refusé, puis UDisks2 refusé aussi : les deux causes restent lisibles, celle du service
+    /// surtout, qui dit pourquoi le repli n'a pas suffi.
+    #[test]
+    fn l_echec_du_service_garde_sa_cause() {
+        let system = System {
+            umount: &|_| output(32, "umount: /run/media/u/CLE: must be superuser\n"),
+            mounts_table: &|| Ok("/dev/sdz1 /run/media/u/CLE vfat rw 0 0\n".to_owned()),
+            udisks: &|_| {
+                Err(BlockError::Io(io::Error::other(
+                    "Not authorized to perform operation",
+                )))
+            },
+        };
+        let error = unmount_all_with(&cle_montee(), Elevation::Auto, &system).err();
+        assert!(
+            matches!(error, Some(OpenTargetError::Unmount(ref m)) if m.contains("superuser") && m.contains("Not authorized")),
+            "{error:?}"
+        );
+    }
+
+    /// Une table des montages illisible ne prouve pas que la partition est démontée : le service est
+    /// sollicité, au lieu d'annoncer un démontage qui n'a pas eu lieu.
+    #[test]
+    fn une_table_illisible_ne_vaut_pas_demontage() {
+        use std::cell::Cell;
+        let asked = Cell::new(false);
+        let system = System {
+            umount: &|_| output(32, "umount: must be superuser\n"),
+            mounts_table: &|| Err(io::Error::new(io::ErrorKind::PermissionDenied, "denied")),
+            udisks: &|_| {
+                asked.set(true);
+                Ok(())
+            },
+        };
+        assert!(unmount_all_with(&cle_montee(), Elevation::Auto, &system).is_ok());
+        assert!(asked.get(), "le service n'a pas été sollicité");
     }
 
     #[test]
