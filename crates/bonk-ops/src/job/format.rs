@@ -12,7 +12,7 @@ use bonk_core::format::table::{self, PartitionPlan, TableKind};
 use bonk_core::format::{Filesystem, FormatError, Ids, fat32, normalize_label};
 use bonk_core::partition::{Severity, inspect};
 use bonk_hal::platform::format_capability;
-use bonk_hal::{Access, Elevation, FilterOptions, TargetIdentity, reverify};
+use bonk_hal::{Access, Elevation, FilterOptions, OpenTargetError, TargetIdentity};
 
 use super::target::{
     Chosen, OpenRequest, choose, enumerate, map_open_target, open_target, reread_table,
@@ -232,7 +232,6 @@ struct HostDisk<'a> {
     identity: &'a TargetIdentity,
     path: &'a str,
     elevation: Elevation,
-    options: FilterOptions,
 }
 
 /// Le disque est rendu au système : il relit la table, montre la partition, et y pose exFAT, NTFS ou
@@ -253,10 +252,21 @@ fn hand_over_to_host(
                 "the system does not show the new partition: nothing was formatted on it",
             )
         })?;
-        // L'outil de l'hôte écrit sur un chemin : le disque qui le porte repasse le filtre et son identité est
-        // revérifiée, comme avant l'ouverture. Une autre clé arrivée entre-temps à la même place est refusée.
+        // L'outil de l'hôte écrit sur un chemin : le disque qui le porte doit être celui qu'on a choisi, même
+        // identifiant, même série, même taille. Le filtre complet n'est pas repassé : le système vient de
+        // monter la nouvelle partition (Windows lui donne une lettre aussitôt), et ce montage est le nôtre.
         let disks = enumerate(deps)?;
-        reverify(disk.identity, &disks, disk.options).map_err(map_open_target)?;
+        let found = disks
+            .iter()
+            .find(|candidate| candidate.id == disk.identity.id)
+            .ok_or_else(|| map_open_target(OpenTargetError::NotFound(disk.identity.id.clone())))?;
+        let actual = TargetIdentity::from(found);
+        if actual != *disk.identity {
+            return Err(map_open_target(OpenTargetError::IdentityChanged {
+                expected: disk.identity.clone(),
+                actual,
+            }));
+        }
         (deps.io.format_partition)(Path::new(&path), filesystem, label, disk.elevation)
             .map_err(|e| fail(Code::FormatFailed, e))?;
         wait_for_filesystem(&disk.identity.id, filesystem, deps)?;
@@ -372,7 +382,6 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
             identity,
             path: &info.path,
             elevation: job.elevation,
-            options: job.options,
         };
         hand_over_to_host(
             &disk,
