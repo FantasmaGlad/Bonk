@@ -2,18 +2,18 @@
 //! ce certificat qui décide si un PC démarre la clé. Le fichier vient de l'image : chaque position est bornée.
 
 use schemars::JsonSchema;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 const MACHINE_X86_64: u16 = 0x8664;
 const OPTIONAL_PE32: u16 = 0x10B;
 const OPTIONAL_PE32_PLUS: u16 = 0x20B;
 /// `commonName` en DER : l'OID 2.5.4.3.
 const COMMON_NAME_OID: [u8; 5] = [0x06, 0x03, 0x55, 0x04, 0x03];
-const PCA_2011: &str = "Microsoft Windows Production PCA 2011";
-const UEFI_CA_2023: &str = "Windows UEFI CA 2023";
+pub const PCA_2011: &str = "Microsoft Windows Production PCA 2011";
+pub const UEFI_CA_2023: &str = "Windows UEFI CA 2023";
 
 /// Authority of the loader certificate.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Signer {
     /// Old certificate: refused by a PC that revoked it.

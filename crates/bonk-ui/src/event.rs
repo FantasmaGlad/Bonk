@@ -26,8 +26,8 @@ pub enum Outcome {
         bytes: u64,
         verified: bool,
         gpt_repaired: bool,
-        /// Clé Windows : ce que le certificat du chargeur implique.
-        secure_boot: Option<String>,
+        /// Clé Windows : le certificat du chargeur, dont l'écran dit ce qu'il implique dans sa langue.
+        secure_boot: Option<bonk_core::pe::Signer>,
     },
     Failed {
         /// Code d'erreur stable (`bonk explain`), quand le processus en a donné un.
@@ -79,9 +79,7 @@ pub fn parse_line(line: &str) -> Option<Event> {
             bytes: value["write"]["bytes"].as_u64()?,
             verified: !value["verify"].is_null(),
             gpt_repaired: !value["gpt_repair"].is_null(),
-            secure_boot: value["extraction"]["secure_boot"]
-                .as_str()
-                .map(str::to_owned),
+            secure_boot: serde_json::from_value(value["extraction"]["signer"].clone()).ok(),
         })),
         "error" => Some(Event::Finished(Outcome::Failed {
             code: value["code"].as_str().map(str::to_owned),
@@ -111,9 +109,11 @@ pub fn parse_failure(stderr: &str, status: &str) -> Outcome {
                 message: message.to_owned(),
             }
         }
+        // Arrêté sans ligne d'erreur (tué, plantage) : rattaché à l'échec d'écriture, dont la fenêtre affiche le
+        // titre dans sa langue ; le détail suit la langue des messages du moteur.
         None => Outcome::Failed {
-            code: None,
-            message: format!("le processus d'écriture s'est arrêté ({status})"),
+            code: Some("E4001".to_owned()),
+            message: format!("the write process stopped ({status})"),
         },
     }
 }
