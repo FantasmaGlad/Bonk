@@ -107,6 +107,8 @@ struct Faults {
     flush: bool,
     /// Clé débranchée une fois ce nombre d'octets écrit : toute écriture suivante échoue.
     unplugged_after: Option<u64>,
+    /// Écritures acceptées mais perdues au-delà de cette position, comme une carte défaillante ou contrefaite.
+    lost_after: Option<u64>,
 }
 
 struct Faulty {
@@ -141,6 +143,9 @@ impl BlockDevice for Faulty {
             )));
         }
         self.written += data.len() as u64;
+        if self.faults.lost_after.is_some_and(|limit| offset >= limit) {
+            return Ok(());
+        }
         self.inner.write_at(offset, data)
     }
     fn flush(&mut self) -> Result<(), BlockError> {

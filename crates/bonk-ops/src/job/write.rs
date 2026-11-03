@@ -288,7 +288,18 @@ fn repair_if_needed(device: &mut dyn BlockDevice) -> Result<Option<RepairReport>
         return Ok(None);
     }
     let report = repair_gpt(device).map_err(|e| fail(Code::GptRepairFailed, e))?;
-    log::info!(target: "bonk::write", actions = report.actions.join(",").as_str(); "gpt repaired");
+    // Relue après vidage : un support qui n'a pas gardé les tables laisserait partir une clé sans GPT de
+    // secours, avec un succès annoncé.
+    device.flush().map_err(|e| fail(Code::GptRepairFailed, e))?;
+    let _ = device.drop_cache();
+    let after = inspect(device).map_err(|e| fail(Code::GptRepairFailed, e))?;
+    if needs_repair(&after) {
+        return Err(fail(
+            Code::GptRepairFailed,
+            "the repaired GPT did not read back: the drive may not keep what is written at its end",
+        ));
+    }
+    log::info!(target: "bonk::write", actions = report.actions.join(",").as_str(); "gpt repaired and read back");
     Ok(Some(report))
 }
 
@@ -419,11 +430,26 @@ fn refuse_if_too_large(needed: Option<u64>, available: Option<u64>) -> Result<()
     Ok(())
 }
 
+/// Simuler vers l'image elle-même l'écraserait pendant qu'on la lit : une image compressée serait détruite.
+fn refuse_source_as_target(job: &WriteJob) -> Result<(), JobError> {
+    match &job.target {
+        Target::Image { path, .. } if bonk_hal::same_file(path, &job.source) => Err(fail(
+            Code::InvalidArgument,
+            format!(
+                "{} is the image itself: choose another target file",
+                path.display()
+            ),
+        )),
+        _ => Ok(()),
+    }
+}
+
 pub fn write(
     job: &WriteJob,
     deps: &Deps<'_>,
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<WriteOutcome, JobError> {
+    refuse_source_as_target(job)?;
     let file = ImageFile::open(&job.source)?;
     let (mut source, source_info) = file.decoded()?;
     let chosen = choose(&job.target, job.options, deps)?;
@@ -544,4 +570,83 @@ pub fn write(
         verify,
         gpt_repair,
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    use bonk_core::format::table::{TableKind, write_table};
+    use bonk_core::format::{Filesystem, Ids};
+    use bonk_core::{BlockError, MemoryDevice};
+
+    use super::*;
+
+    /// Une image GPT plus petite que le support : la GPT de secours manque à la fin, à réparer.
+    fn image_sur_un_plus_grand_support() -> Result<MemoryDevice, Box<dyn std::error::Error>> {
+        let mut image = MemoryDevice::new(8 << 20, 512)?;
+        write_table(
+            &mut image,
+            TableKind::Gpt,
+            Filesystem::Fat32,
+            None,
+            &Ids::from_seed(b"gpt"),
+        )?;
+        let mut support = MemoryDevice::new(16 << 20, 512)?;
+        support.write_at(0, image.as_bytes())?;
+        Ok(support)
+    }
+
+    /// Support qui accepte sans rien garder les écritures au-delà d'un point, comme une carte défaillante.
+    struct PerdLaFin {
+        inner: MemoryDevice,
+        limite: u64,
+    }
+
+    impl BlockDevice for PerdLaFin {
+        fn size(&self) -> u64 {
+            self.inner.size()
+        }
+        fn block_size(&self) -> u32 {
+            self.inner.block_size()
+        }
+        fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), BlockError> {
+            self.inner.read_at(offset, buf)
+        }
+        fn write_at(&mut self, offset: u64, data: &[u8]) -> Result<(), BlockError> {
+            if offset >= self.limite {
+                return Ok(());
+            }
+            self.inner.write_at(offset, data)
+        }
+        fn flush(&mut self) -> Result<(), BlockError> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn la_gpt_reparee_est_relue() -> Result<(), Box<dyn std::error::Error>> {
+        let mut support = image_sur_un_plus_grand_support()?;
+        assert!(needs_repair(&inspect(&support)?));
+        assert!(
+            repair_if_needed(&mut support)
+                .map_err(|e| e.message)?
+                .is_some()
+        );
+        assert!(!needs_repair(&inspect(&support)?));
+        Ok(())
+    }
+
+    /// Sans relecture, la réparation passait pour faite et la clé partait sans GPT de secours.
+    #[test]
+    fn une_reparation_que_le_support_ne_garde_pas_est_un_echec()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut support = PerdLaFin {
+            inner: image_sur_un_plus_grand_support()?,
+            limite: 8 << 20,
+        };
+        let erreur = repair_if_needed(&mut support)
+            .err()
+            .ok_or("réparation acceptée")?;
+        assert_eq!(erreur.code, Code::GptRepairFailed);
+        Ok(())
+    }
 }

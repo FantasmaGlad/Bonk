@@ -139,6 +139,32 @@ fn exfat_ne_formate_jamais_l_ancienne_partition_encore_visible() {
     );
 }
 
+/// Entre la nouvelle table et le formatage par le système, une autre clé a pris la place : l'outil de
+/// l'hôte n'est jamais appelé sur elle.
+#[test]
+fn exfat_ne_formate_pas_une_autre_cle_arrivee_entre_temps() {
+    let mut scenario = Scenario::new();
+    scenario.capabilities = vec![exfat_capability(true)];
+    let mut autre = usb_with_new_partition("");
+    autre.serial = Some("S2".to_owned());
+    scenario.enumerations = vec![
+        vec![usb("S1")],
+        vec![usb("S1")],
+        vec![usb("S1")],
+        vec![usb("S1")],
+        vec![usb_with_new_partition("")],
+        vec![autre],
+    ];
+    let (code, _, err) = scenario.run(&["format", "usb-a", "--fs", "exfat", "--yes"]);
+    assert_eq!(code, EXIT_TARGET_REFUSED, "{err}");
+    assert!(err.trim_end().ends_with("[E2002]"), "{err}");
+    assert!(
+        !scenario.log().iter().any(|l| l.starts_with("format:")),
+        "{:?}",
+        scenario.log()
+    );
+}
+
 #[test]
 fn exfat_sans_nouvelle_partition_ne_formate_rien() {
     let mut scenario = Scenario::new();
@@ -205,6 +231,63 @@ fn fat32_dit_sa_limite_par_fichier_et_propose_exfat() {
     let (_, json, _) = scenario.run(&["format", "usb-a", "--fs", "exfat", "--dry-run", "--json"]);
     let value: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert!(value["file_size_limit_bytes"].is_null(), "{json}");
+}
+
+/// Une image GPT de 8 Mio posée au début de la clé : sa GPT de secours manque à la fin, à réparer.
+fn cle_a_reparer() -> Scenario {
+    use bonk_core::format::table::{TableKind, write_table};
+    use bonk_core::format::{Filesystem, Ids};
+    let mut image = MemoryDevice::new(8 << 20, 512).expect("géométrie valide");
+    write_table(
+        &mut image,
+        TableKind::Gpt,
+        Filesystem::Fat32,
+        None,
+        &Ids::from_seed(b"cle"),
+    )
+    .expect("table");
+    let scenario = Scenario::new();
+    scenario
+        .device
+        .0
+        .borrow_mut()
+        .write_at(0, image.as_bytes())
+        .expect("copie");
+    scenario
+}
+
+/// Réparée, la table est relue sur la clé puis par le système, comme après une écriture.
+#[test]
+fn reparer_relit_la_table_sur_la_cle_et_par_le_systeme() {
+    let scenario = cle_a_reparer();
+    let (code, out, err) = scenario.run(&["repair-gpt", "usb-a", "--yes", "--json"]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    let value: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(value["needs_repair"], true, "{out}");
+    assert!(
+        value["findings_after"]
+            .as_array()
+            .is_some_and(|f| f.iter().all(|c| c != "gpt_backup_missing")),
+        "{out}"
+    );
+    assert!(
+        scenario
+            .log()
+            .iter()
+            .any(|call| call.starts_with("rescan:")),
+        "{:?}",
+        scenario.log()
+    );
+}
+
+/// Une clé qui ne garde pas la fin : la réparation semblait faite, la relecture la dément.
+#[test]
+fn une_reparation_que_la_cle_ne_garde_pas_echoue() {
+    let mut scenario = cle_a_reparer();
+    scenario.faults.lost_after = Some(32 << 20);
+    let (code, _, err) = scenario.run(&["repair-gpt", "usb-a", "--yes"]);
+    assert_eq!(code, crate::errors::EXIT_RUNTIME_ERROR, "{err}");
+    assert!(err.trim_end().ends_with("[E4005]"), "{err}");
 }
 
 /// Annulé juste après l'ouverture : le disque reste intact, la réparation n'a pas commencé.

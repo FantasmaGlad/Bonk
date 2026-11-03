@@ -12,9 +12,11 @@ use bonk_core::format::table::{self, PartitionPlan, TableKind};
 use bonk_core::format::{Filesystem, FormatError, Ids, fat32, normalize_label};
 use bonk_core::partition::{Severity, inspect};
 use bonk_hal::platform::format_capability;
-use bonk_hal::{Access, Elevation, FilterOptions};
+use bonk_hal::{Access, Elevation, FilterOptions, TargetIdentity, reverify};
 
-use super::target::{Chosen, OpenRequest, choose, enumerate, open_target, reread_table};
+use super::target::{
+    Chosen, OpenRequest, choose, enumerate, map_open_target, open_target, reread_table,
+};
 use super::types::{Deps, FormatDone, JobError, SCHEMA_VERSION, Target, TraceIo, fail};
 use super::verify::drop_cache_before_verify;
 use super::write::confirm_internal;
@@ -227,9 +229,10 @@ fn write_volume(
 
 /// Le disque formaté, tel que le système le désigne.
 struct HostDisk<'a> {
-    id: &'a str,
+    identity: &'a TargetIdentity,
     path: &'a str,
     elevation: Elevation,
+    options: FilterOptions,
 }
 
 /// Le disque est rendu au système : il relit la table, montre la partition, et y pose exFAT, NTFS ou
@@ -242,7 +245,7 @@ fn hand_over_to_host(
     deps: &Deps<'_>,
 ) -> Result<(), JobError> {
     reread_table(Path::new(disk.path), disk.elevation, deps);
-    let path = wait_for_partition(disk.id, partition_bytes, deps)?;
+    let path = wait_for_partition(&disk.identity.id, partition_bytes, deps)?;
     if !filesystem.is_native() {
         let path = path.ok_or_else(|| {
             fail(
@@ -250,9 +253,13 @@ fn hand_over_to_host(
                 "the system does not show the new partition: nothing was formatted on it",
             )
         })?;
+        // L'outil de l'hôte écrit sur un chemin : le disque qui le porte repasse le filtre et son identité est
+        // revérifiée, comme avant l'ouverture. Une autre clé arrivée entre-temps à la même place est refusée.
+        let disks = enumerate(deps)?;
+        reverify(disk.identity, &disks, disk.options).map_err(map_open_target)?;
         (deps.io.format_partition)(Path::new(&path), filesystem, label, disk.elevation)
             .map_err(|e| fail(Code::FormatFailed, e))?;
-        wait_for_filesystem(disk.id, filesystem, deps)?;
+        wait_for_filesystem(&disk.identity.id, filesystem, deps)?;
     } else if path.is_none() {
         // FAT32 est écrit et relu : le système le verra au prochain branchement.
         log::warn!(target: "bonk::write", "new partition not visible yet: unplug and replug the disk");
@@ -328,7 +335,7 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
     confirm_internal(&chosen, job.options, job.force)?;
 
     let seed_name = chosen.info.path.clone();
-    let disk_id = chosen.disk.as_ref().map(|disk| disk.id.clone());
+    let identity = chosen.disk.as_ref().map(TargetIdentity::from);
     let (mut device, info, unmounted) = open_target(
         chosen,
         &job.target,
@@ -360,11 +367,12 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
     )?;
     let block = u64::from(device.block_size());
     drop(device);
-    if let Some(id) = &disk_id {
+    if let Some(identity) = &identity {
         let disk = HostDisk {
-            id,
+            identity,
             path: &info.path,
             elevation: job.elevation,
+            options: job.options,
         };
         hand_over_to_host(
             &disk,
