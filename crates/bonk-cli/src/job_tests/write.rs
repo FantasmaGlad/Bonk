@@ -72,6 +72,40 @@ fn une_ecriture_simulee_ne_fait_relire_aucune_table() {
     );
 }
 
+/// Simuler vers l'image elle-même l'écraserait pendant sa lecture : une image compressée serait détruite.
+/// Refusé avant toute ouverture, plan compris, et quel que soit le chemin qui désigne le fichier.
+#[test]
+fn une_simulation_vers_sa_propre_source_est_refusee() {
+    let source = TempSource::new("meme-fichier", 4096);
+    let avant = source.bytes();
+    let scenario = Scenario::new();
+    let chemin = std::path::PathBuf::from(source.arg());
+    let detour = chemin
+        .parent()
+        .map(|dossier| {
+            dossier
+                .join(".")
+                .join(chemin.file_name().unwrap_or_default())
+        })
+        .unwrap_or_default()
+        .display()
+        .to_string();
+    let image = source.arg();
+    for cible in [image.clone(), detour] {
+        for fin in [&["--dry-run"][..], &["--yes", "--progress", "none"][..]] {
+            let args = [
+                &["write", "--simulate", cible.as_str(), image.as_str()][..],
+                fin,
+            ]
+            .concat();
+            let (code, out, err) = scenario.run(&args);
+            assert_eq!(code, EXIT_USAGE, "{cible} {fin:?} : {out}");
+            assert!(err.trim_end().ends_with("[E0001]"), "{err}");
+        }
+    }
+    assert_eq!(source.bytes(), avant, "l'image a été touchée");
+}
+
 #[test]
 fn sans_yes_rien_n_est_touche() {
     let source = TempSource::new("sans-yes", 4096);

@@ -297,6 +297,7 @@ pub const CATALOG: &[Entry] = &[
         causes: &[
             "no valid GPT header can serve as a model",
             "the drive is too small for the table",
+            "the repaired table did not read back: the drive does not keep what is written at its end (failing or counterfeit drive)",
         ],
         remedy: "Inspect the drive with `bonk debug layout` and write the image again if needed.",
     },

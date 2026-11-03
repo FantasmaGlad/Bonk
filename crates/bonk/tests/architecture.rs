@@ -78,21 +78,111 @@ fn chaque_crate_ne_depend_que_de_ce_que_permet_sa_couche() {
     }
 }
 
+/// Le code de production d'un fichier : ses tests à part, comme pour le plafond de taille.
+fn production(file: &Path) -> String {
+    // Windows extrait les sources avec des fins de ligne CRLF.
+    let text = fs::read_to_string(file)
+        .unwrap_or_default()
+        .replace("\r\n", "\n");
+    text.split("#[cfg(test)]\nmod tests")
+        .next()
+        .unwrap_or_default()
+        .to_owned()
+}
+
+/// Ce qui trahit du code propre à un système : attributs de plateforme et appels directs à l'OS.
+const SYSTEM_MARKERS: &[&str] = &[
+    "target_os",
+    "target_family",
+    "cfg(unix",
+    "cfg(windows",
+    "cfg(all(unix",
+    "cfg(not(unix",
+    "cfg(any(unix",
+    "libc::",
+    "std::os::",
+];
+
+/// Exceptions connues, chacune avec sa raison ; une exception qui n'a plus lieu d'être fait échouer le test.
+const SYSTEM_EXCEPTIONS: &[(&str, &[&str], &str)] = &[(
+    "bonk-gui/src/lib.rs",
+    &["target_os", "cfg(all(unix", "cfg(not("],
+    "variables d'affichage d'une session graphique Unix hors macOS ; à déplacer dans bonk-hal (STATE.md, dette)",
+)];
+
 #[test]
 fn le_code_propre_a_un_systeme_reste_dans_bonk_hal() {
-    for name in ["bonk-core", "bonk-ops", "bonk-cli", "bonk-gui"] {
+    let mut used = vec![false; SYSTEM_EXCEPTIONS.len()];
+    for name in [
+        "bonk-core",
+        "bonk-ops",
+        "bonk-cli",
+        "bonk-gui",
+        "bonk-ui",
+        "bonk-catalog",
+    ] {
         let mut files = Vec::new();
         sources(&crates_dir().join(name).join("src"), &mut files);
         assert!(!files.is_empty(), "{name} : aucune source lue");
         for file in files {
-            let text = fs::read_to_string(&file).unwrap_or_default();
-            for marker in ["cfg(target_os", "libc::", "std::os::"] {
-                assert!(
-                    !text.contains(marker),
-                    "{} contient {marker} : à placer derrière bonk_hal::Platform",
-                    file.display()
-                );
+            let text = production(&file);
+            let relative = file
+                .strip_prefix(crates_dir())
+                .unwrap_or(&file)
+                .to_string_lossy()
+                .replace('\\', "/");
+            for marker in SYSTEM_MARKERS {
+                if !text.contains(marker) {
+                    continue;
+                }
+                let excepted = SYSTEM_EXCEPTIONS
+                    .iter()
+                    .position(|(path, allowed, _)| *path == relative && allowed.contains(marker));
+                match excepted {
+                    Some(index) => used[index] = true,
+                    None => panic!(
+                        "{relative} contient {marker} : à placer derrière bonk_hal::Platform"
+                    ),
+                }
             }
+        }
+    }
+    for ((path, marker, _), used) in SYSTEM_EXCEPTIONS.iter().zip(used) {
+        assert!(
+            used,
+            "exception sans objet, à retirer : {path} ({marker:?})"
+        );
+    }
+}
+
+/// Une seule porte d'écriture : seuls les travaux de bonk-ops et la couche système ouvrent un disque en
+/// écriture. La fenêtre, l'écran commun, le catalogue, la CLI et l'application Android passent par eux.
+#[test]
+fn seule_la_porte_d_ecriture_ouvre_un_disque_en_ecriture() {
+    for name in [
+        "bonk-core",
+        "bonk-ops",
+        "bonk-cli",
+        "bonk-gui",
+        "bonk-ui",
+        "bonk-catalog",
+        "bonk-android",
+    ] {
+        let mut files = Vec::new();
+        sources(&crates_dir().join(name).join("src"), &mut files);
+        for file in files {
+            let relative = file
+                .strip_prefix(crates_dir())
+                .unwrap_or(&file)
+                .to_string_lossy()
+                .replace('\\', "/");
+            if relative.starts_with("bonk-ops/src/job/") {
+                continue;
+            }
+            assert!(
+                !production(&file).contains("Access::ReadWrite"),
+                "{relative} ouvre un disque en écriture hors de bonk_ops::job"
+            );
         }
     }
 }

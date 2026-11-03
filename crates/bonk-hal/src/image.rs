@@ -18,6 +18,22 @@ pub enum Access {
     ReadWrite,
 }
 
+/// Le même fichier, quel que soit le chemin qui le désigne : chemins canoniques égaux, ou, sous Unix, même
+/// périphérique et même inode (un lien physique). Un fichier absent n'est jamais le même qu'un autre.
+#[must_use]
+pub fn same_file(a: &Path, b: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if let (Ok(a), Ok(b)) = (fs::metadata(a), fs::metadata(b))
+            && (a.dev(), a.ino()) == (b.dev(), b.ino())
+        {
+            return true;
+        }
+    }
+    matches!((a.canonicalize(), b.canonicalize()), (Ok(a), Ok(b)) if a == b)
+}
+
 /// Fichier image ordinaire utilisé comme [`BlockDevice`].
 #[derive(Debug)]
 pub struct FileDevice {

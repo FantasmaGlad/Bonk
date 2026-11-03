@@ -28,7 +28,7 @@ pub use enumerate::{
     EnumerateError, SourceRead, enumerate_disks, enumerate_disks_from_capture,
     enumerate_disks_recorded,
 };
-pub use image::{Access, FileDevice};
+pub use image::{Access, FileDevice, same_file};
 #[cfg(target_os = "linux")]
 pub use node::BlockNode;
 pub use platform::{Elevation, Platform};

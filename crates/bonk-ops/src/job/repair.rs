@@ -1,10 +1,12 @@
 //! Réparer le GPT.
 
+use std::path::Path;
+
 use bonk_core::partition::inspect;
 use bonk_core::repair::{RepairError, needs_repair, repair_gpt};
 use bonk_hal::{Access, Elevation, FilterOptions};
 
-use super::target::{OpenRequest, choose, open_read_only, open_target};
+use super::target::{OpenRequest, choose, open_read_only, open_target, reread_table};
 use super::types::{Deps, JobError, RepairDone, SCHEMA_VERSION, Target, TraceIo, fail};
 use super::write::confirm_internal;
 use crate::errors::Code;
@@ -73,7 +75,23 @@ pub fn repair(job: &RepairJob, deps: &Deps<'_>) -> Result<RepairDone, JobError> 
     } else {
         None
     };
+    if needed {
+        // Relue après vidage : une clé qui n'a pas gardé les tables ne doit pas passer pour réparée.
+        device.flush().map_err(|e| fail(Code::WriteFailed, e))?;
+        let _ = device.drop_cache();
+    }
     let after = inspect(&*device).map_err(|e| fail(Code::GptRepairFailed, e))?;
+    if needed && needs_repair(&after) {
+        return Err(fail(
+            Code::GptRepairFailed,
+            "the repaired GPT did not read back: the drive may not keep what is written at its end",
+        ));
+    }
+    drop(device);
+    // Le système relit la table qu'on vient de changer, sinon il garde l'ancienne jusqu'au rebranchement.
+    if needed && matches!(job.target, Target::Disk(_)) {
+        reread_table(Path::new(&info.path), job.elevation, deps);
+    }
     Ok(RepairDone {
         schema_version: SCHEMA_VERSION,
         event: "result",
