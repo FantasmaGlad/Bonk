@@ -759,7 +759,9 @@ mod tests {
         let mut disk = UsbDisk::open(&mut fake)?;
         let erreur = disk.write_at(0, &random(4 * BLOCK)).err();
         assert!(
-            erreur.as_ref().is_some_and(|e| e.to_string().contains("short USB transfer")),
+            erreur
+                .as_ref()
+                .is_some_and(|e| e.to_string().contains("short USB transfer")),
             "{erreur:?}"
         );
         Ok(())
