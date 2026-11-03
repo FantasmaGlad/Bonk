@@ -12,12 +12,10 @@ use bonk_hal::{Disk, Elevation, FilterOptions};
 use bonk_ops::job::{self, Deps, Io, Target, WriteJob, WriteMode, WriteOutcome};
 use bonk_ui::event::{Event, Outcome, parse_line};
 
-use crate::screen::{CANCEL, EVENTS, MODEL};
+use crate::screen::{CANCEL, EVENTS, MODEL, lock};
 
 fn push(event: Event) {
-    if let Ok(mut events) = EVENTS.lock() {
-        events.push_back(event);
-    }
+    lock(&EVENTS).push_back(event);
 }
 
 fn unavailable(what: &str) -> BlockError {
@@ -95,10 +93,7 @@ pub(crate) fn write(
     request: &Request<'_>,
     open: impl Fn() -> Result<Box<dyn BlockDevice>, BlockError> + 'static,
 ) {
-    let disks: Vec<Disk> = MODEL
-        .lock()
-        .map(|model| model.disks.clone())
-        .unwrap_or_default();
+    let disks: Vec<Disk> = lock(&MODEL).disks.clone();
     if let Err(message) = same_drive(&disks, request.disk_id, request.device, request.serial) {
         push(Event::Finished(Outcome::Failed {
             code: Some(bonk_ops::errors::Code::IdentityChanged.id().to_owned()),

@@ -1,6 +1,7 @@
 package app.bonkos.bonk
 
 import android.os.ParcelFileDescriptor
+import android.util.Log
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
@@ -15,6 +16,9 @@ object Bridge {
     /** L'écran qui affiche les réponses ; aucun pendant qu'il est fermé, et Rust garde l'état. */
     @Volatile var listener: ((String) -> Unit)? = null
 
+    /** Langue choisie dans Bonk, telle que Rust la rend ; le service y écrit sa notification. */
+    @Volatile var language = "en"
+
     /** Lu par le téléchargement, que Rust ne voit pas ; Rust arrête l'écriture de son côté. */
     @Volatile var cancelled = false
 
@@ -27,8 +31,11 @@ object Bridge {
         if (message == Cancel) cancelled = true
         val text = Protocol.encode(message)
         worker.execute {
-            val answer = Native.dispatch(text)
-            listener?.invoke(answer)
+            // Une panique de Rust revient en exception : non rattrapée, elle tuerait l'application. Rust reprend
+            // son état au message suivant ; celui-ci est seulement perdu, et journalisé.
+            runCatching { Native.dispatch(text) }
+                .onSuccess { answer -> listener?.invoke(answer) }
+                .onFailure { Log.e("Bonk", "native dispatch failed", it) }
         }
     }
 

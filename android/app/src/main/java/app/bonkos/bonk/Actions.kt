@@ -97,13 +97,15 @@ class Actions(
     fun catalog() {
         thread {
             val answer =
-                Protocol.outcome(
-                    Native.loadCatalog(
-                        File(context.filesDir, "catalog").path,
-                        fetchOrEmpty(CATALOG),
-                        fetchOrEmpty("$CATALOG.sig"),
-                    ),
-                )
+                runCatching {
+                    Protocol.outcome(
+                        Native.loadCatalog(
+                            File(context.filesDir, "catalog").path,
+                            fetchOrEmpty(CATALOG),
+                            fetchOrEmpty("$CATALOG.sig"),
+                        ),
+                    )
+                }.getOrElse { Outcome(error = it.message ?: it.toString()) }
             send(answer.error?.let(::CatalogFailed) ?: Refresh)
         }
     }

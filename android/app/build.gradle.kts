@@ -70,6 +70,14 @@ android {
         }
     }
 
+    // La langue se choisit dans Bonk, pas dans le téléphone : chaque installation garde le français et
+    // l'anglais, au lieu des seules ressources de la langue du système dans un app bundle.
+    bundle {
+        language {
+            enableSplit = false
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true

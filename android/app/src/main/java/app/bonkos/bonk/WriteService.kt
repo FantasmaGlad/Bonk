@@ -34,7 +34,7 @@ class WriteService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val manager = getSystemService(NotificationManager::class.java)
-        val title = getString(R.string.writing_notification)
+        val title = inLanguage(Bridge.language).getString(R.string.writing_notification)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, title, NotificationManager.IMPORTANCE_LOW))
         // Toucher la notification rouvre l'écran, où se lisent la progression et le résultat.
         val open =
