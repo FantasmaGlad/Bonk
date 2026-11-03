@@ -991,3 +991,40 @@ fn une_cle_debranchee_en_ecriture_arrete_tout() {
         scenario.log()
     );
 }
+
+/// Après une réparation de la GPT, l'empreinte affichée par `verify` n'est pas celle de l'éditeur : quelques
+/// octets réparés sont mis à zéro des deux côtés. Elle le dit, au lieu de laisser croire à une image fausse.
+#[test]
+fn la_verification_apres_reparation_dit_ce_que_couvre_son_empreinte() {
+    use bonk_core::format::table::{TableKind, write_table};
+    use bonk_core::format::{Filesystem, Ids};
+    let mut image = MemoryDevice::new(8 << 20, 512).expect("géométrie valide");
+    write_table(
+        &mut image,
+        TableKind::Gpt,
+        Filesystem::Fat32,
+        None,
+        &Ids::from_seed(b"img"),
+    )
+    .expect("table");
+    let source = TempSource::from_bytes("gpt-a-reparer", image.as_bytes());
+    let scenario = Scenario::new();
+    let (code, out, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &source.arg(),
+        "--yes",
+        "--mode",
+        "raw",
+        "--progress",
+        "none",
+    ]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    let (code, out, err) = scenario.run(&["verify", "usb-a", &source.arg(), "--progress", "none"]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(out.contains("Excluded from the comparison"), "{out}");
+    assert!(
+        out.contains("differs from the image's own hash"),
+        "l'empreinte doit dire qu'elle n'est pas celle de l'image : {out}"
+    );
+}
