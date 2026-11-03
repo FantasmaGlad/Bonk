@@ -6,6 +6,7 @@ import android.hardware.usb.UsbManager
 import android.os.storage.StorageManager
 import android.util.Log
 import java.io.File
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
@@ -16,8 +17,20 @@ private const val BUFFER = 1 shl 20
 private const val RETRY_MS = 10_000L
 private const val TAG = "Bonk"
 
+// Sans délai, une connexion qui ne répond plus suspend le catalogue ou le téléchargement indéfiniment, et
+// l'annulation, vérifiée entre deux lectures, ne passe jamais.
+private const val CONNECT_TIMEOUT_MS = 30_000
+private const val READ_TIMEOUT_MS = 60_000
+
+private fun open(address: String): HttpURLConnection =
+    (URL(address).openConnection() as HttpURLConnection).apply {
+        connectTimeout = CONNECT_TIMEOUT_MS
+        readTimeout = READ_TIMEOUT_MS
+    }
+
+/** Le catalogue garde sa dernière copie vérifiée quand le réseau manque : rien ici ne doit l'empêcher. */
 private fun fetchOrEmpty(address: String): ByteArray =
-    runCatching { URL(address).readBytes() }.getOrDefault(ByteArray(0))
+    runCatching { open(address).inputStream.use { it.readBytes() } }.getOrDefault(ByteArray(0))
 
 /** Ce que Rust demande et que seul Android sait faire : voir l'USB, le réseau, les fichiers. */
 class Actions(
@@ -97,13 +110,15 @@ class Actions(
 
     private fun download(address: String): File {
         val target = File(context.cacheDir, "image.download")
-        val connection = URL(address).openConnection() as HttpURLConnection
+        val connection = open(address)
         val total = connection.contentLengthLong
         // L'espace « allouable » compte aussi les caches que le système peut vider ; allocateBytes les vide
         // alors avant le téléchargement, au lieu de refuser une image qui tiendrait.
         val storage = context.getSystemService(StorageManager::class.java)
         val volume = storage.getUuidForPath(context.cacheDir)
-        check(storage.getAllocatableBytes(volume) > total) { "not enough free space on the phone: $total bytes needed" }
+        if (storage.getAllocatableBytes(volume) <= total) {
+            throw BonkFailure("E3008", "not enough free space on the phone: $total bytes needed")
+        }
         if (total > 0) storage.allocateBytes(volume, total)
         var done = 0L
         var reported = 0L
@@ -112,7 +127,7 @@ class Actions(
             target.outputStream().use { output ->
                 val buffer = ByteArray(BUFFER)
                 while (true) {
-                    check(!Bridge.cancelled) { "cancelled" }
+                    if (Bridge.cancelled) throw BonkFailure("E4003", "cancelled during the download")
                     val count = input.read(buffer)
                     if (count < 0) break
                     output.write(buffer, 0, count)
@@ -141,10 +156,10 @@ class Actions(
         try {
             val device =
                 usb.drives().firstOrNull { it.deviceName == request.device }
-                    ?: error("the drive is no longer connected")
+                    ?: throw BonkFailure("E1003", "the drive is no longer connected")
             val image = request.image
             val hash = request.hash
-            check(!image.startsWith("http") || hash.isNotEmpty()) { "an address needs a SHA-256 hash" }
+            if (image.startsWith("http") && hash.isEmpty()) throw BonkFailure("E0001", "an address needs a SHA-256 hash")
             val source =
                 if (image.startsWith("http")) {
                     download(image).also { downloaded = it }.path
@@ -165,6 +180,11 @@ class Actions(
                 )
             }
             send(Refresh)
+        } catch (error: BonkFailure) {
+            send(Failed(error.message.orEmpty(), error.code))
+        } catch (error: IOException) {
+            // Réseau coupé, délai dépassé : seul le téléchargement fait des entrées et sorties ici.
+            send(Failed(error.message ?: error.toString(), "E3008"))
         } catch (error: Exception) {
             send(Failed(error.message ?: error.toString()))
         } finally {

@@ -67,7 +67,8 @@ class ProtocolTest {
                 Cancel,
                 Dismiss,
                 Download(1024, 4096, 512.0),
-                Failed("the drive is no longer connected"),
+                Failed("the drive is no longer connected", "E1003"),
+                Failed("unexpected"),
                 CatalogFailed("404"),
             )
         val expected = samples.getValue("messages").jsonArray

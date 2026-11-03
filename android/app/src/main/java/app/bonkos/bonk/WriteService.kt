@@ -3,6 +3,7 @@ package app.bonkos.bonk
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -35,10 +36,19 @@ class WriteService : Service() {
         val manager = getSystemService(NotificationManager::class.java)
         val title = getString(R.string.writing_notification)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, title, NotificationManager.IMPORTANCE_LOW))
+        // Toucher la notification rouvre l'écran, où se lisent la progression et le résultat.
+        val open =
+            PendingIntent.getActivity(
+                this,
+                0,
+                Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                PendingIntent.FLAG_IMMUTABLE,
+            )
         val notification =
             Notification.Builder(this, CHANNEL)
                 .setContentTitle(title)
                 .setSmallIcon(android.R.drawable.stat_sys_upload)
+                .setContentIntent(open)
                 .setOngoing(true)
                 .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

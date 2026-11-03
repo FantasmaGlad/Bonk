@@ -77,7 +77,10 @@ data object Dismiss : ToRust
 data class Download(val done: Long, val total: Long?, val rate: Double) : ToRust
 
 @Serializable @SerialName("failed")
-data class Failed(val message: String) : ToRust
+data class Failed(val message: String, val code: String? = null) : ToRust
+
+/** Échec né dans l'application, rattaché à un code de Bonk : l'écran en montre le titre traduit. */
+class BonkFailure(val code: String, message: String) : Exception(message)
 
 @Serializable @SerialName("catalog_failed")
 data class CatalogFailed(val message: String) : ToRust

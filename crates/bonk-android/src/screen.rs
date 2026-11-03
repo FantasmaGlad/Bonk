@@ -143,8 +143,10 @@ fn message_of(input: &Value, model: &Model) -> Option<Message> {
             total: input["total"].as_u64(),
             rate: input["rate"].as_f64().unwrap_or(0.0),
         }),
+        // Échec né dans l'application (annulation, clé partie, téléchargement) : son code, quand il en a un,
+        // fait afficher le titre traduit, comme pour une erreur du moteur.
         "failed" => Message::Write(Event::Finished(Outcome::Failed {
-            code: None,
+            code: text_of("code"),
             message: text_of("message")?,
         })),
         _ => return None,
@@ -683,7 +685,8 @@ mod tests {
             json!({"type": "cancel"}),
             json!({"type": "dismiss"}),
             json!({"type": "download", "done": 1024, "total": 4096, "rate": 512.0}),
-            json!({"type": "failed", "message": "the drive is no longer connected"}),
+            json!({"type": "failed", "message": "the drive is no longer connected", "code": "E1003"}),
+            json!({"type": "failed", "message": "unexpected"}),
             json!({"type": "catalog_failed", "message": "404"}),
         ];
         // `choose` n'a de sens qu'avec un catalogue chargé : son échantillon fixe la forme seulement.
@@ -709,6 +712,30 @@ mod tests {
             "{} n'est plus à jour : BONK_UPDATE_PROTOCOL=1 cargo test -p bonk-android",
             path.display()
         );
+        Ok(())
+    }
+
+    /// Un échec né côté application (annulation, clé partie) porte un code de Bonk : l'écran en montre le
+    /// titre traduit et le code, comme pour une erreur du moteur.
+    #[test]
+    fn un_echec_de_l_application_porte_son_code() -> Result<(), Box<dyn std::error::Error>> {
+        let mut model = loaded();
+        let _ = model.update(Message::ImageInput("/x.iso".to_owned()));
+        if let WriteState::Draft { opened, .. } = &mut model.write {
+            *opened = Instant::now()
+                .checked_sub(Duration::from_secs(4))
+                .unwrap_or(*opened);
+        }
+        let _ = model.update(Message::StartWrite);
+        let _ = model.update(Message::Write(Event::Started(0)));
+        let failed = json!({"type": "failed", "code": "E4003", "message": "cancelled"});
+        let message = message_of(&failed, &model).ok_or("message refusé")?;
+        let _ = model.update(message);
+        let shown = state(&model)["panel"]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned();
+        assert!(shown.contains("[E4003]"), "{shown}");
         Ok(())
     }
 
