@@ -177,7 +177,7 @@ fn load_catalog(dir: &str, json: Vec<u8>, signature: Vec<u8>) -> Result<(), Stri
         images,
     };
     let systems = bonk_ui::catalog::systems(&report);
-    let mut model = screen::MODEL.lock().map_err(|error| error.to_string())?;
+    let mut model = screen::lock(&screen::MODEL);
     let _ = model.update(bonk_ui::model::Message::CatalogLoaded(Ok(systems)));
     Ok(())
 }

@@ -87,6 +87,7 @@ class ProtocolTest {
         assertEquals(4, states.size)
         val (idle, draft, running, finished) = states
         assertEquals(null, idle.panel)
+        assertTrue(states.all { it.lang in setOf("fr", "en") })
         assertEquals(emptyList(), idle.disks)
 
         val panel = assertIs<DraftPanel>(draft.panel)

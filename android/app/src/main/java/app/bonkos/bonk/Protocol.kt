@@ -138,6 +138,8 @@ data class Answer(val state: ScreenState = ScreenState(), val effects: List<Effe
 data class ScreenState(
     val intro: String = "",
     val language: String = "",
+    /** Langue choisie dans Bonk (`fr`, `en`) : l'application y lit ses propres textes. */
+    val lang: String = "en",
     val status: String = "",
     @SerialName("show_all") val showAll: Boolean = false,
     @SerialName("show_all_label") val showAllLabel: String = "",

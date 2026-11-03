@@ -19,12 +19,16 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.lifecycle.Lifecycle
@@ -88,6 +92,7 @@ class MainActivity : ComponentActivity() {
             // Redessiner ou toucher à la fenêtre sans changement fait tressauter l'écran.
             if (state != screen) {
                 screen = state
+                Bridge.language = state.lang
                 keepScreenOn(state.running)
                 // Le résultat reste lisible après coup, même une fois le panneau refermé.
                 (state.panel as? FinishedPanel)?.let { Log.i(TAG, it.message) }
@@ -168,7 +173,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             BonkTheme {
                 Surface(Modifier.fillMaxSize(), color = Color(Tokens.PAPER)) {
-                    Screen(screen, usb, revision, driveErrors, ::send)
+                    val localized = remember(screen.lang) { inLanguage(screen.lang) }
+                    CompositionLocalProvider(
+                        LocalContext provides localized,
+                        LocalConfiguration provides localized.resources.configuration,
+                    ) {
+                        Screen(screen, usb, revision, driveErrors, ::send)
+                    }
                 }
             }
         }

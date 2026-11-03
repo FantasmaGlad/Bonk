@@ -3,7 +3,7 @@
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{LazyLock, Mutex};
+use std::sync::{LazyLock, Mutex, MutexGuard, PoisonError};
 
 use bonk_core::partition::Layout;
 use bonk_core::write::Phase;
@@ -18,6 +18,13 @@ use serde_json::{Value, json};
 pub(crate) static CANCEL: AtomicBool = AtomicBool::new(false);
 /// Ce que rapporte l'écriture, en attendant le prochain passage de l'écran.
 pub(crate) static EVENTS: Mutex<VecDeque<Event>> = Mutex::new(VecDeque::new());
+/// Une panique en tenant un verrou l'empoisonne : refuser ensuite tout accès laisserait l'écran mort jusqu'au
+/// redémarrage de l'application. L'état est repris tel qu'il était ; une écriture en cours a ses propres
+/// contrôles (relecture, empreinte), et le pire est un écran à rafraîchir.
+pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 pub(crate) static MODEL: LazyLock<Mutex<Model>> =
     LazyLock::new(|| Mutex::new(Model::new(ViewOptions::default(), Lang::En).0));
 
@@ -390,6 +397,8 @@ pub fn state(model: &Model) -> Value {
             "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
         ),
         "language": lang.pick("Français", "English"),
+        // La langue choisie : l'application y lit ses propres textes (ressources Android, notification).
+        "lang": lang.pick("en", "fr"),
         "status": model.status_line(model.entries().len()),
         "show_all": model.show_all,
         "show_all_label": lang.pick("Also show excluded disks", "Afficher aussi les disques écartés"),
@@ -406,15 +415,10 @@ pub fn state(model: &Model) -> Value {
 /// Un message, ou seulement un regard sur l'état avec `{}` : l'état et les effets à accomplir.
 #[must_use]
 pub fn dispatch(input: &str) -> String {
-    let Ok(mut model) = MODEL.lock() else {
-        return json!({"error": "state unavailable"}).to_string();
-    };
+    let mut model = lock(&MODEL);
     let input: Value = serde_json::from_str(input).unwrap_or_default();
     let mut effects = Vec::new();
-    let pending: Vec<Event> = EVENTS
-        .lock()
-        .map(|mut events| events.drain(..).collect())
-        .unwrap_or_default();
+    let pending: Vec<Event> = lock(&EVENTS).drain(..).collect();
     for event in pending {
         effects.extend(model.update(Message::Write(event)));
     }
@@ -428,9 +432,7 @@ pub fn dispatch(input: &str) -> String {
 
 /// Pose la langue de départ, celle du système ou celle choisie la fois d'avant.
 pub fn set_language(fr: bool) {
-    if let Ok(mut model) = MODEL.lock() {
-        model.lang = if fr { Lang::Fr } else { Lang::En };
-    }
+    lock(&MODEL).lang = if fr { Lang::Fr } else { Lang::En };
 }
 
 #[cfg(test)]
@@ -737,6 +739,35 @@ mod tests {
             .to_owned();
         assert!(shown.contains("[E4003]"), "{shown}");
         Ok(())
+    }
+
+    /// Une panique survenue en tenant l'état ne doit pas laisser l'écran mort : le verrou empoisonné est repris
+    /// avec l'état tel qu'il était, au lieu de répondre « indisponible » à chaque message suivant.
+    #[test]
+    fn un_verrou_empoisonne_est_repris() {
+        let etat = std::sync::Arc::new(Mutex::new(1));
+        let partage = std::sync::Arc::clone(&etat);
+        let _ = std::thread::spawn(move || {
+            let _garde = partage.lock();
+            panic!("panique pendant la mise à jour");
+        })
+        .join();
+        assert!(etat.is_poisoned());
+        assert_eq!(*lock(&etat), 1);
+    }
+
+    /// L'application lit ses propres textes dans la langue choisie dans Bonk, pas dans celle du téléphone.
+    #[test]
+    fn l_etat_dit_la_langue_choisie() {
+        let mut model = loaded();
+        let avant = state(&model)["lang"].clone();
+        let _ = model.update(Message::SwitchLanguage);
+        let apres = state(&model)["lang"].clone();
+        assert_ne!(avant, apres);
+        assert!(
+            ["fr", "en"].contains(&apres.as_str().unwrap_or_default()),
+            "{apres}"
+        );
     }
 
     #[test]
