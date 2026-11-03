@@ -484,6 +484,8 @@ mod tests {
         BadTag,
         BadSignature,
         Gone,
+        /// La clé reçoit toutes les données mais déclare, par son résidu, n'en avoir gardé qu'une partie.
+        KeepsPart,
     }
 
     /// Clé USB en mémoire qui suit le protocole.
@@ -587,6 +589,7 @@ mod tests {
                 Fault::BadTag => self.tag = self.tag.wrapping_add(7),
                 Fault::BadSignature => {}
                 Fault::Gone => self.fault = (0xFE, Fault::Gone),
+                Fault::KeepsPart => self.residue = u32::try_from(BLOCK).unwrap_or(0),
                 Fault::None => {}
             }
             let bad_signature = fault == Fault::BadSignature;
@@ -744,6 +747,21 @@ mod tests {
             // L'échange suivant reste aligné : même statut, même étiquette.
             assert_eq!(msc.capacity()?, (64, BLOCK as u32), "{len} octets");
         }
+        Ok(())
+    }
+
+    /// Statut « réussi » mais résidu non nul : la clé n'a pas tout gardé. L'écriture échoue au lieu de passer
+    /// pour complète ; c'est le seul signe qu'en donne le protocole.
+    #[test]
+    fn une_ecriture_gardee_en_partie_est_un_echec() -> Result<(), BlockError> {
+        let mut fake = Fake::new(64);
+        fake.fault = (0x2A, Fault::KeepsPart);
+        let mut disk = UsbDisk::open(&mut fake)?;
+        let erreur = disk.write_at(0, &random(4 * BLOCK)).err();
+        assert!(
+            erreur.as_ref().is_some_and(|e| e.to_string().contains("short USB transfer")),
+            "{erreur:?}"
+        );
         Ok(())
     }
 
