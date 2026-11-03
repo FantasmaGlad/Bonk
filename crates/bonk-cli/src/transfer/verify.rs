@@ -48,6 +48,16 @@ pub(crate) fn run_verify(
             )?;
         }
         cache_warning(&done.verify, out)?;
-        writeln!(out, "  SHA-256: {}", done.verify.sha256)
+        if done.ignored_ranges.is_empty() {
+            writeln!(out, "  SHA-256: {}", done.verify.sha256)
+        } else {
+            // Les octets réparés sont mis à zéro des deux côtés avant l'empreinte : comparée à celle publiée
+            // par l'éditeur, elle passerait pour le signe d'une image fausse.
+            writeln!(
+                out,
+                "  SHA-256 of the compared content, excluded bytes zeroed (it differs from the image's own hash): {}",
+                done.verify.sha256
+            )
+        }
     })
 }
