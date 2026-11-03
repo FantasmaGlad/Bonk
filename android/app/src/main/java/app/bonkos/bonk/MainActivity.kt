@@ -1,11 +1,14 @@
 package app.bonkos.bonk
 
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.hardware.usb.UsbManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.WindowManager
@@ -16,7 +19,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -25,8 +27,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import java.util.Locale
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private const val TAG = "Bonk"
 private const val CLOCK_MS = 500L
@@ -49,6 +55,9 @@ class MainActivity : ComponentActivity() {
                 actions.enumerate()
             }
         }
+
+    /** Android 13 et plus masquent la notification de l'écriture sans cet accord ; l'écriture n'en dépend pas. */
+    private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     private val pickFile =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -109,7 +118,14 @@ class MainActivity : ComponentActivity() {
             Enumerate -> actions.enumerate()
             LoadCatalog -> actions.catalog()
             PickImage -> pickFile.launch(arrayOf("*/*"))
-            is Write -> actions.write(effect)
+            is Write -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+                actions.write(effect)
+            }
             is SaveLanguage -> getPreferences(MODE_PRIVATE).edit { putString("lang", effect.value) }
         }
     }
@@ -137,17 +153,21 @@ class MainActivity : ComponentActivity() {
         ContextCompat.registerReceiver(this, usbEvents, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         val usb = getSystemService(UsbManager::class.java)
         actions.enumerate()
+        // L'horloge et la détection ne tournent que l'écran visible : en arrière-plan, elles réveilleraient Rust
+        // et l'USB pour rien. L'écriture, elle, vit dans le service.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                var ticks = 0
+                while (true) {
+                    delay(CLOCK_MS)
+                    ticks = (ticks + 1) % TICKS_PER_REFRESH
+                    send(if (ticks == 0) Tick else Clock)
+                }
+            }
+        }
         setContent {
             BonkTheme {
                 Surface(Modifier.fillMaxSize(), color = Color(Tokens.PAPER)) {
-                    LaunchedEffect(Unit) {
-                        var ticks = 0
-                        while (true) {
-                            delay(CLOCK_MS)
-                            ticks = (ticks + 1) % TICKS_PER_REFRESH
-                            send(if (ticks == 0) Tick else Clock)
-                        }
-                    }
                     Screen(screen, usb, revision, driveErrors, ::send)
                 }
             }

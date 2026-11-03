@@ -42,10 +42,10 @@ fun UsbManager.askPermission(context: Context, device: UsbDevice) {
 /** Réclame la clé, en détachant le pilote du système, le temps de `work`. */
 fun <T> UsbManager.withDrive(device: UsbDevice, work: (fd: Int, descriptors: ByteArray) -> T): T =
     usbAccess.withLock {
-        val connection = openDevice(device) ?: error("openDevice refused")
+        val connection = openDevice(device) ?: throw BonkFailure("E4004", "the system refused to open the drive")
         try {
-            val storage = device.storageInterface() ?: error("no storage interface")
-            check(connection.claimInterface(storage, true)) { "claimInterface refused" }
+            val storage = device.storageInterface() ?: throw BonkFailure("E4004", "no storage interface on the drive")
+            if (!connection.claimInterface(storage, true)) throw BonkFailure("E4004", "the system kept the drive")
             try {
                 work(connection.fileDescriptor, connection.rawDescriptors)
             } finally {
