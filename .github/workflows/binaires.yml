@@ -380,6 +380,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Le wrapper Gradle est un binaire du dépôt exécuté par la CI : son empreinte doit être une de celles que
+      # publie Gradle.
+      - name: Wrapper Gradle
+        uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
       - name: Plateforme Android
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" > /dev/null
@@ -401,15 +405,18 @@ jobs:
           version=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
           mkdir dist
           apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
-          # Un APK par puce : le nom publié garde celui de la puce (arm64, x86_64), comme les archives.
+          # Un APK par puce : le nom publié garde celui de la puce (arm64, x86_64), comme les archives. Hors tag,
+          # l'APK est signé d'une clé de débogage jetable : son nom le dit, pour ne jamais passer pour une release.
+          essai=$([ "$GITHUB_REF_TYPE" = tag ] || echo "-essai")
           for abi in arm64-v8a:arm64 x86_64:x86_64; do
-            apk="dist/bonk-$version-android-${abi#*:}.apk"
+            apk="dist/bonk-$version$essai-android-${abi#*:}.apk"
             cp "android/app/build/outputs/apk/release/app-${abi%%:*}-release.apk" "$apk"
             "$apksigner" verify --print-certs "$apk"
             (cd dist && sha256sum -- "$(basename "$apk")" > "$(basename "$apk").sha256")
           done
+      # Seule la release, signée de la clé officielle, est attestée : un APK d'essai ne doit pas en recevoir.
       - name: Attestation de provenance
-        if: github.event_name != 'pull_request' && !github.event.repository.private
+        if: github.ref_type == 'tag' && !github.event.repository.private
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: dist/*.apk
