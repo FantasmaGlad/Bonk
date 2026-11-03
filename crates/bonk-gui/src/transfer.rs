@@ -191,7 +191,7 @@ mod tests {
         );
         let silent = parse_failure("", "signal: 9");
         assert!(
-            matches!(&silent, Outcome::Failed { code: None, message } if message.contains("signal: 9"))
+            matches!(&silent, Outcome::Failed { code: Some(code), message } if code == "E4001" && message.contains("signal: 9"))
         );
     }
 

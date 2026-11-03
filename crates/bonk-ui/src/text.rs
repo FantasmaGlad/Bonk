@@ -105,7 +105,7 @@ pub fn outcome(lang: Lang, outcome: &Outcome) -> String {
             },
             secure_boot
                 .as_ref()
-                .map_or_else(String::new, |text| format!(" Secure Boot : {text}.")),
+                .map_or_else(String::new, |signer| secure_boot_text(lang, signer)),
         ),
         Outcome::Failed { code, message } => format!(
             "{} {}{}",
@@ -116,6 +116,41 @@ pub fn outcome(lang: Lang, outcome: &Outcome) -> String {
                 Lang::Fr => format!(" [{c}] : voir « bonk explain {c} »"),
             }),
         ),
+    }
+}
+
+/// Ce que le certificat du chargeur d'une clé Windows implique au démarrage, dans la langue de l'écran.
+fn secure_boot_text(lang: Lang, signer: &bonk_core::pe::Signer) -> String {
+    use bonk_core::pe::{PCA_2011, Signer, UEFI_CA_2023};
+    let sentence = match (signer, lang) {
+        (Signer::WindowsProductionPca2011, Lang::En) => format!(
+            "loader signed by {PCA_2011}: with Secure Boot, refused by a PC that revoked this certificate"
+        ),
+        (Signer::WindowsProductionPca2011, Lang::Fr) => format!(
+            "chargeur signé par {PCA_2011} : avec Secure Boot, refusé par un PC qui a révoqué ce certificat"
+        ),
+        (Signer::WindowsUefiCa2023, Lang::En) => format!(
+            "loader signed by {UEFI_CA_2023}: with Secure Boot, refused by a PC whose firmware does not know this certificate"
+        ),
+        (Signer::WindowsUefiCa2023, Lang::Fr) => format!(
+            "chargeur signé par {UEFI_CA_2023} : avec Secure Boot, refusé par un PC dont le micrologiciel ne connaît pas ce certificat"
+        ),
+        (Signer::Other(name), Lang::En) => {
+            format!("loader signed by {name}: with Secure Boot, depends on what the PC accepts")
+        }
+        (Signer::Other(name), Lang::Fr) => {
+            format!("chargeur signé par {name} : avec Secure Boot, dépend de ce que le PC accepte")
+        }
+        (Signer::Unsigned, Lang::En) => {
+            "unsigned loader: refused with Secure Boot active".to_owned()
+        }
+        (Signer::Unsigned, Lang::Fr) => {
+            "chargeur non signé : refusé quand Secure Boot est actif".to_owned()
+        }
+    };
+    match lang {
+        Lang::En => format!(" Secure Boot: {sentence}."),
+        Lang::Fr => format!(" Secure Boot : {sentence}."),
     }
 }
 
@@ -146,4 +181,75 @@ pub fn disk_summary(lang: Lang, disk: &bonk_hal::Disk) -> String {
             )
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use bonk_core::pe::Signer;
+
+    use super::*;
+
+    fn windows(signer: Signer) -> Outcome {
+        Outcome::Done {
+            bytes: 7 << 30,
+            verified: true,
+            gpt_repaired: false,
+            secure_boot: Some(signer),
+        }
+    }
+
+    /// La phrase Secure Boot suit la langue de la fenêtre, avec sa typographie : en anglais, pas d'espace
+    /// avant les deux-points.
+    #[test]
+    fn la_phrase_secure_boot_suit_la_langue() {
+        let fr = outcome(Lang::Fr, &windows(Signer::WindowsProductionPca2011));
+        assert!(
+            fr.contains("Secure Boot : chargeur signé par Microsoft Windows Production PCA 2011"),
+            "{fr}"
+        );
+        let en = outcome(Lang::En, &windows(Signer::WindowsProductionPca2011));
+        assert!(
+            en.contains("Secure Boot: loader signed by Microsoft Windows Production PCA 2011"),
+            "{en}"
+        );
+        assert!(!en.contains(" :"), "{en}");
+        let unsigned = outcome(Lang::Fr, &windows(Signer::Unsigned));
+        assert!(unsigned.contains("chargeur non signé"), "{unsigned}");
+    }
+
+    /// Un processus d'écriture arrêté sans ligne d'erreur : le titre suit la langue de la fenêtre, jamais une
+    /// phrase française dans une fenêtre anglaise.
+    #[test]
+    fn un_arret_sans_message_suit_la_langue() {
+        let failure = crate::event::parse_failure("", "signal 9");
+        let en = outcome(Lang::En, &failure);
+        assert!(!en.contains("processus"), "{en}");
+        assert!(en.contains("[E4001]"), "{en}");
+        let fr = outcome(Lang::Fr, &failure);
+        assert!(fr.contains("[E4001]"), "{fr}");
+    }
+
+    /// Le signataire se lit tel que `bonk write` l'écrit dans son résultat JSON.
+    #[test]
+    fn le_signataire_se_lit_dans_le_resultat_de_bonk_write() {
+        for signer in [
+            Signer::WindowsUefiCa2023,
+            Signer::Other("Debian".to_owned()),
+            Signer::Unsigned,
+        ] {
+            let line = serde_json::json!({
+                "event": "result",
+                "write": {"bytes": 1},
+                "verify": {"bytes": 1},
+                "gpt_repair": null,
+                "extraction": {"signer": signer, "secure_boot": "anglais"},
+            })
+            .to_string();
+            let parsed = crate::event::parse_line(&line);
+            assert!(
+                matches!(parsed, Some(crate::event::Event::Finished(Outcome::Done { secure_boot: Some(ref s), .. })) if *s == signer),
+                "{line}"
+            );
+        }
+    }
 }
