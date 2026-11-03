@@ -54,7 +54,7 @@ jobs:
       - name: Plateforme Android
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" > /dev/null
-          rustup target add aarch64-linux-android
+          rustup target add aarch64-linux-android x86_64-linux-android
       - name: Construire
         working-directory: android
         run: ./gradlew --no-daemon :app:assembleDebug
