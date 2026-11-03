@@ -3,6 +3,7 @@ package app.bonkos.bonk
 import android.content.Context
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.os.storage.StorageManager
 import android.util.Log
 import java.io.File
 import java.net.HttpURLConnection
@@ -98,7 +99,12 @@ class Actions(
         val target = File(context.cacheDir, "image.download")
         val connection = URL(address).openConnection() as HttpURLConnection
         val total = connection.contentLengthLong
-        check(context.cacheDir.usableSpace > total) { "not enough free space on the phone: $total bytes needed" }
+        // L'espace « allouable » compte aussi les caches que le système peut vider ; allocateBytes les vide
+        // alors avant le téléchargement, au lieu de refuser une image qui tiendrait.
+        val storage = context.getSystemService(StorageManager::class.java)
+        val volume = storage.getUuidForPath(context.cacheDir)
+        check(storage.getAllocatableBytes(volume) > total) { "not enough free space on the phone: $total bytes needed" }
+        if (total > 0) storage.allocateBytes(volume, total)
         var done = 0L
         var reported = 0L
         val started = System.nanoTime()

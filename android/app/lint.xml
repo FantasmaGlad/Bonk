@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- La bibliothèque Rust n'est construite que pour ARM64 : aucune version x86_64 n'a été essayée sur un
+         Chromebook, et le site ne propose l'APK qu'aux appareils ARM64. À rétablir avec une version x86_64. -->
+    <issue id="ChromeOsAbiSupport" severity="ignore" />
+</lint>
