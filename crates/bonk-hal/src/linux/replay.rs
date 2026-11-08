@@ -1,5 +1,3 @@
-//! Rejeu d'une capture : l'arborescence lue est reconstruite sous un dossier temporaire.
-
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};

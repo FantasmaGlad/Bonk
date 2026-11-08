@@ -1,13 +1,3 @@
-//! Windows : l'autorisation au moment d'écrire, par un helper élevé.
-//!
-//! Comme UDisks2 sous Linux et `authopen` sous macOS, le côté privilégié ne fait que donner accès au disque :
-//! Bonk reste sans droits, et les décodeurs d'images ne tournent jamais en administrateur. Le helper, lancé
-//! par l'invite UAC, verrouille les volumes, ouvre le disque et remet la poignée au client par
-//! `DuplicateHandle`. Il vit tant que le tube est ouvert : ses verrous tiennent pendant l'écriture.
-//!
-//! Le helper ne croit pas son client : il ré-énumère et refuse ce que le filtre interdit, quelles que
-//! soient les options, et ne parle qu'au processus nommé à son lancement.
-
 use std::ffi::c_void;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Write};
@@ -69,7 +59,6 @@ fn denied(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::PermissionDenied, message.into())
 }
 
-/// Lance le helper par l'invite UAC et attend qu'il se connecte.
 fn start() -> io::Result<Session> {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -227,8 +216,6 @@ pub(super) fn format(
     )?;
     Ok(())
 }
-
-// --- Côté élevé ---
 
 /// Le disque doit exister et ne pas être interdit, avec les options les plus larges : ce que le client a
 /// demandé n'est pas cru, mais il peut avoir admis un disque interne ou virtuel. Le disque système et

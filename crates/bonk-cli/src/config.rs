@@ -1,9 +1,3 @@
-//! Réglages persistants : `bonk config list|get|set|reset`.
-//!
-//! Priorité : option de la ligne de commande, puis variable `BONK_*`, puis fichier, puis valeur par
-//! défaut. `config list` montre la valeur effective et son origine, pour comprendre d'où vient un
-//! comportement. Le fichier est un petit JSON de chaînes, validées clé par clé à l'écriture.
-
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::{self, Write};

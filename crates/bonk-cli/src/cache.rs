@@ -1,6 +1,3 @@
-//! `bonk cache` : les images téléchargées restent pour éviter de les retélécharger ; rien ne les supprime sans
-//! qu'on le demande. Seul ce que Bonk a rangé (`images/<empreinte>/`) se liste et se vide.
-
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};

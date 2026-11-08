@@ -454,7 +454,6 @@ fn explain_donne_le_sens_d_un_code_et_refuse_un_code_inconnu() {
     assert!(err.trim_end().ends_with("[E0001]"), "{err}");
 }
 
-/// Lance une commande avec un fichier de configuration propre au test et des variables injectées.
 fn lancer_config(
     args: &[&str],
     file: &std::path::Path,

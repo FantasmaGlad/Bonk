@@ -1,5 +1,3 @@
-//! Écriture en cours et résultat.
-
 use super::*;
 
 pub(super) fn en_cours_d_ecriture() -> App {
@@ -45,7 +43,6 @@ fn le_resultat_reste_jusqu_a_la_fermeture() {
     assert!(matches!(app.write, WriteState::Finished { .. }));
 }
 
-/// « Fermer » ne rouvre pas un panneau d'écriture sur le disque qu'on vient d'écrire.
 #[test]
 fn fermer_le_resultat_ne_rouvre_pas_le_panneau() {
     let mut app = en_cours_d_ecriture();

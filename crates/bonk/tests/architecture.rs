@@ -1,6 +1,3 @@
-//! Les règles de dépendance du workspace, vérifiées plutôt que promises : une violation fait échouer les
-//! tests au lieu de s'installer sans bruit.
-
 use std::fs;
 use std::path::{Path, PathBuf};
 

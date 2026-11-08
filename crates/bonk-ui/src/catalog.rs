@@ -1,11 +1,8 @@
-//! Le menu des images : ce qu'on en retient pour l'afficher, quelle que soit l'interface.
-
 use std::path::PathBuf;
 
 use bonk_catalog::manifest::{CatalogReport, Channel, Image, ImageSource};
 use bonk_hal::Lang;
 
-/// Une version proposée d'un système.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Choice {
     /// Peut différer du système : Kubuntu est rangé sous Ubuntu.
@@ -152,7 +149,6 @@ pub fn writable<'a>(systems: &[&'a System]) -> Vec<&'a Choice> {
         .collect()
 }
 
-/// Le système et la version dont `url` est l'adresse.
 pub fn find_url<'a>(systems: &'a [System], url: &str) -> Option<(&'a System, &'a Choice)> {
     systems.iter().find_map(|system| {
         system
@@ -165,13 +161,11 @@ pub fn find_url<'a>(systems: &'a [System], url: &str) -> Option<(&'a System, &'a
     })
 }
 
-/// Libellé du choix « toutes les catégories » du filtre.
 #[must_use]
 pub fn all_categories(lang: Lang) -> &'static str {
     lang.pick("All categories", "Toutes les catégories")
 }
 
-/// Libellé du choix « tous les systèmes » du filtre.
 #[must_use]
 pub fn all_systems(lang: Lang) -> &'static str {
     lang.pick("All systems", "Tous les systèmes")

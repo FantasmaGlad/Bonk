@@ -1,11 +1,5 @@
-//! Parité fenêtre et ligne de commande : la fenêtre n'a aucun pouvoir que la CLI n'ait.
-//! Chaque commande équivalente qu'elle affiche, pour toute combinaison de réglages et de sélection,
-//! doit être acceptée par la CLI, et la cible d'`info` doit arriver intacte, même avec des caractères
-//! que le shell interpréterait.
-
 use bonk_gui::{ViewOptions, WriteView, equivalent_commands};
 
-/// Images saisies dans le champ de la fenêtre, y compris des chemins que le shell interpréterait.
 const IMAGES: [&str; 4] = [
     "/tmp/debian.iso",
     "/home/u/Mes images/ubuntu 24.04.img.xz",

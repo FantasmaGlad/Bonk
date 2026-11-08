@@ -1,4 +1,3 @@
-//! La fenêtre donne un titre français à chaque code d'erreur que connaît la ligne de commande.
 #![cfg(feature = "gui")]
 
 use std::process::Command;

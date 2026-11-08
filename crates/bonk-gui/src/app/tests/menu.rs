@@ -1,5 +1,3 @@
-//! Menu du catalogue, options, langue.
-
 use super::*;
 
 pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {

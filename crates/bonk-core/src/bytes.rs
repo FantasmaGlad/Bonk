@@ -1,5 +1,3 @@
-//! Écriture de champs petit-boutistes dans un secteur : le format de tout ce que Bonk écrit sur disque.
-
 pub(crate) fn put_u16(buf: &mut [u8], at: usize, value: u16) {
     buf[at..at + 2].copy_from_slice(&value.to_le_bytes());
 }

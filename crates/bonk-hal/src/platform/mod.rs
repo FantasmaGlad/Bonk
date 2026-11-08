@@ -1,9 +1,3 @@
-//! Ce que Bonk demande au système d'exploitation, derrière une seule interface.
-//!
-//! Tout le code propre à un OS passe par [`Platform`] ; le choix de l'implémentation n'a lieu qu'une
-//! fois, dans [`current`]. Ajouter un système revient à écrire une implémentation : les opérations et
-//! les interfaces n'ont rien à changer.
-
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]

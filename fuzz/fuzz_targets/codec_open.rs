@@ -1,5 +1,3 @@
-//! `codec::open` puis lecture : un fichier compressé corrompu ou hostile doit finir en erreur, sans
-//! panique, dans les trois décodeurs (gzip, xz, zstd).
 #![no_main]
 
 use std::io::{self, Cursor, Read};

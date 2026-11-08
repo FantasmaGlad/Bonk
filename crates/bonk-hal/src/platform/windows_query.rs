@@ -1,9 +1,3 @@
-//! Windows : collecte des faits sur les disques et les volumes, en lecture seule.
-//!
-//! Les poignées s'ouvrent sans droit d'accès : les requêtes de propriétés n'en demandent aucun, et la
-//! liste des disques n'exige donc pas d'être administrateur. L'interprétation vit dans
-//! [`crate::windows_facts`], testée sur tous les systèmes.
-
 use std::collections::HashMap;
 use std::ffi::{OsString, c_void};
 use std::io;
@@ -42,7 +36,6 @@ use crate::windows_facts::{RawDisk, RawExtent, RawPartition, RawVolume, WindowsF
 /// Au-delà, Windows ne numérote pas de disques en pratique ; les numéros peuvent avoir des trous.
 const MAX_DISKS: u32 = 128;
 
-/// Poignée refermée à la sortie de portée.
 pub(super) struct Handle(pub(super) HANDLE);
 
 impl Drop for Handle {
@@ -97,7 +90,6 @@ fn has_code(error: &io::Error, codes: &[u32]) -> bool {
         .is_some_and(|code| codes.contains(&code))
 }
 
-/// Requête sans entrée sur une poignée déjà ouverte.
 pub(super) fn ioctl_raw(handle: HANDLE, code: u32, capacity: usize) -> io::Result<Vec<u64>> {
     ioctl_on(handle, code, &[], capacity)
 }
@@ -106,7 +98,6 @@ fn ioctl(handle: &Handle, code: u32, input: &[u8], capacity: usize) -> io::Resul
     ioctl_on(handle.0, code, input, capacity)
 }
 
-/// Tampon aligné pour les structures de Windows, qui contiennent des entiers de 64 bits.
 fn ioctl_on(handle: HANDLE, code: u32, input: &[u8], capacity: usize) -> io::Result<Vec<u64>> {
     let mut size = capacity;
     loop {
@@ -158,7 +149,6 @@ fn guid_text(guid: &GUID) -> String {
     )
 }
 
-/// Partitions réelles du disque.
 fn layout(handle: &Handle) -> io::Result<Vec<RawPartition>> {
     let buffer = ioctl(handle, IOCTL_DISK_GET_DRIVE_LAYOUT_EX, &[], 16 * 1024)?;
     let info = buffer.as_ptr().cast::<DRIVE_LAYOUT_INFORMATION_EX>();

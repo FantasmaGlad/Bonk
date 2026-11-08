@@ -1,5 +1,3 @@
-//! Disques internes : `--force` exigé, jamais suffisant pour un disque système.
-
 use super::*;
 
 #[test]

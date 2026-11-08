@@ -1,8 +1,3 @@
-//! macOS : ouverture brute d'un disque entier, démontage, autorisation par `authopen`.
-//!
-//! L'accès passe par `/dev/rdiskN`, sans le tampon du système. Sans droits, `authopen` demande le mot de
-//! passe administrateur et remet le descripteur par une socket : Bonk reste sans privilège.
-
 use std::fs::{File, OpenOptions};
 use std::io::{self, IoSliceMut};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
@@ -51,7 +46,6 @@ fn has_access(raw: &str, access: Access) -> bool {
     unsafe { libc::access(name.as_ptr(), mode) == 0 }
 }
 
-/// Reçoit le descripteur envoyé par `authopen` en donnée de contrôle `SCM_RIGHTS`.
 fn receive_fd(socket: &UnixStream) -> io::Result<OwnedFd> {
     let mut byte = [0u8; 1];
     let mut slices = [IoSliceMut::new(&mut byte)];
@@ -148,7 +142,6 @@ pub(super) fn prepare(
     Ok(())
 }
 
-/// Disque entier ouvert en accès brut.
 pub(super) struct MacDisk {
     file: File,
     size: u64,
@@ -263,7 +256,6 @@ pub(super) fn format_exfat(partition: &Path, label: Option<&str>) -> Result<(), 
     ))))
 }
 
-/// `diskutil unmountDisk` démonte tous les volumes, ceux d'un conteneur APFS porté par ce disque compris.
 pub(super) fn unmount(disk: &Disk) -> Result<Vec<String>, OpenTargetError> {
     let output = Command::new("/usr/sbin/diskutil")
         .args(["unmountDisk", &disk.path])

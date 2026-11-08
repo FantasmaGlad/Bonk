@@ -1,5 +1,3 @@
-//! Ce que la fenêtre affiche, et captures.
-
 use super::*;
 
 pub(super) fn contient(app: &App, texte: &str) -> bool {

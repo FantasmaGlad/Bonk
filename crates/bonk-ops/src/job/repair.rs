@@ -1,5 +1,3 @@
-//! Réparer le GPT.
-
 use std::path::Path;
 
 use bonk_core::partition::inspect;

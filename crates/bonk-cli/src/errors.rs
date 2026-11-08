@@ -1,9 +1,3 @@
-//! Codes d'erreur stables et codes de sortie.
-//!
-//! Chaque erreur affichée se termine par son code entre crochets (`[E1003]`) : un outil le retrouve
-//! sans interpréter le texte, et `bonk explain <code>` en donne le sens, les causes probables et le
-//! remède. Les codes ne sont jamais réutilisés ni renumérotés.
-
 use std::fmt::Display;
 use std::io::{self, Write};
 

@@ -1,5 +1,3 @@
-//! `bonk debug filter` : le filtre de sécurité rejoué règle par règle.
-
 use std::io::{self, Write};
 
 use bonk_hal::{Disk, FilterOptions, evaluate_traced, state_label};

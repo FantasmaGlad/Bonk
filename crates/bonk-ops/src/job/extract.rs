@@ -1,8 +1,3 @@
-//! Clé d'installation Windows : l'ISO n'est pas écrite telle quelle, elle n'amorce pas depuis un disque. Ses
-//! fichiers sont copiés sur une partition FAT32 écrite ici ; un `install.wim` trop grand pour FAT32 est
-//! découpé en `.swm`, sans recompression. Le démarrage se fait en UEFI, par le chargeur de l'ISO, sur x86_64,
-//! x86 ou ARM64 selon les chargeurs qu'elle porte.
-
 use std::io::{self, Read};
 use std::path::Path;
 use std::time::Instant;

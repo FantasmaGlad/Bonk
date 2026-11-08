@@ -1,6 +1,3 @@
-//! Icône et informations de version de `bonk.exe`. Seule la chaîne MSVC est servie : c'est celle des binaires
-//! publiés, et le compilateur de ressources n'existe pas sur les autres hôtes.
-
 fn main() {
     println!("cargo:rerun-if-changed=assets/bonk.ico");
     println!("cargo:rerun-if-changed=build.rs");

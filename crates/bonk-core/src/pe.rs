@@ -1,6 +1,3 @@
-//! Lecture du chargeur UEFI d'une image : architecture et certificat qui l'a signé. Avec Secure Boot, c'est
-//! ce certificat qui décide si un PC démarre la clé. Le fichier vient de l'image : chaque position est bornée.
-
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

@@ -1,5 +1,3 @@
-//! Commande équivalente et journal.
-
 use super::*;
 
 #[test]

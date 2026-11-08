@@ -1,10 +1,3 @@
-//! Réparation du GPT : après l'écriture d'une image sur un support plus grand, l'en-tête de secours
-//! n'est plus à la fin du disque ; ou l'un des deux en-têtes est abîmé. Ce qui manque est reconstruit
-//! depuis l'en-tête valide, GUID du disque et partitions inchangés.
-//!
-//! Écrit sur le support : à n'appeler que sur une cible déjà autorisée (filtre de sécurité,
-//! confirmation) ou sur une image.
-
 use crate::bytes::{put_u32, put_u64};
 use std::fmt;
 use std::ops::Range;

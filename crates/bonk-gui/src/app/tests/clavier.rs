@@ -1,5 +1,3 @@
-//! Navigation au clavier.
-
 use super::*;
 
 pub(super) fn nav(app: &mut App, nav: Nav) {

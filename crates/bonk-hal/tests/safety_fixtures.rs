@@ -1,10 +1,3 @@
-//! Le filtre de sécurité face aux jeux d'énumération de `tests/fixtures/`.
-//!
-//! Chaque fichier décrit des disques et, pour chaque jeu de réglages, le verdict attendu de chacun
-//! : un disque sans verdict attendu fait échouer le test, pour qu'aucun cas ne soit ajouté sans être
-//! vérifié. Le verdict réel est comparé en JSON, donc ce test fige aussi le format des verdicts que
-//! rend `bonk list --json`.
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fs;
@@ -30,7 +23,6 @@ struct Scenario {
     name: String,
     #[serde(default)]
     options: FilterOptions,
-    /// Verdicts attendus, par identifiant de disque.
     expected: Option<BTreeMap<String, Value>>,
     /// Reprend les verdicts d'un autre jeu : les réglages ouverts ne doivent pas lever une exclusion.
     same_as: Option<String>,

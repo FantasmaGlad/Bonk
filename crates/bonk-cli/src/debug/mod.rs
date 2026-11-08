@@ -1,7 +1,3 @@
-//! Sous-commandes `bonk debug ...` : le bas niveau des disques, en lecture seule par construction.
-//! Aucune fonction de ce module n'écrit sur un disque ou une image : elles ne touchent que
-//! `BlockDevice::read_at` et des lectures de fichiers système.
-
 mod filter;
 mod hexdump;
 mod layout;

@@ -1,12 +1,9 @@
-//! Ce que rapporte une écriture, et la commande qui la lance sur un ordinateur.
-
 use serde_json::Value;
 
 use bonk_core::write::Phase;
 
 use crate::command::{ViewOptions, WriteView};
 
-/// Ce que la fenêtre apprend du processus d'écriture.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Event {
     /// Le processus est lancé (numéro de processus, pour l'annulation).
@@ -36,7 +33,6 @@ pub enum Outcome {
     },
 }
 
-/// Arguments de `bonk write` équivalents à ce que montre la fenêtre.
 pub fn write_args(
     disk_id: &str,
     write: WriteView<'_>,
@@ -65,7 +61,6 @@ pub fn write_args(
     args
 }
 
-/// Traduit une ligne de la sortie standard de `bonk write --progress json`.
 pub fn parse_line(line: &str) -> Option<Event> {
     let value: Value = serde_json::from_str(line).ok()?;
     match value["event"].as_str()? {

@@ -1,7 +1,3 @@
-//! Les opérations d'écriture sur un « disque » : tout le chemin réel (filtre, confirmation,
-//! démontage, revérification d'identité, ouverture, écriture, vérification) avec des dépendances
-//! injectées. Aucun vrai disque n'est ouvert : le périphérique est un tampon en mémoire.
-
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::cell::{Cell, RefCell};
@@ -98,7 +94,6 @@ impl BlockDevice for Logged {
     }
 }
 
-/// Les défaillances d'un vrai support, que la mémoire ne connaît pas.
 #[derive(Clone, Copy, Default)]
 struct Faults {
     /// Relectures fausses : support défectueux.
@@ -251,10 +246,8 @@ struct Scenario {
     faults: Faults,
     rescan_fails: bool,
     cancel: bool,
-    /// Annulation demandée pendant l'attente de l'autorisation.
     cancel_on_prepare: bool,
     seen_elevation: Rc<Cell<Option<Elevation>>>,
-    /// Appelé à la première énumération, entre l'ouverture de l'image et son contrôle.
     on_first_enumeration: Option<Rc<dyn Fn()>>,
     vars: Vec<(String, String)>,
     capabilities: Vec<Capability>,

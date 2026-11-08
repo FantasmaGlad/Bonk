@@ -1,7 +1,3 @@
-//! Écriture d'un arbre de fichiers sur un volume FAT32 neuf, d'un seul trait : chaque fichier reçoit des
-//! clusters contigus, sans gestion d'espace libre ni fragmentation. Le volume n'est jamais modifié ensuite.
-//! La date des entrées est fixe : rien ne dépend de l'horloge.
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{self, Read};
 
@@ -18,15 +14,12 @@ const ATTR_ARCHIVE: u8 = 0x20;
 const ATTR_LABEL: u8 = 0x08;
 const ATTR_LONG_NAME: u8 = 0x0F;
 const END_OF_CHAIN: u32 = 0x0FFF_FFFF;
-/// 1er janvier 1980, la plus ancienne date de FAT.
 const FIXED_DATE: u16 = 0x0021;
 const LONG_NAME_UNITS: usize = 13;
 const MAX_NAME_UNITS: usize = 255;
-/// Taille maximale d'un fichier sur FAT32.
 pub const MAX_FILE_BYTES: u64 = u32::MAX as u64;
 const IO_CHUNK: usize = 4 << 20;
 
-/// Un fichier à placer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewFile {
     pub path: Vec<String>,
@@ -55,7 +48,6 @@ enum ChildKind {
 /// Entrées d'un enfant : noms longs, nom court, rang dans son dossier.
 type Row = (Vec<[u8; ENTRY]>, [u8; 11], usize);
 
-/// Où tout va, calculé sans toucher au support.
 #[derive(Debug)]
 pub struct Layout {
     geometry: Geometry,
@@ -63,12 +55,10 @@ pub struct Layout {
     block: u64,
     files: Vec<Placed>,
     sizes: Vec<u64>,
-    /// Dossiers et leur contenu, racine comprise.
     directories: Vec<(u32, u32, Vec<u8>)>,
     used_clusters: u32,
 }
 
-/// Le nom court est-il valide tel quel ? Alors aucune entrée longue n'est nécessaire.
 fn is_plain_short(name: &str) -> bool {
     let (base, ext) = name.rsplit_once('.').unwrap_or((name, ""));
     let good = |part: &str, max: usize| {
@@ -178,7 +168,6 @@ fn short_entry(short: &[u8; 11], attributes: u8, cluster: u32, size: u32) -> [u8
     entry
 }
 
-/// Noms de `.` et `..`.
 const DOT: [u8; 11] = *b".          ";
 const DOT_DOT: [u8; 11] = *b"..         ";
 
@@ -234,7 +223,6 @@ fn collect_children(
     Ok(children)
 }
 
-/// Une première passe donne le nombre d'entrées de chaque dossier, donc ses clusters.
 fn encode_names(children: &Children) -> Result<Encoded, FormatError> {
     let mut encoded = Encoded::new();
     for (path, list) in children {
@@ -261,7 +249,6 @@ fn encode_names(children: &Children) -> Result<Encoded, FormatError> {
     Ok(encoded)
 }
 
-/// Le contenu de chaque dossier, une fois tout placé.
 fn directory_bytes(
     label: Option<&str>,
     files: &[NewFile],

@@ -1,5 +1,3 @@
-//! Lecture des fichiers d'empreintes publiés par les distributions (`SHA256SUMS`).
-
 /// Empreinte SHA-256 de `name` dans un fichier d'empreintes, en minuscules. Formats reconnus : celui de
 /// `sha256sum` (`hex  nom`, `hex *nom`, `./nom`) et le format BSD (`SHA256 (nom) = hex`). Une ligne d'un autre
 /// format est ignorée : ces fichiers portent parfois des commentaires ou une signature en clair.
@@ -22,7 +20,6 @@ fn parse_line(line: &str) -> Option<(&str, &str)> {
     Some((hex, entry.strip_prefix('*').unwrap_or(entry)))
 }
 
-/// Une empreinte SHA-256 écrite en hexadécimal.
 #[must_use]
 pub fn is_sha256(text: &str) -> bool {
     text.len() == 64 && text.bytes().all(|b| b.is_ascii_hexdigit())

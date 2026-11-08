@@ -1,5 +1,3 @@
-//! Méthodes immédiates : elles répondent sans lancer d'opération longue.
-
 use bonk_hal::{Disk, FilterOptions};
 use serde_json::{Value, json};
 

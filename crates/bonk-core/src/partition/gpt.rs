@@ -1,5 +1,3 @@
-//! GPT : en-têtes principal et de secours, table des partitions, et leurs constats.
-
 use crate::block::{BlockDevice, BlockError};
 
 use super::{

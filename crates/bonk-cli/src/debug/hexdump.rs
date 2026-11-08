@@ -1,5 +1,3 @@
-//! `bonk debug hexdump` : octets bruts d'une image ou d'un disque, par lignes de 16.
-
 use std::io::{self, Write};
 
 use bonk_core::partition::read_range;

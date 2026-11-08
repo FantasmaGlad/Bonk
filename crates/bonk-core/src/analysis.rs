@@ -1,10 +1,3 @@
-//! Analyse d'une image avant écriture : que deviendra une clé écrite octet pour octet ?
-//!
-//! Écrire et relire ne dit rien de cela : la relecture compare le support à l'image, pas l'image à ce
-//! qu'elle devrait être. Une ISO non hybride ou un téléchargement coupé donneraient une clé « vérifiée »
-//! qui ne démarre pas. L'analyse lit le début de l'image, ne dépend ni du nom du fichier ni de la
-//! distribution, et juge uniquement ce qui s'y trouve.
-
 use schemars::JsonSchema;
 use serde::Serialize;
 

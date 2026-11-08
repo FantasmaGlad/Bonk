@@ -1,5 +1,3 @@
-//! Enveloppes du protocole : requête, réponse, erreur, et écriture d'un message par ligne.
-
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 

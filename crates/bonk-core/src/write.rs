@@ -1,8 +1,3 @@
-//! Écriture brute d'une image sur un [`BlockDevice`] et vérification par relecture : l'empreinte
-//! SHA-256 de l'image est calculée pendant l'écriture, puis comparée à celle du support relu. Rien
-//! n'est écrit au-delà de la fin du périphérique, et la main revient à chaque bloc pour la
-//! progression et l'annulation.
-
 use std::fmt;
 use std::io::{self, Read};
 use std::ops::Range;

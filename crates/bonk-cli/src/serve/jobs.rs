@@ -1,5 +1,3 @@
-//! Opérations longues et surveillance de la liste des disques, chacune sur son fil.
-
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -55,9 +53,7 @@ pub(super) fn progress_event(p: &Progress, request: &Value) -> Value {
     value
 }
 
-/// Une opération longue validée, prête à partir sur son fil.
 pub(super) enum Task {
-    /// L'écriture, avec le fichier d'empreintes et le dossier de cache d'une image à télécharger.
     Write(Box<WriteJob>, Option<String>, Option<PathBuf>),
     Verify(VerifyJob),
     Repair(RepairJob),

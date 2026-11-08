@@ -1,6 +1,3 @@
-//! Erreurs de `bonk write` dans la fenêtre : le texte vient de la ligne de commande, toujours en anglais.
-//! En français, le titre de son code le précède ; le détail reste tel quel, utile au support.
-
 use bonk_hal::Lang;
 
 const FRENCH_TITLES: &[(&str, &str)] = &[

@@ -1,6 +1,3 @@
-//! Tests de bout en bout du binaire `bonk`, lancé tel que Cargo le construit : options
-//! `--version` et `--help`, codes de sortie d'usage, `list` et lancement sans argument.
-
 use std::process::Command;
 
 mod common;
@@ -137,7 +134,6 @@ fn list_hors_linux_echoue_avec_un_message_clair() -> Resultat {
     Ok(())
 }
 
-/// `debug sources` rend un rapport JSON versionné avec toutes les lectures, ou échoue proprement.
 #[test]
 fn debug_sources_json_reussit_ou_echoue_proprement() -> Resultat {
     let sortie = bonk().args(["debug", "sources", "--json"]).output()?;

@@ -1,5 +1,3 @@
-//! Arguments communs de `bonk write`, `bonk verify` et `bonk repair-gpt`.
-
 use std::path::PathBuf;
 
 use bonk_hal::{Elevation, FilterOptions};

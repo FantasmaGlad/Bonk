@@ -1,6 +1,3 @@
-//! Lecture des sources système : chaque lecture est journalisée au niveau `trace` et, pour
-//! `bonk debug sources`, enregistrée avec son contenu.
-
 use std::cell::RefCell;
 use std::fs;
 use std::io;
@@ -12,7 +9,6 @@ use crate::enumerate::{EnumerateError, SourceRead};
 
 use super::{LinuxRoots, enumerate};
 
-/// Taille maximale du contenu conservé par lecture enregistrée.
 pub(super) const CONTENT_LIMIT: usize = 8 * 1024;
 
 thread_local! {

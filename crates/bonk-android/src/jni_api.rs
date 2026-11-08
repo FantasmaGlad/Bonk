@@ -1,6 +1,3 @@
-//! Méthodes natives de `app.bonkos.bonk.Native`. Une erreur revient en JSON, jamais en exception : l'écran
-//! l'affiche telle quelle.
-
 use std::fs::File;
 use std::os::fd::{FromRawFd, RawFd};
 

@@ -1,7 +1,3 @@
-//! Source de `bonk write` : une adresse devient un fichier du cache, dont l'empreinte est connue avant le
-//! premier octet écrit sur le support. La suite ne distingue plus un téléchargement d'un fichier local :
-//! même contrôle, même écriture.
-
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -50,7 +46,6 @@ fn download_error(failure: &DownloadError) -> JobError {
     error(code, failure)
 }
 
-/// Lit l'empreinte de l'image `name` dans un fichier d'empreintes, local ou distant.
 fn sha256_from_file(location: &str, name: &str) -> Result<String, JobError> {
     let text = if bonk_catalog::is_url(location) {
         bonk_catalog::fetch_text(location).map_err(|failure| download_error(&failure))?

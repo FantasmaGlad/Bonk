@@ -1,5 +1,3 @@
-//! Base udev : signatures, numéros de série, types de partition et liens `by-id`.
-
 use std::collections::BTreeMap;
 use std::io;
 

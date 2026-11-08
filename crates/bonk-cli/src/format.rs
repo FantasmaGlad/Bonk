@@ -1,5 +1,3 @@
-//! `bonk format` et `bonk capabilities` : présentation ; la logique est dans `bonk_ops::job`.
-
 use std::io::{self, Write};
 
 use bonk_core::format::Filesystem;
