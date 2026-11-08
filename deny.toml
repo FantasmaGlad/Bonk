@@ -1,18 +1,36 @@
 # Contrôle des dépendances par cargo-deny : licences, vulnérabilités connues, sources.
 # Lancé par le workflow « dependances » (changements de dépendances, puis chaque semaine) ; aussi à la main avec `cargo deny check`.
 
+# Seules les cibles que Bonk construit sont analysées : une dépendance propre à une autre plateforme
+# (wasm32 par exemple) n'entre dans aucun binaire. Une cible ajoutée aux workflows s'ajoute ici.
+[graph]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "i686-unknown-linux-gnu",
+    "x86_64-unknown-linux-musl",
+    "aarch64-unknown-linux-musl",
+    "x86_64-pc-windows-msvc",
+    "aarch64-pc-windows-msvc",
+    "i686-pc-windows-msvc",
+    "x86_64-pc-windows-gnu",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+    "aarch64-linux-android",
+    "x86_64-linux-android",
+]
+
 [advisories]
 # Une vulnérabilité connue fait toujours échouer le contrôle ; les paquets non maintenus
 # et les versions retirées du registre sont signalés par défaut.
-# Exceptions : trois paquets déclarés non maintenus par leur auteur (aucune faille connue), tirés par
-# Iced 0.14 via wgpu, cosmic-text et wasmtimer, et un avis « unsound » de lru hors de portée ici ; aucun n'a de version
+# Exceptions : deux paquets déclarés non maintenus par leur auteur (aucune faille connue), tirés par
+# Iced 0.14 via wgpu et cosmic-text, et un avis « unsound » de lru hors de portée ici ; aucun n'a de version
 # corrigée à adopter. Chaque exception porte sa raison et son critère de retrait ; à relire à chaque montée de
 # version d'Iced.
 ignore = [
     { id = "RUSTSEC-2026-0253", reason = "lru unsound dans LruCache::pop si le Drop d'une clé panique ; cryoglyph 0.1.0 (Iced 0.14) exige lru 0.16, corrigé en 0.18.2, et n'appelle que pop_lru avec une clé Copy, donc sans Drop. Retrait : une version de cryoglyph qui tire lru 0.18.2 ou plus" },
     { id = "RUSTSEC-2024-0436", reason = "paste non maintenu ; dépendance de metal, via wgpu-hal (Iced 0.14). Retrait : une version d'Iced ou de wgpu qui ne tire plus paste" },
     { id = "RUSTSEC-2026-0192", reason = "ttf-parser non maintenu ; dépendance de la pile de texte d'Iced 0.14. Retrait : une version d'Iced ou de cosmic-text qui ne tire plus ttf-parser" },
-    { id = "RUSTSEC-2026-0441", reason = "pin-utils non maintenu ; tiré seulement par wasmtimer, dépendance wasm32 d'iced_futures 0.14, jamais construite pour Bonk. Retrait : une version d'Iced ou de wasmtimer qui ne tire plus pin-utils" },
 ]
 # Défaut : seuls les avis « unsound » sur nos propres crates sont signalés. Scorecard les voit aussi sur les
 # dépendances transitives : ce contrôle doit au moins en dire autant.
