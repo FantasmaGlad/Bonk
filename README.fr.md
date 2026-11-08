@@ -1,6 +1,10 @@
 # Bonk
 
 <p align="center">
+  <img src="crates/bonk/assets/icons/256x256/bonk.png" width="160" height="160" alt="Bonk">
+</p>
+
+<p align="center">
   <b>Écrit des images amorçables sur clé USB. Un seul binaire, ligne de commande et fenêtre, aucune télémétrie.</b>
 </p>
 
