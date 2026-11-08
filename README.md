@@ -1,6 +1,10 @@
 # Bonk
 
 <p align="center">
+  <img src="crates/bonk/assets/icons/256x256/bonk.png" width="160" height="160" alt="Bonk">
+</p>
+
+<p align="center">
   <b>Write bootable images to USB drives. One binary, command line and window, zero telemetry.</b>
 </p>
 
