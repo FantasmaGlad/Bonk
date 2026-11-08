@@ -3,3 +3,5 @@ android/gradlew text eol=lf
 android/build-native.sh text eol=lf
 android/gradlew.bat text eol=crlf
 *.jar binary
+crates/bonk-core/src/boot/*.bin binary
+boot/* text eol=lf

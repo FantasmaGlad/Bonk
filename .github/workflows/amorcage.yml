@@ -1,0 +1,53 @@
+# Code d'amorçage BIOS : les binaires versionnés sont-ils exactement ceux que donnent les sources, et le
+# MBR démarre-t-il sous QEMU (SeaBIOS) ? Assemblage par la seule chaîne Rust, aucun outil tiers.
+name: amorcage
+
+on:
+  pull_request:
+    paths:
+      - "boot/**"
+      - "crates/bonk-core/src/boot/**"
+      - "rust-toolchain.toml"
+      - ".github/scripts/amorcage-qemu.py"
+      - ".github/workflows/amorcage.yml"
+  push:
+    branches: [main]
+    paths:
+      - "boot/**"
+      - "crates/bonk-core/src/boot/**"
+      - "rust-toolchain.toml"
+      - ".github/scripts/amorcage-qemu.py"
+      - ".github/workflows/amorcage.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  amorcage:
+    name: assemblage et démarrage BIOS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Installer la chaîne Rust du dépôt
+        run: rustup toolchain install
+      - name: Réassembler et comparer aux binaires versionnés
+        run: |
+          boot/assemble.sh
+          git diff --exit-code crates/bonk-core/src/boot/
+      - name: QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-system-x86
+      - name: Démarrer le MBR sous SeaBIOS
+        run: |
+          python3 .github/scripts/amorcage-qemu.py crates/bonk-core/src/boot/mbr.bin \
+            "Bonk: this drive has no BIOS boot code"
