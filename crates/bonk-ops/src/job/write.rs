@@ -183,7 +183,7 @@ fn judge_image(report: &ImageReport, mode: WriteMode) -> Result<(), JobError> {
         None
     } else if report.kind == ImageKind::PlainIso {
         let hint = if report.udf {
-            "; Bonk does not recognize a Windows 10 or 11 x86_64 installation in it"
+            "; Bonk does not recognize a Windows installation in it"
         } else {
             ""
         };
@@ -330,7 +330,7 @@ fn windows_image(
     if found.is_none() && mode == WriteMode::Extract {
         return Err(fail(
             Code::ImageNotBootable,
-            "this is not a Windows 10 or 11 x86_64 installation ISO (UDF, sources/install.wim, efi/boot/bootx64.efi)",
+            "this is not a Windows installation ISO (UDF, sources/install.wim or install.esd, efi/boot/bootx64.efi, bootaa64.efi or bootia32.efi)",
         ));
     }
     Ok(found)

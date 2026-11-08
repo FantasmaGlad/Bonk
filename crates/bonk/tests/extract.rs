@@ -38,7 +38,7 @@ fn bonk(args: &[&str]) -> Output {
         .expect("lancement de bonk")
 }
 
-/// Chargeur x86_64 minimal, sans signature.
+/// Chargeur UEFI minimal pour la puce donnée, sans signature.
 fn loader(machine: u16) -> Vec<u8> {
     let mut file = vec![0u8; 1024];
     file[..2].copy_from_slice(b"MZ");
@@ -50,9 +50,13 @@ fn loader(machine: u16) -> Vec<u8> {
 }
 
 fn windows_iso(machine: u16) -> Vec<u8> {
+    windows_iso_with("efi/boot/bootx64.efi", machine)
+}
+
+fn windows_iso_with(loader_path: &str, machine: u16) -> Vec<u8> {
     let content: Vec<u8> = (0..200_000u32).map(|i| i as u8).collect();
     build(&[
-        ("efi/boot/bootx64.efi", &loader(machine)),
+        (loader_path, &loader(machine)),
         ("sources/install.wim", &content),
         ("Un nom assez long pour une entree longue.txt", b"contenu"),
         ("setup.exe", b"MZ"),
@@ -115,6 +119,10 @@ fn auto_reconnait_une_iso_windows_et_ecrit_un_volume_valide() {
     let value: serde_json::Value = serde_json::from_str(&text).expect("JSON");
     assert_eq!(value["verify"]["files"], 4);
     assert_eq!(value["extraction"]["signer"], "unsigned");
+    assert_eq!(
+        value["extraction"]["architectures"],
+        serde_json::json!(["x86_64"])
+    );
     assert!(value["gpt_repair"].is_null());
 
     let volume = volume_of(&d, &cle);
@@ -131,12 +139,10 @@ fn auto_reconnait_une_iso_windows_et_ecrit_un_volume_valide() {
     assert!(listing.contains("files"), "{listing}");
 }
 
-#[test]
-fn une_iso_d_une_autre_architecture_reste_refusee() {
-    let d = Dossier::new("arm");
-    let (iso, cle) = (d.file("arm.iso"), d.file("cle.img"));
-    fs::write(&iso, windows_iso(0xAA64)).expect("écriture de l'ISO");
-    let auto = bonk(&[
+fn plan(d: &Dossier, iso_bytes: Vec<u8>) -> Output {
+    let (iso, cle) = (d.file("win.iso"), d.file("cle.img"));
+    fs::write(&iso, iso_bytes).expect("écriture de l'ISO");
+    bonk(&[
         "write",
         "--simulate",
         &cle,
@@ -144,12 +150,38 @@ fn une_iso_d_une_autre_architecture_reste_refusee() {
         "--size",
         "134217728",
         "--dry-run",
-    ]);
-    assert_eq!(auto.status.code(), Some(6));
+        "--json",
+    ])
+}
+
+#[test]
+fn une_iso_arm64_ou_x86_est_ecrite_avec_son_architecture() {
+    for (label, path, machine, arch) in [
+        ("arm64", "efi/boot/bootaa64.efi", 0xAA64, "arm64"),
+        ("x86", "efi/boot/bootia32.efi", 0x14C, "x86"),
+    ] {
+        let d = Dossier::new(label);
+        let out = plan(&d, windows_iso_with(path, machine));
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(out.status.success(), "{label}: {text}");
+        let value: serde_json::Value = serde_json::from_str(&text).expect("JSON");
+        assert_eq!(
+            value["extraction"]["architectures"],
+            serde_json::json!([arch]),
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn un_chargeur_qui_ment_sur_sa_puce_reste_refuse() {
+    let d = Dossier::new("ment");
+    let iso = d.file("ment.iso");
+    fs::write(&iso, windows_iso_with("efi/boot/bootaa64.efi", 0x8664)).expect("écriture");
     let forced = bonk(&[
         "write",
         "--simulate",
-        &cle,
+        &d.file("cle.img"),
         &iso,
         "--size",
         "134217728",
