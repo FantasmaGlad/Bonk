@@ -1,5 +1,3 @@
-//! Effet des messages sur l'état de la fenêtre, et suivi du processus d'écriture.
-
 use std::time::Instant;
 
 use bonk_core::write::Phase;
@@ -315,7 +313,6 @@ impl Model {
         }
     }
 
-    /// Lance `bonk write` dans un processus séparé, une fois le délai de réflexion écoulé.
     pub fn start_write(&mut self, internal_confirmed: bool) -> Effects {
         self.focus = Some(Focus::Action);
         let WriteState::Draft {

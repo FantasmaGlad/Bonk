@@ -1,5 +1,3 @@
-//! `bonk repair-gpt`.
-
 use std::io::Write;
 
 use super::args::*;

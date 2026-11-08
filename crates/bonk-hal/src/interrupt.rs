@@ -1,12 +1,3 @@
-//! Demande d'annulation par Ctrl+C ou SIGTERM.
-//!
-//! Le gestionnaire de signal ne fait que lever un drapeau atomique, seule opération permise dans un
-//! gestionnaire de signal. Le moteur d'écriture le consulte entre deux blocs : il n'est jamais
-//! interrompu au milieu d'un bloc.
-//!
-//! Windows n'a pas de signal à envoyer à un autre processus sans console commune : la fenêtre, sans
-//! console, arrête son sous-processus par un événement nommé d'après le numéro de celui-ci.
-
 use std::sync::atomic::{AtomicBool, Ordering};
 
 static REQUESTED: AtomicBool = AtomicBool::new(false);
@@ -118,7 +109,6 @@ pub fn stop_process(pid: u32) -> std::io::Result<()> {
     }
 }
 
-/// Une annulation a-t-elle été demandée depuis [`install`] ?
 #[must_use]
 pub fn requested() -> bool {
     #[cfg(windows)]

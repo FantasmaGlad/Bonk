@@ -1,8 +1,3 @@
-//! Écriture d'un système de fichiers FAT32 vide (spécification Microsoft « FAT32 File System », fatgen103).
-//!
-//! Écriture maison plutôt que `fatfs` : un volume vide ne demande que quelques structures fixes, et
-//! `fatfs` ne connaît pas les accès alignés qu'impose `BlockDevice`.
-
 use crate::bytes::{put_u16, put_u32};
 use schemars::JsonSchema;
 use serde::Serialize;

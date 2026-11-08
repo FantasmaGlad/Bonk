@@ -1,6 +1,3 @@
-//! Sous-commande `bonk info <disque>` : le détail d'un disque (série, nature, partitions, étiquettes,
-//! montages), comme la fenêtre le montre au clic sur un disque.
-
 use std::io::{self, Write};
 
 use bonk_hal::{Disk, FilterOptions, bus_label, evaluate, format_size, kind_label, state_label};

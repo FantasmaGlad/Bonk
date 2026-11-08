@@ -1,7 +1,3 @@
-//! Découpage d'un fichier WIM en morceaux `.swm`, sans recompression : FAT32 ne garde pas un fichier de
-//! 4 Gio. Chaque morceau a son en-tête et sa table ; les ressources compressées sont recopiées telles
-//! quelles, et une ressource n'est jamais répartie entre deux morceaux (format WIM).
-
 use std::fmt;
 
 const HEADER_LEN: usize = 208;
@@ -70,7 +66,6 @@ impl Segment {
     }
 }
 
-/// Emplacement d'une ressource, tel que l'écrit le format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Resource {
     stored: u64,

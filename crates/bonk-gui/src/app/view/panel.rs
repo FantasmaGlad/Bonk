@@ -1,5 +1,3 @@
-//! Le panneau d'écriture : saisie, progression, résultat.
-
 use std::time::Instant;
 
 use bonk_hal::Disk;
@@ -135,7 +133,6 @@ impl App {
             .into()
     }
 
-    /// L'image manuelle et les options, repliées tant qu'on choisit dans le catalogue.
     fn manual_options<'a>(
         &'a self,
         image: &'a str,

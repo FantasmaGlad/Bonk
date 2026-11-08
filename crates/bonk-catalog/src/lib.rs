@@ -1,6 +1,3 @@
-//! Obtenir une image depuis le réseau : téléchargement reprenable, fichiers d'empreintes, manifeste signé.
-//! Ne dépend d'aucun autre crate du workspace.
-
 mod download;
 pub mod manifest;
 mod sums;

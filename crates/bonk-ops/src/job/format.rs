@@ -1,9 +1,3 @@
-//! Formater un support : une table, une partition, un système de fichiers.
-//!
-//! Mêmes garde-fous que l'écriture : filtre, identité revérifiée, démontage, `O_EXCL`, `yes`, `force` pour
-//! un disque interne. FAT32 est écrit ici et relu ; exFAT, NTFS et ext4 passent par l'hôte une fois la
-//! table écrite et la partition apparue.
-
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -182,7 +176,6 @@ fn wait_for_filesystem(id: &str, fs: Filesystem, deps: &Deps<'_>) -> Result<(), 
     ))
 }
 
-/// Écrit la table et, pour FAT32, le système de fichiers, puis relit ce qui a été écrit.
 fn write_volume(
     device: &mut dyn BlockDevice,
     kind: TableKind,
@@ -227,7 +220,6 @@ fn write_volume(
     Ok((partition, cluster_bytes))
 }
 
-/// Le disque formaté, tel que le système le désigne.
 struct HostDisk<'a> {
     identity: &'a TargetIdentity,
     path: &'a str,

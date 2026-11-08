@@ -1,5 +1,3 @@
-//! Points de montage (`/proc/self/mountinfo`) et espaces d'échange actifs (`/proc/swaps`).
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 

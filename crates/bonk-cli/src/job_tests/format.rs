@@ -1,8 +1,5 @@
-//! Formatage : garde-fous, relecture, et passage de relais aux outils de l'hôte.
-
 use super::*;
 
-/// Taille de la partition d'un GPT sur le disque simulé.
 fn new_partition_bytes() -> u64 {
     let plan = bonk_core::format::table::plan(
         DISK_SIZE as u64,

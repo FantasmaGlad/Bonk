@@ -1,5 +1,3 @@
-//! MBR : la table du premier secteur et ses constats.
-
 use super::{MBR_PROTECTIVE, Mbr, MbrEntry, Severity, u32_le};
 
 pub(super) fn parse_mbr(sector: &[u8]) -> Option<Mbr> {

@@ -1,8 +1,3 @@
-//! Commande équivalente d'une vue de la fenêtre : la fenêtre n'ayant aucun pouvoir que la
-//! ligne de commande n'ait, chaque vue se traduit en commandes exactes. Le binaire vérifie par un test
-//! que la CLI accepte bien celles que la fenêtre affiche.
-
-/// Réglages de la fenêtre qui changent ce qu'elle montre.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ViewOptions {
     pub show_internal: bool,
@@ -10,7 +5,6 @@ pub struct ViewOptions {
     pub show_all: bool,
 }
 
-/// Ce que le panneau d'écriture a de saisi.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct WriteView<'a> {
     pub image: &'a str,
@@ -30,7 +24,6 @@ impl<'a> WriteView<'a> {
         }
     }
 
-    /// Options de `bonk write` pour ce qui est saisi, en plus de l'image.
     #[must_use]
     pub fn flags(&self) -> Vec<String> {
         let mut flags = Vec::new();

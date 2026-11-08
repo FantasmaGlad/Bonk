@@ -1,9 +1,3 @@
-//! Cœur pur de Bonk : tables de partitions, formatage FAT32, écriture brute, décompression,
-//! vérification, réparation du GPT et analyse d'image.
-//!
-//! Aucune entrée-sortie système, aucune API d'OS, aucun autre crate du workspace : tout se teste sur
-//! des fichiers image, sans matériel ni privilèges.
-
 pub mod analysis;
 pub mod block;
 pub mod boot;

@@ -1,5 +1,3 @@
-//! Les phrases que toutes les interfaces affichent : une seule rédaction, en deux langues.
-
 use std::time::Duration;
 
 use bonk_core::write::Phase;
@@ -52,7 +50,6 @@ pub fn step(lang: Lang, phase: Phase) -> &'static str {
     }
 }
 
-/// La ligne de progression et la part accomplie, de 0 à 1.
 #[must_use]
 pub fn progress(
     lang: Lang,
@@ -79,7 +76,6 @@ pub fn progress(
     (line, fraction)
 }
 
-/// Le résultat d'une écriture, en toutes lettres.
 #[must_use]
 pub fn outcome(lang: Lang, outcome: &Outcome) -> String {
     match outcome {
@@ -119,7 +115,6 @@ pub fn outcome(lang: Lang, outcome: &Outcome) -> String {
     }
 }
 
-/// Ce que le certificat du chargeur d'une clé Windows implique au démarrage, dans la langue de l'écran.
 fn secure_boot_text(lang: Lang, signer: &bonk_core::pe::Signer) -> String {
     use bonk_core::pe::{PCA_2011, Signer, UEFI_CA_2023};
     let sentence = match (signer, lang) {
@@ -229,7 +224,6 @@ mod tests {
         assert!(fr.contains("[E4001]"), "{fr}");
     }
 
-    /// Le signataire se lit tel que `bonk write` l'écrit dans son résultat JSON.
     #[test]
     fn le_signataire_se_lit_dans_le_resultat_de_bonk_write() {
         for signer in [

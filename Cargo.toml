@@ -5,8 +5,7 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.0.5"
 edition = "2024"
-# Plancher imposé par zbus 6 (Iced 0.14 demande 1.88) ; le job « msrv » de la CI le vérifie à chaque changement
-# du code.
+# Plancher imposé par zbus 6.
 rust-version = "1.89"
 license = "MIT"
 repository = "https://github.com/FantasmaGlad/Bonk"
@@ -25,44 +24,28 @@ bonk-android = { path = "crates/bonk-android" }
 clap = { version = "4.6", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-# Façade de journal : nos crates, Iced, wgpu et winit émettent par elle ; `kv` pour les champs structurés, `std` pour installer le puits.
+# `kv` pour les champs structurés, `std` pour installer le puits.
 log = { version = "0.4", features = ["kv", "std"] }
-# Rendu wgpu avec repli logiciel tiny-skia obligatoire ; `linux-theme-detection` est écarté :
-# le thème de Bonk est fixe (charte monochrome), la détection ne ferait qu'ajouter des dépendances.
-# `smol` plutôt que `thread-pool` : seul un exécuteur (tokio ou smol) fournit `iced::time::every`, utilisé pour
-# l'actualisation automatique de la liste des disques ; smol est le plus léger des deux.
-# PNG seul : les logos du catalogue. Le moteur SVG d'Iced tirerait rustybuzz, non maintenu.
+# `smol` : seul un exécuteur fournit `iced::time::every`. PNG seul : le SVG tirerait rustybuzz, non maintenu.
 image = { version = "0.25", default-features = false, features = ["png"] }
 iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia", "crisp", "web-colors", "smol", "x11", "wayland", "image-without-codecs"] }
 iced_test = "0.14"
-# Sélecteur de fichier du système : portail du bureau sous Linux (libdbus chargée à l'exécution, repli
-# `zenity`), dialogue natif sous Windows et macOS.
 rfd = "0.17"
-# Téléchargement HTTPS sans OpenSSL ni racines embarquées : certificats du système par le vérificateur de
-# la plateforme, `ring` choisi explicitement parce que l'option `rustls` d'ureq tirerait aussi `webpki-roots`.
+# `ring` choisi à la main : l'option `rustls` d'ureq tirerait aussi `webpki-roots`.
 ureq = { version = "3", default-features = false, features = ["rustls-no-provider", "platform-verifier", "socks-proxy"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
-# API de Windows que std n'expose pas : console et disques.
 windows-sys = "0.61"
-# Icône et informations de version de bonk.exe, compilées à la construction.
 winresource = "0.1"
-# Schémas JSON générés depuis les types sérialisés (`bonk schema`) : ils ne peuvent pas diverger des sorties.
 schemars = "1"
-# Complétions de shell générées depuis la définition clap (`bonk completions`).
 clap_complete = "4"
-# Empreinte SHA-256 de l'image écrite et relue.
 sha2 = "0.11"
-# Décompression à la volée en Rust pur : rien à installer, pas de bibliothèque C à lier.
 flate2 = "1"
-# Service du système pour ouvrir un disque sans droits d'administrateur.
 zbus = "6"
-# Constantes d'ouverture des périphériques (O_EXCL : refuse un disque déjà utilisé).
 libc = "0.2"
 lzma-rust2 = { version = "0.24", default-features = false, features = ["xz", "std"] }
 ruzstd = "0.9"
 
-# `warn` plutôt que `deny` : la validation passe `-D warnings` à clippy, donc ces lints
-# empêchent de terminer un travail tout en restant tolérables pendant l'écriture.
+# `warn` : la validation passe `-D warnings`, donc ces lints bloquent la fin d'un travail, pas son écriture.
 [workspace.lints.clippy]
 unwrap_used = "warn"
 expect_used = "warn"

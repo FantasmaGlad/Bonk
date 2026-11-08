@@ -1,5 +1,3 @@
-//! Écriture d'une table MBR ou GPT à une seule partition, alignée sur 1 Mio.
-
 use crate::bytes::{put_u32, put_u64};
 use schemars::JsonSchema;
 use serde::Serialize;

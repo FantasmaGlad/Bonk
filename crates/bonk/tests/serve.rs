@@ -1,6 +1,3 @@
-//! Le service headless `bonk serve`, par le vrai binaire et de vrais tubes : un client écrit des
-//! requêtes JSON sur l'entrée standard et lit les réponses et les événements sur la sortie.
-
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};

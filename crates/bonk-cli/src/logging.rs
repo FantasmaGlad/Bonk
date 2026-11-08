@@ -1,9 +1,3 @@
-//! Journal de Bonk : options globales, filtre par composant, formats texte et JSON.
-//!
-//! Tout le code émet par la façade `log` : nos crates, mais aussi Iced, wgpu et winit, ce qui donne le
-//! moteur de rendu retenu et les erreurs de pilote dans le même flux. Seul ce module sait où va le
-//! journal. Il est local : rien n'est jamais envoyé.
-
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::fs::{File, OpenOptions};

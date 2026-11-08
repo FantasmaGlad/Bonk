@@ -1,6 +1,3 @@
-//! L'écran de l'application : le modèle commun à toutes les interfaces, vu depuis Kotlin. Un message entre en
-//! JSON, l'état à dessiner et les effets à accomplir en sortent. Kotlin dessine, il ne décide rien.
-
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, Mutex, MutexGuard, PoisonError};
@@ -16,7 +13,6 @@ use bonk_ui::text;
 use serde_json::{Value, json};
 
 pub(crate) static CANCEL: AtomicBool = AtomicBool::new(false);
-/// Ce que rapporte l'écriture, en attendant le prochain passage de l'écran.
 pub(crate) static EVENTS: Mutex<VecDeque<Event>> = Mutex::new(VecDeque::new());
 /// Une panique en tenant un verrou l'empoisonne : refuser ensuite tout accès laisserait l'écran mort jusqu'au
 /// redémarrage de l'application. L'état est repris tel qu'il était ; une écriture en cours a ses propres
@@ -387,7 +383,6 @@ fn panel_state(model: &Model) -> Value {
     }
 }
 
-/// Tout ce que l'écran affiche.
 #[must_use]
 pub fn state(model: &Model) -> Value {
     let lang = model.lang;
@@ -756,7 +751,6 @@ mod tests {
         assert_eq!(*lock(&etat), 1);
     }
 
-    /// L'application lit ses propres textes dans la langue choisie dans Bonk, pas dans celle du téléphone.
     #[test]
     fn l_etat_dit_la_langue_choisie() {
         let mut model = loaded();

@@ -1,5 +1,3 @@
-//! Exécution des commandes, une fonction par famille : énumération, sortie et code de sortie.
-
 use std::io::{self, Write};
 use std::sync::Arc;
 

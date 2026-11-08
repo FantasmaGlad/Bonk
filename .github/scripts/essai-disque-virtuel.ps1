@@ -1,4 +1,3 @@
-# Écrit, vérifie et formate un VHD attaché ; le disque système doit rester refusé.
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 cargo build -p bonk --locked
@@ -28,7 +27,6 @@ try {
     & $bonk verify $virtuel[0].id $image --allow-virtual
     if ($LASTEXITCODE -ne 0) { throw "verify : $LASTEXITCODE" }
 
-    # Même parcours par le helper élevé : poignée reçue, verrous tenus par lui.
     $env:BONK_WINDOWS_HELPER = 'always'
     & $bonk write $virtuel[0].id $image --allow-virtual --mode raw --yes
     if ($LASTEXITCODE -ne 0) { throw "write par le helper : $LASTEXITCODE" }
@@ -36,12 +34,10 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "verify par le helper : $LASTEXITCODE" }
     & $bonk write $systeme[0].id $image --allow-virtual --mode raw --yes
     if ($LASTEXITCODE -ne 3) { throw "disque système : code $LASTEXITCODE au lieu de 3" }
-    # Formatage par le helper, identifiant inchangé : FAT32 par Bonk, exFAT et NTFS par le système.
     foreach ($fs in 'fat32', 'exfat', 'ntfs') {
         & $bonk format $virtuel[0].id --fs $fs --label ESSAI --allow-virtual --yes
         if ($LASTEXITCODE -ne 0) { throw "format $fs : $LASTEXITCODE" }
-        # Windows a donné une lettre à la nouvelle partition : sur un bus non amovible, le filtre interdirait
-        # le disque au tour suivant, comme il se doit pour un disque en service.
+        # Windows a monté la partition : sur un bus non amovible, le filtre refuserait le tour suivant.
         $numero = [int]($virtuel[0].path -replace '^.*PhysicalDrive', '')
         Get-Partition -DiskNumber $numero | Where-Object DriveLetter | ForEach-Object {
             Remove-PartitionAccessPath -DiskNumber $numero -PartitionNumber $_.PartitionNumber -AccessPath "$($_.DriveLetter):\"

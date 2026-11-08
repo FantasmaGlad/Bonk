@@ -1,9 +1,3 @@
-//! Le catalogue des images : un fichier statique signé, publié hors du binaire.
-//!
-//! Le fichier change sans publier l'application, et l'hébergeur n'a pas à être cru : seule la signature,
-//! contrôlée sur les octets exacts avec une clé embarquée dans le binaire, donne confiance. Rien n'est lu
-//! avant ce contrôle. Fonctions pures : le réseau et l'horloge viennent de l'appelant.
-
 use crate::sums::is_sha256;
 use std::collections::HashSet;
 use std::fmt;

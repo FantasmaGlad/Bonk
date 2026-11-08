@@ -1,5 +1,3 @@
-//! Écrire une image.
-
 use std::path::{Path, PathBuf};
 
 use bonk_core::BlockDevice;
@@ -32,7 +30,6 @@ pub struct WriteJob {
     pub trace_io: Option<TraceIo>,
     pub dry_run: bool,
     pub yes: bool,
-    /// Empreinte SHA-256 publiée pour le fichier source, en hexadécimal.
     pub expected_sha256: Option<String>,
     pub mode: WriteMode,
     /// Table de la clé Windows ; sans effet sur une écriture brute, dont la table vient de l'image.
@@ -375,7 +372,6 @@ fn write_windows(
         .map(|done| WriteOutcome::Extracted(Box::new(done)))
 }
 
-/// Le plan d'un essai à blanc, le même pour une image brute et une clé Windows.
 fn plan(
     chosen: Chosen,
     source: SourceInfo,
@@ -635,7 +631,6 @@ mod tests {
         Ok(())
     }
 
-    /// Sans relecture, la réparation passait pour faite et la clé partait sans GPT de secours.
     #[test]
     fn une_reparation_que_le_support_ne_garde_pas_est_un_echec()
     -> Result<(), Box<dyn std::error::Error>> {

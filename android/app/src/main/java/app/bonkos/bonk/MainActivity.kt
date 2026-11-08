@@ -75,14 +75,12 @@ class MainActivity : ComponentActivity() {
 
     private fun send(message: ToRust) = Bridge.send(message)
 
-    /** Une réponse de Rust, sur le fil du pont : seul l'écran vivant la reçoit. */
     private val answered: (String) -> Unit = { raw -> show(raw) }
 
     private fun show(raw: String) {
         if (raw == lastAnswer && raw.contains(NO_EFFECT)) return
         lastAnswer = raw
-        // Frontière avec Rust : une réponse illisible serait un défaut de protocole, pas une raison de tuer
-        // l'application ; elle est journalisée et l'écran garde l'état précédent.
+        // Une réponse illisible est journalisée ; l'écran garde l'état précédent.
         val answer =
             runCatching { Protocol.answer(raw) }
                 .onFailure { Log.e(TAG, "unreadable answer from the native library", it) }
@@ -158,8 +156,7 @@ class MainActivity : ComponentActivity() {
         ContextCompat.registerReceiver(this, usbEvents, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         val usb = getSystemService(UsbManager::class.java)
         actions.enumerate()
-        // L'horloge et la détection ne tournent que l'écran visible : en arrière-plan, elles réveilleraient Rust
-        // et l'USB pour rien. L'écriture, elle, vit dans le service.
+        // En arrière-plan, l'horloge réveillerait Rust et l'USB pour rien.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 var ticks = 0

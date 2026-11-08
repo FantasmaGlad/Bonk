@@ -1,13 +1,3 @@
-//! Téléchargement reprenable d'une image.
-//!
-//! Les octets arrivent dans `<destination>.part`, renommé une fois complet : un fichier qui porte le nom
-//! final est toujours entier. Une coupure n'efface rien ; la reprise demande la suite par `Range`, et
-//! `If-Range` fait repartir de zéro si le fichier a changé sur le serveur entre-temps.
-//!
-//! La connexion vit sur un fil à part qui passe ses blocs par un canal : une lecture réseau bloquée
-//! n'empêche ni l'annulation ni le constat d'un serveur muet. Seul l'appelant écrit dans le fichier :
-//! un fil abandonné ne peut plus y toucher.
-
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -22,13 +12,11 @@ use ureq::{Agent, Proxy};
 
 /// Essais sans un octet de plus avant d'abandonner.
 const ATTEMPTS_WITHOUT_PROGRESS: u32 = 5;
-/// Taille d'un bloc passé du fil réseau à l'écriture.
 const CHUNK: usize = 256 * 1024;
 /// Blocs en attente entre les deux fils : borne la mémoire si le disque est plus lent que le réseau.
 const QUEUED_CHUNKS: usize = 8;
 /// Fréquence à laquelle l'attente regarde si l'annulation a été demandée.
 const POLL: Duration = Duration::from_millis(100);
-/// Au-delà, un serveur qui n'envoie plus rien est quitté pour une nouvelle connexion.
 pub const SILENCE_LIMIT: Duration = Duration::from_secs(60);
 /// Un fichier d'empreintes tient largement là-dedans ; le plafond protège d'une URL qui se trompe.
 const TEXT_LIMIT: u64 = 1 << 20;
@@ -37,14 +25,12 @@ const TEXT_LIMIT: u64 = 1 << 20;
 pub enum DownloadError {
     /// Ni `https://`, ni `http://` vers cette machine.
     Scheme(String),
-    /// Réponse que réessayer ne changera pas.
     Refused {
         url: String,
         status: u16,
     },
     /// Réseau ou serveur, après tous les essais.
     Network(String),
-    /// Le serveur répond autre chose que ce qui était demandé.
     Inconsistent(String),
     Io(io::Error),
     Cancelled,
@@ -104,7 +90,6 @@ fn https_required(url: &str) -> Result<bool, DownloadError> {
     }
 }
 
-/// Une URL que Bonk téléchargerait, par opposition à un chemin de fichier.
 #[must_use]
 pub fn is_url(text: &str) -> bool {
     text.starts_with("https://") || text.starts_with("http://")
@@ -191,7 +176,6 @@ pub fn fetch_bytes(url: &str) -> Result<Vec<u8>, DownloadError> {
         .map_err(|e| DownloadError::Network(format!("{url}: {e}")))
 }
 
-/// Ce que dit le serveur en tête d'une réponse.
 struct Head {
     status: u16,
     content_length: Option<u64>,
@@ -284,7 +268,6 @@ fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(name)
 }
 
-/// Fichier partiel et ce qui l'identifie sur le serveur.
 struct Partial {
     file: File,
     done: u64,
@@ -343,7 +326,6 @@ impl Partial {
     }
 }
 
-/// Fin d'un essai.
 enum Attempt {
     Complete,
     /// À réessayer : le message dit pourquoi.

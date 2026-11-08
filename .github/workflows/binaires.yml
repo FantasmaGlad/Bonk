@@ -1,11 +1,3 @@
-# Binaires de Bonk pour chaque système hôte, construits en continu pour que les cibles
-# d'exécution soient exercées en permanence, pas seulement à la release.
-#   - push sur main, lundi (dérive des images d'exécuteur), lancement manuel : construction, essai de
-#     démarrage, archive, empreinte, attestation de provenance (artefact conservé 14 jours) ;
-#   - tag vX.Y.Z : mêmes étapes, puis publication d'une release en BROUILLON (le mainteneur la publie).
-# Signature : attestation de provenance Sigstore (vérifiable par `gh attestation verify`), sans secret ni
-# certificat. La signature Authenticode (Windows) et la notarisation Apple exigent des certificats payants,
-# non provisionnés.
 name: binaires
 
 on:
@@ -45,7 +37,6 @@ jobs:
     name: ${{ matrix.nom }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
-    # Droits d'attestation limités à ce job ; les autres étapes ne lisent que le dépôt.
     permissions:
       contents: read
       id-token: write
@@ -54,10 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # outil/suffixe : `zigbuild` fixe la version minimale de la glibc (2.17) pour que le binaire
-        # tourne sur les distributions anciennes ; musl = binaire statique, destiné à la ligne de commande
-        # (la fenêtre charge les bibliothèques graphiques du système, impossible en statique).
-        # fumee : le binaire s'exécute sur l'exécuteur qui l'a construit.
+        # `zigbuild` fixe la glibc minimale (2.17) ; musl est statique, donc sans fenêtre.
         include:
           - { nom: linux-x86_64, os: ubuntu-24.04, target: x86_64-unknown-linux-gnu, outil: zigbuild, suffixe: ".2.17", fumee: true, glibc: true }
           - { nom: linux-aarch64, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, outil: zigbuild, suffixe: ".2.17", fumee: true, glibc: true }
@@ -83,8 +71,7 @@ jobs:
           rustup toolchain install
           rustup target add "$TARGET"
         shell: bash
-      # Pas de cache de compilation : ces binaires entrent dans les releases, un cache empoisonné n'y a pas sa place.
-      # Versions fixes, éprouvées en local.
+      # Pas de cache : un cache empoisonné n'a pas sa place dans une release.
       - name: Installer zig et cargo-zigbuild
         if: matrix.outil == 'zigbuild'
         run: |
@@ -110,8 +97,7 @@ jobs:
           max=$(objdump -T "target/$TARGET/release/bonk" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -n 1)
           echo "glibc maximale exigée : $max"
           test "$(printf '%s\n2.17\n' "$max" | sort -V | tail -n 1)" = "2.17"
-      # Signature : sans les secrets, ces deux étapes ne font rien (message d'information). Jamais éprouvées
-      # faute de certificats : à valider à la première signature réelle.
+      # Sans les secrets, ces deux étapes ne font rien ; jamais éprouvées faute de certificats.
       - name: Signer (Authenticode, Windows)
         if: runner.os == 'Windows'
         env:
@@ -186,7 +172,6 @@ jobs:
             v="$cargo_v-${SHA::8}"
           fi
           if [ -n "$EXE" ]; then ext=zip; else ext=tar.gz; fi
-          # La version musl est la version sans fenêtre de Linux : son nom le dit, comme sur les autres systèmes.
           if [[ "$NOM" == *-musl ]]; then racine="bonk-cli-$v-${NOM%-musl}"; else racine="bonk-$v-$NOM"; fi
           {
             echo "dossier=$racine"
@@ -208,13 +193,11 @@ jobs:
             tar -C dist -czf "dist/$ARCHIVE" "$DOSSIER"
           fi
           rm -r "dist/$DOSSIER"
-          # Sous Windows, l'exécutable aussi, seul : rien à décompresser pour le lancer.
           if [ -n "$EXE" ]; then cp "target/$TARGET/release/bonk$EXE" "dist/$EXECUTABLE"; fi
           cd dist
           if command -v sha256sum > /dev/null; then sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"; else shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"; fi
           cat "$ARCHIVE.sha256"
         shell: bash
-      # Sans droits d'administrateur ; installé et désinstallé ici, le raccourci du menu Démarrer contrôlé.
       - name: Installateur Windows
         if: runner.os == 'Windows'
         shell: pwsh
@@ -245,8 +228,7 @@ jobs:
           # Fin de ligne Unix : la vérification de la release relit ce fichier sous Linux.
           $somme = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLower() + "  " + $setup.Name + "`n"
           [IO.File]::WriteAllText("$PWD\dist\$($setup.Name).sha256", $somme)
-      # Dépôt public seulement (les attestations sont réservées aux dépôts publics hors offre Enterprise) ;
-      # jamais sur une PR.
+      # Attestations réservées aux dépôts publics hors offre Enterprise.
       - name: Attestation de provenance
         if: github.event_name != 'pull_request' && !github.event.repository.private
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
@@ -266,8 +248,7 @@ jobs:
           path: dist/bonk-*
           if-no-files-found: error
           retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
-      # Après l'archive : cette construction remplace le binaire dans target/. Sous Linux, la version sans fenêtre
-      # est la musl. Artefact à part : le binaire universel de macOS choisit ses entrées par motif.
+      # Après l'archive : cette construction remplace le binaire dans target/.
       - name: Version en ligne de commande seule
         id: cli
         if: matrix.cli
@@ -308,9 +289,7 @@ jobs:
           if-no-files-found: error
           retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
 
-  # Le binaire démarre-t-il sur les distributions que visent les utilisateurs ? centos:7 est le plancher réel
-  # (glibc 2.17) ; Alpine exécute la version musl. Ne dit rien de la fenêtre ni de l'accès aux disques
-  # (pas d'affichage ni de périphérique dans un conteneur).
+  # centos:7 est le plancher réel de la glibc (2.17).
   compatibilite:
     name: ${{ matrix.image }} (${{ matrix.nom }})
     needs: construire
@@ -346,7 +325,6 @@ jobs:
           docker run --rm --volume "$PWD/dist:/dist:ro" "$IMAGE" sh -c \
             'mkdir /tmp/bonk && tar -xzf /dist/bonk-*.tar.gz -C /tmp/bonk && /tmp/bonk/bonk-*/bonk --version && /tmp/bonk/bonk-*/bonk explain E2001 > /dev/null'
 
-  # Paquets natifs (deb, rpm, macOS universel) à partir des binaires ci-dessus.
   paquets:
     name: paquets
     needs: construire
@@ -366,8 +344,6 @@ jobs:
       attestations: write
       artifact-metadata: write
 
-  # Release en brouillon : la publication reste une décision du mainteneur.
-  # Application Android. Signée par la clé officielle sur un tag seulement : une PR construit sans secret.
   android:
     name: android
     runs-on: ubuntu-24.04
@@ -380,8 +356,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Le wrapper Gradle est un binaire du dépôt exécuté par la CI : son empreinte doit être une de celles que
-      # publie Gradle.
+      # Le wrapper Gradle est un binaire exécuté par la CI : son empreinte doit être publiée par Gradle.
       - name: Wrapper Gradle
         uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
       - name: Plateforme Android
@@ -405,8 +380,7 @@ jobs:
           version=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
           mkdir dist
           apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
-          # Un APK par puce : le nom publié garde celui de la puce (arm64, x86_64), comme les archives. Hors tag,
-          # l'APK est signé d'une clé de débogage jetable : son nom le dit, pour ne jamais passer pour une release.
+          # Hors tag, l'APK porte une clé de débogage jetable : son nom le dit.
           essai=$([ "$GITHUB_REF_TYPE" = tag ] || echo "-essai")
           for abi in arm64-v8a:arm64 x86_64:x86_64; do
             apk="dist/bonk-$version$essai-android-${abi#*:}.apk"

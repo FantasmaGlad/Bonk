@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Construit la bibliothèque Rust pour chaque puce de l'application : ARM64 (téléphones, tablettes) et x86_64
-# (Chromebook Intel ou AMD, émulateur). Usage : build-native.sh <dossier jniLibs>
 set -euo pipefail
 SDK=${ANDROID_HOME:-$HOME/Android/Sdk}
 NDK=${ANDROID_NDK_HOME:-$(find "$SDK/ndk" -mindepth 1 -maxdepth 1 | sort -V | tail -1)}

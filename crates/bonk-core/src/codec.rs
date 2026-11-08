@@ -1,9 +1,3 @@
-//! Formats d'image et décompression à la volée.
-//!
-//! Le format se reconnaît à ses premiers octets, jamais à l'extension. Gzip, xz et zstd sont
-//! décompressés en flux, sans tenir l'image entière en mémoire, et en Rust pur : rien à installer,
-//! aucune bibliothèque C à lier.
-
 use std::fmt;
 use std::io::{self, BufRead, BufReader, Read};
 
@@ -219,7 +213,6 @@ pub fn open(
 
 #[cfg(test)]
 pub(crate) mod testing {
-    //! Fabrique d'images compressées pour les tests, sans outil externe.
 
     use std::io::Write;
 

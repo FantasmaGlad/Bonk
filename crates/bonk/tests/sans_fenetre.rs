@@ -1,5 +1,3 @@
-//! Version en ligne de commande, construite sans la fonctionnalité `gui` : tout marche, sauf la fenêtre, qui
-//! n'existe pas et le dit.
 #![cfg(not(feature = "gui"))]
 
 mod common;

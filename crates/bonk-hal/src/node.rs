@@ -1,22 +1,9 @@
-//! Périphérique bloc réel ouvert pour lecture ou écriture brute (Linux).
-//!
-//! Complément de [`crate::image::FileDevice`], qui refuse tout ce qui n'est pas un fichier ordinaire :
-//! `BlockNode` n'accepte, lui, que un disque entier (jamais une partition, jamais un fichier). Il
-//! n'est construit qu'après les contrôles de sécurité de [`crate::target`] (filtre, identité,
-//! démontage). À l'ouverture en écriture, `O_EXCL` fait refuser par le noyau un disque encore utilisé
-//! (monté, ou ouvert par un autre programme) : dernier garde-fou, indépendant de nos propres contrôles.
-//!
-//! L'ouverture exige des droits : ceux de l'appelant, ou un descripteur remis par le service du
-//! système ([`BlockNode::from_fd`]) ; l'interface ne tourne jamais en administrateur. Les tests
-//! n'ouvrent jamais de périphérique réel.
-
 use std::path::{Path, PathBuf};
 
 use bonk_core::{BlockDevice, BlockError};
 
 use crate::image::Access;
 
-/// Disque entier ouvert en accès brut.
 #[derive(Debug)]
 pub struct BlockNode {
     file: std::fs::File,
@@ -27,7 +14,6 @@ pub struct BlockNode {
 }
 
 impl BlockNode {
-    /// Chemin ouvert, pour les messages et le journal.
     #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
@@ -234,7 +220,6 @@ mod tests {
 
     use super::*;
 
-    /// Un descripteur qui n'est pas un disque est refusé, quoi qu'en dise le chemin.
     #[test]
     fn un_descripteur_recu_n_est_pas_cru_sur_parole() {
         let fd = |path: &str| -> OwnedFd {

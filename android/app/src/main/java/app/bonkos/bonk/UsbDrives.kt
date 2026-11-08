@@ -13,10 +13,7 @@ import kotlin.concurrent.withLock
 
 const val ACTION_PERMISSION = "app.bonkos.bonk.USB_PERMISSION"
 
-/**
- * Une seule conversation à la fois avec une clé : deux échanges mêlés se volent leurs réponses, et le suivant
- * attend jusqu'au délai maximal.
- */
+/** Une conversation à la fois : deux échanges mêlés se volent leurs réponses. */
 private val usbAccess = ReentrantLock()
 
 private const val SUBCLASS_SCSI = 6
@@ -39,7 +36,6 @@ fun UsbManager.askPermission(context: Context, device: UsbDevice) {
     requestPermission(device, PendingIntent.getBroadcast(context, 0, intent, flags))
 }
 
-/** Réclame la clé, en détachant le pilote du système, le temps de `work`. */
 fun <T> UsbManager.withDrive(device: UsbDevice, work: (fd: Int, descriptors: ByteArray) -> T): T =
     usbAccess.withLock {
         val connection = openDevice(device) ?: throw BonkFailure("E4004", "the system refused to open the drive")

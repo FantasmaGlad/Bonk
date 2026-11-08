@@ -1,9 +1,3 @@
-//! Ligne de commande de Bonk : analyse des arguments, sortie texte et JSON, journal, codes de sortie
-//! stables.
-//!
-//! Ce crate ne connaît pas la fenêtre : le binaire lui passe la fonction qui l'ouvre. Ainsi `bonk` sans
-//! commande ouvre la fenêtre, et `bonk -v` l'ouvre avec le journal verbeux.
-
 mod cache;
 mod catalog;
 #[cfg(test)]

@@ -1,5 +1,3 @@
-# Fuzzing hebdomadaire des analyseurs et décodeurs (MBR, GPT, formats d'image) avec cargo-fuzz (cibles : fuzz/).
-# Un plantage est conservé en artefact pour être transformé en test de non-régression.
 name: fuzz
 
 on:

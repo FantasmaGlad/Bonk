@@ -1,5 +1,3 @@
-//! Linux : `sysfs`, `mountinfo` et base udev pour l'énumération, `umount`, périphérique bloc en `O_EXCL`.
-
 use std::io;
 use std::path::Path;
 use std::process::Command;
@@ -121,7 +119,6 @@ impl Platform for Linux {
     }
 }
 
-/// Nom du système de fichiers pour UDisks2.
 fn udisks_type(fs: Filesystem) -> &'static str {
     match fs {
         Filesystem::Fat32 => "vfat",
@@ -131,7 +128,6 @@ fn udisks_type(fs: Filesystem) -> &'static str {
     }
 }
 
-/// Ce que le démontage demande au système, séparé pour l'éprouver sans disque ni droits.
 struct System<'a> {
     umount: &'a dyn Fn(&str) -> io::Result<std::process::Output>,
     mounts_table: &'a dyn Fn() -> io::Result<String>,

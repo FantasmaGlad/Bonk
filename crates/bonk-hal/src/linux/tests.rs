@@ -7,7 +7,6 @@ use super::mounts::unescape_octal;
 use super::*;
 use crate::safety::{Eligibility, Exclusion, FilterOptions, evaluate};
 
-/// Arborescence factice supprimée à la fin du test.
 struct Fake {
     base: PathBuf,
 }

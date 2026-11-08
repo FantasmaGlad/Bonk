@@ -1,10 +1,3 @@
-//! macOS : collecte des faits sur les disques par `diskutil`, en lecture seule. L'accès brut est dans
-//! `macos_disk`.
-//!
-//! `diskutil` est présent sur tout macOS et ne demande aucun droit pour lire ; passer par lui évite une
-//! dépendance et du code `unsafe`. `plutil` convertit sa sortie en JSON. L'interprétation vit dans
-//! [`crate::macos_facts`], testée sur tous les systèmes.
-
 use std::io::{self, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};

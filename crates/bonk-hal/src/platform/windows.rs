@@ -1,6 +1,3 @@
-//! Windows : l'implémentation de `Platform`. La lecture des faits est dans `windows_query`, l'accès brut
-//! dans `windows_disk`.
-
 use std::mem::size_of;
 use std::path::Path;
 use std::ptr::null_mut;

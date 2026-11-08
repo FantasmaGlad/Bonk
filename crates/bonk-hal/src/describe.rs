@@ -1,12 +1,6 @@
-//! Libellés lisibles des faits et des verdicts sur les disques.
-//!
-//! La ligne de commande (toujours en anglais) et la fenêtre (en français) affichent les mêmes faits :
-//! écrits une seule fois par langue, ils ne peuvent pas diverger.
-
 use crate::disk::{Bus, DiskKind};
 use crate::safety::{Eligibility, Exclusion, HiddenReason, Warning};
 
-/// Langue d'un libellé.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Lang {
     En,

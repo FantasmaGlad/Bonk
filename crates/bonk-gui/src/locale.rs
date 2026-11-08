@@ -1,5 +1,3 @@
-//! La langue de la fenêtre au premier lancement, tant que rien n'a été choisi.
-
 use bonk_hal::Lang;
 
 /// `fr`, `fr-FR`, `fr_CA.UTF-8` : français. Tout le reste, ou rien : anglais, la langue de la CLI.

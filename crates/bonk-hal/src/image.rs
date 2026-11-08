@@ -1,17 +1,9 @@
-//! Fichier image exposé comme périphérique bloc.
-//!
-//! Seuls les fichiers ordinaires sont acceptés : un périphérique (`/dev/sdX`, `\\.\PhysicalDriveN`), un
-//! répertoire ou un tube est refusé avant toute ouverture, pour qu'une faute de frappe en test ne
-//! puisse pas écrire sur un disque réel. Les disques réels passent par [`crate::BlockNode`], derrière le
-//! filtre de sécurité.
-
 use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::path::Path;
 
 use bonk_core::{BlockDevice, BlockError, check_access, check_geometry};
 
-/// Mode d'ouverture d'un fichier image existant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Access {
     ReadOnly,
@@ -195,7 +187,6 @@ mod tests {
 
     use super::*;
 
-    /// Chemin temporaire unique, supprimé à la fin du test.
     struct TempImage(PathBuf);
 
     impl TempImage {

@@ -1,5 +1,3 @@
-//! `bonk debug sources` : chaque source système lue par l'énumération.
-
 use std::io::{self, Write};
 
 use bonk_hal::{Disk, EnumerateError, SourceRead};

@@ -1,8 +1,3 @@
-//! Codes d'erreur stables et codes de sortie.
-//!
-//! Chaque erreur porte un code `Exxxx` : un outil le retrouve sans interpréter le texte, et le catalogue
-//! en donne le sens, les causes probables et le remède. Les codes ne sont jamais réutilisés ni renumérotés.
-
 use bonk_hal::EnumerateError;
 
 /// Code de sortie d'une erreur d'exécution générale.

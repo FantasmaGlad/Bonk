@@ -1,16 +1,3 @@
-//! Faits bruts sur les disques de macOS et leur traduction en [`Disk`].
-//!
-//! La collecte (`platform/macos.rs`) lit `diskutil` ; cette traduction est pure et se teste, se rejoue et
-//! se relit sur tous les systèmes.
-//!
-//! # APFS
-//! Les volumes d'un disque APFS sont portés par un disque *synthétisé* (`disk3`) adossé à une partition
-//! physique (`disk0s2`). Leurs montages sont rapportés sur cette partition : sans cela, le disque qui porte
-//! le système paraîtrait libre.
-//!
-//! # Échouer plutôt que deviner
-//! Sans volume système retrouvé sur un disque physique, l'énumération échoue.
-
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

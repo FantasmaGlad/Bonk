@@ -1,6 +1,3 @@
-//! Système sans accès aux disques : chaque opération échoue clairement, jamais en silence. C'est aussi
-//! ce qui permet de lancer la ligne de commande partout, et d'y tester les chemins d'erreur.
-
 use std::path::Path;
 
 use bonk_core::format::Filesystem;
@@ -12,7 +9,6 @@ use crate::enumerate::{EnumerateError, SourceRead};
 use crate::image::Access;
 use crate::target::OpenTargetError;
 
-/// Implémentation pour un système que Bonk ne sait pas piloter.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Unsupported;
 

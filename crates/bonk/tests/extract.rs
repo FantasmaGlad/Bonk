@@ -1,6 +1,3 @@
-//! Clé d'installation Windows de bout en bout, par le binaire, sur un fichier image : ISO synthétique,
-//! volume relu par `fsck.vfat`, outil de référence. Aucun disque n'est touché.
-
 #![allow(clippy::expect_used)]
 
 use std::fs;
@@ -38,7 +35,6 @@ fn bonk(args: &[&str]) -> Output {
         .expect("lancement de bonk")
 }
 
-/// Chargeur UEFI minimal pour la puce donnée, sans signature.
 fn loader(machine: u16) -> Vec<u8> {
     let mut file = vec![0u8; 1024];
     file[..2].copy_from_slice(b"MZ");

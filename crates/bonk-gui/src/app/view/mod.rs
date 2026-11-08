@@ -1,5 +1,3 @@
-//! Rendu de la fenêtre : liste, cartes, détail, panneau d'écriture et demande de confirmation.
-
 use bonk_hal::{Disk, Eligibility};
 use iced::widget::{
     Column, button, center, checkbox, column, container, opaque, row, scrollable, stack, text,

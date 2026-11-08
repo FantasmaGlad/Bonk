@@ -1,8 +1,3 @@
-//! Lecture de la structure d'un disque, sans jamais écrire : MBR, GPT principal et GPT de secours.
-//!
-//! Un contenu illisible ou incohérent n'est pas une erreur mais un constat à code stable, pour qu'un
-//! diagnostic dise précisément ce qui ne va pas ; la réparation du GPT s'appuie sur ces constats.
-
 mod gpt;
 mod mbr;
 #[cfg(any(test, feature = "testing"))]

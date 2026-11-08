@@ -1,13 +1,3 @@
-//! Abstraction de périphérique bloc : `bonk-core` ne lit et n'écrit qu'à travers [`BlockDevice`].
-//!
-//! # Contrat
-//!
-//! Les accès sont positionnels (décalage absolu en octets, pas de curseur partagé) et alignés :
-//! le décalage et la longueur sont des multiples de [`BlockDevice::block_size`]. Un fichier image
-//! accepterait n'importe quel accès, mais un périphérique brut (`O_DIRECT`, `\\.\PhysicalDriveN`,
-//! `/dev/rdiskN`) refuse les accès non alignés : imposer l'alignement partout révèle l'erreur en test
-//! au lieu de la révéler sur du matériel. Les accès hors des bornes sont refusés, jamais tronqués.
-
 use std::error::Error;
 use std::fmt;
 use std::io;
@@ -76,7 +66,6 @@ impl From<io::Error> for BlockError {
     }
 }
 
-/// Périphérique adressable par blocs, sans curseur.
 pub trait BlockDevice {
     /// Taille totale en octets, multiple de [`Self::block_size`].
     fn size(&self) -> u64;
@@ -86,7 +75,6 @@ pub trait BlockDevice {
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), BlockError>;
 
-    /// En cas d'erreur de validation, rien n'est écrit.
     fn write_at(&mut self, offset: u64, data: &[u8]) -> Result<(), BlockError>;
 
     fn flush(&mut self) -> Result<(), BlockError>;

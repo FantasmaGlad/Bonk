@@ -1,5 +1,3 @@
-//! Types communs aux opérations : résultats sérialisables, erreur, dépendances injectées.
-
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 

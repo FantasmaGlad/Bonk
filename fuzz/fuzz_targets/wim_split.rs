@@ -1,4 +1,3 @@
-//! Découpage WIM sur un en-tête et une table arbitraires : un refus, jamais une panique.
 #![no_main]
 use bonk_core::wim;
 use libfuzzer_sys::fuzz_target;

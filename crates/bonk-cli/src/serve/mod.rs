@@ -1,21 +1,3 @@
-//! `bonk serve` : le service headless. Tout ce que fait la fenêtre, sans interface graphique : un autre
-//! programme (outil de support, orchestrateur, test) pilote Bonk par un protocole JSON, une ligne par
-//! message, sur l'entrée et la sortie standard.
-//!
-//! - Requête : `{"id": 1, "method": "disk.list", "params": {"all": true}}`.
-//! - Réponse : `{"id": 1, "result": {...}}` ou `{"id": 1, "error": {"code": "E1003", ...}}`, avec
-//!   les mêmes codes d'erreur et les mêmes formats que la CLI en `--json`.
-//! - Événements (sans `id`) : `ready` au démarrage, `job_started`, `progress` (avec `request_id`)
-//!   pendant une écriture, `disks_changed` quand la liste des disques change (`watch.start`).
-//!
-//! Les méthodes portent le nom de la commande : `disk.list` est `bonk disk list`. Une seule opération
-//! d'écriture à la fois ; `cancel` arrête une écriture ou une vérification entre deux blocs, un
-//! formatage entre deux étapes ; une réparation du GPT commencée, quelques secteurs, va à son terme : la
-//! couper abîmerait la table. À la fermeture de l'entrée, l'opération
-//! en cours est annulée et le service s'arrête ; sous Unix, Ctrl+C et SIGTERM font de même et le
-//! service rend le code 5. Les mêmes garde-fous que la CLI s'appliquent : rien ne s'écrit sans
-//! `"yes": true` ou `"force": true`, ni sur un disque que le filtre interdit.
-
 mod jobs;
 mod methods;
 mod params;
@@ -252,7 +234,6 @@ impl Method {
         }
     }
 
-    /// Description rendue par la méthode `methods`.
     fn about(self) -> &'static str {
         match self {
             Self::Ping => "answers pong",

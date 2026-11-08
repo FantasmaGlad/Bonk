@@ -1,6 +1,3 @@
-# Contrôle des dépendances avec cargo-deny : licences compatibles, vulnérabilités connues, sources du registre.
-# Tourne quand les dépendances ou la politique (deny.toml) changent, et chaque semaine : de nouvelles
-# vulnérabilités sont publiées sans qu'aucun commit ne touche le dépôt.
 name: dependances
 
 on:
@@ -25,11 +22,9 @@ on:
     - cron: "23 6 * * 1"
   workflow_dispatch:
 
-# Droits minimaux : le contrôle ne fait que lire le dépôt.
 permissions:
   contents: read
 
-# Annulation sur une PR seulement : le contrôle de main et le contrôle hebdomadaire ne sont jamais interrompus.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

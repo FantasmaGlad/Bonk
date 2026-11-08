@@ -1,14 +1,9 @@
-//! Lecture d'un système de fichiers UDF (ECMA-167, profil OSTA), sans monter l'image : les ISO récentes de
-//! Windows n'ont presque rien en ISO 9660. Une image vient de l'extérieur : chaque champ est borné, et une
-//! structure incohérente devient une erreur, jamais une panique ni une boucle.
-
 use std::fmt;
 use std::io;
 
 /// Un secteur de support optique. L'ancre principale est toujours au secteur 256.
 const SECTOR: u64 = 2048;
 const ANCHOR_SECTOR: u64 = 256;
-/// Limites contre une image construite pour épuiser la mémoire ou tourner sans fin.
 const MAX_DESCRIPTORS: u64 = 4096;
 const MAX_DEPTH: usize = 32;
 const MAX_ENTRIES: usize = 1_000_000;
@@ -51,7 +46,6 @@ impl ReadAt for [u8] {
 pub enum UdfError {
     /// Pas de système de fichiers UDF ici.
     NotUdf,
-    /// UDF, mais une structure incohérente ou que Bonk ne lit pas.
     Malformed(&'static str),
     Io(io::Error),
 }
@@ -88,7 +82,6 @@ pub enum Content {
     Inline(Vec<u8>),
 }
 
-/// Un fichier de l'image, avec son chemin depuis la racine.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct File {
     pub path: Vec<String>,
@@ -104,7 +97,6 @@ pub struct Tree {
 }
 
 impl Tree {
-    /// Le fichier de ce chemin, sans tenir compte de la casse.
     #[must_use]
     pub fn find(&self, path: &[&str]) -> Option<&File> {
         self.files.iter().find(|file| {
@@ -149,7 +141,6 @@ fn tag_id(sector: &[u8]) -> Option<u16> {
     (sum == head[4]).then(|| u16::from_le_bytes([head[0], head[1]]))
 }
 
-/// Position d'un bloc logique, la partition étant unique dans ce que Bonk lit.
 #[derive(Clone, Copy)]
 struct LongAd {
     block: u32,
@@ -431,7 +422,6 @@ pub fn read_content<R: ReadAt + ?Sized>(
 
 #[cfg(any(test, feature = "testing"))]
 pub mod testing {
-    //! Construit une petite image UDF : seuls les champs que le lecteur regarde sont remplis.
     use super::*;
 
     fn tag(sector: &mut [u8], id: u16) {
@@ -560,7 +550,6 @@ pub mod testing {
         img
     }
 
-    /// `/SOURCES/boot.wim` en deux morceaux, `/readme.txt` dans son entrée, `/vide/` sans contenu.
     #[must_use]
     pub fn image() -> Vec<u8> {
         const P: usize = 300;

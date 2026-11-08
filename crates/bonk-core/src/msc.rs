@@ -1,9 +1,3 @@
-//! Stockage de masse USB depuis l'espace utilisateur : transport « bulk-only » et commandes SCSI.
-//!
-//! Sur Android sans root, l'API ne donne que des transferts USB bruts : il faut parler le protocole de la
-//! clé soi-même. Cette couche est pure : elle ne connaît qu'un [`BulkTransport`], fourni par chaque système,
-//! et se teste contre un faux périphérique en mémoire.
-
 use std::cell::RefCell;
 use std::fmt;
 use std::io;
@@ -16,27 +10,21 @@ const CBW_LEN: usize = 31;
 const CSW_LEN: usize = 13;
 /// Plafond d'une commande : 1 Mio, que les clés acceptent et qui laisse l'annulation réagir vite.
 const MAX_TRANSFER: usize = 1 << 20;
-/// Une clé qu'on vient de brancher répond « pas prête » un moment.
 const READY_ATTEMPTS: u32 = 5;
 
-/// Sens d'un transfert, vu de l'hôte.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
     In,
     Out,
 }
 
-/// Échec d'un transfert en bloc.
 #[derive(Debug)]
 pub enum BulkError {
-    /// Le périphérique a arrêté le point de terminaison.
     Stall,
-    /// Le périphérique n'est plus là.
     Disconnected,
     Other(io::Error),
 }
 
-/// Transferts en bloc vers une interface de stockage déjà réclamée.
 pub trait BulkTransport {
     /// Envoie tout `data`.
     ///
@@ -72,17 +60,14 @@ pub struct Sense {
     pub qualifier: u8,
 }
 
-/// Échec d'une commande.
 #[derive(Debug)]
 pub enum MscError {
     Bulk(BulkError),
-    /// Enveloppe de statut mal formée, ou qui ne répond pas à cette commande.
     Protocol(&'static str),
     /// Erreur de phase : l'échange est perdu, le périphérique a été réinitialisé.
     Phase,
     /// La commande a échoué ; le sens est absent s'il n'a pas pu être lu.
     Check(Option<Sense>),
-    /// Moins d'octets transférés que demandé.
     Short {
         expected: usize,
         done: usize,
@@ -128,21 +113,18 @@ impl From<MscError> for BlockError {
     }
 }
 
-/// Phase de données d'une commande.
 enum Data<'a> {
     None,
     In(&'a mut [u8]),
     Out(&'a [u8]),
 }
 
-/// Résultat de `INQUIRY`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Inquiry {
     pub vendor: String,
     pub product: String,
 }
 
-/// Session sur une interface de stockage.
 pub struct MassStorage<T> {
     transport: T,
     tag: u32,
@@ -472,7 +454,6 @@ mod tests {
 
     const BLOCK: usize = 512;
 
-    /// Panne à provoquer sur la prochaine commande dont l'opcode correspond.
     #[derive(Clone, Copy, PartialEq)]
     enum Fault {
         None,
@@ -484,11 +465,9 @@ mod tests {
         BadTag,
         BadSignature,
         Gone,
-        /// La clé reçoit toutes les données mais déclare, par son résidu, n'en avoir gardé qu'une partie.
         KeepsPart,
     }
 
-    /// Clé USB en mémoire qui suit le protocole.
     struct Fake {
         storage: Vec<u8>,
         huge: bool,

@@ -1,9 +1,3 @@
-//! Banc d'essai du transport `usbfs` sur une vraie clé, hors du binaire publié.
-//! `essai_usbfs <périphérique> info`
-//! `essai_usbfs <périphérique> read <décalage> <longueur> <fichier>`
-//! `essai_usbfs <périphérique> write <décalage> <fichier>`
-//! Aucun filtre de sécurité ici : c'est à l'appelant de désigner la clé de test.
-
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use bonk_core::block::BlockDevice;
