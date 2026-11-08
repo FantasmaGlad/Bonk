@@ -1,4 +1,3 @@
-//! Aides partagées par les tests de processus. Chaque binaire de test n'en utilise qu'une partie.
 #![allow(dead_code)]
 
 use std::process::Command;

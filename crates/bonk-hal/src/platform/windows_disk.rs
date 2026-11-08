@@ -1,9 +1,3 @@
-//! Windows : ouverture brute d'un disque entier, verrouillage de ses volumes.
-//!
-//! Windows refuse d'écrire sur les secteurs d'un volume monté : chaque volume du disque est verrouillé
-//! puis démonté, et sa poignée gardée tant que l'écriture dure. Ces gestes exigent d'être administrateur :
-//! ce processus l'est, ou c'est le helper élevé qui les fait (`windows_helper`).
-
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::os::windows::fs::{FileExt, OpenOptionsExt};
@@ -71,7 +65,6 @@ pub(super) fn format_partition(
     ))))
 }
 
-/// Volumes verrouillés, gardés jusqu'à la relecture de la table ou la fin du processus.
 static LOCKED: Mutex<Vec<File>> = Mutex::new(Vec::new());
 
 fn invalid(message: &str) -> BlockError {
@@ -81,7 +74,6 @@ fn invalid(message: &str) -> BlockError {
     ))
 }
 
-/// Refuse tout chemin qui n'est pas un disque entier.
 fn check_disk_path(path: &Path) -> Result<(), BlockError> {
     match path.to_str().and_then(disk_number) {
         Some(_) => Ok(()),
@@ -98,7 +90,6 @@ pub(super) fn open_file(path: &Path, access: Access) -> io::Result<File> {
         .open(path)
 }
 
-/// Le droit d'ouvrir, sans garder le disque ouvert, avec les droits de ce processus.
 pub(super) fn prepare(path: &Path, access: Access) -> Result<(), BlockError> {
     check_disk_path(path)?;
     match open_file(path, access) {
@@ -247,7 +238,6 @@ pub(super) fn unmount(path: &str) -> Result<Vec<String>, OpenTargetError> {
     Ok(done)
 }
 
-/// Libère les volumes et demande au système de relire la table.
 pub(super) fn rescan(path: &Path) -> Result<(), BlockError> {
     check_disk_path(path)?;
     LOCKED

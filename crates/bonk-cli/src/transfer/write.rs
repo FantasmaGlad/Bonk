@@ -1,5 +1,3 @@
-//! `bonk write`.
-
 use std::io::{self, Write};
 
 use bonk_core::write::VerifyReport;

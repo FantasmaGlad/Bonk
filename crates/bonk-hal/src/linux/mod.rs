@@ -1,19 +1,3 @@
-//! Énumération des disques sous Linux, en lecture seule.
-//!
-//! Sources, toutes lisibles sans privilège :
-//! - `/sys/block` : disques, partitions, tailles, périphériques empilés (`holders`), et le chemin
-//!   canonique du périphérique, d'où l'on déduit le bus (USB, SATA, NVMe, carte SD...) ;
-//! - `/proc/self/mountinfo` et `/proc/swaps` : ce que l'hôte utilise en ce moment ;
-//! - la base udev (`/run/udev/data`) : signatures de systèmes de fichiers, numéro de série, type de
-//!   partition (ESP) et liens `by-id`, que seul udev sait lire sans ouvrir le périphérique.
-//!
-//! Pourquoi pas UDisks2 (D-Bus) : il demanderait un service en marche et une dépendance de plus pour
-//! des informations déjà disponibles en lecture de fichiers. Un disque que l'appelant n'a pas le droit
-//! d'ouvrir passe, lui, par UDisks2 et polkit (`platform/udisks.rs`).
-//!
-//! Tous les chemins système sont regroupés dans [`LinuxRoots`] : les tests construisent une
-//! arborescence factice et vérifient l'énumération sans toucher au vrai système.
-
 mod mounts;
 mod replay;
 mod sources;
@@ -39,16 +23,12 @@ use udev::{UdevRecord, load_udev};
 pub(crate) use replay::enumerate_from_reads;
 pub(crate) use sources::enumerate_recorded;
 
-/// Type de partition GPT « EFI System Partition ».
 const GPT_ESP: &str = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b";
 
-/// Type de partition MBR « EFI System ».
 const MBR_ESP: &str = "0xef";
 
-/// Points de montage où l'ESP active se trouve en pratique.
 const ESP_MOUNTS: [&str; 3] = ["/boot/efi", "/efi", "/boot"];
 
-/// Emplacements des sources système.
 #[derive(Debug, Clone)]
 pub struct LinuxRoots {
     pub sys: PathBuf,
@@ -57,7 +37,6 @@ pub struct LinuxRoots {
     pub dev: PathBuf,
 }
 
-/// Énumère les disques à partir de `roots`.
 pub fn enumerate(roots: &LinuxRoots) -> Result<Vec<Disk>, EnumerateError> {
     let mountinfo_path = roots.proc.join("self/mountinfo");
     let mounts = parse_mountinfo(&read_required(&mountinfo_path)?)?;
@@ -343,7 +322,6 @@ fn natural_cmp(a: &str, b: &str) -> Ordering {
 }
 
 impl LinuxRoots {
-    /// Le vrai système.
     #[must_use]
     pub fn system() -> Self {
         Self {
@@ -354,7 +332,6 @@ impl LinuxRoots {
         }
     }
 
-    /// Une arborescence factice, pour les tests.
     #[must_use]
     pub fn under(base: &Path) -> Self {
         Self {

@@ -1,7 +1,3 @@
-//! Le menu des images à l'écran : la fenêtre lit `bonk catalog list --json`, comme elle écrit par `bonk write`.
-//! Signature et expiration restent donc contrôlées au même endroit ; un choix donne l'adresse et l'empreinte
-//! officielles, sans rien à régler.
-
 use std::path::PathBuf;
 
 use bonk_hal::Lang;
@@ -39,7 +35,6 @@ pub(crate) fn read(program: PathBuf) -> Result<Vec<System>, String> {
         .map_err(|e| e.to_string())
 }
 
-/// Identifiant de la liste du menu, pour la suivre au clavier.
 pub(super) const MENU: &str = "menu-images";
 
 fn logo(icon: Option<&PathBuf>) -> Element<'_, Message> {

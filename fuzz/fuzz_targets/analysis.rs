@@ -1,5 +1,3 @@
-//! `analysis::analyze` sur des octets quelconques : aucune panique, quelles que soient les valeurs lues
-//! dans les tables (elles viennent de l'image).
 #![no_main]
 
 use bonk_core::analysis::analyze;

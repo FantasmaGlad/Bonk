@@ -1,5 +1,3 @@
-//! `partition::inspect` sur un disque arbitraire : une image reçue d'ailleurs ne doit jamais le faire
-//! paniquer ni l'amener à allouer sans borne, quelle que soit sa table de partitions.
 #![no_main]
 
 use bonk_core::MemoryDevice;

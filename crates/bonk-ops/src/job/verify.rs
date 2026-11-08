@@ -1,5 +1,3 @@
-//! Comparer un support à une image, sans écrire.
-
 use std::path::PathBuf;
 
 use bonk_core::BlockDevice;

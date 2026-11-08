@@ -1,7 +1,3 @@
-//! Transport `usbfs` du stockage de masse : parle à la clé depuis l'espace utilisateur, sans le pilote du
-//! noyau. Sous Linux, il sert de banc d'essai sur une vraie clé. Sous Android, sans root, le seul accès au
-//! matériel est le descripteur que rend `UsbDeviceConnection.getFileDescriptor()` : les mêmes appels y valent.
-
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read};
 use std::os::fd::AsRawFd;
@@ -27,7 +23,6 @@ const ENDPOINT_IN: u8 = 0x80;
 const REQUEST_MASS_STORAGE_RESET: u8 = 0xFF;
 const REQUEST_TYPE_CLASS_INTERFACE_OUT: u8 = 0x21;
 
-/// L'interface de stockage trouvée dans les descripteurs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StorageInterface {
     pub number: u8,
@@ -373,7 +368,6 @@ mod tests {
         assert_eq!(find_storage_interface(&[]), None);
     }
 
-    /// Valeurs de `linux/usbdevice_fs.h` sur une architecture 64 bits.
     #[cfg(target_pointer_width = "64")]
     #[test]
     fn numeros_d_appel_du_noyau() {

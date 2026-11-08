@@ -1,7 +1,3 @@
-//! Règle commune aux tests qui exigent un outil du système : absent hors CI, le test se saute en le
-//! disant ; absent en CI, il échoue (un saut silencieux y ferait passer pour verte une vérification
-//! jamais exécutée).
-
 mod common;
 
 use common::decider;

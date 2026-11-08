@@ -1,9 +1,3 @@
-//! UDisks2 : obtenir un disque sans lancer Bonk en administrateur.
-//!
-//! Le service du système ouvre le périphérique et nous rend un descripteur ; l'autorisation passe par
-//! polkit, au moment où on en a besoin. Tout échec devient `PermissionDenied` avec une phrase qui dit
-//! quoi faire : `bonk-ops` le traduit en `E4004`.
-
 use std::collections::HashMap;
 use std::io;
 use std::os::fd::OwnedFd;
@@ -140,7 +134,6 @@ enum Waited<T> {
     Answer(T),
     Cancelled,
     TimedOut,
-    /// Le fil qui attendait la réponse s'est arrêté sans la donner.
     Lost,
 }
 
@@ -196,7 +189,6 @@ pub(super) fn reachable() -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
-/// Le service sait-il formater ce type ? Il répond sans rien demander à polkit.
 pub(super) fn can_format(kind: &str) -> Result<(), String> {
     let connection = connect().map_err(|error| error.to_string())?;
     let reply = block_on(connection.call_method(

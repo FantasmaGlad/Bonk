@@ -1,5 +1,3 @@
-//! `bonk verify`.
-
 use std::io::Write;
 
 use bonk_hal::format_size;

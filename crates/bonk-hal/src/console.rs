@@ -1,7 +1,3 @@
-//! Console de Windows : un seul binaire sert la ligne de commande et la fenêtre. Marqué console, il garde sa
-//! sortie dans un terminal ; lancé d'un double-clic, il se défait de la console que Windows lui a ouverte.
-//! Ailleurs, rien à faire.
-
 use std::process::Command;
 
 /// Quitte la console si ce processus en est le seul occupant : personne ne la lit. Rend vrai si c'est fait. Dans

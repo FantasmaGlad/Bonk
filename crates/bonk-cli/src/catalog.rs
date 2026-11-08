@@ -1,5 +1,3 @@
-//! `bonk catalog` : les images proposées, lues dans le catalogue signé, et `--image`, qui en écrit une.
-
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};

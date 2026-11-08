@@ -1,13 +1,7 @@
-//! Charte graphique : thème clair par défaut, noir sur blanc, contraste maximal, angles vifs.
-//!
-//! Contours de composants à 21:1, pour 3:1 exigés par le WCAG 1.4.11. Les états ne reposent jamais
-//! sur la couleur : ils sont écrits en toutes lettres.
-
 use iced::theme::Palette;
 use iced::widget::{button, checkbox, container, text_input};
 use iced::{Border, Color, Theme};
 
-/// Fond principal `#FFFFFF`.
 pub(crate) const BACKGROUND: Color = Color::WHITE;
 /// Texte et éléments actifs `#000000` (21:1 sur le fond).
 pub(crate) const TEXT: Color = Color::BLACK;
@@ -18,7 +12,6 @@ pub(crate) const CONTROL_BORDER: Color = Color::BLACK;
 /// Fond d'un composant survolé `#E5E5E5` (texte noir dessus : 16,7:1).
 pub(crate) const HOVER: Color = Color::from_rgb(0.898, 0.898, 0.898);
 
-/// Angles vifs.
 const RADIUS: f32 = 2.0;
 
 pub(crate) fn bonk() -> Theme {
@@ -142,7 +135,6 @@ pub(crate) fn input_style(_theme: &Theme, status: text_input::Status) -> text_in
 mod tests {
     use super::*;
 
-    /// Les couleurs viennent de `design/tokens.json`, partagé avec l'application Android.
     #[test]
     fn la_charte_suit_le_fichier_commun() {
         let tokens: serde_json::Value =

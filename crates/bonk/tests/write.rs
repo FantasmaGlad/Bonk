@@ -1,8 +1,3 @@
-//! Écriture, vérification et réparation du GPT de bout en bout, par le binaire, sur des fichiers image
-//! (`--simulate`) : aucun disque n'est touché. Les formats compressés sont produits par les outils du
-//! système (`gzip`, `xz`, `zstd`) quand ils sont installés ; sinon ces cas sont ignorés hors CI et
-//! échouent en CI.
-
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};

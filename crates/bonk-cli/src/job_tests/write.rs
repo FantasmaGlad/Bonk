@@ -1,5 +1,3 @@
-//! Écriture et vérification : ordre des garde-fous, images refusées, relecture du support.
-
 use super::*;
 
 #[test]
@@ -485,7 +483,6 @@ fn gzip_stored(data: &[u8]) -> Vec<u8> {
     out
 }
 
-/// ISO hybride qui annonce `sectors` secteurs de 2 Kio, dans une image de 1 Mio.
 fn cut_iso(sectors: u32) -> Vec<u8> {
     let mut image: Vec<u8> = (0..1usize << 20).map(|i| (i % 251) as u8).collect();
     image[446..510].fill(0);

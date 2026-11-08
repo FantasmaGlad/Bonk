@@ -1,10 +1,3 @@
-//! Formatage : une partition unique alignée sur 1 Mio et son système de fichiers, écrits sur
-//! [`crate::BlockDevice`].
-//!
-//! FAT32 est écrit ici, à l'identique sur chaque hôte et sans outil externe ; exFAT, NTFS et ext4
-//! restent aux outils de l'hôte, qui ne reçoivent d'ici que la table. Rien ne dépend de l'horloge ni
-//! du hasard : les identifiants dérivent d'une graine donnée par l'appelant.
-
 pub mod fat32;
 pub mod fat32_tree;
 pub mod table;

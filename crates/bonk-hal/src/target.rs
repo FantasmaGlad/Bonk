@@ -1,16 +1,8 @@
-//! Choix et préparation d'une cible d'écriture.
-//!
-//! Trois garde-fous, dans cet ordre : le filtre de sécurité décide que la cible est écrivable ;
-//! les partitions montées sont démontées ; juste avant l'ouverture, on ré-énumère et on vérifie que
-//! c'est bien le même disque (identifiant, numéro de série, taille), pour qu'un disque débranché puis
-//! remplacé entre-temps ne soit jamais écrit à la place de l'autre.
-
 use std::fmt;
 
 use crate::disk::Disk;
 use crate::safety::{Eligibility, FilterOptions, evaluate};
 
-/// Ce qui identifie un disque d'un branchement à l'autre.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TargetIdentity {
     pub id: String,
@@ -31,9 +23,7 @@ impl From<&Disk> for TargetIdentity {
 #[derive(Debug)]
 pub enum OpenTargetError {
     NotFound(String),
-    /// Le filtre de sécurité refuse ou masque la cible.
     Refused(Eligibility),
-    /// Ce n'est plus le même disque que celui qui a été choisi.
     IdentityChanged {
         expected: TargetIdentity,
         actual: TargetIdentity,
@@ -93,7 +83,6 @@ pub fn reverify<'a>(
     Ok(disk)
 }
 
-/// Points de montage de tout ce que porte le disque, du plus profond au moins profond.
 #[must_use]
 pub fn mount_points(disk: &Disk) -> Vec<String> {
     let mut mounts: Vec<String> = disk

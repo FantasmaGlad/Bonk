@@ -1,7 +1,3 @@
-//! L'écriture sur le téléphone : le moteur de la ligne de commande, sur la clé qu'Android a confiée à
-//! l'application. L'accès au matériel change, et avec lui la revérification d'identité : la liste vient de
-//! l'écran, donc la clé ouverte est comparée au disque choisi par `same_drive`, et sa taille par le moteur.
-
 use std::path::Path;
 use std::sync::atomic::Ordering;
 

@@ -1,8 +1,3 @@
-//! Sous-commande `bonk list` : les disques que Bonk peut écrire, et pourquoi il écarte les autres.
-//!
-//! La commande ne fait que présenter les verdicts de `bonk_hal::evaluate` : aucune règle de sécurité
-//! ne vit ici. Elle est en lecture seule.
-
 use std::io::{self, Write};
 
 use bonk_hal::{Disk, Eligibility, FilterOptions, bus_label, evaluate, format_size, state_label};

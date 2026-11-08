@@ -1,5 +1,3 @@
-//! Paramètres des méthodes, validés avant tout geste.
-
 use std::path::PathBuf;
 
 use bonk_core::format::Filesystem;
@@ -60,7 +58,6 @@ pub(super) struct WatchParams {
     pub(super) allow_virtual: bool,
 }
 
-/// Paramètres de `catalog.list`.
 #[derive(Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub(super) struct CatalogParams {
@@ -78,7 +75,6 @@ pub(super) struct CatalogParams {
 pub(super) struct TransferParams {
     pub(super) target: String,
     pub(super) source: Option<PathBuf>,
-    /// Image du catalogue signé, à la place de `source`.
     pub(super) image: Option<String>,
     /// Adresse du catalogue ; sa signature est contrôlée d'où qu'il vienne.
     pub(super) catalog_url: Option<String>,
@@ -91,25 +87,19 @@ pub(super) struct TransferParams {
     pub(super) no_repair_gpt: bool,
     pub(super) show_internal: bool,
     pub(super) allow_virtual: bool,
-    /// `metadata` ou `data`.
     pub(super) trace_io: Option<String>,
-    /// Empreinte SHA-256 publiée pour le fichier source.
     pub(super) sha256: Option<String>,
-    /// Fichier d'empreintes publié, chemin ou adresse.
     pub(super) sha256_file: Option<String>,
-    /// Dossier des téléchargements.
     pub(super) cache_dir: Option<PathBuf>,
     /// `auto` (par défaut), `raw` ou `extract`.
     pub(super) mode: Option<String>,
     /// `never` (par défaut : personne devant l'écran) ou `auto`.
     pub(super) elevate: Option<String>,
-    /// Tient lieu de `yes` et autorise un disque interne admis par `show_internal`.
     pub(super) force: bool,
     /// Système de fichiers de `disk.format` : `fat32`, `exfat`, `ntfs`, `ext4`.
     pub(super) fs: Option<String>,
     /// Table de `disk.format` : `gpt` (par défaut) ou `mbr`.
     pub(super) table: Option<String>,
-    /// Étiquette de `disk.format`.
     pub(super) label: Option<String>,
 }
 

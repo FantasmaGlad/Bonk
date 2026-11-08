@@ -1,9 +1,3 @@
-//! Modèle de disque commun aux systèmes.
-//!
-//! Les adaptateurs d'OS le remplissent de faits bruts, sans interprétation. La décision de
-//! proposer, cacher ou interdire un disque revient à la fonction pure de [`crate::safety`], testable
-//! sans matériel et identique sur tous les systèmes.
-
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

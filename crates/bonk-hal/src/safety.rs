@@ -1,17 +1,3 @@
-//! Filtre de sécurité des disques.
-//!
-//! [`evaluate`] est une fonction pure : elle ne lit que le [`Disk`] qu'on lui donne. Elle ne
-//! touche ni le système ni le réseau, donc elle se teste sur des jeux de données capturés (voir
-//! `tests/fixtures/`) et donne le même verdict sur les trois OS. C'est la seule porte vers
-//! l'écriture : la CLI comme la GUI proposent un disque si et seulement si le verdict est
-//! [`Eligibility::Offered`], et le revérifient juste avant d'écrire.
-//!
-//! # Parti pris : en cas de doute, exclure
-//! Un disque refusé à tort se contourne (démontage, autre outil) ; un disque effacé à tort ne se
-//! récupère pas. Toutes les règles vont donc dans le sens du refus : bus inconnu traité comme
-//! interne, signature RAID/LVM/ZFS refusée même inactive, partition d'échange refusée même inutilisée,
-//! montage hors des chemins utilisateur refusé même s'il est manuel (`/mnt/cle` : démonter d'abord).
-
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

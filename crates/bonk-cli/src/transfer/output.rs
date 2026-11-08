@@ -1,5 +1,3 @@
-//! Ce que ces commandes écrivent : événements JSON, progression, lignes de résultat.
-
 use std::io::{self, IsTerminal, Write};
 use std::time::{Duration, Instant};
 

@@ -1,6 +1,3 @@
-//! Téléchargements contre un serveur HTTP local : coupures, reprises, réponses inattendues. Aucun accès au
-//! réseau réel.
-
 #![allow(clippy::unwrap_used)]
 
 use std::cell::Cell;
@@ -23,11 +20,8 @@ enum Reply {
     Serve,
     /// Répond normalement, mais coupe après ce nombre d'octets du corps.
     CutAfter(usize),
-    /// Ignore `Range`.
     IgnoreRange,
-    /// Partielle, à un autre début que celui demandé.
     WrongStart,
-    /// Accepte et ne dit plus rien.
     Mute,
     Status(u16),
 }

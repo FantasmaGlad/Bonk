@@ -1,5 +1,3 @@
-//! Panneau d'écriture : ouverture, délai, confirmation, image.
-
 use super::*;
 
 pub(super) fn vieillir_le_panneau(app: &mut App) {

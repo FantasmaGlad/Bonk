@@ -1,5 +1,3 @@
-//! `bonk debug layout` : MBR et GPT décodés, avec leurs constats.
-
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 

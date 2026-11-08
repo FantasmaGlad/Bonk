@@ -1,5 +1,3 @@
-//! Traduction des erreurs du moteur en codes stables, et progression sous annulation.
-
 use bonk_core::BlockError;
 use bonk_core::codec::Format;
 use bonk_core::write::{Control, Progress, VerifyError, WriteError};

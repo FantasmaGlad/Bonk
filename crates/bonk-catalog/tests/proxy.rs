@@ -1,6 +1,3 @@
-//! Le proxy : le nom passe par lui, et sans lui rien ne part. Fichier à part : le réglage vaut pour tout le
-//! processus, et chaque fichier de test en a un.
-
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc;

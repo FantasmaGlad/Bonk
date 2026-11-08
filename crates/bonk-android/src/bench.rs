@@ -1,5 +1,3 @@
-//! Essais sur une vraie clé : ce qui décide si l'écriture sans root est possible sur un téléphone.
-
 use std::time::Instant;
 
 use bonk_core::{BlockDevice, BlockError};

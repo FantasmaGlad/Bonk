@@ -1,11 +1,3 @@
-//! Faits bruts sur les disques de Windows et leur traduction en [`Disk`].
-//!
-//! La collecte (`platform/windows.rs`) n'existe que sous Windows ; cette traduction est pure et se teste,
-//! se rejoue et se relit sur tous les systèmes : une capture de Windows sert ainsi de jeu de test partout.
-//!
-//! # Échouer plutôt que deviner
-//! Sans volume système retrouvé sur un disque, l'énumération échoue : le disque système paraîtrait libre.
-
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

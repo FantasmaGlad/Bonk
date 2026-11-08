@@ -1,6 +1,3 @@
-//! La ligne de commande parle anglais, quelles que soient la commande et l'issue : un script et le support
-//! comparent ces textes, et rien ne les traduit.
-
 use std::process::Command;
 
 const COMMANDES: &[&[&str]] = &[

@@ -1,7 +1,3 @@
-//! Fenêtre de Bonk : dessine l'état de `bonk_ui::Model` avec Iced et accomplit ce qu'il demande.
-//!
-//! L'écriture lance `bonk write` dans un processus séparé (voir `transfer`), avec tous ses garde-fous.
-
 mod catalog;
 mod navigation;
 #[cfg(test)]
@@ -171,7 +167,6 @@ fn save_language(program: &std::path::Path, lang: Lang) {
     }
 }
 
-/// Le sélecteur de fichier du système, limité aux formats que Bonk écrit.
 async fn pick_image(lang: Lang) -> Option<PathBuf> {
     rfd::AsyncFileDialog::new()
         .set_title(lang.pick("Choose the image to write", "Choisir l'image à écrire"))

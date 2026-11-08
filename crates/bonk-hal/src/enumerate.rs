@@ -1,14 +1,3 @@
-//! Énumération des disques de l'hôte.
-//!
-//! [`enumerate_disks`] renvoie des faits bruts ([`Disk`]) ; la décision de proposer ou d'écarter
-//! un disque appartient à [`crate::safety::evaluate`].
-//!
-//! # Échouer plutôt que deviner
-//! Si une source dont dépend la sécurité est illisible (points de montage, base udev, liste des
-//! disques), l'énumération échoue : proposer un disque sans savoir s'il est monté serait pire que ne
-//! rien proposer. Les attributs purement descriptifs (modèle, étiquette) ont, eux, une valeur par
-//! défaut.
-
 use std::error::Error;
 use std::fmt;
 use std::io;

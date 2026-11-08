@@ -1,9 +1,3 @@
-//! Ouverture de l'image à écrire.
-//!
-//! Le fichier est ouvert une seule fois ; empreinte, analyse, écriture et vérification le lisent par
-//! le même descripteur, chacune à sa position. Un fichier remplacé sous le même nom entre deux étapes
-//! ne peut donc pas faire contrôler d'autres octets que ceux qui sont écrits.
-
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
@@ -50,7 +44,6 @@ impl ImageFile {
         self.len
     }
 
-    /// Les octets du fichier tels quels, depuis le début.
     pub fn raw(&self) -> FileReader {
         FileReader {
             file: Arc::clone(&self.file),
@@ -58,7 +51,6 @@ impl ImageFile {
         }
     }
 
-    /// Les octets de l'image, décompressés, depuis le début.
     pub(crate) fn decoded(&self) -> Result<(Source, SourceInfo), JobError> {
         let source = codec::open(self.raw(), Some(self.len)).map_err(|e| match e {
             CodecError::Unsupported(_) => fail(Code::SourceFormatUnsupported, e),

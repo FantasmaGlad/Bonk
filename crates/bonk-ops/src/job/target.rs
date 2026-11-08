@@ -1,6 +1,3 @@
-//! Choix et ouverture de la cible, les garde-fous avant le premier geste ; relecture de sa table après le
-//! dernier.
-
 use std::fs;
 use std::path::Path;
 
@@ -113,7 +110,6 @@ pub(super) fn reread_table(disk: &Path, elevation: Elevation, deps: &Deps<'_>) {
     }
 }
 
-/// Comment ouvrir la cible.
 pub(super) struct OpenRequest {
     pub(super) options: FilterOptions,
     pub(super) access: Access,
@@ -146,7 +142,6 @@ pub(super) fn open_read_only(
     Ok((device, info))
 }
 
-/// Ouvre la cible choisie et rend le périphérique, ses informations et les points démontés.
 pub(super) fn open_target(
     chosen: Chosen,
     target: &Target,

@@ -1,5 +1,3 @@
-//! Un disque à l'écran : sa carte, son détail, la confirmation d'un disque interne.
-
 use bonk_hal::{
     Disk, Eligibility, Lang, bus_label, format_size, kind_label, state_label, verdict_badge,
 };

@@ -1,5 +1,3 @@
-//! Tor déjà lancé sur cette machine : Bonk le signale et ne s'en sert que si on le lui demande.
-
 use std::net::{SocketAddr, TcpStream};
 use std::time::Duration;
 

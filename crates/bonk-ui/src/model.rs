@@ -1,8 +1,3 @@
-//! L'état de l'interface et ses règles, sans dessin ni système : chaque interface le dessine à sa façon et
-//! accomplit les [`Effect`] demandés. Elle ne contient aucune règle de sécurité ni logique d'écriture : le
-//! verdict vient de `bonk_hal::evaluate`, et un disque doit être proposé, un récapitulatif affiché et le bouton
-//! n'est actif qu'après trois secondes.
-
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -27,7 +22,6 @@ pub enum Effect {
     /// Arguments de `bonk write` ; une interface sans ligne de commande les ignore.
     StartWrite(Vec<String>),
     CancelWrite(u32),
-    /// Position relative, de 0 à 1, à garder visible.
     ScrollList(f32),
     ScrollMenu(f32),
 }
@@ -45,46 +39,35 @@ pub enum Message {
     ToggleAll(bool),
     /// Sélectionne (ou désélectionne) un disque, par identifiant.
     Select(String),
-    /// Action au clavier.
     Nav(Nav),
-    /// Copie dans le presse-papiers la commande équivalente à la vue.
     Copy,
-    /// Saisie du chemin de l'image à écrire.
     ImageInput(String),
-    /// Saisie de l'empreinte, ou du chemin ou de l'adresse d'un fichier d'empreintes.
     HashInput(String),
-    /// Écrire les octets tels quels, sans refuser une image que l'analyse ne juge pas amorçable.
     ToggleRaw(bool),
     TorDetected(Option<String>),
     ToggleTor(bool),
     SwitchLanguage,
-    /// Table MBR pour une clé Windows.
     ToggleMbr(bool),
-    /// Ouvre le sélecteur de fichier du système pour choisir l'image.
     BrowseImage,
     /// Réponse du sélecteur ; `None` : fermé sans choix.
     ImagePicked(Option<PathBuf>),
-    /// Ouvre ou referme le menu des images.
     ToggleMenu,
     MenuCategory(Option<String>),
     MenuSystem(Option<String>),
     CatalogLoaded(Result<Vec<crate::catalog::System>, String>),
     /// Une version choisie : adresse, empreinte et réglages automatiques.
     MenuChose(crate::catalog::Choice),
-    /// Montre ou cache l'image manuelle et les options.
     ToggleAdvanced,
     /// Battement qui rafraîchit le décompte avant d'autoriser l'écriture.
     Clock,
     /// Lance l'écriture (après le délai de réflexion).
     StartWrite,
     CancelWrite,
-    /// Referme le résultat d'une écriture.
     DismissWrite,
     /// Dans la demande de confirmation d'un disque interne : effacer quand même.
     ConfirmInternal,
     /// Dans la demande de confirmation d'un disque interne : renoncer.
     CloseInternal,
-    /// Ce que rapporte le processus d'écriture.
     Write(Event),
 }
 
@@ -99,7 +82,6 @@ pub enum Nav {
     Escape,
 }
 
-/// Composant qui a le focus clavier.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Focus {
     Refresh,
@@ -107,32 +89,23 @@ pub enum Focus {
     Virtual,
     All,
     Disk(String),
-    /// Champ du chemin de l'image, dans le panneau d'écriture du disque sélectionné.
     Image,
-    /// Bouton qui ouvre le sélecteur de fichier, à côté du champ de l'image.
     Browse,
-    /// Champ de l'empreinte.
     Hash,
-    /// Menu des images.
     Menu,
-    /// Bouton qui montre l'image manuelle et les options.
     Advanced,
-    /// Case de l'écriture brute.
     Tor,
     Language,
     Raw,
-    /// Case de la table MBR.
     Mbr,
     /// Bouton du panneau d'écriture : écrire, annuler ou fermer selon l'état.
     Action,
-    /// Bouton de copie de la commande équivalente, dernier de l'ordre de Tab.
     Copy,
 }
 
 /// Délai de réflexion avant que « Écrire » ne s'active.
 pub const WRITE_DELAY: Duration = Duration::from_secs(3);
 
-/// Où en est l'écriture d'une image depuis la fenêtre.
 #[derive(Debug, Default)]
 pub enum WriteState {
     #[default]
@@ -173,7 +146,6 @@ pub struct Model {
     pub selected: Option<String>,
     pub focus: Option<Focus>,
     pub write: WriteState,
-    /// La demande de confirmation d'un disque interne est à l'écran.
     pub confirming_internal: bool,
     pub catalog: crate::catalog::CatalogState,
     pub menu_filter: crate::catalog::MenuFilter,
@@ -182,9 +154,7 @@ pub struct Model {
     pub lang: Lang,
     pub use_tor: bool,
     pub menu_open: bool,
-    /// Ligne du menu désignée au clavier.
     pub menu_index: usize,
-    /// Image manuelle et options visibles.
     pub advanced: bool,
     /// À l'ouverture de la fenêtre, un seul disque proposé se sélectionne seul, une fois pour chaque disque :
     /// écrire reste un geste explicite, avec le disque nommé à l'écran.
@@ -297,7 +267,6 @@ impl Model {
         equivalent_commands(self.view_options(), self.selected.as_deref(), None).join(" ; ")
     }
 
-    /// Commandes qui donnent ce que montre la fenêtre en ce moment.
     pub fn equivalents(&self) -> Vec<String> {
         let write = match &self.write {
             WriteState::Draft {
@@ -330,7 +299,6 @@ impl Model {
             .collect()
     }
 
-    /// Le disque est-il proposé, avec les réglages actuels ?
     pub fn offered(&self, id: &str) -> bool {
         self.entries()
             .iter()

@@ -1,4 +1,3 @@
-//! Lecture UDF d'une image reçue d'ailleurs : ni panique, ni boucle, ni allocation sans borne.
 #![no_main]
 use bonk_core::udf::Udf;
 use libfuzzer_sys::fuzz_target;

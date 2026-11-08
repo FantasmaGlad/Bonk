@@ -1,7 +1,3 @@
-//! Point d'entrée unique de Bonk : la fenêtre sans commande, la ligne de commande sinon. Sans la fonctionnalité
-//! `gui`, le binaire ne contient que la ligne de commande : ni Iced, ni rendu, pour les serveurs et les scripts.
-//! La ligne de commande reçoit la fonction qui ouvre la fenêtre : les deux crates ne se connaissent pas.
-
 use std::process::ExitCode;
 
 fn main() -> ExitCode {

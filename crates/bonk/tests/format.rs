@@ -1,6 +1,3 @@
-//! `bonk format --simulate`, relu par les outils de référence : `sgdisk` pour la table, `fsck.vfat` pour le
-//! système de fichiers. Aucun disque réel.
-
 mod common;
 
 use std::path::PathBuf;

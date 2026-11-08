@@ -1,5 +1,3 @@
-//! Touches du clavier vers actions de la fenêtre.
-
 use iced::keyboard::{self, Key, key::Named};
 
 use super::{Message, Nav};

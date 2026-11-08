@@ -1,5 +1,3 @@
-//! Navigation au clavier : chaque touche a le même effet qu'un clic.
-
 use crate::catalog::{CatalogState, writable};
 use crate::model::{Effect, Effects, Focus, Message, Model, Nav, WriteState};
 
@@ -156,7 +154,6 @@ impl Model {
         Vec::new()
     }
 
-    /// Déplace la ligne désignée et garde la liste à sa hauteur.
     fn move_in_menu(&mut self, nav: Nav) -> Effects {
         let CatalogState::Ready(systems) = &self.catalog else {
             return Vec::new();
