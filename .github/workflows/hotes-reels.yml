@@ -1,9 +1,3 @@
-# Essais sur machines réelles du mainteneur (runners auto-hébergés), pour ce que les runners hébergés ne
-# jouent pas : invites UAC (Windows) et `authopen` (macOS), vrais disques USB. Manuel seulement.
-# Prérequis : enregistrer un runner avec l'étiquette `bonk-windows` ou `bonk-macos` ou `bonk-linux`. Sans runner,
-# le job reste en attente : ne pas le lancer. Ne jamais l'exécuter sur un dépôt qui accepte des PR de forks.
-# Aucune écriture sur disque : seule l'énumération en lecture seule est lancée (une écriture réelle exige
-# l'accord explicite du mainteneur, sur sa clé de test).
 name: hotes-reels
 
 on:

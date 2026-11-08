@@ -1,5 +1,3 @@
-# Analyse de sécurité continue du code : CodeQL (Rust) et OpenSSF Scorecard (pratiques du dépôt).
-# Dépôt public : analyses gratuites ; résultats dans l'onglet Sécurité.
 name: securite-code
 
 on:

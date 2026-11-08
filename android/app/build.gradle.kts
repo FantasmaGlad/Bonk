@@ -59,8 +59,7 @@ android {
         }
     }
 
-    // Un APK par puce : le téléphone ne reçoit pas la bibliothèque de l'autre. Seules ces deux puces sont
-    // construites ; sans cette liste, les bibliothèques d'AndroidX feraient annoncer armv7 et x86 sans Bonk.
+    // Sans cette liste, AndroidX ferait annoncer armv7 et x86, sans bibliothèque Bonk.
     splits {
         abi {
             isEnable = true
@@ -70,8 +69,7 @@ android {
         }
     }
 
-    // La langue se choisit dans Bonk, pas dans le téléphone : chaque installation garde le français et
-    // l'anglais, au lieu des seules ressources de la langue du système dans un app bundle.
+    // La langue se choisit dans Bonk : chaque installation garde le français et l'anglais.
     bundle {
         language {
             enableSplit = false
@@ -88,7 +86,6 @@ android {
     sourceSets["main"].res.directories.add(iconsOutput.get().asFile.path)
 }
 
-// La charte vient du même fichier que celle de la fenêtre de bureau.
 val generateTokens by tasks.registering {
     val input = rootProject.file("../design/tokens.json")
     val output = tokensOutput.get().file("app/bonkos/bonk/Tokens.kt").asFile
@@ -117,7 +114,6 @@ val generateTokens by tasks.registering {
     }
 }
 
-// L'icône vient du même dessin que celle du bureau : une seule source, réduite à chaque densité d'Android.
 val generateIcons by tasks.registering {
     val input = rootProject.file("../crates/bonk/assets/icons/512x512/bonk.png")
     val densities = mapOf("mdpi" to 48, "hdpi" to 72, "xhdpi" to 96, "xxhdpi" to 144, "xxxhdpi" to 192)
@@ -160,7 +156,6 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2026.09.00"))
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.compose.material3:material3")
-    // Messages typés avec Rust : la sérialisation de JetBrains, sans réflexion à l'exécution.
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.4.21")
 }

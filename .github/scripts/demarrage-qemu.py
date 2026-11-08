@@ -19,8 +19,7 @@ import sys
 import time
 
 OVMF = "/usr/share/OVMF"
-# Le chargeur BIOS ne parle que sur l'écran : attente fixe, plus courte que le compte à rebours du menu quand
-# il en a un (`--attente`).
+# Le chargeur BIOS n'écrit que sur l'écran : attente fixe, plus courte que le compte à rebours du menu.
 BIOS_MENU_SECONDS = 25
 # Le menu GRUB s'affiche peu après l'annonce du micrologiciel.
 UEFI_BOOT_LIMIT_SECONDS = 180

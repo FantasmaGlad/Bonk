@@ -1,9 +1,3 @@
-# Validation de la compilation.
-# Linux x86_64 d'abord (moins long à échouer) : formatage, lint, tests, version minimale de Rust. Les autres machines
-# (Linux ARM64, Windows x64 et ARM64, macOS ARM64 et Intel) ne démarrent que si ces deux jobs réussissent.
-# L'image des exécuteurs Linux est figée (ubuntu-24.04, pas ubuntu-latest) : l'image change par un commit.
-# Aucun job pour une PR en brouillon ; aucune exécution pour un changement qui ne touche ni le code, ni la
-# chaîne Rust, ni ce fichier (le modifier relance la CI, pour le valider).
 name: ci
 
 on:
@@ -27,12 +21,10 @@ on:
       - ".github/paquets-linux.txt"
   workflow_dispatch:
 
-# Droits minimaux : la CI ne fait que lire le dépôt.
 permissions:
   contents: read
 
-# Sur une PR, une nouvelle exécution annule la précédente : aucune minute payée pour un état dépassé.
-# Sur main, une exécution en cours n'est jamais interrompue (son build release compte).
+# Sur main, une exécution n'est jamais interrompue : son build release compte.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -55,13 +47,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Le canal et les composants (rustfmt, clippy) viennent de rust-toolchain.toml.
       - name: Installer la chaîne Rust du dépôt
         run: rustup toolchain install
       - name: Restaurer le cache de compilation
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      # Paquets listés dans .github/paquets-linux.txt (un seul endroit) : l'image est figée,
-      # un changement de paquet est donc un commit.
       - name: Paquets système
         run: |
           sudo apt-get update
@@ -70,10 +59,7 @@ jobs:
         run: cargo fmt --all --check
       - name: Lint
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      # Le code cfg(target_os) d'un autre système n'est pas compilé ci-dessus : clippy le vérifie ici, sans
-      # édition de liens ni exécution, pour que le code mort ou l'import inutilisé échoue avant les runners
-      # Windows et macOS, plus chers. Ne dit rien du comportement à l'exécution. Sans édition de liens, le C de
-      # ring ne sert pas : `true` tient lieu de compilateur, le vrai passe sur les runners de chaque système.
+      # Sans édition de liens, le C de ring ne sert pas : `true` tient lieu de compilateur.
       - name: Lint croisé (Windows et macOS, compilation seulement)
         env:
           CC_x86_64_pc_windows_gnu: "true"
@@ -86,7 +72,6 @@ jobs:
           rustup target add x86_64-pc-windows-gnu x86_64-apple-darwin aarch64-linux-android
           cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-gnu -- -D warnings
           cargo clippy --workspace --all-targets --locked --target x86_64-apple-darwin -- -D warnings
-          # Android : la bibliothèque de l'application et ce qu'elle partage avec l'ordinateur ; la fenêtre Iced n'y est pas construite.
           cargo clippy -p bonk-core -p bonk-ops -p bonk-cli -p bonk-android -p bonk-ui --all-targets --locked --target aarch64-linux-android -- -D warnings
       - name: Tests
         run: cargo test --workspace --locked
@@ -125,8 +110,6 @@ jobs:
           rustup toolchain install "$MSRV" --profile minimal
           cargo "+$MSRV" check --workspace --locked
 
-  # Le code propre à un système ou à une architecture n'est exercé que sur elle : ces jobs ne démarrent
-  # qu'une fois les deux jobs Linux x86_64 verts (échec rapide, sans mobiliser les autres machines).
   portabilite:
     name: portabilité (${{ matrix.os }})
     needs: [qualite, msrv]
@@ -135,8 +118,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Une machine par couple système/architecture que Bonk livre (binaires.yml) : Linux ARM64, Windows x64 et
-        # ARM64, macOS ARM64 et Intel. Dépôt public : minutes gratuites.
         os: [ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-latest, macos-15-intel]
     steps:
       - name: Récupérer le code
@@ -152,12 +133,10 @@ jobs:
         run: |
           sudo apt-get update
           grep -vE '^[[:space:]]*(#|$)' .github/paquets-linux.txt | xargs sudo apt-get install -y --no-install-recommends
-      # Clippy est relancé ici : il analyse le code conditionné par cfg(target_os), qui n'est pas compilé sous Linux.
       - name: Lint
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Tests
         run: cargo test --workspace --locked
-      # Parcours entier sur un disque virtuel, le disque système restant refusé : aucune vraie clé ici.
       - name: Écriture sur un disque virtuel (Windows)
         if: runner.os == 'Windows'
         shell: pwsh

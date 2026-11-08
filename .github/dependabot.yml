@@ -1,6 +1,3 @@
-# Mises à jour automatisées, une PR par groupe et par semaine pour limiter le coût de la CI.
-# Les actions sont épinglées par empreinte : seul Dependabot les fait bouger.
-# Les images d'exécuteur (ubuntu-24.04) ne sont pas suivies : leur changement est décidé à la main.
 version: 2
 updates:
   - package-ecosystem: cargo
@@ -27,7 +24,6 @@ updates:
     groups:
       actions:
         patterns: ["*"]
-  # Outils de CI installés par pip, épinglés par empreinte dans .github/pip/.
   - package-ecosystem: pip
     directory: /.github/pip
     schedule:
@@ -39,7 +35,6 @@ updates:
     groups:
       pip:
         patterns: ["*"]
-  # Dépendances des cibles de fuzzing, hors du workspace.
   - package-ecosystem: cargo
     directory: /fuzz
     schedule:

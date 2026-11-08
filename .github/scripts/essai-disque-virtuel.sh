@@ -1,6 +1,5 @@
 #!/bin/sh
-# Écrit et vérifie un disque RAM ; le disque système doit rester refusé. Le runner est sudoer sans mot de passe :
-# macOS ne donne l'accès brut aux disques qu'à root, et authopen demanderait un mot de passe à l'écran.
+# sudo : macOS ne donne l'accès brut qu'à root, et authopen demanderait un mot de passe à l'écran.
 set -eu
 cargo build -p bonk --locked
 bonk="$PWD/target/debug/bonk"
@@ -24,7 +23,6 @@ print(s[0]['id'])")
 sudo "$bonk" write "$id" "$image" --allow-virtual --mode raw --yes
 sudo "$bonk" verify "$id" "$image" --allow-virtual
 
-# FAT32 par Bonk, exFAT par le système.
 sudo "$bonk" format "$id" --fs fat32 --label ESSAI --allow-virtual --yes
 sudo "$bonk" format "$id" --fs exfat --label ESSAI --allow-virtual --yes
 
