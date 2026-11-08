@@ -183,9 +183,15 @@ pub(super) fn extraction_lines(
 ) -> io::Result<()> {
     writeln!(
         out,
-        "  Mode: extraction, {} files, FAT32 on {}, UEFI boot",
+        "  Mode: extraction, {} files, FAT32 on {}, UEFI boot on {}",
         extraction.files,
-        extraction.table.name()
+        extraction.table.name(),
+        extraction
+            .architectures
+            .iter()
+            .map(|machine| machine.name())
+            .collect::<Vec<_>>()
+            .join(", ")
     )?;
     if extraction.wim_parts > 0 {
         writeln!(

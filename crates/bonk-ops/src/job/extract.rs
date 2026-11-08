@@ -1,6 +1,7 @@
 //! Clé d'installation Windows : l'ISO n'est pas écrite telle quelle, elle n'amorce pas depuis un disque. Ses
 //! fichiers sont copiés sur une partition FAT32 écrite ici ; un `install.wim` trop grand pour FAT32 est
-//! découpé en `.swm`, sans recompression. Le démarrage se fait en UEFI, par le chargeur de l'ISO.
+//! découpé en `.swm`, sans recompression. Le démarrage se fait en UEFI, par le chargeur de l'ISO, sur x86_64,
+//! x86 ou ARM64 selon les chargeurs qu'elle porte.
 
 use std::io::{self, Read};
 use std::path::Path;
@@ -10,7 +11,7 @@ use bonk_core::format::fat32::Volume;
 use bonk_core::format::fat32_tree::{self, Layout, MAX_FILE_BYTES, NewFile};
 use bonk_core::format::table::{self, TableKind};
 use bonk_core::format::{Filesystem, FormatError, Ids};
-use bonk_core::pe::{self, Signer};
+use bonk_core::pe::{self, Machine, Signer};
 use bonk_core::udf::{self, Content, ReadAt, Tree, Udf};
 use bonk_core::wim::{self, Segment};
 use bonk_core::write::{Control, Phase, Progress};
@@ -27,7 +28,12 @@ use super::types::{Deps, JobError, TargetInfo, fail};
 use super::write::WriteJob;
 use crate::errors::Code;
 
-const LOADER: [&str; 3] = ["efi", "boot", "bootx64.efi"];
+/// Nom imposé par l'UEFI au chargeur par défaut de chaque puce, dans l'ordre où le plan les cite.
+const LOADERS: [(&str, Machine); 3] = [
+    ("bootx64.efi", Machine::X86_64),
+    ("bootaa64.efi", Machine::Arm64),
+    ("bootia32.efi", Machine::X86),
+];
 const LABEL: &str = "BONK-WIN";
 /// Le chargeur tient largement là-dedans ; le plafond protège d'une image construite pour tromper.
 const LOADER_LIMIT: u64 = 64 << 20;
@@ -44,6 +50,9 @@ pub struct Extraction {
     pub bytes: u64,
     /// `.swm` parts; 0: the WIM fits as is.
     pub wim_parts: usize,
+    /// Processors the drive boots on: one per loader that matches its own name.
+    pub architectures: Vec<Machine>,
+    /// Signer of the first loader of `architectures`.
     pub signer: Signer,
     /// What this certificate implies, in one sentence.
     pub secure_boot: String,
@@ -154,6 +163,7 @@ pub(super) struct WindowsImage {
     items: Vec<Item>,
     directories: Vec<Vec<String>>,
     signer: Signer,
+    architectures: Vec<Machine>,
     wim_parts: usize,
 }
 
@@ -179,22 +189,35 @@ pub(super) fn detect(image: &ImageFile) -> Result<Option<WindowsImage>, JobError
     let wim = tree
         .find(&["sources", "install.wim"])
         .or_else(|| tree.find(&["sources", "install.esd"]));
-    let (Some(loader), Some(wim)) = (tree.find(&LOADER), wim) else {
+    let Some(wim) = wim else {
         return Ok(None);
     };
-    if loader.size > LOADER_LIMIT {
-        return Ok(None);
+    let mut architectures = Vec::new();
+    let mut signer = None;
+    for (name, expected) in LOADERS {
+        let Some(loader) = tree.find(&["efi", "boot", name]) else {
+            continue;
+        };
+        if loader.size > LOADER_LIMIT {
+            continue;
+        }
+        let bytes = read_whole(image, &loader.content, loader.size).map_err(|e| unreadable(&e))?;
+        // Le micrologiciel choisit le fichier par son nom : un chargeur d'une autre puce n'y démarrerait pas.
+        if pe::machine(&bytes) != Some(expected) {
+            continue;
+        }
+        architectures.push(expected);
+        signer.get_or_insert_with(|| pe::signer(&bytes).unwrap_or(Signer::Unsigned));
     }
-    let bytes = read_whole(image, &loader.content, loader.size).map_err(|e| unreadable(&e))?;
-    if !pe::is_x86_64(&bytes) {
+    let Some(signer) = signer else {
         return Ok(None);
-    }
-    let signer = pe::signer(&bytes).unwrap_or(Signer::Unsigned);
+    };
     let (items, wim_parts) = plan_items(image, &tree, wim)?;
     Ok(Some(WindowsImage {
         items,
         directories: tree.directories.clone(),
         signer,
+        architectures,
         wim_parts,
     }))
 }
@@ -292,6 +315,7 @@ impl WindowsImage {
             files: self.items.len(),
             bytes: self.items.iter().map(|item| item.size).sum(),
             wim_parts: self.wim_parts,
+            architectures: self.architectures.clone(),
             secure_boot: self.signer.meaning(),
             signer: self.signer.clone(),
         }

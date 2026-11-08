@@ -5,12 +5,36 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 const MACHINE_X86_64: u16 = 0x8664;
+const MACHINE_X86: u16 = 0x14C;
+const MACHINE_ARM64: u16 = 0xAA64;
 const OPTIONAL_PE32: u16 = 0x10B;
 const OPTIONAL_PE32_PLUS: u16 = 0x20B;
 /// `commonName` en DER : l'OID 2.5.4.3.
 const COMMON_NAME_OID: [u8; 5] = [0x06, 0x03, 0x55, 0x04, 0x03];
 pub const PCA_2011: &str = "Microsoft Windows Production PCA 2011";
 pub const UEFI_CA_2023: &str = "Windows UEFI CA 2023";
+
+/// Processor a UEFI loader runs on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub enum Machine {
+    #[serde(rename = "x86_64")]
+    X86_64,
+    #[serde(rename = "x86")]
+    X86,
+    #[serde(rename = "arm64")]
+    Arm64,
+}
+
+impl Machine {
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::X86_64 => "x86_64",
+            Self::X86 => "x86",
+            Self::Arm64 => "arm64",
+        }
+    }
+}
 
 /// Authority of the loader certificate.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -63,12 +87,15 @@ fn coff_offset(file: &[u8]) -> Option<usize> {
     (file.get(pe..pe.checked_add(4)?)? == b"PE\0\0").then_some(pe + 4)
 }
 
-/// Le fichier est-il un exécutable PE pour x86_64 ?
+/// La puce d'un exécutable PE. `None` : pas un PE, ou une puce qu'un PC ne démarre pas.
 #[must_use]
-pub fn is_x86_64(file: &[u8]) -> bool {
-    coff_offset(file)
-        .and_then(|coff| u16_at(file, coff))
-        .is_some_and(|machine| machine == MACHINE_X86_64)
+pub fn machine(file: &[u8]) -> Option<Machine> {
+    match u16_at(file, coff_offset(file)?)? {
+        MACHINE_X86_64 => Some(Machine::X86_64),
+        MACHINE_X86 => Some(Machine::X86),
+        MACHINE_ARM64 => Some(Machine::Arm64),
+        _ => None,
+    }
 }
 
 /// Les noms communs d'une structure DER : ceux des certificats, sujets et émetteurs.
@@ -179,9 +206,11 @@ mod tests {
 
     #[test]
     fn l_architecture_est_lue() {
-        assert!(is_x86_64(&pe(MACHINE_X86_64, &[])));
-        assert!(!is_x86_64(&pe(0xAA64, &[])));
-        assert!(!is_x86_64(&[]));
+        assert_eq!(machine(&pe(0x8664, &[])), Some(Machine::X86_64));
+        assert_eq!(machine(&pe(0x14C, &[])), Some(Machine::X86));
+        assert_eq!(machine(&pe(0xAA64, &[])), Some(Machine::Arm64));
+        assert_eq!(machine(&pe(0x1C4, &[])), None);
+        assert_eq!(machine(&[]), None);
     }
 
     #[test]
@@ -192,7 +221,7 @@ mod tests {
                 let mut bad = good.clone();
                 bad[at] = byte;
                 let _ = signer(&bad);
-                let _ = is_x86_64(&bad);
+                let _ = machine(&bad);
             }
             let _ = signer(&good[..at]);
         }
