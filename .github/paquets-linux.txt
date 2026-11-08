@@ -1,8 +1,4 @@
-# Paquets système que les jobs Linux de ci.yml installent en plus de l'image de l'exécuteur (un par ligne).
-# Un ajout est un commit, relu comme le reste ; l'image est figée dans ci.yml (ubuntu-24.04).
-# Aucun test ne se saute en CI quand un outil manque (crates/bonk/tests/common) : tout outil exigé par un
-# test figure ici même s'il est déjà dans l'image, pour que la dépendance soit écrite.
-#
+# Tout outil exigé par un test figure ici, même déjà présent dans l'image.
 # Xvfb et xauth : affichage virtuel du test de la fenêtre.
 xvfb
 xauth

@@ -1,5 +1,3 @@
-# Contrôle des workflows eux-mêmes : syntaxe (actionlint) et failles classiques (zizmor : injection par
-# expression, droits excessifs, actions non épinglées). Seul le dossier .github est concerné.
 name: securite-workflows
 
 on:

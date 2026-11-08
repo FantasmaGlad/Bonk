@@ -1,6 +1,3 @@
-# Manifestes de distribution (Scoop, Homebrew, AUR, winget) générés à partir des empreintes d'une release
-# publiée, puis joints à cette release. Rien n'est soumis aux canaux : c'est une décision du mainteneur
-# (comptes et dépôts tiers à créer).
 name: distribution
 
 on:

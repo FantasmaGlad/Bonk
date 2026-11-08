@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/* La charte de l'application, tirée de design/tokens.json : textes, boutons, cadres. */
 
 @Composable
 internal fun BonkTheme(content: @Composable () -> Unit) {

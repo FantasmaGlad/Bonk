@@ -6,12 +6,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonClassDiscriminator
 
-/*
- * Ce qui passe entre l'application et Rust (`crates/bonk-android/src/screen.rs`). Les échantillons de
- * `src/test/resources/protocole.json` viennent du code Rust ; les tests de ce côté les relisent avec ces types.
- */
 
-/** Un message vers Rust ; `type` le désigne. */
 @Serializable
 sealed interface ToRust
 
@@ -102,7 +97,6 @@ data class Drive(
 @Serializable
 data class PartitionInfo(val label: String?, @SerialName("size_bytes") val sizeBytes: Long)
 
-/** Ce que Rust demande à l'application ; `do` le désigne. */
 @Serializable
 sealed interface Effect
 
@@ -129,7 +123,6 @@ data class Write(
     val mbr: Boolean,
 ) : Effect
 
-/** La réponse de Rust à chaque message : l'état à dessiner et les effets à accomplir. */
 @Serializable
 data class Answer(val state: ScreenState = ScreenState(), val effects: List<Effect> = emptyList())
 
@@ -214,11 +207,9 @@ data class MenuView(
 @Serializable
 data class MenuRow(val title: String, val note: String? = null, val index: Int? = null)
 
-/** Réponse d'un appel natif qui ne rend rien d'autre qu'un éventuel échec. */
 @Serializable
 data class Outcome(val error: String? = null)
 
-/** Réponse de la sonde d'une clé. */
 @Serializable
 data class Probe(
     @SerialName("size_bytes") val sizeBytes: Long = 0,

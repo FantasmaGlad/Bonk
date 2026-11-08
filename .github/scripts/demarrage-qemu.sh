@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-# Démarrage d'une clé écrite par Bonk, sous QEMU. La clé est un fichier image : aucun périphérique réel n'est
-# touché.
-# Usage : demarrage-qemu.sh <bonk> <image ou URL> <bios|uefi|secureboot> <dossier de travail> <preuve> [options]
-# Avec une URL : SHA256_FILE donne l'adresse du fichier d'empreintes. Options : celles de demarrage-qemu.py.
-# Niveau de preuve : un motif du système démarré (installateur, invite de connexion) sur la console série,
-# après écriture et relecture par Bonk.
 set -euo pipefail
 
 bonk=$1

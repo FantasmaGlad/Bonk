@@ -1,4 +1,3 @@
-# Les tests de l'interface (iced_test) dessinent hors écran. Le moteur logiciel tiny-skia les rend
-# indépendants du pilote graphique de la machine, notamment en CI sans carte graphique.
+# tiny-skia rend les tests de l'interface indépendants du pilote graphique, CI comprise.
 [env]
 ICED_TEST_BACKEND = "tiny-skia"

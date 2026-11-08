@@ -34,7 +34,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/* L'écran, dessiné depuis l'état que rend Rust ; chaque geste devient un message typé (Protocol.kt). */
 
 private const val MENU_HEIGHT_DP = 360
 

@@ -17,8 +17,7 @@ private const val BUFFER = 1 shl 20
 private const val RETRY_MS = 10_000L
 private const val TAG = "Bonk"
 
-// Sans délai, une connexion qui ne répond plus suspend le catalogue ou le téléchargement indéfiniment, et
-// l'annulation, vérifiée entre deux lectures, ne passe jamais.
+// Sans délai, une connexion muette bloquerait le téléchargement et son annulation.
 private const val CONNECT_TIMEOUT_MS = 30_000
 private const val READ_TIMEOUT_MS = 60_000
 
@@ -32,14 +31,12 @@ private fun open(address: String): HttpURLConnection =
 private fun fetchOrEmpty(address: String): ByteArray =
     runCatching { open(address).inputStream.use { it.readBytes() } }.getOrDefault(ByteArray(0))
 
-/** Ce que Rust demande et que seul Android sait faire : voir l'USB, le réseau, les fichiers. */
 class Actions(
     private val context: Context,
     private val send: (ToRust) -> Unit,
     private val driveError: (String, String?) -> Unit,
 ) {
     private val usb = context.getSystemService(UsbManager::class.java)
-    /** Réponse de la sonde par clé : taille et partitions. */
     private val probes = HashMap<String, Probe>()
     private val failedAt = HashMap<String, Long>()
     private val enumerating = AtomicBoolean(false)
@@ -114,8 +111,7 @@ class Actions(
         val target = File(context.cacheDir, "image.download")
         val connection = open(address)
         val total = connection.contentLengthLong
-        // L'espace « allouable » compte aussi les caches que le système peut vider ; allocateBytes les vide
-        // alors avant le téléchargement, au lieu de refuser une image qui tiendrait.
+        // allocateBytes vide les caches du système plutôt que de refuser une image qui tiendrait.
         val storage = context.getSystemService(StorageManager::class.java)
         val volume = storage.getUuidForPath(context.cacheDir)
         if (storage.getAllocatableBytes(volume) <= total) {
@@ -152,7 +148,6 @@ class Actions(
         WriteService.start(context, request)
     }
 
-    /** Écrit et vérifie, de bout en bout. Bloque : appelé par le service, hors du fil de l'écran. */
     fun runWrite(request: Write) {
         var downloaded: File? = null
         try {
