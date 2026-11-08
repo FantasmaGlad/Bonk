@@ -1,5 +1,5 @@
-/* Adresse où le BIOS ou l'étage précédent charge chaque code : les adresses absolues y sont résolues. */
 SECTIONS
 {
-    .bonk_mbr 0x7c00 : { KEEP(*(.bonk_mbr)) }
+    .bonk_mbr 0x0600 : { KEEP(*(.bonk_mbr)) }
+    .bonk_test_vbr 0x7c00 : { KEEP(*(.bonk_test_vbr)) }
 }
