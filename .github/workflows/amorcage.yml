@@ -48,4 +48,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends qemu-system-x86
       - name: Démarrer le MBR sous SeaBIOS
-        run: python3 .github/scripts/amorcage-qemu.py crates/bonk-core/src/boot/mbr.bin "Bonk: this drive has no BIOS boot code"
+        run: |
+          python3 .github/scripts/amorcage-qemu.py crates/bonk-core/src/boot/mbr.bin \
+            "Bonk: this drive has no BIOS boot code"
