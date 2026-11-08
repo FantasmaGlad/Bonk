@@ -42,12 +42,10 @@ jobs:
       - name: Réassembler et comparer aux binaires versionnés
         run: |
           boot/assemble.sh
-          git diff --exit-code crates/bonk-core/src/boot/
+          git diff --exit-code crates/bonk-core/src/boot/ boot/
       - name: QEMU
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends qemu-system-x86
       - name: Démarrer le MBR sous SeaBIOS
-        run: |
-          python3 .github/scripts/amorcage-qemu.py crates/bonk-core/src/boot/mbr.bin \
-            "Bonk: this drive has no BIOS boot code"
+        run: python3 .github/scripts/amorcage-qemu.py
