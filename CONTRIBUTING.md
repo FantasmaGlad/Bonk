@@ -31,6 +31,8 @@ cargo test -p bonk --no-default-features --locked
 cargo deny check
 ```
 
+BIOS boot code: edit `boot/*.s`, run `boot/assemble.sh`, commit the regenerated `crates/bonk-core/src/boot/*.bin`. Only the Rust toolchain is used.
+
 Commits follow Conventional Commits, in lower case, with a scope: `fix(parser): reject truncated headers`.
 
 Contributions are accepted under the [MIT license](LICENSE). Security issues: [SECURITY.md](SECURITY.md).
