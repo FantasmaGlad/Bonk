@@ -42,7 +42,7 @@ sha2 = "0.11"
 flate2 = "1"
 zbus = "6"
 libc = "0.2"
-lzma-rust2 = { version = "0.24", default-features = false, features = ["xz", "std"] }
+lzma-rust2 = { version = "0.25", default-features = false, features = ["xz", "std"] }
 ruzstd = "0.9"
 
 # `warn` : la validation passe `-D warnings`, donc ces lints bloquent la fin d'un travail, pas son écriture.
