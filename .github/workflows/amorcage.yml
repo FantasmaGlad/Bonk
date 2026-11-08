@@ -1,5 +1,5 @@
 # Code d'amorçage BIOS : les binaires versionnés sont-ils exactement ceux que donnent les sources, et le
-# MBR démarre-t-il sous QEMU (SeaBIOS) ? Assemblage par la seule chaîne Rust, aucun outil tiers.
+# code démarre-t-il sous QEMU (SeaBIOS) ? Assemblage par la seule chaîne Rust, aucun outil tiers.
 name: amorcage
 
 on:
@@ -47,5 +47,5 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends qemu-system-x86
-      - name: Démarrer le MBR sous SeaBIOS
+      - name: Démarrer le code d'amorçage sous SeaBIOS
         run: python3 .github/scripts/amorcage-qemu.py
