@@ -157,6 +157,7 @@ mod tests {
                 verified: true,
                 gpt_repaired: false,
                 secure_boot: None,
+                bios_boot: false,
             }))
         );
         assert_eq!(parse_line("pas du json"), None);
@@ -230,6 +231,7 @@ mod tests {
                 verified: true,
                 gpt_repaired: true,
                 secure_boot: None,
+                bios_boot: false,
             }))
         );
         assert_eq!(

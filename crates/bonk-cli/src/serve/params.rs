@@ -184,9 +184,10 @@ impl TransferParams {
         }
     }
 
-    pub(super) fn table(&self) -> Result<TableKind, Failure> {
+    /// `default` quand la requête n'en donne pas : MBR pour une clé Windows, GPT pour un formatage.
+    pub(super) fn table(&self, default: TableKind) -> Result<TableKind, Failure> {
         match self.table.as_deref() {
-            None => Ok(TableKind::Gpt),
+            None => Ok(default),
             Some(name) => TableKind::ALL
                 .into_iter()
                 .find(|table| table.name() == name)

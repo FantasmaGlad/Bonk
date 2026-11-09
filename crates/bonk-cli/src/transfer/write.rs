@@ -1,5 +1,6 @@
 use std::io::{self, Write};
 
+use bonk_core::format::table::TableKind;
 use bonk_core::write::VerifyReport;
 use bonk_hal::format_size;
 
@@ -191,6 +192,14 @@ pub(super) fn extraction_lines(
             .collect::<Vec<_>>()
             .join(", ")
     )?;
+    let bios = if extraction.firmware.contains(&job::Firmware::Bios) {
+        "yes, boot code written by Bonk"
+    } else if extraction.table == TableKind::Gpt {
+        "no, GPT table (--table mbr adds it)"
+    } else {
+        "no, the image has no bootmgr for x86 or the drive has sectors other than 512 bytes"
+    };
+    writeln!(out, "  BIOS boot: {bios}")?;
     if extraction.wim_parts > 0 {
         writeln!(
             out,

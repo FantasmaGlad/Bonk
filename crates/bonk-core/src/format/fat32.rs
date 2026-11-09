@@ -101,10 +101,31 @@ pub struct Volume<'a> {
     pub sectors: u64,
     pub label: Option<&'a str>,
     pub volume_id: u32,
+    /// Code de [`crate::boot::VBR`] autour du BPB, et [`crate::boot::STAGE2`] en zone réservée.
+    pub bios_boot: bool,
 }
+
+fn check_bios_boot(block: u32, volume: &Volume<'_>) -> Result<(), FormatError> {
+    use crate::boot::SECTOR;
+    if volume.bios_boot && block != SECTOR {
+        return Err(FormatError::Unsupported(format!(
+            "BIOS boot code needs sectors of {SECTOR} bytes, not {block}"
+        )));
+    }
+    Ok(())
+}
+
+const _: () = assert!(
+    crate::boot::STAGE2_SECTOR as u64
+        + crate::boot::STAGE2.len() as u64 / crate::boot::SECTOR as u64
+        <= RESERVED
+);
 
 fn boot_sector(block: u32, geo: &Geometry, volume: &Volume<'_>) -> Vec<u8> {
     let mut s = vec![0u8; block as usize];
+    if volume.bios_boot {
+        s.copy_from_slice(crate::boot::VBR);
+    }
     s[..3].copy_from_slice(&[0xEB, 0x58, 0x90]);
     s[3..11].copy_from_slice(b"MSWIN4.1");
     put_u16(&mut s, 11, narrow(u64::from(block)));
@@ -156,6 +177,7 @@ pub fn write(dev: &mut dyn BlockDevice, volume: &Volume<'_>) -> Result<Geometry,
     let block = dev.block_size();
     let block64 = u64::from(block);
     let geo = geometry(volume.sectors, block)?;
+    check_bios_boot(block, volume)?;
     let at = |sector: u64| (volume.first_lba + sector) * block64;
 
     let data_start = geo.reserved_sectors + FATS * geo.fat_sectors;
@@ -189,7 +211,14 @@ pub(super) fn write_boot(
     next_free: u32,
 ) -> Result<(), FormatError> {
     let block = dev.block_size();
+    check_bios_boot(block, volume)?;
     let at = |sector: u64| (volume.first_lba + sector) * u64::from(block);
+    if volume.bios_boot {
+        dev.write_at(
+            at(u64::from(crate::boot::STAGE2_SECTOR)),
+            crate::boot::STAGE2,
+        )?;
+    }
     let boot = boot_sector(block, geo, volume);
     let fsinfo = fsinfo_sector(block, free_clusters, next_free);
     let mut third = vec![0u8; block as usize];
@@ -221,9 +250,18 @@ pub(super) fn verify_boot(
 ) -> Result<Geometry, FormatError> {
     let block = dev.block_size();
     let geo = geometry(volume.sectors, block)?;
+    check_bios_boot(block, volume)?;
     let boot = boot_sector(block, &geo, volume);
     for sector in [0, BACKUP_BOOT_SECTOR] {
         compare_sector(dev, volume, sector, &boot)?;
+    }
+    if volume.bios_boot {
+        compare_sector(
+            dev,
+            volume,
+            u64::from(crate::boot::STAGE2_SECTOR),
+            crate::boot::STAGE2,
+        )?;
     }
     Ok(geo)
 }
@@ -235,7 +273,11 @@ fn compare_sector(
     expected: &[u8],
 ) -> Result<(), FormatError> {
     let block = u64::from(dev.block_size());
-    let found = read_range(dev, (volume.first_lba + sector) * block, block)?;
+    let found = read_range(
+        dev,
+        (volume.first_lba + sector) * block,
+        expected.len() as u64,
+    )?;
     if found == expected {
         Ok(())
     } else {
@@ -259,6 +301,7 @@ mod tests {
             sectors,
             label: Some("CLE"),
             volume_id: 0x1234_5678,
+            bios_boot: false,
         }
     }
 
@@ -334,6 +377,54 @@ mod tests {
         let root = fat + usize::try_from(2 * geo.fat_sectors * 512)?;
         assert_eq!(&bytes[root..root + 11], b"CLE        ");
         assert_eq!(bytes[root + 11], 0x08);
+        Ok(())
+    }
+
+    #[test]
+    fn volume_amorcable_porte_le_code_bios_et_le_second_etage()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let sectors = 64 * MIB / 512;
+        let mut dev = MemoryDevice::new(65 * MIB, 512)?;
+        let vol = Volume {
+            bios_boot: true,
+            ..volume(sectors)
+        };
+        write(&mut dev, &vol)?;
+        verify(&dev, &vol)?;
+        let base = usize::try_from(vol.first_lba * 512)?;
+        let bytes = dev.as_bytes();
+        let boot = &bytes[base..base + 512];
+        assert_eq!(&boot[..3], &crate::boot::VBR[..3]);
+        assert_eq!(&boot[90..], &crate::boot::VBR[90..]);
+        assert_eq!(&boot[82..90], b"FAT32   ");
+        assert_eq!(u32_at(boot, 28), 2048);
+        assert_eq!(&bytes[base + 6 * 512..base + 7 * 512], boot);
+        let stage2 = base + crate::boot::STAGE2_SECTOR as usize * 512;
+        assert_eq!(&bytes[stage2..stage2 + 4096], &crate::boot::STAGE2[..]);
+
+        let mut altered = bytes.to_vec();
+        altered[stage2 + 100] ^= 0xFF;
+        let altered = MemoryDevice::from_bytes(altered, 512)?;
+        assert!(matches!(
+            verify(&altered, &vol),
+            Err(FormatError::Mismatch(_))
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn code_bios_refuse_hors_secteurs_de_512_octets() -> Result<(), Box<dyn std::error::Error>> {
+        let mut dev = MemoryDevice::new(513 * MIB, 4096)?;
+        let vol = Volume {
+            first_lba: 256,
+            bios_boot: true,
+            ..volume(512 * MIB / 4096)
+        };
+        assert!(matches!(
+            write(&mut dev, &vol),
+            Err(FormatError::Unsupported(_))
+        ));
+        assert!(dev.as_bytes().iter().all(|b| *b == 0));
         Ok(())
     }
 

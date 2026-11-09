@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use super::{ALIGNMENT, Filesystem, FormatError, Ids, zero_range};
 use crate::block::BlockDevice;
-use crate::partition::{MBR_PROTECTIVE, crc32};
+use crate::partition::{MBR_PROTECTIVE, crc32, read_range};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -202,15 +202,25 @@ fn write_gpt(
     Ok(())
 }
 
+const ACTIVE: u8 = 0x80;
+
 /// Efface les anciennes tables et le début de la nouvelle partition, puis écrit la table ; une
 /// géométrie refusée n'écrit rien. Le vidage reste à l'appelant, une fois le système de fichiers posé.
+/// `bios_boot` pose le code de [`crate::boot::MBR`] et rend la partition active : MBR seulement, le
+/// BIOS ne démarre pas une table GPT.
 pub fn write_table(
     dev: &mut dyn BlockDevice,
     kind: TableKind,
     fs: Filesystem,
     label: Option<&str>,
     ids: &Ids,
+    bios_boot: bool,
 ) -> Result<PartitionPlan, FormatError> {
+    if bios_boot && kind == TableKind::Gpt {
+        return Err(FormatError::Unsupported(
+            "BIOS boot code needs an MBR table".to_owned(),
+        ));
+    }
     let part = plan(dev.size(), dev.block_size(), kind)?;
     let block = u64::from(dev.block_size());
     // Un ancien GPT de secours survivrait en fin de support, une ancienne signature au début de la
@@ -225,17 +235,33 @@ pub fn write_table(
         TableKind::Mbr => {
             let first = u32::try_from(part.first_lba).unwrap_or(u32::MAX);
             let sectors = u32::try_from(part.sectors()).unwrap_or(u32::MAX);
-            let sector = mbr_sector(
+            let mut sector = mbr_sector(
                 usize::try_from(block).unwrap_or(512),
                 ids.disk_signature,
                 mbr_type(fs),
                 first,
                 sectors,
             );
+            if bios_boot {
+                sector[..crate::boot::MBR.len()].copy_from_slice(crate::boot::MBR);
+                sector[446] = ACTIVE;
+            }
             dev.write_at(0, &sector)?;
         }
     }
     Ok(part)
+}
+
+/// Relit le code d'amorçage du MBR et l'état actif de la partition.
+pub fn verify_bios_boot(dev: &dyn BlockDevice) -> Result<(), FormatError> {
+    let sector = read_range(dev, 0, 512)?;
+    if sector[..crate::boot::MBR.len()] == crate::boot::MBR[..] && sector[446] == ACTIVE {
+        Ok(())
+    } else {
+        Err(FormatError::Mismatch(
+            "MBR boot code read back differently".to_owned(),
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -271,6 +297,7 @@ mod tests {
                 Filesystem::Fat32,
                 Some("CLE"),
                 &ids(),
+                false,
             )?;
             let layout = no_error(&dev);
             let gpt = layout.gpt.as_ref().ok_or("pas de GPT")?;
@@ -287,7 +314,14 @@ mod tests {
     #[test]
     fn mbr_relu_sans_constat() -> Result<(), Box<dyn std::error::Error>> {
         let mut dev = MemoryDevice::new(64 * MIB, 512)?;
-        let part = write_table(&mut dev, TableKind::Mbr, Filesystem::Exfat, None, &ids())?;
+        let part = write_table(
+            &mut dev,
+            TableKind::Mbr,
+            Filesystem::Exfat,
+            None,
+            &ids(),
+            false,
+        )?;
         let layout = no_error(&dev);
         assert!(layout.gpt.is_none());
         let mbr = layout.mbr.as_ref().ok_or("pas de MBR")?;
@@ -299,10 +333,70 @@ mod tests {
     }
 
     #[test]
+    fn mbr_amorcable_porte_le_code_et_une_partition_active()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut dev = MemoryDevice::new(64 * MIB, 512)?;
+        write_table(
+            &mut dev,
+            TableKind::Mbr,
+            Filesystem::Fat32,
+            None,
+            &ids(),
+            false,
+        )?;
+        assert!(verify_bios_boot(&dev).is_err());
+        write_table(
+            &mut dev,
+            TableKind::Mbr,
+            Filesystem::Fat32,
+            None,
+            &ids(),
+            true,
+        )?;
+        no_error(&dev);
+        verify_bios_boot(&dev)?;
+        let sector = &dev.as_bytes()[..512];
+        assert_eq!(&sector[..440], &crate::boot::MBR[..]);
+        assert_eq!(sector[446], 0x80);
+        assert_eq!(sector[440..444], ids().disk_signature.to_le_bytes());
+        Ok(())
+    }
+
+    #[test]
+    fn gpt_refuse_le_code_bios() -> Result<(), Box<dyn std::error::Error>> {
+        let mut dev = MemoryDevice::new(64 * MIB, 512)?;
+        let result = write_table(
+            &mut dev,
+            TableKind::Gpt,
+            Filesystem::Fat32,
+            None,
+            &ids(),
+            true,
+        );
+        assert!(matches!(result, Err(FormatError::Unsupported(_))));
+        assert!(dev.as_bytes().iter().all(|b| *b == 0));
+        Ok(())
+    }
+
+    #[test]
     fn passer_de_gpt_a_mbr_ne_laisse_aucun_secours() -> Result<(), Box<dyn std::error::Error>> {
         let mut dev = MemoryDevice::new(64 * MIB, 512)?;
-        write_table(&mut dev, TableKind::Gpt, Filesystem::Fat32, None, &ids())?;
-        write_table(&mut dev, TableKind::Mbr, Filesystem::Fat32, None, &ids())?;
+        write_table(
+            &mut dev,
+            TableKind::Gpt,
+            Filesystem::Fat32,
+            None,
+            &ids(),
+            false,
+        )?;
+        write_table(
+            &mut dev,
+            TableKind::Mbr,
+            Filesystem::Fat32,
+            None,
+            &ids(),
+            false,
+        )?;
         assert!(no_error(&dev).gpt.is_none());
         let end = &dev.as_bytes()[usize::try_from(63 * MIB)?..];
         assert!(end.iter().all(|b| *b == 0));
@@ -313,7 +407,14 @@ mod tests {
     fn une_ancienne_signature_au_debut_de_la_partition_est_effacee()
     -> Result<(), Box<dyn std::error::Error>> {
         let mut dev = MemoryDevice::from_bytes(vec![0xAB; usize::try_from(8 * MIB)?], 512)?;
-        write_table(&mut dev, TableKind::Mbr, Filesystem::Ext4, None, &ids())?;
+        write_table(
+            &mut dev,
+            TableKind::Mbr,
+            Filesystem::Ext4,
+            None,
+            &ids(),
+            false,
+        )?;
         let begin = usize::try_from(MIB)?;
         assert!(dev.as_bytes()[begin..begin * 2].iter().all(|b| *b == 0));
         Ok(())
@@ -336,8 +437,22 @@ mod tests {
     fn meme_graine_memes_octets() -> Result<(), Box<dyn std::error::Error>> {
         let mut a = MemoryDevice::new(8 * MIB, 512)?;
         let mut b = MemoryDevice::new(8 * MIB, 512)?;
-        write_table(&mut a, TableKind::Gpt, Filesystem::Fat32, None, &ids())?;
-        write_table(&mut b, TableKind::Gpt, Filesystem::Fat32, None, &ids())?;
+        write_table(
+            &mut a,
+            TableKind::Gpt,
+            Filesystem::Fat32,
+            None,
+            &ids(),
+            false,
+        )?;
+        write_table(
+            &mut b,
+            TableKind::Gpt,
+            Filesystem::Fat32,
+            None,
+            &ids(),
+            false,
+        )?;
         assert!(a.as_bytes() == b.as_bytes());
         Ok(())
     }

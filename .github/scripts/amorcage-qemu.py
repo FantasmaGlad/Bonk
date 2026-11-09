@@ -2,9 +2,11 @@
 """Démarre le code d'amorçage de Bonk sous QEMU (SeaBIOS) : MBR, puis secteur FAT32 et second étage.
 
 Le texte est lu dans la mémoire de l'écran (0xB8000) par le moniteur de QEMU. Usage, depuis le dépôt :
-python3 .github/scripts/amorcage-qemu.py
+python3 .github/scripts/amorcage-qemu.py [chemin de bonk]
+Avec le chemin d'un binaire de bonk, une clé écrite par `bonk write --table mbr` démarre aussi.
 """
 
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -138,6 +140,31 @@ def screen(image, tmp):
     return "\n".join(cells[i : i + 80].rstrip() for i in range(0, 2000, 80))
 
 
+def written_by_bonk(bonk, tmp):
+    """Clé écrite par Bonk depuis une fausse ISO Windows : chargeur UEFI x86_64, WIM et faux BOOTMGR."""
+    tree = Path(tmp, "iso")
+    (tree / "efi" / "boot").mkdir(parents=True)
+    (tree / "sources").mkdir()
+    loader = bytearray(1024)
+    loader[:2] = b"MZ"
+    loader[0x3C] = 0x40
+    loader[0x40:0x44] = b"PE\0\0"
+    loader[0x44:0x46] = (0x8664).to_bytes(2, "little")
+    loader[0x58:0x5A] = (0x20B).to_bytes(2, "little")
+    (tree / "efi" / "boot" / "bootx64.efi").write_bytes(loader)
+    (tree / "sources" / "install.wim").write_bytes(bytes(range(256)) * 800)
+    (tree / "bootmgr").write_bytes(fake_bootmgr(473_364))
+    iso, key = Path(tmp, "win.iso"), Path(tmp, "cle.img")
+    subprocess.run(["genisoimage", "-quiet", "-udf", "-R", "-J", "-o", str(iso), str(tree)], check=True)
+    subprocess.run(
+        [bonk, "write", "--simulate", str(key), str(iso), "--size", str(256 << 20),
+         "--table", "mbr", "--yes", "--progress", "none"],
+        check=True, stdout=subprocess.DEVNULL,
+    )
+    shutil.rmtree(tree)
+    return key.read_bytes()
+
+
 def main():
     vbr = TEST_VBR.read_bytes()
     unsigned = vbr[:510] + b"\0\0"
@@ -158,6 +185,8 @@ def main():
     ]
     failed = 0
     with tempfile.TemporaryDirectory() as tmp:
+        if len(sys.argv) > 1:
+            cases.append(("clé écrite par bonk write --table mbr", written_by_bonk(sys.argv[1], tmp), "BONK: bootmgr OK"))
         for name, image, expected in cases:
             text = screen(image, tmp)
             ok = expected in text

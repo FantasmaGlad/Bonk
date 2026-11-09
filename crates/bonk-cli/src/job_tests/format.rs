@@ -241,6 +241,7 @@ fn cle_a_reparer() -> Scenario {
         Filesystem::Fat32,
         None,
         &Ids::from_seed(b"cle"),
+        false,
     )
     .expect("table");
     let scenario = Scenario::new();

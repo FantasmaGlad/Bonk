@@ -133,6 +133,8 @@ pub enum FormatError {
     Name(String),
     /// Lecture de la source pendant la copie.
     Source(std::io::Error),
+    /// Combinaison que le support ne peut pas porter, comme le code BIOS sur une table GPT.
+    Unsupported(String),
 }
 
 impl fmt::Display for FormatError {
@@ -142,7 +144,8 @@ impl fmt::Display for FormatError {
             Self::TooSmall(what)
             | Self::TooLarge(what)
             | Self::Mismatch(what)
-            | Self::Name(what) => f.write_str(what),
+            | Self::Name(what)
+            | Self::Unsupported(what) => f.write_str(what),
             Self::Source(err) => write!(f, "reading the image: {err}"),
         }
     }

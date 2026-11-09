@@ -192,7 +192,7 @@ fn write_volume(
         fat32::geometry(planned.sectors(), block).map_err(format_error)?;
     }
     let partition =
-        table::write_table(device, kind, filesystem, label, ids).map_err(format_error)?;
+        table::write_table(device, kind, filesystem, label, ids, false).map_err(format_error)?;
     if cancelled() {
         return Err(fail(
             Code::Cancelled,
@@ -204,6 +204,7 @@ fn write_volume(
         sectors: partition.sectors(),
         label,
         volume_id: ids.volume_id,
+        bios_boot: false,
     };
     let cluster_bytes = if filesystem.is_native() {
         let geometry = fat32::write(device, &volume).map_err(format_error)?;

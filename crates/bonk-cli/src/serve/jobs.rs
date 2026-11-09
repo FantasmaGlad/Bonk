@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+use bonk_core::format::table::TableKind;
 use bonk_core::write::{Control, Progress};
 use bonk_hal::FilterOptions;
 use serde::Serialize;
@@ -70,7 +71,12 @@ pub(super) fn prepare(kind: Kind, params: &Value, cfg: &Config) -> Result<Task, 
     let (target, trace) = (p.target()?, p.trace()?);
     let mode = p.mode()?;
     let elevation = p.elevation()?;
-    let (filesystem, table) = (p.filesystem()?, p.table()?);
+    let filesystem = p.filesystem()?;
+    let table = p.table(if matches!(kind, Kind::Format) {
+        TableKind::Gpt
+    } else {
+        TableKind::Mbr
+    })?;
     let mut sha256 = p.sha256.clone();
     let source = match (kind, &p.image) {
         (Kind::Repair | Kind::Format, _) => PathBuf::new(),

@@ -13,6 +13,9 @@ pub const STAGE2: &[u8; 4096] = include_bytes!("stage2.bin");
 /// Premier secteur du volume où `VBR` lit `STAGE2`.
 pub const STAGE2_SECTOR: u32 = 9;
 
+/// Taille de secteur que supposent `VBR` et `STAGE2`.
+pub const SECTOR: u32 = 512;
+
 #[cfg(test)]
 mod tests {
     use super::*;

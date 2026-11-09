@@ -265,7 +265,7 @@ impl Model {
             *image = url;
             *hash = sha256;
             *raw = false;
-            *mbr = false;
+            *mbr = true;
             self.menu_open = false;
             self.focus = Some(Focus::Action);
         }
@@ -305,7 +305,7 @@ impl Model {
                     image: String::new(),
                     hash: String::new(),
                     raw: false,
-                    mbr: false,
+                    mbr: true,
                     opened: Instant::now(),
                 };
             }

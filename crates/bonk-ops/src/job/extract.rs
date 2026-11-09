@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use bonk_core::format::fat32::Volume;
 use bonk_core::format::fat32_tree::{self, Layout, MAX_FILE_BYTES, NewFile};
-use bonk_core::format::table::{self, TableKind};
+use bonk_core::format::table::{self, PartitionPlan, TableKind};
 use bonk_core::format::{Filesystem, FormatError, Ids};
 use bonk_core::pe::{self, Machine, Signer};
 use bonk_core::udf::{self, Content, ReadAt, Tree, Udf};
@@ -37,10 +37,31 @@ const MIN_SIMULATED: u64 = 128 << 20;
 /// Marge sous la limite de FAT32 : un morceau reste un fichier valide, arrondi compris.
 const PART_LIMIT: u64 = MAX_FILE_BYTES - (1 << 20);
 
+/// Firmware the drive boots from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Firmware {
+    Uefi,
+    /// Legacy BIOS, through boot code written by Bonk and the image's `bootmgr`.
+    Bios,
+}
+
+impl Firmware {
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Uefi => "UEFI",
+            Self::Bios => "BIOS",
+        }
+    }
+}
+
 /// What the drive will receive, described in the plan and in the result.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct Extraction {
     pub table: TableKind,
+    /// UEFI always; BIOS too with an MBR table, 512-byte sectors and a `bootmgr` for x86.
+    pub firmware: Vec<Firmware>,
     pub files: usize,
     pub bytes: u64,
     /// `.swm` parts; 0: the WIM fits as is.
@@ -160,6 +181,8 @@ pub(super) struct WindowsImage {
     signer: Signer,
     architectures: Vec<Machine>,
     wim_parts: usize,
+    /// `bootmgr` à la racine, pour x86 : le chargeur que lance le code BIOS.
+    bios_loader: bool,
 }
 
 fn read_whole(image: &ImageFile, content: &Content, size: u64) -> io::Result<Vec<u8>> {
@@ -207,6 +230,10 @@ pub(super) fn detect(image: &ImageFile) -> Result<Option<WindowsImage>, JobError
     let Some(signer) = signer else {
         return Ok(None);
     };
+    let bios_loader = tree.find(&["bootmgr"]).is_some()
+        && architectures
+            .iter()
+            .any(|machine| matches!(machine, Machine::X86_64 | Machine::X86));
     let (items, wim_parts) = plan_items(image, &tree, wim)?;
     Ok(Some(WindowsImage {
         items,
@@ -214,6 +241,7 @@ pub(super) fn detect(image: &ImageFile) -> Result<Option<WindowsImage>, JobError
         signer,
         architectures,
         wim_parts,
+        bios_loader,
     }))
 }
 
@@ -292,6 +320,15 @@ fn format_failure(code: Code, error: FormatError) -> JobError {
     }
 }
 
+/// Place de la partition ; un MBR ne va pas au-delà de 2 Tio, ce que dit le code du formatage et non
+/// celui d'une image trop grande.
+fn partition_plan(size: u64, block: u32, kind: TableKind) -> Result<PartitionPlan, JobError> {
+    table::plan(size, block, kind).map_err(|error| match error {
+        FormatError::TooLarge(what) => fail(Code::FormatFailed, what),
+        other => format_failure(Code::WriteFailed, other),
+    })
+}
+
 impl WindowsImage {
     fn new_files(&self) -> Vec<NewFile> {
         self.items
@@ -303,10 +340,20 @@ impl WindowsImage {
             .collect()
     }
 
-    /// Ce que le plan et le résultat disent de la clé.
-    pub(super) fn describe(&self, table: TableKind) -> Extraction {
+    fn firmware(&self, table: TableKind, block: u32) -> Vec<Firmware> {
+        let bios = self.bios_loader && table == TableKind::Mbr && block == bonk_core::boot::SECTOR;
+        let mut firmware = vec![Firmware::Uefi];
+        if bios {
+            firmware.push(Firmware::Bios);
+        }
+        firmware
+    }
+
+    /// Ce que le plan et le résultat disent de la clé, pour des secteurs de `block` octets.
+    pub(super) fn describe(&self, table: TableKind, block: u32) -> Extraction {
         Extraction {
             table,
+            firmware: self.firmware(table, block),
             files: self.items.len(),
             bytes: self.items.iter().map(|item| item.size).sum(),
             wim_parts: self.wim_parts,
@@ -323,13 +370,13 @@ impl WindowsImage {
         table_kind: TableKind,
     ) -> Result<(), JobError> {
         let Some(size) = size else { return Ok(()) };
-        let partition = table::plan(size, DEFAULT_BLOCK_SIZE, table_kind)
-            .map_err(|e| format_failure(Code::WriteFailed, e))?;
+        let partition = partition_plan(size, DEFAULT_BLOCK_SIZE, table_kind)?;
         let volume = Volume {
             first_lba: partition.first_lba,
             sectors: partition.sectors(),
             label: Some(LABEL),
             volume_id: 0,
+            bios_boot: false,
         };
         fat32_tree::layout(
             &volume,
@@ -388,7 +435,7 @@ pub(super) fn run(
             // FAT32 exige.
             size_hint: Some(
                 prepared
-                    .describe(job.table)
+                    .describe(job.table, DEFAULT_BLOCK_SIZE)
                     .bytes
                     .saturating_mul(2)
                     .max(MIN_SIMULATED),
@@ -400,13 +447,15 @@ pub(super) fn run(
     let block = device.block_size();
     let files = prepared.new_files();
     let ids = Ids::from_seed(&fresh_seed(&seed_name));
-    let partition = table::plan(device.size(), block, job.table)
-        .map_err(|e| format_failure(Code::WriteFailed, e))?;
+    let partition = partition_plan(device.size(), block, job.table)?;
+    let extraction = prepared.describe(job.table, block);
+    let bios_boot = extraction.firmware.contains(&Firmware::Bios);
     let volume = Volume {
         first_lba: partition.first_lba,
         sectors: partition.sectors(),
         label: Some(LABEL),
         volume_id: ids.volume_id,
+        bios_boot,
     };
     // Tout est calculé avant le premier octet écrit : un refus ne coûte rien à la clé.
     let layout = fat32_tree::layout(&volume, block, &files, &prepared.directories)
@@ -418,6 +467,7 @@ pub(super) fn run(
         Filesystem::Fat32,
         Some(LABEL),
         &ids,
+        bios_boot,
     )
     .map_err(write_failure)?;
     layout
@@ -469,7 +519,7 @@ pub(super) fn run(
         schema_version: super::types::SCHEMA_VERSION,
         event: "result",
         target: info,
-        extraction: prepared.describe(job.table),
+        extraction,
         sha256_checked,
         unmounted,
         write,
@@ -494,6 +544,9 @@ fn verify_all(
     layout
         .verify_structures(device, volume)
         .map_err(verify_failure)?;
+    if volume.bios_boot {
+        table::verify_bios_boot(device).map_err(verify_failure)?;
+    }
     let mut advance = Advance {
         phase: Phase::Verify,
         done: 0,
@@ -518,6 +571,13 @@ mod tests {
     use bonk_core::BlockError;
 
     use super::*;
+
+    #[test]
+    fn un_mbr_au_dela_de_2_tio_est_refuse_par_le_code_du_formatage() {
+        let error = partition_plan(4 << 40, 512, TableKind::Mbr).err();
+        assert_eq!(error.map(|e| e.code), Some(Code::FormatFailed));
+        assert!(partition_plan(4 << 40, 512, TableKind::Gpt).is_ok());
+    }
 
     /// Même message que l'écriture d'une image : le noyau répond « plus de place » sur un disque unplugged.
     #[test]

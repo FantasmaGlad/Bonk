@@ -192,8 +192,8 @@ pub(crate) struct WriteArgs {
     #[arg(long, value_enum, default_value_t = ModeArg::Auto)]
     pub(super) mode: ModeArg,
 
-    /// Partition table of a Windows drive; boot stays UEFI in both cases
-    #[arg(long, value_enum, default_value_t = TableArg::Gpt)]
+    /// Partition table of a Windows drive: mbr boots in BIOS and UEFI (up to 2 TiB), gpt in UEFI only
+    #[arg(long, value_enum, default_value_t = TableArg::Mbr)]
     pub(super) table: TableArg,
 
     /// Do not read the drive back after writing
