@@ -26,7 +26,7 @@ struct Placed {
     clusters: u32,
 }
 
-/// Entrées d'un enfant : noms longs, nom court, rang dans son dossier.
+/// Long entries, short name, rank in its directory.
 type Row = (Vec<[u8; ENTRY]>, [u8; 11], usize);
 
 #[derive(Debug)]
@@ -72,8 +72,7 @@ fn pack_short(base: &str, ext: &str) -> [u8; 11] {
     field
 }
 
-/// Nom court unique dans son dossier : le nom en majuscules s'il est valide, sinon `BASE~N.EXT`. Le
-/// booléen dit qu'une entrée longue doit garder le nom exact.
+/// The upper-cased name if valid, else `BASE~N.EXT`. The flag says a long entry must keep the exact name.
 fn short_name(name: &str, taken: &mut BTreeSet<[u8; 11]>) -> Result<([u8; 11], bool), FormatError> {
     let (base, ext) = name.rsplit_once('.').unwrap_or((name, ""));
     let upper = name.to_ascii_uppercase();
@@ -103,7 +102,7 @@ fn short_checksum(short: &[u8; 11]) -> u8 {
         .fold(0u8, |sum, byte| sum.rotate_right(1).wrapping_add(*byte))
 }
 
-/// Entrées longues d'un nom, de la dernière à la première, comme l'exige le format.
+/// Last to first, as the format requires.
 fn long_entries(name: &str, short: &[u8; 11]) -> Result<Vec<[u8; ENTRY]>, FormatError> {
     let mut units: Vec<u16> = name.encode_utf16().collect();
     if units.len() > MAX_NAME_UNITS || name.chars().any(|c| "\"*/:<>?\\|".contains(c) || c < ' ') {
@@ -207,7 +206,7 @@ fn directory_bytes(
             }
         } else {
             let parent_first = match placed_dirs[&path[..path.len() - 1]].0 {
-                // `..` vers la racine s'écrit 0.
+                // `..` pointing to the root is written 0.
                 ROOT_CLUSTER => 0,
                 other => other,
             };
@@ -237,10 +236,8 @@ fn directory_bytes(
     Ok(directories)
 }
 
-/// Calcule la place de tout : refuse ce qui ne tient pas avant le premier octet écrit.
-///
 /// # Errors
-/// Volume trop petit, fichier de 4 Gio ou plus, nom refusé, doublon.
+/// Volume too small, file of 4 GiB or more, refused name, or duplicate.
 pub fn layout(
     volume: &Volume<'_>,
     block: u32,
@@ -308,7 +305,7 @@ fn narrow(value: u64) -> Result<u32, FormatError> {
 }
 
 impl Layout {
-    /// Début d'un fichier ; un fichier vide n'a pas de cluster, rien n'y sera lu ni écrit.
+    /// An empty file has no cluster: nothing is read or written there.
     fn file_offset(&self, placed: Placed) -> u64 {
         if placed.clusters == 0 {
             0
@@ -323,7 +320,6 @@ impl Layout {
             + u64::from(cluster - ROOT_CLUSTER) * u64::from(self.geometry.cluster_bytes)
     }
 
-    /// Octets à copier : le contenu des fichiers.
     #[must_use]
     pub fn data_bytes(&self) -> u64 {
         self.sizes.iter().sum()
@@ -357,11 +353,11 @@ impl Layout {
         bytes
     }
 
-    /// Tables et dossiers, sans le secteur de démarrage : tant qu'il manque, personne ne prend le support
-    /// pour un volume valide.
+    /// Tables and directories without the boot sector, so an interrupted write never looks like a valid
+    /// volume.
     ///
     /// # Errors
-    /// Écriture impossible.
+    /// Write failure.
     pub fn write_structures(&self, dev: &mut dyn BlockDevice) -> Result<(), FormatError> {
         let geo = self.geometry;
         let at = |sector: u64| (self.first_lba + sector) * self.block;
@@ -380,11 +376,11 @@ impl Layout {
         Ok(())
     }
 
-    /// Copie un fichier à sa place et rend l'empreinte de ce qui a été lu. `advance` reçoit les octets de
-    /// chaque bloc écrit, et rend faux pour arrêter.
+    /// Returns the SHA-256 of what was read. `advance` gets the bytes of each block and returns false to
+    /// stop.
     ///
     /// # Errors
-    /// Lecture ou écriture impossible, fichier plus court qu'annoncé, arrêt demandé (`Interrupted`).
+    /// Read or write failure, short file, or stop requested (`Interrupted`).
     pub fn write_file(
         &self,
         dev: &mut dyn BlockDevice,
@@ -396,10 +392,8 @@ impl Layout {
         write_contiguous(dev, self.file_offset(placed), size, reader, advance)
     }
 
-    /// Relit un fichier sur le support et compare son empreinte à celle de la copie.
-    ///
     /// # Errors
-    /// Lecture impossible, empreinte différente, arrêt demandé.
+    /// Read failure, hash mismatch, or stop requested.
     pub fn verify_file(
         &self,
         dev: &dyn BlockDevice,
@@ -418,10 +412,10 @@ impl Layout {
         )
     }
 
-    /// Secteur de démarrage et informations du volume, en dernier.
+    /// Boot sector and FSInfo, last.
     ///
     /// # Errors
-    /// Écriture impossible.
+    /// Write failure.
     pub fn finish(
         &self,
         dev: &mut dyn BlockDevice,
@@ -436,10 +430,8 @@ impl Layout {
         )
     }
 
-    /// Relit tables et dossiers.
-    ///
     /// # Errors
-    /// Lecture impossible, ou écart.
+    /// Read failure, or mismatch.
     pub fn verify_structures(
         &self,
         dev: &dyn BlockDevice,
@@ -507,7 +499,7 @@ mod tests {
         assert_eq!(&b, b"BOOTMG~2EFI");
     }
 
-    /// Le second étage du démarrage BIOS cherche `BOOTMGR` ; l'ISO de Windows le nomme en minuscules.
+    /// The BIOS second stage looks for `BOOTMGR`; Windows ISOs name it in lower case.
     #[test]
     fn un_nom_court_en_minuscules_garde_son_nom_en_majuscules() {
         let mut taken = BTreeSet::new();
@@ -522,7 +514,7 @@ mod tests {
         assert_eq!(&again, b"BOOTMG~1   ");
     }
 
-    /// Valeurs de la spécification : somme de contrôle du nom court, ordre et remplissage des entrées.
+    /// Specification values: short name checksum, entry order and padding.
     #[test]
     fn les_entrees_longues_suivent_le_format() {
         let short = *b"BOOTMG~1EFI";

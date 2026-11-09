@@ -15,7 +15,6 @@ use sha2::{Digest, Sha256};
 
 use crate::block::BlockError;
 
-/// Taille d'alignement des partitions et de la zone de données.
 pub(crate) const ALIGNMENT: u64 = crate::partition::ALIGNMENT_BYTES;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
@@ -40,20 +39,18 @@ impl Filesystem {
         }
     }
 
-    /// Taille maximale d'un fichier, quand elle peut gêner sur une clé : FAT32 code la taille sur 32 bits.
+    /// FAT32 stores file sizes on 32 bits.
     #[must_use]
     pub fn file_size_limit(self) -> Option<u64> {
         (self == Self::Fat32).then_some(u64::from(u32::MAX))
     }
 
-    /// Bonk l'écrit-il lui-même, sans outil de l'hôte ?
     #[must_use]
     pub fn is_native(self) -> bool {
         matches!(self, Self::Fat32 | Self::Exfat)
     }
 
-    /// Longueur maximale d'une étiquette : en caractères ASCII pour FAT32, en unités UTF-16 pour exFAT et
-    /// NTFS, en octets pour ext4.
+    /// ASCII characters for FAT32, UTF-16 units for exFAT and NTFS, bytes for ext4.
     fn label_limit(self) -> usize {
         match self {
             Self::Fat32 | Self::Exfat => 11,
@@ -69,7 +66,7 @@ impl fmt::Display for Filesystem {
     }
 }
 
-/// Valide une étiquette pour ce système de fichiers et la met sous sa forme écrite (FAT32 : majuscules).
+/// Returns the label as written (upper case for FAT32).
 pub fn normalize_label(fs: Filesystem, label: &str) -> Result<String, String> {
     let limit = fs.label_limit();
     let length = match fs {
@@ -95,7 +92,7 @@ pub fn normalize_label(fs: Filesystem, label: &str) -> Result<String, String> {
     Ok(label.to_ascii_uppercase())
 }
 
-/// Identifiants d'un support formaté, dérivés d'une graine : à graine égale, résultat égal aux octets près.
+/// Derived from a seed: same seed, same bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ids {
     pub disk_guid: [u8; 16],
@@ -104,7 +101,7 @@ pub struct Ids {
     pub volume_id: u32,
 }
 
-/// GUID aléatoire au sens de la RFC 4122 (version 4), dans l'ordre d'octets du GPT.
+/// RFC 4122 version 4, in GPT byte order.
 fn guid(bytes: &[u8]) -> [u8; 16] {
     let mut out = [0u8; 16];
     out.copy_from_slice(&bytes[..16]);
@@ -132,13 +129,10 @@ pub enum FormatError {
     Device(BlockError),
     TooSmall(String),
     TooLarge(String),
-    /// La relecture ne donne pas ce qui a été écrit.
     Mismatch(String),
-    /// Un nom de fichier que FAT32 ne peut pas porter.
     Name(String),
-    /// Lecture de la source pendant la copie.
     Source(std::io::Error),
-    /// Combinaison que le support ne peut pas porter, comme le code BIOS sur une table GPT.
+    /// A combination the drive cannot carry, such as BIOS code on GPT.
     Unsupported(String),
 }
 
@@ -164,8 +158,7 @@ impl From<BlockError> for FormatError {
     }
 }
 
-/// Écrit des zéros sur `[offset, offset + len[`, par morceaux : les tables FAT d'un grand support ne
-/// tiennent pas en mémoire d'un seul tenant.
+/// In chunks: the FATs of a large drive do not fit in memory at once.
 pub(crate) fn zero_range(
     dev: &mut dyn crate::block::BlockDevice,
     offset: u64,

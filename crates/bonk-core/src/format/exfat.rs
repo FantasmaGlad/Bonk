@@ -6,18 +6,17 @@ use super::exfat_tree;
 use super::{ALIGNMENT, FormatError};
 use crate::block::BlockDevice;
 
-/// Secteurs d'une région de démarrage ; la copie de secours suit la principale.
 pub(super) const BOOT_REGION: u64 = 12;
 const CHECKSUM_SECTOR: usize = 11;
 const MAX_CLUSTERS: u64 = (1 << 32) - 11;
 pub(super) const FIRST_CLUSTER: u32 = 2;
 const REVISION: u16 = 0x0100;
 
-/// Table de majuscules recommandée par la spécification exFAT, sous sa forme compressée : celle que pose
-/// Windows. Sa somme publiée, `E619D30D`, est vérifiée par un test.
+/// Recommended up-case table of the exFAT specification, compressed, as Windows writes it. Its published
+/// checksum `E619D30D` is checked by a test.
 pub(super) const UPCASE: &[u8; 5836] = include_bytes!("exfat_upcase.bin");
 
-/// Forme d'un volume, calculée sans toucher au support. Offsets et longueurs en secteurs du volume.
+/// Volume shape, computed without touching the drive. Offsets and lengths in volume sectors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct Geometry {
     pub cluster_bytes: u32,
@@ -27,7 +26,7 @@ pub struct Geometry {
     pub heap_offset: u32,
 }
 
-/// Tailles de cluster par défaut de Windows pour exFAT, selon la taille du volume.
+/// Windows default exFAT cluster sizes.
 fn cluster_bytes_for(volume_bytes: u64) -> u32 {
     const MIB: u64 = 1 << 20;
     match volume_bytes {
@@ -38,9 +37,8 @@ fn cluster_bytes_for(volume_bytes: u64) -> u32 {
 }
 
 /// # Errors
-/// [`FormatError::Unsupported`] pour un secteur hors de 512 à 4 096 octets, [`FormatError::TooSmall`] sans
-/// place pour la table d'allocation, la table de majuscules et la racine, [`FormatError::TooLarge`] au-delà
-/// de ce qu'adressent les champs du secteur de démarrage.
+/// Sector size outside 512 to 4096 bytes, no room for the bitmap, up-case table and root, or a volume beyond
+/// the boot sector fields.
 pub fn geometry(sectors: u64, block: u32) -> Result<Geometry, FormatError> {
     if !block.is_power_of_two() || !(512..=4096).contains(&block) {
         return Err(FormatError::Unsupported(format!(
@@ -51,10 +49,10 @@ pub fn geometry(sectors: u64, block: u32) -> Result<Geometry, FormatError> {
     let volume_bytes = sectors.saturating_mul(block64);
     let cluster_bytes = cluster_bytes_for(volume_bytes).max(block);
     let per_cluster = u64::from(cluster_bytes / block);
-    // Table et tas commencent chacun sur 1 Mio : les clusters tombent sur les blocs d'effacement.
+    // FAT and heap start on 1 MiB boundaries, aligned with erase blocks.
     let align = (ALIGNMENT / block64).max(1);
     let fat_offset = align.max(2 * BOOT_REGION);
-    // Comptée sur tout le volume, la table couvre toujours les clusters restants.
+    // Sized on the whole volume, the FAT always covers the remaining clusters.
     let fat_length = ((sectors / per_cluster + 2) * 4).div_ceil(block64);
     let heap_offset = (fat_offset + fat_length).next_multiple_of(align);
     let clusters = (sectors.saturating_sub(heap_offset) / per_cluster).min(MAX_CLUSTERS);
@@ -66,7 +64,6 @@ pub fn geometry(sectors: u64, block: u32) -> Result<Geometry, FormatError> {
         fat_length: u32::try_from(fat_length).map_err(|_| too_large())?,
         heap_offset: u32::try_from(heap_offset).map_err(|_| too_large())?,
     };
-    // Table d'allocation, table de majuscules et un cluster de racine, au moins.
     if u64::from(geometry.root_cluster() + 1 - FIRST_CLUSTER) >= clusters {
         return Err(FormatError::TooSmall(format!(
             "{volume_bytes} bytes: too small for exFAT"
@@ -88,36 +85,32 @@ impl Geometry {
         FIRST_CLUSTER
     }
 
-    /// La table d'allocation tient dans le volume : la conversion ne peut pas échouer.
+    /// The bitmap fits in the volume: the conversion cannot fail.
     pub(super) fn upcase_cluster(&self) -> u32 {
         self.bitmap_cluster()
             + u32::try_from(self.clusters_for(u64::from(self.bitmap_bytes()))).unwrap_or(0)
     }
 
-    /// Premier cluster de la racine, juste après la table de majuscules.
     pub(super) fn root_cluster(&self) -> u32 {
         self.upcase_cluster() + u32::try_from(self.clusters_for(UPCASE.len() as u64)).unwrap_or(0)
     }
 
-    /// Octet du support où commence un cluster du tas.
     pub(super) fn cluster_offset(&self, first_lba: u64, block: u32, cluster: u32) -> u64 {
         (first_lba + u64::from(self.heap_offset)) * u64::from(block)
             + u64::from(cluster - FIRST_CLUSTER) * u64::from(self.cluster_bytes)
     }
 }
 
-/// Ce qu'on écrit sur un volume : ses paramètres, pour écrire puis pour relire.
 #[derive(Debug, Clone, Copy)]
 pub struct Volume<'a> {
     pub first_lba: u64,
     pub sectors: u64,
-    /// Déjà validée par [`super::normalize_label`] : 11 unités UTF-16 au plus.
+    /// Already checked by [`super::normalize_label`]: at most 11 UTF-16 units.
     pub label: Option<&'a str>,
     pub volume_id: u32,
 }
 
-/// Somme sur 32 bits des régions de démarrage et de la table de majuscules : rotation à droite, puis ajout
-/// de l'octet.
+/// Boot region and up-case table checksum: rotate right, then add the byte.
 pub(super) fn checksum32(bytes: &[u8], skip: &[usize]) -> u32 {
     bytes
         .iter()
@@ -128,7 +121,7 @@ pub(super) fn checksum32(bytes: &[u8], skip: &[usize]) -> u32 {
         })
 }
 
-/// Somme sur 16 bits d'un jeu d'entrées et empreinte d'un nom, même rotation.
+/// Entry set checksum and name hash: the same rotation on 16 bits.
 pub(super) fn checksum16(bytes: &[u8], skip: &[usize]) -> u16 {
     bytes
         .iter()
@@ -139,8 +132,7 @@ pub(super) fn checksum16(bytes: &[u8], skip: &[usize]) -> u16 {
         })
 }
 
-/// La table de majuscules développée : une valeur par unité UTF-16. `FFFF` suivi d'un nombre annonce autant
-/// d'unités inchangées ; la dernière valeur de la table, `FFFF`, est la majuscule de `FFFF`.
+/// One value per UTF-16 unit. `FFFF` then a count marks unchanged units; the final `FFFF` maps `FFFF` itself.
 pub(super) fn upcase_map() -> Vec<u16> {
     let units: Vec<u16> = UPCASE
         .as_chunks::<2>()
@@ -167,7 +159,7 @@ pub(super) fn upcase_map() -> Vec<u16> {
     map
 }
 
-/// Régions de démarrage principale et de secours, identiques. `used` compte les clusters occupés.
+/// `used`: clusters in use.
 pub(super) fn boot_region(
     block: u32,
     geo: &Geometry,
@@ -193,7 +185,7 @@ pub(super) fn boot_region(
     s[110] = 1;
     s[111] = 0x80;
     s[112] = u8::try_from(u64::from(used) * 100 / u64::from(geo.clusters)).unwrap_or(0xFF);
-    // Aucun code d'amorçage : HLT partout, comme le veut la spécification.
+    // No boot code: HLT everywhere, as the specification asks.
     s[120..510].fill(0xF4);
     s[510] = 0x55;
     s[511] = 0xAA;
@@ -208,8 +200,8 @@ pub(super) fn boot_region(
     region
 }
 
-/// Écrit le volume vide ; une forme refusée n'écrit rien. Les régions de démarrage viennent en dernier :
-/// une coupure laisse un support que personne ne prend pour un volume valide. Le vidage reste à l'appelant.
+/// Writes the empty volume; a refused shape writes nothing. Boot regions go last, so an interrupted write
+/// never looks like a valid volume. Flushing is the caller's job.
 pub fn write(dev: &mut dyn BlockDevice, volume: &Volume<'_>) -> Result<Geometry, FormatError> {
     let layout = exfat_tree::layout(volume, dev.block_size(), &[], &[])?;
     layout.write_structures(dev)?;
@@ -217,7 +209,6 @@ pub fn write(dev: &mut dyn BlockDevice, volume: &Volume<'_>) -> Result<Geometry,
     Ok(*layout.geometry())
 }
 
-/// Relit ce qui définit le volume vide.
 pub fn verify(dev: &dyn BlockDevice, volume: &Volume<'_>) -> Result<(), FormatError> {
     exfat_tree::layout(volume, dev.block_size(), &[], &[])?.verify_structures(dev, volume)
 }
@@ -243,7 +234,6 @@ mod tests {
         u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]])
     }
 
-    /// Valeur publiée par la spécification pour sa table recommandée, sous forme compressée.
     #[test]
     fn la_table_de_majuscules_est_celle_de_la_specification() {
         assert_eq!(checksum32(UPCASE, &[]), 0xE619_D30D);

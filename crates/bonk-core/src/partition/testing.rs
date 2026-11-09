@@ -14,11 +14,10 @@ pub(crate) fn put_u64(buf: &mut [u8], at: usize, v: u64) {
     buf[at..at + 8].copy_from_slice(&v.to_le_bytes());
 }
 
-/// Image GPT valide de `sectors` secteurs de 512 octets, avec les partitions `(début, fin, type, nom)`.
+/// Valid GPT image of `sectors` 512-byte sectors with `(start, end, type, name)` partitions.
 pub fn gpt_image(sectors: u64, parts: &[(u64, u64, [u8; 16], &str)]) -> Vec<u8> {
     let bs = 512usize;
     let mut img = vec![0u8; usize::try_from(sectors).unwrap_or(0) * bs];
-    // MBR de protection
     img[446 + 4] = MBR_PROTECTIVE;
     put_u32(&mut img, 446 + 8, 1);
     put_u32(
@@ -28,7 +27,6 @@ pub fn gpt_image(sectors: u64, parts: &[(u64, u64, [u8; 16], &str)]) -> Vec<u8> 
     );
     img[510] = 0x55;
     img[511] = 0xAA;
-    // table : 128 entrées de 128 octets
     let mut table = vec![0u8; 128 * 128];
     for (i, (first, last, kind, name)) in parts.iter().enumerate() {
         let e = &mut table[i * 128..(i + 1) * 128];

@@ -5,8 +5,7 @@ use super::{
     Severity, crc32, guid, read_range, u32_le, u64_le,
 };
 
-/// Lit un en-tête GPT au secteur `lba` et la table de partitions qu'il désigne. `None` si la signature
-/// n'y est pas.
+/// Header at `lba` and the entries it points to; `None` without the signature.
 pub(super) type HeaderAndEntries = (GptHeader, Vec<GptEntry>);
 
 pub(super) fn read_header(
@@ -14,7 +13,7 @@ pub(super) fn read_header(
     lba: u64,
     block: u64,
 ) -> Result<Option<HeaderAndEntries>, BlockError> {
-    // `lba` peut venir de l'en-tête principal : aucune hypothèse sur sa grandeur.
+    // `lba` may come from the primary header: no assumption on its size.
     let Some(offset) = lba.checked_mul(block).filter(|offset| {
         offset
             .checked_add(block)
@@ -112,7 +111,7 @@ pub(super) fn check_gpt(
     check_gpt_entries(gpt, block, note);
 }
 
-/// Les deux en-têtes : présence, sommes de contrôle, emplacement, cohérence entre eux.
+/// Presence, checksums, location, consistency between both headers.
 pub(super) fn check_gpt_headers(
     gpt: &Gpt,
     last_lba: u64,
@@ -206,7 +205,7 @@ pub(super) fn check_gpt_headers(
     }
 }
 
-/// Les partitions : bornes, zone utilisable, alignement, chevauchements.
+/// Bounds, usable area, alignment, overlaps.
 pub(super) fn check_gpt_entries(
     gpt: &Gpt,
     block: u64,
@@ -245,7 +244,7 @@ pub(super) fn check_gpt_entries(
                 ),
             );
         }
-        // Valeur lue dans le support : hors de portée, elle a déjà été signalée ci-dessus.
+        // Read from the drive: out of range, it was already reported above.
         let start = entry.first_lba.checked_mul(block);
         if start.is_some_and(|start| !start.is_multiple_of(ALIGNMENT_BYTES)) {
             note(

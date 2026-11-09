@@ -8,7 +8,7 @@ const CBW_SIGNATURE: u32 = 0x4342_5355;
 const CSW_SIGNATURE: u32 = 0x5342_5355;
 const CBW_LEN: usize = 31;
 const CSW_LEN: usize = 13;
-/// Plafond d'une commande : 1 Mio, que les clés acceptent et qui laisse l'annulation réagir vite.
+/// 1 MiB per command: keys accept it and cancel stays quick.
 const MAX_TRANSFER: usize = 1 << 20;
 const READY_ATTEMPTS: u32 = 5;
 
@@ -26,34 +26,29 @@ pub enum BulkError {
 }
 
 pub trait BulkTransport {
-    /// Envoie tout `data`.
-    ///
     /// # Errors
-    /// Arrêt du point de terminaison, débranchement ou erreur du système.
+    /// Endpoint stall, unplug, or system error.
     fn send(&mut self, data: &[u8]) -> Result<(), BulkError>;
-    /// Reçoit au plus `buf.len()` octets et rend le nombre reçu. En rendre moins signifie que le périphérique
-    /// a terminé le transfert (paquet court) : un transport qui découpe ses transferts doit enchaîner les
-    /// morceaux jusqu'à remplir `buf` ou rencontrer ce paquet court.
+    /// Receives at most `buf.len()` bytes. Fewer means the device ended the transfer (short packet): a
+    /// transport that splits transfers chains them until `buf` is full or a short packet arrives.
     ///
     /// # Errors
-    /// Arrêt du point de terminaison, débranchement ou erreur du système.
+    /// Endpoint stall, unplug, or system error.
     fn receive(&mut self, buf: &mut [u8]) -> Result<usize, BulkError>;
-    /// Efface l'arrêt d'un point de terminaison.
-    ///
     /// # Errors
-    /// Débranchement ou erreur du système.
+    /// Unplug or system error.
     fn clear_halt(&mut self, direction: Direction) -> Result<(), BulkError>;
-    /// Réinitialisation du stockage de masse : requête de classe, puis effacement des deux arrêts.
+    /// Mass storage reset: class request, then both halts cleared.
     ///
     /// # Errors
-    /// Débranchement ou erreur du système.
+    /// Unplug or system error.
     fn reset(&mut self) -> Result<(), BulkError>;
 }
 
 const SENSE_ILLEGAL_REQUEST: u8 = 5;
 const ASC_INVALID_OPCODE: u8 = 0x20;
 
-/// Ce que dit la clé d'une commande refusée : clé de sens, code et qualificatif SCSI.
+/// Sense key, code and qualifier of a refused command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Sense {
     pub key: u8,
@@ -65,9 +60,9 @@ pub struct Sense {
 pub enum MscError {
     Bulk(BulkError),
     Protocol(&'static str),
-    /// Erreur de phase : l'échange est perdu, le périphérique a été réinitialisé.
+    /// The exchange is lost; the device was reset.
     Phase,
-    /// La commande a échoué ; le sens est absent s'il n'a pas pu être lu.
+    /// `None` when the sense could not be read.
     Check(Option<Sense>),
     Short {
         expected: usize,
@@ -136,7 +131,7 @@ impl<T: BulkTransport> MassStorage<T> {
         Self { transport, tag: 0 }
     }
 
-    /// Envoie une commande et rend les octets transférés. `Check` ne porte pas encore le sens.
+    /// Returns the bytes transferred. `Check` does not carry the sense yet.
     fn execute(&mut self, cdb: &[u8], data: Data<'_>) -> Result<usize, MscError> {
         self.tag = self.tag.wrapping_add(1);
         let tag = self.tag;
@@ -168,7 +163,7 @@ impl<T: BulkTransport> MassStorage<T> {
                     match self.transport.receive(&mut buf[done..]) {
                         Ok(read) => {
                             done += read;
-                            // Moins que demandé : la clé a fini par un paquet court, le statut vient ensuite.
+                            // Short packet: the data phase ended, the status follows.
                             if read < asked {
                                 break;
                             }
@@ -209,12 +204,12 @@ impl<T: BulkTransport> MassStorage<T> {
                 return Err(MscError::Protocol("unknown status"));
             }
         }
-        // Le résidu de la clé compte autant que ce qu'on a compté : une clé peut combler avec des zéros.
+        // Trust the device residue too: a device may pad with zeros.
         let residue = u32::from_le_bytes([csw[8], csw[9], csw[10], csw[11]]) as usize;
         Ok(done.min(length.saturating_sub(residue)))
     }
 
-    /// Un arrêt pendant le statut se lève une fois (spécification « bulk-only ») ; au second, réinitialise.
+    /// A stall during status is cleared once (bulk-only specification); the second time, reset.
     fn read_status(&mut self) -> Result<[u8; CSW_LEN], MscError> {
         let mut csw = [0u8; CSW_LEN];
         for attempt in 0..2 {
@@ -237,7 +232,7 @@ impl<T: BulkTransport> MassStorage<T> {
         Err(MscError::Protocol("no status"))
     }
 
-    /// Exécute une commande ; en cas d'échec, lit le sens pour le rapporter.
+    /// On failure, reads the sense to report it.
     fn command(&mut self, cdb: &[u8], data: Data<'_>) -> Result<usize, MscError> {
         match self.execute(cdb, data) {
             Err(MscError::Check(_)) => Err(MscError::Check(self.request_sense().ok())),
@@ -255,10 +250,8 @@ impl<T: BulkTransport> MassStorage<T> {
         })
     }
 
-    /// `INQUIRY` : fabricant et produit.
-    ///
     /// # Errors
-    /// Échec de la commande.
+    /// Command failure.
     pub fn inquiry(&mut self) -> Result<Inquiry, MscError> {
         let mut reply = [0u8; 36];
         let done = self.command(&[0x12, 0, 0, 0, 36, 0], Data::In(&mut reply))?;
@@ -272,10 +265,10 @@ impl<T: BulkTransport> MassStorage<T> {
         })
     }
 
-    /// Attend que la clé soit prête : une clé tout juste branchée signale d'abord son changement.
+    /// A freshly plugged key first reports its media change.
     ///
     /// # Errors
-    /// Toujours pas prête après quelques essais.
+    /// Still not ready after a few tries.
     pub fn wait_ready(&mut self) -> Result<(), MscError> {
         let mut last = MscError::Check(None);
         for _ in 0..READY_ATTEMPTS {
@@ -288,10 +281,10 @@ impl<T: BulkTransport> MassStorage<T> {
         Err(last)
     }
 
-    /// Capacité : nombre de blocs et taille d'un bloc. `READ CAPACITY(16)` seulement si (10) ne suffit pas.
+    /// Block count and block size. `READ CAPACITY(16)` only when (10) is not enough.
     ///
     /// # Errors
-    /// Échec de la commande, ou réponse trop courte.
+    /// Command failure, or short reply.
     pub fn capacity(&mut self) -> Result<(u64, u32), MscError> {
         let mut short = [0u8; 8];
         let done = self.command(&[0x25, 0, 0, 0, 0, 0, 0, 0, 0, 0], Data::In(&mut short))?;
@@ -320,7 +313,7 @@ impl<T: BulkTransport> MassStorage<T> {
         ))
     }
 
-    /// Commande de lecture ou d'écriture : la forme 10 tant qu'elle suffit, sinon la forme 16.
+    /// The 10-byte form while it fits, else the 16-byte form.
     fn rw_cdb(opcode_10: u8, opcode_16: u8, lba: u64, blocks: u32) -> Vec<u8> {
         if let (Ok(short_lba), Ok(short_blocks)) = (u32::try_from(lba), u16::try_from(blocks)) {
             let mut cdb = vec![0u8; 10];
@@ -377,7 +370,6 @@ impl<T: BulkTransport> MassStorage<T> {
     }
 }
 
-/// Une clé USB vue comme [`BlockDevice`].
 pub struct UsbDisk<T> {
     session: RefCell<MassStorage<T>>,
     size: u64,
@@ -385,10 +377,10 @@ pub struct UsbDisk<T> {
 }
 
 impl<T: BulkTransport> UsbDisk<T> {
-    /// Attend la clé et lit sa capacité.
+    /// Waits for the key and reads its capacity.
     ///
     /// # Errors
-    /// Clé qui ne répond pas, ou géométrie invalide.
+    /// No answer, or invalid geometry.
     pub fn open(transport: T) -> Result<Self, BlockError> {
         let mut session = MassStorage::new(transport);
         session.wait_ready()?;
@@ -491,7 +483,7 @@ mod tests {
         max_blocks: usize,
         sense_key: u8,
         sense_code: u8,
-        /// Octets que la clé rend à `INQUIRY` : moins que les 36 demandés, elle termine par un paquet court.
+        /// Bytes returned to `INQUIRY`: fewer than 36 ends with a short packet.
         inquiry_len: usize,
     }
 
@@ -560,7 +552,7 @@ mod tests {
                     self.status = 1;
                 }
                 Fault::StallStatusOnce => self.stall_status = true,
-                // Une commande refusée n'a pas de données à rendre : la clé arrête le point de terminaison.
+                // A refused command has no data: the device stalls the endpoint.
                 Fault::Phase => {
                     self.status = 2;
                     self.stall_in = length > 0;
@@ -690,7 +682,7 @@ mod tests {
                 self.stall_status = false;
                 return Err(BulkError::Stall);
             }
-            // Le statut ne tient pas dans un tampon de données plus petit : le noyau rend alors EOVERFLOW.
+            // The status does not fit a smaller data buffer: the kernel returns EOVERFLOW.
             if buf.len() < CSW_LEN {
                 return Err(BulkError::Other(io::Error::other(
                     "babble: status in data buffer",
@@ -716,8 +708,8 @@ mod tests {
         (0..len).map(|i| (i * 31 % 251) as u8).collect()
     }
 
-    /// Une clé peut rendre moins que demandé et terminer par un paquet court : la phase de données s'arrête
-    /// là, et le statut qui suit n'est pas lu comme des données.
+    /// A key may return less than asked and end with a short packet: the data phase stops there, and the
+    /// status that follows is not read as data.
     #[test]
     fn une_reponse_courte_n_avale_pas_le_statut() -> Result<(), MscError> {
         for len in [34, 32] {
@@ -727,14 +719,14 @@ mod tests {
             let inquiry = msc.inquiry()?;
             assert_eq!(inquiry.vendor, "General", "{len} octets");
             assert_eq!(inquiry.product, "UDisk", "{len} octets");
-            // L'échange suivant reste aligné : même statut, même étiquette.
+            // The next exchange stays aligned: same status, same tag.
             assert_eq!(msc.capacity()?, (64, BLOCK as u32), "{len} octets");
         }
         Ok(())
     }
 
-    /// Statut « réussi » mais résidu non nul : la clé n'a pas tout gardé. L'écriture échoue au lieu de passer
-    /// pour complète ; c'est le seul signe qu'en donne le protocole.
+    /// Status passed but non-zero residue: the key did not keep everything. The write fails instead of
+    /// looking complete.
     #[test]
     fn une_ecriture_gardee_en_partie_est_un_echec() -> Result<(), BlockError> {
         let mut fake = Fake::new(64);
@@ -763,7 +755,6 @@ mod tests {
         assert_eq!(back, data);
         assert_eq!(&fake.storage[4096..4096 + data.len()], &data[..]);
         assert!(fake.commands.contains(&0x35));
-        // Découpé : aucune commande au-delà du plafond.
         assert!(fake.max_blocks <= MAX_TRANSFER / BLOCK);
         Ok(())
     }
@@ -798,7 +789,6 @@ mod tests {
         fake.not_ready = 2;
         MassStorage::new(&mut fake).wait_ready()?;
         assert_eq!(fake.commands.iter().filter(|c| **c == 0).count(), 3);
-        // Le sens est lu après chaque refus.
         assert_eq!(fake.commands.iter().filter(|c| **c == 3).count(), 2);
 
         let mut jamais = Fake::new(16);

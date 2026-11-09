@@ -4,13 +4,12 @@ use serde::Serialize;
 use crate::block::{DEFAULT_BLOCK_SIZE, MemoryDevice};
 use crate::partition::{Layout, MBR_PROTECTIVE, inspect};
 
-/// Octets du début de l'image à fournir à [`analyze`] : couvre les descripteurs ISO 9660 et les tables
-/// de partitions, placées assez loin par certaines images hybrides.
+/// Image head that [`analyze`] needs: some hybrid images put their partition tables far in.
 pub const HEAD_LEN: usize = 1 << 20;
 
 const ISO_SECTOR: usize = 2048;
 const ISO_DESCRIPTORS: usize = 16 * ISO_SECTOR;
-/// Assez de descripteurs pour atteindre ceux d'UDF, qui suivent ceux d'ISO 9660.
+/// Enough descriptors to reach the UDF ones, which follow ISO 9660.
 const ISO_DESCRIPTORS_SCANNED: usize = 16;
 const ESP_GUID: &str = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B";
 const MBR_ESP: u8 = 0xEF;
@@ -48,7 +47,6 @@ pub struct ImageReport {
 }
 
 impl ImageReport {
-    /// Peut-on attendre un démarrage ou un usage de la clé écrite telle quelle ?
     #[must_use]
     pub fn is_writable_as_is(&self) -> bool {
         matches!(
@@ -63,7 +61,7 @@ struct Iso {
     udf: bool,
 }
 
-/// Lit les descripteurs de volume ISO 9660 (ECMA-119 §8) et cherche ceux d'UDF (ECMA-167).
+/// ISO 9660 volume descriptors (ECMA-119 §8), and UDF recognition (ECMA-167).
 fn read_iso(head: &[u8]) -> Option<Iso> {
     let primary = head.get(ISO_DESCRIPTORS..ISO_DESCRIPTORS + ISO_SECTOR)?;
     if primary[0] != 1 || &primary[1..6] != b"CD001" {
@@ -114,9 +112,9 @@ fn has_partition_table(layout: &Layout) -> bool {
             .is_some_and(|m| m.signature_valid && !m.entries.is_empty())
 }
 
-/// Fin du contenu d'après les tables : le GPT annonce où est son en-tête de secours, le MBR où finissent
-/// ses partitions, en secteurs de la taille que révèle le GPT (512 octets sans GPT : le MBR seul ne la
-/// dit pas). Le MBR de protection d'un GPT est ignoré : il couvre tout un disque, pas l'image.
+/// Content end from the tables: the GPT backup header, or the end of the MBR partitions in the sector size
+/// the GPT reveals (512 without GPT). A GPT's protective MBR covers a whole disk, not the image, so it is
+/// ignored.
 fn declared_by_tables(layout: &Layout) -> Option<u64> {
     let block = u64::from(layout.logical_block_size);
     let by_gpt = layout
@@ -124,7 +122,7 @@ fn declared_by_tables(layout: &Layout) -> Option<u64> {
         .as_ref()
         .and_then(|g| g.primary.as_ref())
         .filter(|h| h.header_crc_ok && h.alternate_lba > 1)
-        // Valeur lue dans l'image : un débordement passerait pour une petite taille.
+        // Read from the image: an overflow must not pass for a small size.
         .map(|h| h.alternate_lba.saturating_add(1).saturating_mul(block));
     let by_mbr = layout
         .mbr
@@ -140,8 +138,7 @@ fn declared_by_tables(layout: &Layout) -> Option<u64> {
     by_gpt.or(by_mbr)
 }
 
-/// Analyse le début d'une image. `head` : ses premiers octets (au plus [`HEAD_LEN`] suffisent) ;
-/// `real_len` : sa taille décompressée quand on la connaît.
+/// `real_len`: decompressed size, when known.
 #[must_use]
 pub fn analyze(head: &[u8], real_len: Option<u64>) -> ImageReport {
     let block = DEFAULT_BLOCK_SIZE as usize;
@@ -178,7 +175,6 @@ pub fn analyze(head: &[u8], real_len: Option<u64>) -> ImageReport {
 mod tests {
     use super::*;
 
-    /// Image de 1 Mio remplie de zéros, avec les retouches voulues.
     fn blank() -> Vec<u8> {
         vec![0u8; HEAD_LEN]
     }
@@ -273,9 +269,7 @@ mod tests {
         let report = analyze(&image, Some(HEAD_LEN as u64));
         assert_eq!(report.declared_bytes, Some(10_000 * 2048));
         assert_eq!(report.truncated, Some(true));
-        // Sans la taille réelle (image compressée), on ne prétend rien.
         assert_eq!(analyze(&image, None).truncated, None);
-        // Une image exactement de la taille annoncée, ou plus longue (bourrage), est entière.
         assert_eq!(analyze(&image, Some(10_000 * 2048)).truncated, Some(false));
         assert_eq!(analyze(&image, Some(10_001 * 2048)).truncated, Some(false));
     }
@@ -297,7 +291,6 @@ mod tests {
         assert_eq!(report.truncated, Some(false));
     }
 
-    /// En-tête GPT valide qui annonce son secours à `alternate_lba` : la valeur vient de l'image.
     fn with_gpt_alternate(image: &mut [u8], alternate_lba: u64) {
         with_mbr_entry(image, MBR_PROTECTIVE, 1, 2047);
         let entries = vec![0u8; 128 * 128];
@@ -318,8 +311,8 @@ mod tests {
         image[512..604].copy_from_slice(&h);
     }
 
-    /// Image à secteurs de 4 Kio dont l'en-tête GPT est invalide : seul le MBR hybride donne la taille,
-    /// et ses entrées se comptent en secteurs de 4 Kio, pas de 512 octets.
+    /// 4 KiB-sector image with an invalid GPT header: only the hybrid MBR gives the size, counted in 4 KiB
+    /// sectors.
     #[test]
     fn le_mbr_d_une_image_a_secteurs_de_4_kio_se_compte_en_4_kio() {
         let mut image = blank();

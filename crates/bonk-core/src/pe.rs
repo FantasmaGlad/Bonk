@@ -6,7 +6,7 @@ const MACHINE_X86: u16 = 0x14C;
 const MACHINE_ARM64: u16 = 0xAA64;
 const OPTIONAL_PE32: u16 = 0x10B;
 const OPTIONAL_PE32_PLUS: u16 = 0x20B;
-/// `commonName` en DER : l'OID 2.5.4.3.
+/// `commonName` in DER: OID 2.5.4.3.
 const COMMON_NAME_OID: [u8; 5] = [0x06, 0x03, 0x55, 0x04, 0x03];
 pub const PCA_2011: &str = "Microsoft Windows Production PCA 2011";
 pub const UEFI_CA_2023: &str = "Windows UEFI CA 2023";
@@ -48,7 +48,6 @@ pub enum Signer {
 }
 
 impl Signer {
-    /// Ce que ce certificat implique pour le démarrage, en une phrase.
     #[must_use]
     pub fn meaning(&self) -> String {
         match self {
@@ -84,7 +83,7 @@ fn coff_offset(file: &[u8]) -> Option<usize> {
     (file.get(pe..pe.checked_add(4)?)? == b"PE\0\0").then_some(pe + 4)
 }
 
-/// La puce d'un exécutable PE. `None` : pas un PE, ou une puce qu'un PC ne démarre pas.
+/// `None`: not a PE, or a machine a PC does not boot.
 #[must_use]
 pub fn machine(file: &[u8]) -> Option<Machine> {
     match u16_at(file, coff_offset(file)?)? {
@@ -95,7 +94,7 @@ pub fn machine(file: &[u8]) -> Option<Machine> {
     }
 }
 
-/// Les noms communs d'une structure DER : ceux des certificats, sujets et émetteurs.
+/// Certificates, subjects and issuers.
 fn common_names(der: &[u8]) -> Vec<String> {
     let mut names = Vec::new();
     let mut at = 0;
@@ -118,7 +117,7 @@ fn common_names(der: &[u8]) -> Vec<String> {
     names
 }
 
-/// L'autorité qui a signé un chargeur UEFI. `None` : ce n'est pas un exécutable PE lisible.
+/// `None`: not a readable PE.
 #[must_use]
 pub fn signer(file: &[u8]) -> Option<Signer> {
     let coff = coff_offset(file)?;

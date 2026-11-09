@@ -1,7 +1,7 @@
 use std::fmt;
 use std::io;
 
-/// Un secteur de support optique. L'ancre principale est toujours au secteur 256.
+/// Optical media sector. The main anchor is always at sector 256.
 const SECTOR: u64 = 2048;
 const ANCHOR_SECTOR: u64 = 256;
 const MAX_DESCRIPTORS: u64 = 4096;
@@ -23,10 +23,10 @@ const FID_DIRECTORY: u8 = 0x02;
 const FID_DELETED: u8 = 0x04;
 const FID_PARENT: u8 = 0x08;
 
-/// Lecture à une position donnée : l'image peut être lue par plusieurs fichiers à la fois, sans curseur.
+/// Positional reads: several files may read the image at once, without a shared cursor.
 pub trait ReadAt {
     /// # Errors
-    /// Lecture impossible, ou au-delà de la fin.
+    /// Read failure, or past the end.
     fn read_exact_at(&self, offset: u64, buf: &mut [u8]) -> io::Result<()>;
 }
 
@@ -44,7 +44,6 @@ impl ReadAt for [u8] {
 
 #[derive(Debug)]
 pub enum UdfError {
-    /// Pas de système de fichiers UDF ici.
     NotUdf,
     Malformed(&'static str),
     Io(io::Error),
@@ -68,14 +67,14 @@ impl From<io::Error> for UdfError {
     }
 }
 
-/// Un morceau de fichier : position dans l'image et longueur, en octets.
+/// Image offset and length, in bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Extent {
     pub offset: u64,
     pub len: u64,
 }
 
-/// Données d'un fichier : dans des morceaux de l'image, ou directement dans son entrée.
+/// In image extents, or inline in the file entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Content {
     Extents(Vec<Extent>),
@@ -89,7 +88,7 @@ pub struct File {
     pub content: Content,
 }
 
-/// Arbre d'une image : ses fichiers, et ses dossiers (les vides aussi).
+/// Empty directories included.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Tree {
     pub files: Vec<File>,
@@ -130,7 +129,7 @@ fn u64_at(data: &[u8], at: usize) -> Result<u64, UdfError> {
     Ok(low | (high << 32))
 }
 
-/// Identifiant d'un descripteur dont l'étiquette est valide : somme de contrôle et version.
+/// Id of a descriptor whose tag is valid: checksum and version.
 fn tag_id(sector: &[u8]) -> Option<u16> {
     let head = sector.get(..16)?;
     let sum = head
@@ -152,7 +151,7 @@ fn long_ad(data: &[u8], at: usize) -> Result<LongAd, UdfError> {
     })
 }
 
-/// Le type d'un morceau tient dans les deux bits hauts de sa longueur ; 0 : enregistré.
+/// The extent type is in the two high bits of the length; 0: recorded.
 fn recorded_len(raw: u32) -> Result<u64, UdfError> {
     if raw >> 30 == 0 {
         Ok(u64::from(raw))
@@ -161,7 +160,7 @@ fn recorded_len(raw: u32) -> Result<u64, UdfError> {
     }
 }
 
-/// Décode un nom : premier octet 8 pour du Latin-1, 16 pour de l'UTF-16 gros-boutiste.
+/// First byte 8: Latin-1; 16: big-endian UTF-16.
 fn decode_name(raw: &[u8]) -> Result<String, UdfError> {
     let name = match raw.split_first() {
         Some((8, rest)) => rest.iter().map(|b| char::from(*b)).collect(),
@@ -177,21 +176,20 @@ fn decode_name(raw: &[u8]) -> Result<String, UdfError> {
         }
         _ => return Err(UdfError::Malformed("invalid file name")),
     };
-    // Un nom vient de l'image et deviendra un chemin : aucun moyen d'en sortir.
+    // A name from the image becomes a path: it must not escape.
     if name.is_empty() || name == "." || name == ".." || name.contains(['/', '\\', '\0']) {
         return Err(UdfError::Malformed("invalid file name"));
     }
     Ok(name)
 }
 
-/// Une entrée de fichier lue : genre, taille, données.
 struct Entry {
     directory: bool,
     size: u64,
     content: Content,
 }
 
-/// Lecteur d'une image UDF à une seule partition de type 1, le cas des ISO de Windows.
+/// Single type-1 partition UDF, the case of Windows ISOs.
 pub struct Udf<'a, R: ReadAt + ?Sized> {
     reader: &'a R,
     partition_start: u64,
@@ -201,7 +199,7 @@ pub struct Udf<'a, R: ReadAt + ?Sized> {
 
 impl<'a, R: ReadAt + ?Sized> Udf<'a, R> {
     /// # Errors
-    /// [`UdfError::NotUdf`] sans ancre ; [`UdfError::Malformed`] pour une structure incohérente.
+    /// [`UdfError::NotUdf`] without an anchor; [`UdfError::Malformed`] for an inconsistent structure.
     pub fn open(reader: &'a R) -> Result<Self, UdfError> {
         let mut anchor = [0; SECTOR as usize];
         if reader
@@ -324,10 +322,8 @@ impl<'a, R: ReadAt + ?Sized> Udf<'a, R> {
         Ok(bytes)
     }
 
-    /// L'arbre complet de l'image.
-    ///
     /// # Errors
-    /// Structure incohérente, image illisible, ou arbre au-delà des limites.
+    /// Inconsistent structure, unreadable image, or tree beyond the limits.
     pub fn tree(&self) -> Result<Tree, UdfError> {
         let mut tree = Tree::default();
         let mut pending = vec![(self.root, Vec::new())];
@@ -382,10 +378,10 @@ impl<'a, R: ReadAt + ?Sized> Udf<'a, R> {
     }
 }
 
-/// Lit `buf.len()` octets d'un fichier, depuis `offset`, à travers ses morceaux.
+/// Reads `buf.len()` bytes of a file from `offset`, across its extents.
 ///
 /// # Errors
-/// Lecture impossible, ou au-delà de la fin des morceaux.
+/// Read failure, or past the end of the extents.
 pub fn read_content<R: ReadAt + ?Sized>(
     reader: &R,
     content: &Content,
@@ -449,7 +445,7 @@ pub mod testing {
         record
     }
 
-    /// Image dont les fichiers sont donnés par chemin, chacun d'un seul morceau.
+    /// Files given by path, one extent each.
     #[must_use]
     pub fn build(files: &[(&str, &[u8])]) -> Vec<u8> {
         const P: usize = 300;
@@ -472,7 +468,7 @@ pub mod testing {
                 }
             }
         }
-        // Bloc 0 : jeu de fichiers ; puis, pour chaque dossier, son entrée et ses données ; puis les fichiers.
+        // Block 0: file set; then each directory's entry and data; then the files.
         let mut next = 1;
         let mut dir_blocks = BTreeMap::new();
         for (path, list) in &dirs {
@@ -487,7 +483,7 @@ pub mod testing {
         }
         let mut img = vec![0u8; (P + next + 1) * BLOCK];
         let block = |b: usize| (P + b) * BLOCK;
-        // Reconnaissance du volume : ce que l'analyse d'une image regarde pour dire « ISO » et « UDF ».
+        // Volume recognition: what image analysis checks for ISO and UDF.
         for (sector, id, kind) in [(16, b"CD001", 1u8), (17, b"BEA01", 0), (18, b"NSR02", 0)] {
             let s = sector * BLOCK;
             img[s] = kind;
@@ -556,7 +552,7 @@ pub mod testing {
         let mut img = vec![0u8; 700 * 2048];
         let at = |sector: usize| sector * 2048;
         let block = |b: usize| (P + b) * 2048;
-        // Ancre : séquence de descripteurs au secteur 257.
+        // Anchor: descriptor sequence at sector 257.
         let s = at(256);
         img[s + 16..s + 20].copy_from_slice(&(16 * 2048u32).to_le_bytes());
         img[s + 20..s + 24].copy_from_slice(&257u32.to_le_bytes());
@@ -571,11 +567,11 @@ pub mod testing {
         img[s + 440] = 1;
         tag(&mut img[s..s + 2048], TAG_LOGICAL_VOLUME);
         tag(&mut img[at(259)..at(260)], TAG_TERMINATOR);
-        // Jeu de fichiers au bloc 0, racine au bloc 1.
+        // File set at block 0, root at block 1.
         let s = block(0);
         img[s + 404..s + 408].copy_from_slice(&1u32.to_le_bytes());
         tag(&mut img[s..s + 2048], TAG_FILE_SET);
-        // Entrée de dossier en ligne ou par morceau : `dir(bloc de l'entrée, bloc des données, octets)`.
+        // Directory entry inline or by extent: `dir(entry block, data block, records)`.
         let dir = |img: &mut Vec<u8>, entry: usize, data: usize, records: &[Vec<u8>]| {
             let bytes: Vec<u8> = records.concat();
             img[block(data)..block(data) + bytes.len()].copy_from_slice(&bytes);
@@ -608,7 +604,7 @@ pub mod testing {
                 fid(0, "boot.wim", 8),
             ],
         );
-        // Fichier en ligne.
+        // Inline file.
         let s = block(5);
         img[s + 34] = 3;
         img[s + 56..s + 64].copy_from_slice(&5u64.to_le_bytes());
@@ -616,7 +612,7 @@ pub mod testing {
         img[s + 176..s + 181].copy_from_slice(b"salut");
         tag(&mut img[s..s + 2048], TAG_FILE_ENTRY);
         dir(&mut img, 6, 7, &[fid(FID_PARENT | FID_DIRECTORY, "", 1)]);
-        // Fichier de 3000 octets, en deux morceaux séparés, par une entrée étendue.
+        // 3000-byte file in two separate extents, through an extended entry.
         let s = block(8);
         img[s + 56..s + 64].copy_from_slice(&3000u64.to_le_bytes());
         img[s + 212..s + 216].copy_from_slice(&16u32.to_le_bytes());
@@ -664,7 +660,7 @@ mod tests {
         read_content(image.as_slice(), &parts.content, 0, &mut buf).unwrap();
         assert!(buf[..2048].iter().all(|b| *b == 0xAA));
         assert!(buf[2048..].iter().all(|b| *b == 0xBB));
-        // À cheval sur les deux morceaux.
+        // Across both extents.
         let mut buf = [0; 4];
         read_content(image.as_slice(), &parts.content, 2046, &mut buf).unwrap();
         assert_eq!(buf, [0xAA, 0xAA, 0xBB, 0xBB]);
@@ -694,7 +690,7 @@ mod tests {
         assert_eq!(decode_name(b"\x10\x00a\x00b").unwrap(), "ab");
     }
 
-    /// Chaque octet de la structure abîmé tour à tour : jamais de panique ni de boucle sans fin.
+    /// Each structure byte damaged in turn: never a panic or an endless loop.
     #[test]
     fn une_image_abimee_ne_fait_jamais_paniquer() {
         let good = testing::image();

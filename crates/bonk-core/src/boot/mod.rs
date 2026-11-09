@@ -1,19 +1,18 @@
-//! Code d'amorçage BIOS écrit par Bonk. Sources dans `boot/` à la racine du dépôt, assemblées par
-//! `boot/assemble.sh` avec la seule chaîne Rust ; la CI réassemble et compare ces octets.
+//! BIOS boot code written by Bonk. Sources in `boot/`, assembled by `boot/assemble.sh` with the Rust
+//! toolchain only; CI reassembles and compares these bytes.
 
-/// Code du MBR : les 440 premiers octets du disque, avant sa signature et la table des partitions.
+/// First 440 bytes of the disk, before the signature and the partition table.
 pub const MBR: &[u8; 440] = include_bytes!("mbr.bin");
 
-/// Secteur de démarrage FAT32 ; les octets 3 à 89 sont laissés à zéro pour le BPB du formatage.
+/// FAT32 boot sector; bytes 3 to 89 stay zero for the BPB.
 pub const VBR: &[u8; 512] = include_bytes!("vbr.bin");
 
-/// Second étage, lu par `VBR` à partir du secteur 9 de la zone réservée du volume.
+/// Second stage, read by `VBR` from the reserved area.
 pub const STAGE2: &[u8; 4096] = include_bytes!("stage2.bin");
 
-/// Premier secteur du volume où `VBR` lit `STAGE2`.
 pub const STAGE2_SECTOR: u32 = 9;
 
-/// Taille de secteur que supposent `VBR` et `STAGE2`.
+/// Sector size that `VBR` and `STAGE2` assume.
 pub const SECTOR: u32 = 512;
 
 #[cfg(test)]

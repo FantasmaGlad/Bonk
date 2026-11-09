@@ -9,7 +9,7 @@ pub struct TracedDevice {
 }
 
 impl TracedDevice {
-    /// `include_head` ajoute les 16 premiers octets de chaque accès : réservé aux images.
+    /// `include_head` adds the first 16 bytes of each access: images only.
     #[must_use]
     pub fn new(inner: Box<dyn BlockDevice>, include_head: bool) -> Self {
         Self {
