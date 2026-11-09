@@ -17,6 +17,7 @@ mod schema;
 mod serve;
 mod slot;
 mod transfer;
+mod vault;
 
 pub use config::ViewDefaults;
 
@@ -101,6 +102,11 @@ enum Command {
     RepairGpt(RepairArgs),
     /// Return a disk to storage use: table, partition, filesystem
     Format(format::FormatArgs),
+    /// Disk carrying several ISO images: prepare, list
+    Vault {
+        #[command(subcommand)]
+        action: vault::VaultAction,
+    },
     /// What this host allows, and why not the rest
     Capabilities(format::CapabilitiesArgs),
     /// Support report as JSON: system, rendering, disks and verdicts, secrets masked
@@ -178,6 +184,7 @@ fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
             action: DiskAction::RepairGpt(a),
         } if a.touches_real_disk() => Some(DISK),
         Command::Format(a) if a.touches_real_disk() => Some(DISK),
+        Command::Vault { action } if action.touches_real_disk() => Some(DISK),
         Command::ElevatedHelper { .. } => Some(DISK),
         Command::Debug {
             action: debug::DebugAction::Sources(_),
@@ -191,6 +198,7 @@ fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
             Some("bonk serve writes to the disks it lists: incompatible with --fixture")
         }
         Command::Format(_)
+        | Command::Vault { .. }
         | Command::Capabilities(_)
         | Command::Write(_)
         | Command::Verify(_)
@@ -498,6 +506,7 @@ where
         Some(Command::Verify(args)) => transfer::run_verify(&args, &view, deps, quiet, out, err),
         Some(Command::RepairGpt(args)) => transfer::run_repair(&args, deps, out, err),
         Some(Command::Format(args)) => format::run_format(&args, deps, out, err),
+        Some(Command::Vault { action }) => vault::run(&action, &view, deps, out, err),
         Some(Command::Capabilities(args)) => format::run_capabilities(&args, deps, out, err),
         Some(Command::List(args)) => run_list(&args, &view, out, err, enumerate),
         Some(Command::Info(args)) => run_info(&args, &view, out, err, enumerate),

@@ -210,16 +210,31 @@ fn wait_for_partition(
     expected_bytes: u64,
     deps: &Deps<'_>,
 ) -> Result<Option<String>, JobError> {
+    Ok(
+        wait_for_partitions(id, &[expected_bytes], deps)?
+            .and_then(|paths| paths.into_iter().next()),
+    )
+}
+
+/// Paths of the disk's partitions once their sizes are exactly `expected`, in any order.
+pub(super) fn wait_for_partitions(
+    id: &str,
+    expected: &[u64],
+    deps: &Deps<'_>,
+) -> Result<Option<Vec<String>>, JobError> {
+    let mut wanted = expected.to_vec();
+    wanted.sort_unstable();
     for _ in 0..PARTITION_LOOKS {
         let disks = enumerate(deps)?;
-        let found = disks
-            .iter()
-            .find(|disk| disk.id == id)
-            .filter(|disk| disk.partitions.len() == 1)
-            .map(|disk| &disk.partitions[0])
-            .filter(|partition| partition.size_bytes == expected_bytes);
-        if let Some(partition) = found {
-            return Ok(Some(partition.path.clone()));
+        let found = disks.iter().find(|disk| disk.id == id).filter(|disk| {
+            let mut sizes: Vec<u64> = disk.partitions.iter().map(|p| p.size_bytes).collect();
+            sizes.sort_unstable();
+            sizes == wanted
+        });
+        if let Some(disk) = found {
+            return Ok(Some(
+                disk.partitions.iter().map(|p| p.path.clone()).collect(),
+            ));
         }
         if (deps.io.cancelled)() {
             return Err(fail(

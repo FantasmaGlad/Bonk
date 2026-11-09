@@ -1,4 +1,5 @@
 pub mod exfat;
+pub mod exfat_read;
 pub mod exfat_tree;
 pub mod fat32;
 pub mod fat32_tree;
@@ -102,7 +103,7 @@ pub struct Ids {
 }
 
 /// RFC 4122 version 4, in GPT byte order.
-fn guid(bytes: &[u8]) -> [u8; 16] {
+pub(crate) fn guid(bytes: &[u8]) -> [u8; 16] {
     let mut out = [0u8; 16];
     out.copy_from_slice(&bytes[..16]);
     out[7] = (out[7] & 0x0F) | 0x40;
@@ -134,6 +135,8 @@ pub enum FormatError {
     Source(std::io::Error),
     /// A combination the drive cannot carry, such as BIOS code on GPT.
     Unsupported(String),
+    /// Content read from the drive that Bonk does not understand.
+    Invalid(String),
 }
 
 impl fmt::Display for FormatError {
@@ -144,7 +147,8 @@ impl fmt::Display for FormatError {
             | Self::TooLarge(what)
             | Self::Mismatch(what)
             | Self::Name(what)
-            | Self::Unsupported(what) => f.write_str(what),
+            | Self::Unsupported(what)
+            | Self::Invalid(what) => f.write_str(what),
             Self::Source(err) => write!(f, "reading the image: {err}"),
         }
     }

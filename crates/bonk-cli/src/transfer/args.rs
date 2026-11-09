@@ -125,7 +125,7 @@ impl CommonArgs {
         }
     }
 
-    pub(super) fn options(&self, view: &ViewDefaults) -> FilterOptions {
+    pub(crate) fn options(&self, view: &ViewDefaults) -> FilterOptions {
         FilterOptions {
             show_internal: self.show_internal || view.show_internal,
             allow_virtual: self.allow_virtual || view.allow_virtual,

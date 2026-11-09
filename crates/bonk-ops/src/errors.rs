@@ -38,6 +38,7 @@ pub enum Code {
     GptRepairFailed,
     FormatFailed,
     FilesystemUnavailable,
+    NotAVault,
     LogSettingInvalid,
     ConfigInvalid,
     WindowUnavailable,
@@ -375,6 +376,18 @@ pub const CATALOG: &[Entry] = &[
             "`--simulate`: only FAT32 and exFAT can be written to an image file",
         ],
         remedy: "See `bonk capabilities`. Install the named tool, or choose `--fs fat32` or `--fs exfat`, written by Bonk itself.",
+    },
+    Entry {
+        code: Code::NotAVault,
+        id: "E7003",
+        exit: EXIT_RUNTIME_ERROR,
+        title: "No readable Bonk vault on this disk",
+        causes: &[
+            "the disk was not prepared by `bonk vault init`",
+            "the first partition is not exFAT labelled BonkVault, or the second is not an EFI system partition",
+            "the exFAT volume is damaged",
+        ],
+        remedy: "Prepare the disk with `bonk vault init`, which erases it. A damaged volume can be checked by the system's exFAT tool first.",
     },
 ];
 

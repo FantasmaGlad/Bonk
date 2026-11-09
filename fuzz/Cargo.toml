@@ -56,3 +56,10 @@ path = "fuzz_targets/pe_signer.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "exfat_read"
+path = "fuzz_targets/exfat_read.rs"
+test = false
+doc = false
+bench = false
