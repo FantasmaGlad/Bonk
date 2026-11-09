@@ -18,6 +18,7 @@ impl TableKind {
     pub const FORMAT_DEFAULT: Self = Self::Gpt;
     /// MBR boots in BIOS and UEFI, up to 2 TiB.
     pub const WINDOWS_DEFAULT: Self = Self::Mbr;
+    pub const VAULT_DEFAULT: Self = Self::Mbr;
 
     #[must_use]
     pub fn name(self) -> &'static str {
@@ -55,15 +56,20 @@ const GUID_BASIC_DATA: [u8; 16] = [
 const GUID_LINUX: [u8; 16] = [
     0xAF, 0x3D, 0xC6, 0x0F, 0x83, 0x84, 0x72, 0x47, 0x8E, 0x79, 0x3D, 0x69, 0xD8, 0x47, 0x7D, 0xE4,
 ];
+/// "EFI System": C12A7328-F81F-11D2-BA4B-00A0C93EC93B.
+pub(crate) const GUID_ESP: [u8; 16] = [
+    0x28, 0x73, 0x2A, 0xC1, 0x1F, 0xF8, 0xD2, 0x11, 0xBA, 0x4B, 0x00, 0xA0, 0xC9, 0x3E, 0xC9, 0x3B,
+];
+pub(crate) const MBR_ESP: u8 = 0xEF;
 
-fn gpt_type(fs: Filesystem) -> [u8; 16] {
+pub(crate) fn gpt_type(fs: Filesystem) -> [u8; 16] {
     match fs {
         Filesystem::Fat32 | Filesystem::Exfat | Filesystem::Ntfs => GUID_BASIC_DATA,
         Filesystem::Ext4 => GUID_LINUX,
     }
 }
 
-fn mbr_type(fs: Filesystem) -> u8 {
+pub(crate) fn mbr_type(fs: Filesystem) -> u8 {
     match fs {
         Filesystem::Fat32 => 0x0C,
         Filesystem::Exfat | Filesystem::Ntfs => 0x07,
@@ -75,13 +81,16 @@ fn gpt_table_sectors(block: u64) -> u64 {
     (u64::from(GPT_ENTRIES) * u64::from(GPT_ENTRY_SIZE)).div_ceil(block)
 }
 
-/// Where the partition goes, without writing: also used by `--dry-run`. MBR cannot address beyond 2^32
-/// sectors.
-pub fn plan(size: u64, block: u32, kind: TableKind) -> Result<PartitionPlan, FormatError> {
+/// Last sector a partition may use; `None` when the drive cannot even hold the table. MBR cannot address
+/// beyond 2^32 sectors.
+pub(crate) fn usable_end(
+    size: u64,
+    block: u32,
+    kind: TableKind,
+) -> Result<Option<u64>, FormatError> {
     let block = u64::from(block);
     let sectors = size / block;
-    let first_lba = ALIGNMENT.div_ceil(block);
-    let last = match kind {
+    Ok(match kind {
         TableKind::Gpt => sectors.checked_sub(gpt_table_sectors(block) + 2),
         TableKind::Mbr => {
             if sectors > u64::from(u32::MAX) {
@@ -91,8 +100,13 @@ pub fn plan(size: u64, block: u32, kind: TableKind) -> Result<PartitionPlan, For
             }
             sectors.checked_sub(1)
         }
-    };
-    match last {
+    })
+}
+
+/// Where the partition goes, without writing: also used by `--dry-run`.
+pub fn plan(size: u64, block: u32, kind: TableKind) -> Result<PartitionPlan, FormatError> {
+    let first_lba = ALIGNMENT.div_ceil(u64::from(block));
+    match usable_end(size, block, kind)? {
         Some(last_lba) if last_lba > first_lba => Ok(PartitionPlan {
             first_lba,
             last_lba,
@@ -103,16 +117,28 @@ pub fn plan(size: u64, block: u32, kind: TableKind) -> Result<PartitionPlan, For
     }
 }
 
-/// Signature and a single entry, no boot code.
-fn mbr_sector(block: usize, signature: u32, kind: u8, first: u32, sectors: u32) -> Vec<u8> {
+/// One partition of the table being written.
+pub(crate) struct Slot<'a> {
+    pub(crate) part: PartitionPlan,
+    pub(crate) gpt_type: [u8; 16],
+    pub(crate) mbr_type: u8,
+    pub(crate) guid: [u8; 16],
+    pub(crate) name: Option<&'a str>,
+}
+
+/// Signature and up to four entries `(type, first, sectors)`, no boot code.
+fn mbr_sector(block: usize, signature: u32, entries: &[(u8, u32, u32)]) -> Vec<u8> {
     let mut sector = vec![0u8; block];
     put_u32(&mut sector, 440, signature);
-    // CHS out of range: only LBA values count.
-    sector[446 + 1..446 + 4].copy_from_slice(&[0xFE, 0xFF, 0xFF]);
-    sector[446 + 4] = kind;
-    sector[446 + 5..446 + 8].copy_from_slice(&[0xFE, 0xFF, 0xFF]);
-    put_u32(&mut sector, 446 + 8, first);
-    put_u32(&mut sector, 446 + 12, sectors);
+    for (index, &(kind, first, sectors)) in entries.iter().take(4).enumerate() {
+        let at = 446 + index * 16;
+        // CHS out of range: only LBA values count.
+        sector[at + 1..at + 4].copy_from_slice(&[0xFE, 0xFF, 0xFF]);
+        sector[at + 4] = kind;
+        sector[at + 5..at + 8].copy_from_slice(&[0xFE, 0xFF, 0xFF]);
+        put_u32(&mut sector, at + 8, first);
+        put_u32(&mut sector, at + 12, sectors);
+    }
     sector[510] = 0x55;
     sector[511] = 0xAA;
     sector
@@ -147,30 +173,30 @@ fn gpt_header(block: usize, h: &GptHeader) -> Vec<u8> {
     s
 }
 
-fn write_gpt(
-    dev: &mut dyn BlockDevice,
-    fs: Filesystem,
-    part: PartitionPlan,
-    label: Option<&str>,
-    ids: &Ids,
-) -> Result<(), FormatError> {
+fn write_gpt(dev: &mut dyn BlockDevice, slots: &[Slot<'_>], ids: &Ids) -> Result<(), FormatError> {
     let block = u64::from(dev.block_size());
     let block_len = dev.block_size() as usize;
     let last = dev.size() / block - 1;
     let table_sectors = gpt_table_sectors(block);
 
     let mut table = vec![0u8; usize::try_from(table_sectors * block).unwrap_or(0)];
-    table[..16].copy_from_slice(&gpt_type(fs));
-    table[16..32].copy_from_slice(&ids.partition_guid);
-    put_u64(&mut table, 32, part.first_lba);
-    put_u64(&mut table, 40, part.last_lba);
-    for (i, unit) in label
-        .unwrap_or_default()
-        .encode_utf16()
-        .take(36)
-        .enumerate()
+    for (slot, entry) in slots
+        .iter()
+        .zip(table.as_chunks_mut::<{ GPT_ENTRY_SIZE as usize }>().0)
     {
-        table[56 + i * 2..58 + i * 2].copy_from_slice(&unit.to_le_bytes());
+        entry[..16].copy_from_slice(&slot.gpt_type);
+        entry[16..32].copy_from_slice(&slot.guid);
+        put_u64(entry, 32, slot.part.first_lba);
+        put_u64(entry, 40, slot.part.last_lba);
+        for (i, unit) in slot
+            .name
+            .unwrap_or_default()
+            .encode_utf16()
+            .take(36)
+            .enumerate()
+        {
+            entry[56 + i * 2..58 + i * 2].copy_from_slice(&unit.to_le_bytes());
+        }
     }
     let table_len = (GPT_ENTRIES * GPT_ENTRY_SIZE) as usize;
     let table_crc = crc32(&table[..table_len]);
@@ -200,7 +226,11 @@ fn write_gpt(
     let protective = u32::try_from(last).unwrap_or(u32::MAX);
     dev.write_at(
         0,
-        &mbr_sector(block_len, ids.disk_signature, MBR_PROTECTIVE, 1, protective),
+        &mbr_sector(
+            block_len,
+            ids.disk_signature,
+            &[(MBR_PROTECTIVE, 1, protective)],
+        ),
     )?;
     Ok(())
 }
@@ -224,25 +254,55 @@ pub fn write_table(
         ));
     }
     let part = plan(dev.size(), dev.block_size(), kind)?;
+    let slot = Slot {
+        part,
+        gpt_type: gpt_type(fs),
+        mbr_type: mbr_type(fs),
+        guid: ids.partition_guid,
+        name: label,
+    };
+    write_slots(dev, kind, &[slot], ids, bios_boot)?;
+    Ok(part)
+}
+
+/// Partitions already placed by the caller, in disk order; see [`write_table`].
+pub(crate) fn write_slots(
+    dev: &mut dyn BlockDevice,
+    kind: TableKind,
+    slots: &[Slot<'_>],
+    ids: &Ids,
+    bios_boot: bool,
+) -> Result<(), FormatError> {
     let block = u64::from(dev.block_size());
-    // An old backup GPT at the end, or an old signature at the partition start, would make the system see
-    // what no longer exists.
-    let wiped = (part.first_lba * block + ALIGNMENT).min(dev.size());
-    zero_range(dev, 0, wiped)?;
     let size = dev.size();
+    // An old backup GPT at the end, or an old signature at a partition start, would make the system see
+    // what no longer exists.
+    let first = slots.first().map_or(0, |slot| slot.part.first_lba * block);
+    let wiped = (first + ALIGNMENT).min(size);
+    zero_range(dev, 0, wiped)?;
+    for slot in slots.iter().skip(1) {
+        let start = (slot.part.first_lba * block).min(size);
+        zero_range(dev, start, ALIGNMENT.min(size - start))?;
+    }
     let tail = ALIGNMENT.min(size - wiped);
     zero_range(dev, size - tail, tail)?;
     match kind {
-        TableKind::Gpt => write_gpt(dev, fs, part, label, ids)?,
+        TableKind::Gpt => write_gpt(dev, slots, ids)?,
         TableKind::Mbr => {
-            let first = u32::try_from(part.first_lba).unwrap_or(u32::MAX);
-            let sectors = u32::try_from(part.sectors()).unwrap_or(u32::MAX);
+            let entries: Vec<(u8, u32, u32)> = slots
+                .iter()
+                .map(|slot| {
+                    (
+                        slot.mbr_type,
+                        u32::try_from(slot.part.first_lba).unwrap_or(u32::MAX),
+                        u32::try_from(slot.part.sectors()).unwrap_or(u32::MAX),
+                    )
+                })
+                .collect();
             let mut sector = mbr_sector(
                 usize::try_from(block).unwrap_or(512),
                 ids.disk_signature,
-                mbr_type(fs),
-                first,
-                sectors,
+                &entries,
             );
             if bios_boot {
                 sector[..crate::boot::MBR.len()].copy_from_slice(crate::boot::MBR);
@@ -251,7 +311,7 @@ pub fn write_table(
             dev.write_at(0, &sector)?;
         }
     }
-    Ok(part)
+    Ok(())
 }
 
 pub fn verify_bios_boot(dev: &dyn BlockDevice) -> Result<(), FormatError> {

@@ -10,6 +10,7 @@ pub mod pe;
 pub mod repair;
 pub mod trace;
 pub mod udf;
+pub mod vault;
 pub mod wim;
 pub mod write;
 

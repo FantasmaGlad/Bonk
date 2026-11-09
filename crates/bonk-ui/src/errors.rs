@@ -34,6 +34,7 @@ const FRENCH_TITLES: &[(&str, &str)] = &[
     ("E6001", "Requête de service invalide"),
     ("E7001", "Échec du formatage"),
     ("E7002", "Système de fichiers indisponible sur cet hôte"),
+    ("E7003", "Aucun Bonk Vault lisible sur ce disque"),
 ];
 
 /// French title of a code. Public so the binary test compares it with `bonk explain`.

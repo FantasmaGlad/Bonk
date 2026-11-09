@@ -17,6 +17,7 @@ use bonk_ops::job::Io;
 
 mod format;
 mod internal;
+mod vault;
 mod write;
 
 const DISK_SIZE: usize = 64 << 20;
@@ -26,8 +27,12 @@ struct Shared(Rc<RefCell<MemoryDevice>>);
 
 impl Shared {
     fn new() -> Self {
+        Self::sized(DISK_SIZE as u64)
+    }
+
+    fn sized(size: u64) -> Self {
         Self(Rc::new(RefCell::new(
-            MemoryDevice::new(DISK_SIZE as u64, 512).expect("géométrie valide"),
+            MemoryDevice::new(size, 512).expect("géométrie valide"),
         )))
     }
 }
@@ -272,6 +277,17 @@ impl Scenario {
             on_first_enumeration: None,
             vars: Vec::new(),
             capabilities: Vec::new(),
+        }
+    }
+
+    /// The USB key and its device at `size` bytes.
+    fn sized(size: u64) -> Self {
+        let mut key = usb("S1");
+        key.size_bytes = size;
+        Self {
+            device: Shared::sized(size),
+            enumerations: vec![vec![key, system_disk()]],
+            ..Self::new()
         }
     }
 

@@ -3,7 +3,9 @@ use std::io::{self, Write};
 use clap::Args;
 use serde_json::Value;
 
-use crate::{cache, catalog, config, debug, diagnose, errors, format, info, list, serve, transfer};
+use crate::{
+    cache, catalog, config, debug, diagnose, errors, format, info, list, serve, transfer, vault,
+};
 
 /// Command name and generator of its output schema.
 type Entry = (&'static str, fn() -> Value);
@@ -29,6 +31,8 @@ pub(crate) fn registry() -> Vec<Entry> {
         ("progress-error", transfer::schema_error),
         ("format", format::schema_format),
         ("capabilities", format::schema_capabilities),
+        ("vault-init", vault::schema_init),
+        ("vault-list", vault::schema_list),
         ("serve-request", serve::schema_request),
         ("serve-response", serve::schema_response),
     ]
