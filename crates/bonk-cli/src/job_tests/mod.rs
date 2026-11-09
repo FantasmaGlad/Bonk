@@ -250,7 +250,7 @@ struct ServedCatalog {
 
 impl ServedCatalog {
     fn access(&self) -> crate::catalog::Access {
-        let files = Rc::clone(&self.files);
+        let (files, sized) = (Rc::clone(&self.files), Rc::clone(&self.files));
         crate::catalog::Access {
             keys: self.keys.clone(),
             fetch: Box::new(move |address| {
@@ -258,6 +258,12 @@ impl ServedCatalog {
                     .get(address)
                     .cloned()
                     .ok_or_else(|| format!("{address}: not served"))
+            }),
+            // Same bound as the real download: a file larger than its signed size is refused.
+            fetch_file: Box::new(move |address, size| match sized.get(address) {
+                Some(data) if data.len() as u64 <= size => Ok(data.clone()),
+                Some(_) => Err(format!("{address}: larger than its signed size")),
+                None => Err(format!("{address}: not served")),
             }),
         }
     }

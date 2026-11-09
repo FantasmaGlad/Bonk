@@ -128,7 +128,7 @@ fn grub(args: &InitArgs, access: &catalog::Access) -> Result<(Vec<BootFile>, Gru
     let data = match &args.grub_dir {
         Some(folder) => local_grub(folder, asset, &entry.version)?,
         None => {
-            let path = manifest::asset_path(&base, &dir, "grub", asset, &*access.fetch)
+            let path = manifest::asset_path(&base, &dir, "grub", asset, &*access.fetch_file)
                 .map_err(|e| catalog::refused(format!("GRUB {}: {e}", entry.version)))?;
             fs::read(&path).map_err(|e| catalog::refused(format!("{}: {e}", path.display())))?
         }

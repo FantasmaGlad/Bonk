@@ -151,6 +151,14 @@ pub fn fetch_text(url: &str) -> Result<String, DownloadError> {
 /// # Errors
 /// Refused address, status other than 200, network, or file too long.
 pub fn fetch_bytes(url: &str) -> Result<Vec<u8>, DownloadError> {
+    fetch_limited(url, TEXT_LIMIT)
+}
+
+/// Like [`fetch_bytes`], for a file whose size is known in advance, such as one the signed catalog names.
+///
+/// # Errors
+/// Refused address, status other than 200, network, or more than `limit` bytes.
+pub fn fetch_limited(url: &str, limit: u64) -> Result<Vec<u8>, DownloadError> {
     let agent = agent(https_required(url)?)?;
     let mut response = agent
         .get(url)
@@ -166,7 +174,8 @@ pub fn fetch_bytes(url: &str) -> Result<Vec<u8>, DownloadError> {
     response
         .body_mut()
         .with_config()
-        .limit(TEXT_LIMIT)
+        // ureq refuses a body that reaches its limit: exactly `limit` bytes must still pass.
+        .limit(limit.saturating_add(1))
         .read_to_vec()
         .map_err(|e| DownloadError::Network(format!("{url}: {e}")))
 }

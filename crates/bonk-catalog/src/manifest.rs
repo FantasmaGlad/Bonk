@@ -477,14 +477,17 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// Fetches a file up to the given number of bytes.
+pub type FetchSized<'a> = dyn Fn(&str, u64) -> Result<Vec<u8>, String> + 'a;
+
 /// The bytes carry the signed hash of `asset`.
 #[must_use]
 pub fn asset_matches(asset: &Asset, bytes: &[u8]) -> bool {
     hex(digest(&SHA256, bytes).as_ref()).eq_ignore_ascii_case(&asset.sha256)
 }
 
-/// In the cache under `folder`, named by its signed hash, downloaded when missing. A cached copy is hashed
-/// again before use: a file changed on disk is downloaded anew.
+/// In the cache under `folder`, named by its signed hash, downloaded when missing, up to its signed size.
+/// A cached copy is hashed again before use: a file changed on disk is downloaded anew.
 ///
 /// # Errors
 /// Download failure, or bytes that do not match the signed hash.
@@ -493,7 +496,7 @@ pub fn asset_path(
     dir: &Path,
     folder: &str,
     asset: &Asset,
-    fetch: &dyn Fn(&str) -> Result<Vec<u8>, String>,
+    fetch: &FetchSized<'_>,
 ) -> Result<PathBuf, String> {
     let name = Path::new(&asset.path)
         .file_name()
@@ -503,7 +506,7 @@ pub fn asset_path(
     if fs::read(&path).is_ok_and(|bytes| asset_matches(asset, &bytes)) {
         return Ok(path);
     }
-    let bytes = fetch(&format!("{base}{}", asset.path))?;
+    let bytes = fetch(&format!("{base}{}", asset.path), asset.size_bytes)?;
     if !asset_matches(asset, &bytes) {
         return Err(format!("{} does not match its signed hash", asset.path));
     }
@@ -825,15 +828,16 @@ mod tests {
             sha256: hex(digest(&SHA256, &contenu).as_ref()),
             size_bytes: 7,
         };
-        let faux = |_: &str| Ok(b"autre".to_vec());
+        let faux = |_: &str, _: u64| Ok(b"autre".to_vec());
         assert!(asset_path("https://c/", &dossier.0, "grub", &asset, &faux).is_err());
-        let servi = |url: &str| {
+        let servi = |url: &str, limite: u64| {
             assert_eq!(url, "https://c/grub/2.14/BOOTX64.EFI");
+            assert_eq!(limite, 7);
             Ok(contenu.clone())
         };
         let chemin = asset_path("https://c/", &dossier.0, "grub", &asset, &servi)?;
         assert_eq!(fs::read(&chemin).map_err(|e| e.to_string())?, contenu);
-        let hors_ligne = |_: &str| Err("coupure".to_owned());
+        let hors_ligne = |_: &str, _: u64| Err("coupure".to_owned());
         assert_eq!(
             asset_path("https://c/", &dossier.0, "grub", &asset, &hors_ligne)?,
             chemin
