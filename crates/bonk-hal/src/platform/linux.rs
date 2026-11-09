@@ -297,6 +297,7 @@ mod tests {
             bus: crate::disk::Bus::Usb,
             kind: crate::disk::DiskKind::Physical,
             removable_flag: true,
+            logical_block_size: None,
             fs_type: None,
             holders: vec![],
             partitions: vec![Partition {
@@ -326,6 +327,7 @@ mod tests {
             bus: crate::disk::Bus::Usb,
             kind: crate::disk::DiskKind::Physical,
             removable_flag: true,
+            logical_block_size: None,
             fs_type: None,
             holders: vec![],
             partitions: vec![Partition {

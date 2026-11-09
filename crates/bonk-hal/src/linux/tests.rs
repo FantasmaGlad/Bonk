@@ -136,6 +136,7 @@ fn usb_stick(fake: &Fake) -> Result<(), Box<dyn Error>> {
         31_260_672,
         &[
             ("removable", "1\n"),
+            ("queue/logical_block_size", "512\n"),
             ("device/vendor", "SanDisk \n"),
             ("device/model", "Cruzer Blade    \n"),
         ],
@@ -207,7 +208,30 @@ fn cle_usb_montee_par_l_utilisateur_est_proposee() -> Result<(), Box<dyn Error>>
     assert_eq!(usb.id, "usb-SanDisk_Cruzer_Blade_4C530001-0:0");
     assert_eq!(usb.partitions[0].label.as_deref(), Some("CLE"));
     assert_eq!(usb.partitions[0].mount_points, ["/run/media/alice/CLE"]);
+    assert_eq!(usb.logical_block_size, Some(512));
     assert!(verdict(usb).is_writable());
+    Ok(())
+}
+
+/// Un périphérique loop détaché ou un lecteur de carte vide annonce 0 octet : jamais proposé, même en
+/// mode virtuel ; la raison est dite.
+#[test]
+fn un_peripherique_de_zero_octet_est_cache() -> Result<(), Box<dyn Error>> {
+    let fake = Fake::new()?;
+    desktop(&fake)?;
+    fake.disk("loop25", "devices/virtual/block/loop25", "7:25", 0, &[])?;
+    let disks = enumerate(&fake.roots())?;
+    let empty = find(&disks, "/dev/loop25")?;
+    let options = FilterOptions {
+        allow_virtual: true,
+        ..FilterOptions::default()
+    };
+    assert_eq!(
+        crate::safety::evaluate(empty, options),
+        Eligibility::Hidden {
+            reason: crate::safety::HiddenReason::NoMedium
+        }
+    );
     Ok(())
 }
 

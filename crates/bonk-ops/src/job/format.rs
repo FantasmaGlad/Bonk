@@ -352,9 +352,9 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
         .map_err(|message| fail(Code::InvalidArgument, message))?;
     check_available(filesystem, &chosen, deps)?;
 
-    // Refus par la géométrie avant tout geste. Le secteur réel n'est connu qu'à l'ouverture : 512 ici, le
-    // plan est recalculé à l'ouverture, avant d'écrire la table.
-    let block = bonk_core::DEFAULT_BLOCK_SIZE;
+    // Refus par la géométrie avant tout geste, avec le secteur annoncé par le système ; il est relu à
+    // l'ouverture, avant d'écrire la table.
+    let block = chosen.block_size();
     let planned = table::plan(size, block, job.table).map_err(format_error)?;
     let cluster_bytes =
         native_cluster_bytes(filesystem, planned.sectors(), block).map_err(format_error)?;

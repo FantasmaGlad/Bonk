@@ -158,6 +158,7 @@ mod tests {
             bus: Bus::Usb,
             kind: DiskKind::Physical,
             removable_flag: true,
+            logical_block_size: None,
             fs_type: None,
             holders: Vec::new(),
             partitions: Vec::new(),

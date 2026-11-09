@@ -49,6 +49,7 @@ fn disk_of(value: &Value) -> Option<Disk> {
         bus: Bus::Usb,
         kind: DiskKind::Physical,
         removable_flag: true,
+        logical_block_size: None,
         fs_type: None,
         holders: Vec::new(),
         partitions: value["partitions"]

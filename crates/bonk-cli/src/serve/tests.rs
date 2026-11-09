@@ -65,6 +65,7 @@ fn usb(id: &str) -> Disk {
         bus: Bus::Usb,
         kind: DiskKind::Physical,
         removable_flag: true,
+        logical_block_size: None,
         fs_type: None,
         holders: vec![],
         partitions: vec![partition("/dev/x1", &[], false)],

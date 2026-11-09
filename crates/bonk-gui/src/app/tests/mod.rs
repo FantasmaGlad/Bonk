@@ -45,6 +45,7 @@ fn disk(id: &str, path: &str, model: &str, bus: Bus, partitions: Vec<Partition>)
         bus,
         kind: DiskKind::Physical,
         removable_flag: true,
+        logical_block_size: None,
         fs_type: None,
         holders: vec![],
         partitions,

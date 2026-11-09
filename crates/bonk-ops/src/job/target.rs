@@ -23,6 +23,17 @@ pub(super) struct Chosen {
     pub(super) mounts: Vec<String>,
 }
 
+impl Chosen {
+    /// Taille de secteur du disque choisi, que le plan doit employer avant d'ouvrir le support ; 512 quand
+    /// le système ne la donne pas ou pour un fichier image.
+    pub(super) fn block_size(&self) -> u32 {
+        self.disk
+            .as_ref()
+            .and_then(|disk| disk.logical_block_size)
+            .unwrap_or(DEFAULT_BLOCK_SIZE)
+    }
+}
+
 pub(super) fn map_open_target(err: OpenTargetError) -> JobError {
     let code = match &err {
         OpenTargetError::NotFound(_) => Code::DiskNotFound,

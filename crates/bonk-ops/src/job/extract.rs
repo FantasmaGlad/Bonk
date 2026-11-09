@@ -368,10 +368,11 @@ impl WindowsImage {
     pub(super) fn check_fits(
         &self,
         size: Option<u64>,
+        block: u32,
         table_kind: TableKind,
     ) -> Result<(), JobError> {
         let Some(size) = size else { return Ok(()) };
-        let partition = partition_plan(size, DEFAULT_BLOCK_SIZE, table_kind)?;
+        let partition = partition_plan(size, block, table_kind)?;
         let volume = Volume {
             first_lba: partition.first_lba,
             sectors: partition.sectors(),
@@ -379,14 +380,9 @@ impl WindowsImage {
             volume_id: 0,
             bios_boot: false,
         };
-        fat32_tree::layout(
-            &volume,
-            DEFAULT_BLOCK_SIZE,
-            &self.new_files(),
-            &self.directories,
-        )
-        .map(drop)
-        .map_err(|e| format_failure(Code::WriteFailed, e))
+        fat32_tree::layout(&volume, block, &self.new_files(), &self.directories)
+            .map(drop)
+            .map_err(|e| format_failure(Code::WriteFailed, e))
     }
 }
 
@@ -572,6 +568,32 @@ mod tests {
     use bonk_core::BlockError;
 
     use super::*;
+
+    /// Le code BIOS suppose des secteurs de 512 octets : sur un disque à secteurs de 4 Kio, le plan ne
+    /// l'annonce pas.
+    #[test]
+    fn le_bios_n_est_annonce_qu_avec_des_secteurs_de_512_octets() {
+        let image = WindowsImage {
+            items: Vec::new(),
+            directories: Vec::new(),
+            signer: Signer::Unsigned,
+            architectures: vec![Machine::X86_64],
+            wim_parts: 0,
+            bios_loader: true,
+        };
+        assert_eq!(
+            image.describe(TableKind::Mbr, 512).firmware,
+            [Firmware::Uefi, Firmware::Bios]
+        );
+        assert_eq!(
+            image.describe(TableKind::Mbr, 4096).firmware,
+            [Firmware::Uefi]
+        );
+        assert_eq!(
+            image.describe(TableKind::Gpt, 512).firmware,
+            [Firmware::Uefi]
+        );
+    }
 
     #[test]
     fn un_mbr_au_dela_de_2_tio_est_refuse_par_le_code_du_formatage() {

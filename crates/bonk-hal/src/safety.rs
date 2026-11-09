@@ -51,6 +51,8 @@ pub enum Warning {
 pub enum HiddenReason {
     /// Non-removable (or unknown) bus, and the option to show internal disks is off.
     InternalBus,
+    /// The device reports 0 bytes: card reader without a card, detached loop device.
+    NoMedium,
 }
 
 /// Exclusion reason: the disk is never offered or writable.
@@ -184,8 +186,19 @@ fn decide(disk: &Disk, options: FilterOptions, tracer: &mut Tracer<'_>) -> Eligi
         push_partition_exclusions(&mut reasons, tracer, disk.bus, partition);
     }
 
+    let no_medium = disk.size_bytes == 0;
+    tracer.note(
+        "no_medium",
+        &disk.path,
+        no_medium && reasons.is_empty(),
+        || format!("size_bytes={}", disk.size_bytes),
+    );
     let verdict = if !reasons.is_empty() {
         Eligibility::Excluded { reasons }
+    } else if no_medium {
+        Eligibility::Hidden {
+            reason: HiddenReason::NoMedium,
+        }
     } else if disk.bus.is_removable() {
         Eligibility::Offered {
             warning: Warning::None,
@@ -369,6 +382,7 @@ mod tests {
             bus,
             kind: DiskKind::Physical,
             removable_flag: false,
+            logical_block_size: None,
             fs_type: None,
             holders: vec![],
             partitions,
@@ -640,6 +654,7 @@ mod tests {
             "system_volume",
             "active_esp",
             "mounted_outside_user_paths",
+            "no_medium",
             "bus",
         ];
         let mut lvm = part("/dev/sdx1");
