@@ -17,7 +17,7 @@ private const val BUFFER = 1 shl 20
 private const val RETRY_MS = 10_000L
 private const val TAG = "Bonk"
 
-// Sans délai, une connexion muette bloquerait le téléchargement et son annulation.
+// Without a timeout a silent connection would block the download and its cancel.
 private const val CONNECT_TIMEOUT_MS = 30_000
 private const val READ_TIMEOUT_MS = 60_000
 
@@ -27,7 +27,7 @@ private fun open(address: String): HttpURLConnection =
         readTimeout = READ_TIMEOUT_MS
     }
 
-/** Le catalogue garde sa dernière copie vérifiée quand le réseau manque : rien ici ne doit l'empêcher. */
+/** The catalog keeps its last verified copy when the network fails: nothing here may prevent it. */
 private fun fetchOrEmpty(address: String): ByteArray =
     runCatching { open(address).inputStream.use { it.readBytes() } }.getOrDefault(ByteArray(0))
 
@@ -42,10 +42,10 @@ class Actions(
     private val enumerating = AtomicBoolean(false)
 
     private fun probe(device: UsbDevice): Probe? {
-        // Une clé écrite depuis la dernière sonde a changé de table : la relire.
+        // A key written since the last probe has a new table: probe it again.
         if (Bridge.written.remove(device.deviceName)) probes.remove(device.deviceName)
         probes[device.deviceName]?.let { return it }
-        // Réessayer sans répit retirerait sans cesse la clé au système.
+        // Retrying without pause would keep taking the key from the system.
         val failed = failedAt[device.deviceName]
         if (failed != null && System.currentTimeMillis() - failed < RETRY_MS) return null
         return runCatching {
@@ -63,7 +63,7 @@ class Actions(
         }.getOrNull()
     }
 
-    /** Une clé autorisée n'est interrogée qu'une fois : l'interroger la retire un instant au système. */
+    /** An allowed key is probed once: probing takes it from the system for a moment. */
     fun enumerate() {
         if (!enumerating.compareAndSet(false, true)) return
         thread {
@@ -111,7 +111,7 @@ class Actions(
         val target = File(context.cacheDir, "image.download")
         val connection = open(address)
         val total = connection.contentLengthLong
-        // allocateBytes vide les caches du système plutôt que de refuser une image qui tiendrait.
+        // allocateBytes clears system caches rather than refuse an image that would fit.
         val storage = context.getSystemService(StorageManager::class.java)
         val volume = storage.getUuidForPath(context.cacheDir)
         if (storage.getAllocatableBytes(volume) <= total) {
@@ -133,7 +133,7 @@ class Actions(
                     if (done - reported > 16 * BUFFER) {
                         reported = done
                         val seconds = (System.nanoTime() - started) / 1e9
-                        // Une taille inconnue vaut -1 pour le système : Rust attend alors l'absence de total.
+                        // The system gives -1 for an unknown size: Rust then expects no total.
                         send(Download(done, total.takeIf { it >= 0 }, done / seconds))
                     }
                 }
@@ -142,7 +142,7 @@ class Actions(
         return target
     }
 
-    /** L'écriture appartient au service : fermer l'écran ne l'interrompt pas. */
+    /** The write belongs to the service: closing the screen does not stop it. */
     fun write(request: Write) {
         Bridge.cancelled = false
         WriteService.start(context, request)
@@ -180,7 +180,7 @@ class Actions(
         } catch (error: BonkFailure) {
             send(Failed(error.message.orEmpty(), error.code))
         } catch (error: IOException) {
-            // Réseau coupé, délai dépassé : seul le téléchargement fait des entrées et sorties ici.
+            // Network cut, timeout: only the download does I/O here.
             send(Failed(error.message ?: error.toString(), "E3008"))
         } catch (error: Exception) {
             send(Failed(error.message ?: error.toString()))

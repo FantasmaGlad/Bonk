@@ -13,7 +13,7 @@ import kotlin.concurrent.withLock
 
 const val ACTION_PERMISSION = "app.bonkos.bonk.USB_PERMISSION"
 
-/** Une conversation à la fois : deux échanges mêlés se volent leurs réponses. */
+/** One conversation at a time: two interleaved exchanges steal each other's answers. */
 private val usbAccess = ReentrantLock()
 
 private const val SUBCLASS_SCSI = 6
@@ -26,11 +26,11 @@ private fun UsbDevice.storageInterface(): UsbInterface? =
             it.interfaceProtocol == PROTOCOL_BULK_ONLY
     }
 
-/** Le stockage interne du téléphone n'est pas un périphérique USB : il ne peut pas apparaître ici. */
+/** The phone's internal storage is not a USB device: it cannot appear here. */
 fun UsbManager.drives(): List<UsbDevice> = deviceList.values.filter { it.storageInterface() != null }
 
 fun UsbManager.askPermission(context: Context, device: UsbDevice) {
-    // Le système y ajoute sa réponse : l'intention doit rester modifiable, et explicite pour y avoir droit.
+    // The system adds its answer to it: the intent must stay mutable, and explicit to be allowed.
     val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
     val intent = Intent(ACTION_PERMISSION).setPackage(context.packageName)
     requestPermission(device, PendingIntent.getBroadcast(context, 0, intent, flags))

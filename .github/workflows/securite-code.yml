@@ -3,7 +3,7 @@ name: securite-code
 on:
   push:
     branches: [main]
-  # Sans filtre de chemins : Scorecard (SAST) compte les PR fusionnées sans analyse, quel que soit leur contenu.
+  # No path filter: Scorecard (SAST) counts merged PRs without analysis, whatever their content.
   pull_request:
   schedule:
     - cron: "29 4 * * 2"

@@ -16,7 +16,7 @@ bonk-gui = { workspace = true, optional = true }
 
 [features]
 default = ["gui"]
-# La fenêtre. Sans elle : binaire en ligne de commande seule, `cargo build -p bonk --no-default-features`.
+# The window. Without it: command-line-only binary, `cargo build -p bonk --no-default-features`.
 gui = ["dep:bonk-gui"]
 
 [[test]]
@@ -33,15 +33,15 @@ serde_json.workspace = true
 [lints]
 workspace = true
 
-# Paquets Linux (workflow `paquets`) : le binaire est autonome, les bibliothèques graphiques sont chargées
-# à l'exécution quand elles existent.
+# Linux packages (`paquets` workflow): the binary is self-contained, graphics libraries are loaded at run
+# time when present.
 [package.metadata.deb]
 maintainer = "FantasmaGlad <193235053+FantasmaGlad@users.noreply.github.com>"
 section = "utils"
 priority = "optional"
 depends = "libc6"
-# Écriture sans sudo : UDisks2 ouvre le disque, polkit demande l'autorisation. `policykit-1` est l'ancien
-# nom du paquet de polkit.
+# Writing without sudo: UDisks2 opens the disk, polkit asks for authorization. `policykit-1` is polkit's
+# old package name.
 recommends = "udisks2, polkitd | policykit-1"
 extended-description = "Bootable media writer for USB drives and external disks, with a window and a command line."
 assets = [

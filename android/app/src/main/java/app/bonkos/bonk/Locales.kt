@@ -4,6 +4,6 @@ import android.content.Context
 import android.content.res.Configuration
 import java.util.Locale
 
-/** Les ressources Android suivent la langue choisie dans Bonk, pas celle du téléphone. */
+/** Android resources follow the language chosen in Bonk, not the phone's. */
 fun Context.inLanguage(tag: String): Context =
     createConfigurationContext(Configuration(resources.configuration).apply { setLocale(Locale.forLanguageTag(tag)) })

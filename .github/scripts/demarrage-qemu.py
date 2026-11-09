@@ -1,14 +1,4 @@
 #!/usr/bin/env python3
-"""Démarre un fichier image sous QEMU et attend, sur la console série, la preuve que le système est atteint.
-
-Les images officielles ne parlent pas sur la console série : le clavier virtuel ajoute `console=ttyS0` à la
-ligne du noyau, comme le ferait une personne dans le menu de démarrage. L'image n'est pas modifiée.
-
-Usage : demarrage-qemu.py <image> <bios|uefi|secureboot> <grub|isolinux|systemd-boot> <preuve> <dossier>
-        [--entree N] [--ligne N] [--memoire Mio] [--delai s] [--attente s]
-Code 0 : preuve vue. 1 : absente à la fin du délai. La trace reste dans <dossier>/serie.log, l'écran dans
-<dossier>/*.png.
-"""
 import argparse
 import os
 import re
@@ -19,9 +9,9 @@ import sys
 import time
 
 OVMF = "/usr/share/OVMF"
-# Le chargeur BIOS n'écrit que sur l'écran : attente fixe, plus courte que le compte à rebours du menu.
+# The BIOS loader only writes to the screen: fixed wait, shorter than the menu countdown.
 BIOS_MENU_SECONDS = 25
-# Le menu GRUB s'affiche peu après l'annonce du micrologiciel.
+# The GRUB menu shows shortly after the firmware banner.
 UEFI_BOOT_LIMIT_SECONDS = 180
 GRUB_MENU_SECONDS = 8
 KEY_GAP_SECONDS = 0.15
@@ -89,7 +79,7 @@ class Monitor:
 
 
 def add_console(monitor, loader, entry, line):
-    """Choisit l'entrée du menu et ajoute la console série à la ligne du noyau."""
+    """Official images are silent on the serial console: add `console=ttyS0` to the kernel line, as a person would in the boot menu."""
     monitor.keys(*["down"] * entry)
     if loader == "grub":
         monitor.keys("e")
@@ -123,7 +113,7 @@ def main():
 
     image = os.path.abspath(args.image)
     os.makedirs(args.dossier, exist_ok=True)
-    # Chemins relatifs : la longueur d'un socket Unix est limitée.
+    # Relative paths: Unix socket path length is limited.
     os.chdir(args.dossier)
     for old in (SERIAL, MONITOR):
         if os.path.exists(old):

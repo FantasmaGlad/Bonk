@@ -1,5 +1,5 @@
-# Secteur de démarrage FAT32 : le BPB (octets 3 à 89) est posé par Bonk au formatage. Lit le second étage
-# (8 secteurs à partir du secteur 9 du volume, dans la zone réservée) à 0000:7E00 et lui passe la main.
+# FAT32 boot sector; Bonk writes the BPB (bytes 3 to 89) when formatting. Reads the second stage (8
+# sectors from volume sector 9, in the reserved area) to 0000:7E00 and jumps to it.
 
 .pushsection .bonk_vbr, "ax"
 .code16

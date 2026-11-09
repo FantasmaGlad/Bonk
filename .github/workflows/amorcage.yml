@@ -1,6 +1,3 @@
-# Code d'amorçage BIOS : les binaires versionnés sont-ils exactement ceux que donnent les sources, et le
-# code démarre-t-il sous QEMU (SeaBIOS), seul et sur une clé écrite par `bonk write` ? Assemblage par la
-# seule chaîne Rust, aucun outil tiers.
 name: amorcage
 
 on:

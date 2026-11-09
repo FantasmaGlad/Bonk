@@ -1,5 +1,5 @@
 #!/bin/sh
-# sudo : macOS ne donne l'accès brut qu'à root, et authopen demanderait un mot de passe à l'écran.
+# sudo: macOS only gives raw access to root, and authopen would ask for a password on screen.
 set -eu
 cargo build -p bonk --locked
 bonk="$PWD/target/debug/bonk"

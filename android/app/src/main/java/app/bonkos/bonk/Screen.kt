@@ -75,7 +75,7 @@ internal fun Screen(
             is RunningPanel -> Boxed {
                 Body(panel.line)
                 Small(stringResource(R.string.do_not_unplug))
-                // Sans total connu, la barre défile au lieu de mentir sur l'avancement.
+                // Without a known total the bar scrolls instead of lying about progress.
                 val fraction = panel.fraction
                 if (fraction == null) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Color(Tokens.INK))
@@ -94,7 +94,7 @@ internal fun Screen(
             }
             is DraftPanel, null -> {}
         }
-        // Absents de la version publiée : ils ne servent qu'avec la clé de test désignée à la construction.
+        // Absent from the published build: only useful with the test key named at build time.
         if (BuildConfig.BENCH_SERIAL.isNotEmpty()) {
             HorizontalDivider(color = Color(Tokens.INK))
             Tests(usb, revision)
@@ -158,7 +158,7 @@ private fun Menu(menu: MenuView, send: (ToRust) -> Unit) {
         Picker(menu.system.orEmpty(), menu.systems, menu.allSystems, ::SystemFilter, send)
     }
     val rows = menu.rows
-    // Seules les lignes visibles sont dessinées : le catalogue en compte plus de cent cinquante.
+    // Only visible rows are drawn: the catalog has over 150.
     LazyColumn(
         Modifier.fillMaxWidth().height(MENU_HEIGHT_DP.dp),
         verticalArrangement = Arrangement.spacedBy(Tokens.SPACE_SMALL.dp),

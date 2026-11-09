@@ -17,7 +17,7 @@ on:
       - "crates/**/Cargo.toml"
       - "deny.toml"
       - ".github/workflows/dependances.yml"
-  # Le lundi à 06:23 UTC, hors des heures rondes très chargées.
+  # Monday 06:23 UTC, away from the busy round hours.
   schedule:
     - cron: "23 6 * * 1"
   workflow_dispatch:

@@ -23,7 +23,7 @@ try {
 
     & $bonk write $virtuel[0].id $image --allow-virtual --mode raw --yes
     if ($LASTEXITCODE -ne 0) { throw "write : $LASTEXITCODE" }
-    # L'identifiant survit à l'écriture, qui a pourtant remplacé la table.
+    # The id survives the write, even though the table was replaced.
     & $bonk verify $virtuel[0].id $image --allow-virtual
     if ($LASTEXITCODE -ne 0) { throw "verify : $LASTEXITCODE" }
 
@@ -37,7 +37,7 @@ try {
     foreach ($fs in 'fat32', 'exfat', 'ntfs') {
         & $bonk format $virtuel[0].id --fs $fs --label ESSAI --allow-virtual --yes
         if ($LASTEXITCODE -ne 0) { throw "format $fs : $LASTEXITCODE" }
-        # Windows a monté la partition : sur un bus non amovible, le filtre refuserait le tour suivant.
+        # Windows mounted the partition: on a fixed bus the filter would refuse the next round.
         $numero = [int]($virtuel[0].path -replace '^.*PhysicalDrive', '')
         Get-Partition -DiskNumber $numero | Where-Object DriveLetter | ForEach-Object {
             Remove-PartitionAccessPath -DiskNumber $numero -PartitionNumber $_.PartitionNumber -AccessPath "$($_.DriveLetter):\"

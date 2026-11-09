@@ -1,5 +1,5 @@
-# Secteur de démarrage d'essai, jamais posé sur une clé : vérifie que le MBR a passé la main avec DL
-# et DS:SI sur l'entrée active de la table.
+# Test boot sector, never written to a key: checks the MBR jumped with DL and DS:SI on the active
+# table entry.
 
 .pushsection .bonk_test_vbr, "ax"
 .code16

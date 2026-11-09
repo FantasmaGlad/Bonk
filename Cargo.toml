@@ -5,7 +5,7 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.0.5"
 edition = "2024"
-# Plancher imposé par zbus 6.
+# Floor set by zbus 6.
 rust-version = "1.89"
 license = "MIT"
 repository = "https://github.com/FantasmaGlad/Bonk"
@@ -24,14 +24,14 @@ bonk-android = { path = "crates/bonk-android" }
 clap = { version = "4.6", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-# `kv` pour les champs structurés, `std` pour installer le puits.
+# `kv` for structured fields, `std` to install the sink.
 log = { version = "0.4", features = ["kv", "std"] }
-# `smol` : seul un exécuteur fournit `iced::time::every`. PNG seul : le SVG tirerait rustybuzz, non maintenu.
+# `smol`: only an executor provides `iced::time::every`. PNG only: SVG would pull the unmaintained rustybuzz.
 image = { version = "0.25", default-features = false, features = ["png"] }
 iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia", "crisp", "web-colors", "smol", "x11", "wayland", "image-without-codecs"] }
 iced_test = "0.14"
 rfd = "0.17"
-# `ring` choisi à la main : l'option `rustls` d'ureq tirerait aussi `webpki-roots`.
+# `ring` chosen by hand: ureq's `rustls` option would also pull `webpki-roots`.
 ureq = { version = "3", default-features = false, features = ["rustls-no-provider", "platform-verifier", "socks-proxy"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 windows-sys = "0.61"
@@ -45,7 +45,7 @@ libc = "0.2"
 lzma-rust2 = { version = "0.25", default-features = false, features = ["xz", "std"] }
 ruzstd = "0.9"
 
-# `warn` : la validation passe `-D warnings`, donc ces lints bloquent la fin d'un travail, pas son écriture.
+# `warn`: validation runs `-D warnings`, so these lints block finishing work, not writing it.
 [workspace.lints.clippy]
 unwrap_used = "warn"
 expect_used = "warn"

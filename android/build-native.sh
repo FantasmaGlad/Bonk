@@ -5,7 +5,7 @@ NDK=${ANDROID_NDK_HOME:-$(find "$SDK/ndk" -mindepth 1 -maxdepth 1 | sort -V | ta
 BIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin
 export PATH="$BIN:$PATH"
 racine=$(cd "$(dirname "$0")/.." && pwd)
-# Cible Rust, dossier de l'ABI Android, préfixe du compilateur du NDK (niveau d'API 26, le minSdk).
+# Rust target, Android ABI directory, NDK compiler prefix (API level 26, the minSdk).
 for puce in "aarch64-linux-android arm64-v8a aarch64-linux-android26" "x86_64-linux-android x86_64 x86_64-linux-android26"; do
   read -r cible abi compilateur <<< "$puce"
   variable=$(echo "$cible" | tr '[:lower:]-' '[:upper:]_')

@@ -1,5 +1,5 @@
-# BOOTMGR d'essai, jamais posé sur une clé. Le banc d'essai écrit sa taille en 4, le numéro de chaque bloc
-# de 4 Kio à son début et « BONKEND! » à la fin : tout le fichier doit être arrivé dans l'ordre.
+# Test BOOTMGR, never written to a key. The harness writes its size at 4, each 4 KiB block's number at its
+# start and "BONKEND!" at the end: the whole file must arrive in order.
 
 .pushsection .bonk_test_bootmgr, "ax"
 .code16

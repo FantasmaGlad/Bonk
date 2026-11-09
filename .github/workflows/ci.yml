@@ -24,14 +24,14 @@ on:
 permissions:
   contents: read
 
-# Sur main, une exécution n'est jamais interrompue : son build release compte.
+# On main a run is never cancelled: its release build counts.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
-  # Pas de compilation incrémentale : elle alourdit le cache et ne sert à rien sur une machine neuve.
+  # No incremental build: it bloats the cache and is useless on a fresh machine.
   CARGO_INCREMENTAL: "0"
   CARGO_NET_RETRY: "10"
   RUST_BACKTRACE: "1"
@@ -59,7 +59,7 @@ jobs:
         run: cargo fmt --all --check
       - name: Lint
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      # Sans édition de liens, le C de ring ne sert pas : `true` tient lieu de compilateur.
+      # Without linking, ring's C is unused: `true` stands in for the compiler.
       - name: Lint croisé (Windows et macOS, compilation seulement)
         env:
           CC_x86_64_pc_windows_gnu: "true"
@@ -78,7 +78,7 @@ jobs:
       # fuzz/ is outside the workspace: an API change in bonk-core would otherwise break it unnoticed.
       - name: Cibles de fuzz (compilation)
         run: cargo check --manifest-path fuzz/Cargo.toml --locked
-      # La version sans fenêtre ne doit pas casser sans bruit, ni tirer Iced par un autre chemin.
+      # The windowless build must not break silently, nor pull Iced in another way.
       - name: Version en ligne de commande seule
         run: |
           cargo clippy -p bonk --all-targets --no-default-features --locked -- -D warnings
@@ -87,7 +87,7 @@ jobs:
             echo "la version sans fenêtre embarque une bibliothèque graphique"
             exit 1
           fi
-      # Le build release n'est vérifié qu'après fusion : il est plus long et la PR a déjà prouvé le reste.
+      # The release build is only checked after merge: it is slower and the PR already proved the rest.
       - name: Build release
         if: github.event_name == 'push'
         run: cargo build --workspace --release --locked

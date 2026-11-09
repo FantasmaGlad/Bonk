@@ -19,10 +19,10 @@ private const val CHANNEL = "write"
 private const val NOTIFICATION = 1
 private const val REQUEST = "request"
 
-/** Filet si le service ne relâchait jamais le verrou : aucune écriture ne dure six heures. */
+/** Safety net if the service never released the lock: no write lasts six hours. */
 private const val WAKE_LOCK_MS = 6 * 60 * 60 * 1000L
 
-/** Sans service, Android peut figer le processus dès qu'on quitte l'application, en pleine écriture. */
+/** Without a service Android may freeze the process as soon as the app is left, mid-write. */
 class WriteService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private val writing = AtomicBoolean(false)
@@ -33,7 +33,7 @@ class WriteService : Service() {
         val manager = getSystemService(NotificationManager::class.java)
         val title = inLanguage(Bridge.language).getString(R.string.writing_notification)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, title, NotificationManager.IMPORTANCE_LOW))
-        // Toucher la notification rouvre l'écran, où se lisent la progression et le résultat.
+        // Tapping the notification reopens the screen, with the progress and the result.
         val open =
             PendingIntent.getActivity(
                 this,
@@ -59,7 +59,7 @@ class WriteService : Service() {
                     .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "bonk:write")
                     .apply { acquire(WAKE_LOCK_MS) }
         }
-        // Premier plan d'abord : Android refuse l'arrêt d'un service qui n'y est pas encore.
+        // Foreground first: Android refuses to stop a service that is not there yet.
         val request = intent?.getStringExtra(REQUEST)?.let(Protocol::decodeWrite)
         if (request == null || !writing.compareAndSet(false, true)) {
             if (!writing.get()) stopSelf()

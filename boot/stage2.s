@@ -1,5 +1,5 @@
-# Second étage : trouve BOOTMGR dans le répertoire racine, le charge entier à 2000:0000 en suivant la FAT,
-# puis lui passe la main avec DL, le secteur de démarrage restant à 0000:7C00.
+# Finds BOOTMGR in the root directory, loads it whole at 2000:0000 following the FAT, then jumps to it
+# with DL, the boot sector staying at 0000:7C00.
 
 .pushsection .bonk_stage2, "ax"
 .code16
@@ -116,7 +116,7 @@ s2_halt:
     hlt
     jmp s2_halt
 
-# EAX : numéro de cluster ; BX : segment de destination.
+# EAX: cluster number; BX: destination segment.
 s2_read_cluster:
     sub eax, 2
     movzx ecx, word ptr [s2_spc]
@@ -127,7 +127,7 @@ s2_read_cluster:
     mov word ptr [s2_dap_segment], bx
     jmp s2_read
 
-# EAX : cluster ; rend le suivant dans EAX, d'après la première FAT.
+# EAX: cluster; returns the next one in EAX, from the first FAT.
 s2_next_cluster:
     mov ebx, eax
     shr eax, 7

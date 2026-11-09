@@ -1,14 +1,14 @@
-# Tout outil exigé par un test figure ici, même déjà présent dans l'image.
-# Xvfb et xauth : affichage virtuel du test de la fenêtre.
+# Every tool a test requires is listed here, even if the image already has it.
+# Virtual display for the window test.
 xvfb
 xauth
-# Charge libxkbcommon-x11.so à l'exécution de la fenêtre sous X11.
+# libxkbcommon-x11.so, loaded by the window under X11.
 libxkbcommon-x11-0
-# Compresseurs que les tests d'écriture appellent pour produire les images .gz, .xz, .zst.
+# Compressors the write tests call to produce .gz, .xz, .zst images.
 gzip
 xz-utils
 zstd
-# Outils de référence qui relisent ce que `bonk format` écrit : table et système de fichiers.
+# Reference tools that read back what `bonk format` writes.
 gdisk
 dosfstools
 exfatprogs

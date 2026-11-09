@@ -60,13 +60,13 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-    /** Android 13 et plus masquent la notification de l'écriture sans cet accord ; l'écriture n'en dépend pas. */
+    /** Android 13+ hides the write notification without this permission; the write does not depend on it. */
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     private val pickFile =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
             uri?.let {
-                // Le chemin du descripteur se lit comme un fichier : le moteur reste celui de l'ordinateur.
+                // The descriptor path reads like a file: the engine stays the desktop one.
                 Bridge.pick(contentResolver.openFileDescriptor(it, "r"))?.let { path ->
                     send(Picked(path))
                 }
@@ -80,26 +80,26 @@ class MainActivity : ComponentActivity() {
     private fun show(raw: String) {
         if (raw == lastAnswer && raw.contains(NO_EFFECT)) return
         lastAnswer = raw
-        // Une réponse illisible est journalisée ; l'écran garde l'état précédent.
+        // An unreadable answer is logged; the screen keeps the previous state.
         val answer =
             runCatching { Protocol.answer(raw) }
                 .onFailure { Log.e(TAG, "unreadable answer from the native library", it) }
                 .getOrElse { return }
         val state = answer.state
         runOnUiThread {
-            // Redessiner ou toucher à la fenêtre sans changement fait tressauter l'écran.
+            // Redrawing or touching the window without a change makes the screen flicker.
             if (state != screen) {
                 screen = state
                 Bridge.language = state.lang
                 keepScreenOn(state.running)
-                // Le résultat reste lisible après coup, même une fois le panneau refermé.
+                // The result stays readable afterwards, even once the panel is closed.
                 (state.panel as? FinishedPanel)?.let { Log.i(TAG, it.message) }
             }
             answer.effects.forEach(::accomplish)
         }
     }
 
-    /** La clé branchée rouvre cette même fenêtre (`singleTask`) : seule la liste change. */
+    /** A plugged key reopens this same window (`singleTask`): only the list changes. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         revision++
@@ -135,7 +135,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Fond clair : les icônes du système doivent rester sombres, quel que soit le thème du téléphone.
+        // Light background: system icons must stay dark whatever the phone theme.
         val bars = SystemBarStyle.light(Tokens.PAPER.toInt(), Tokens.INK.toInt())
         enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
         actions =
@@ -156,7 +156,7 @@ class MainActivity : ComponentActivity() {
         ContextCompat.registerReceiver(this, usbEvents, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         val usb = getSystemService(UsbManager::class.java)
         actions.enumerate()
-        // En arrière-plan, l'horloge réveillerait Rust et l'USB pour rien.
+        // In the background the clock would wake Rust and USB for nothing.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 var ticks = 0
@@ -184,7 +184,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         unregisterReceiver(usbEvents)
-        // Une écriture en cours continue dans le service ; l'écran suivant relira l'état auprès de Rust.
+        // A running write goes on in the service; the next screen rereads the state from Rust.
         if (Bridge.listener === answered) Bridge.listener = null
         super.onDestroy()
     }

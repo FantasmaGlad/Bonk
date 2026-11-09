@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android 8 à 11 : rien à sauvegarder, comme data_extraction_rules.xml le dit à Android 12 et plus. -->
+<!-- Android 8 to 11: nothing to back up, as data_extraction_rules.xml says to Android 12+. -->
 <full-backup-content>
     <exclude domain="root" path="." />
     <exclude domain="file" path="." />

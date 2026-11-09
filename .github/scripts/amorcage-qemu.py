@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-"""Démarre le code d'amorçage de Bonk sous QEMU (SeaBIOS) : MBR, puis secteur FAT32 et second étage.
-
-Le texte est lu dans la mémoire de l'écran (0xB8000) par le moniteur de QEMU. Usage, depuis le dépôt :
-python3 .github/scripts/amorcage-qemu.py [chemin de bonk]
-Avec le chemin d'un binaire de bonk, une clé écrite par `bonk write --table mbr` démarre aussi.
-"""
-
 import shutil
 import subprocess
 import sys
@@ -64,7 +57,7 @@ def entry(name, attribute, cluster=0, size=0):
 
 
 def fat32(spc, payload=None, fragmented=False, truncated=False):
-    """Disque MBR avec une partition FAT32 active ; payload est le contenu de BOOTMGR, None s'il manque."""
+    """MBR disk with an active FAT32 partition; `payload` is BOOTMGR's content, None when missing."""
     cluster_bytes = spc * 512
     file_clusters = -(-len(payload) // cluster_bytes) if payload else 0
     per_cluster = cluster_bytes // 32
@@ -141,7 +134,7 @@ def screen(image, tmp):
 
 
 def written_by_bonk(bonk, tmp):
-    """Clé écrite par Bonk depuis une fausse ISO Windows : chargeur UEFI x86_64, WIM et faux BOOTMGR."""
+    """Key written by Bonk from a fake Windows ISO: x86_64 UEFI loader, WIM and fake BOOTMGR."""
     tree = Path(tmp, "iso")
     (tree / "efi" / "boot").mkdir(parents=True)
     (tree / "sources").mkdir()

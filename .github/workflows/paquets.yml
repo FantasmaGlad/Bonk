@@ -50,7 +50,7 @@ jobs:
         run: |
           cargo deb -p bonk --no-build --target "$TARGET" --locked --output dist/
           cargo generate-rpm -p crates/bonk --target "$TARGET" --output dist/
-          # L'application doit paraître dans le tiroir du bureau.
+          # The app must show up in the desktop launcher.
           dpkg-deb -c dist/*.deb | grep -q usr/share/applications/bonk.desktop
           dpkg-deb -c dist/*.deb | grep -q usr/share/icons/hicolor/256x256/apps/bonk.png
           cd dist
@@ -71,7 +71,7 @@ jobs:
           if-no-files-found: error
           retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
 
-  # x86_64 seul : Arch n'a pas d'image officielle pour ARM.
+  # x86_64 only: Arch has no official ARM image.
   arch:
     name: arch (pkg.tar.zst)
     runs-on: ubuntu-24.04

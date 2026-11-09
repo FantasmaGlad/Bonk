@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""Régénère toutes les icônes depuis le logo : changer de logo, c'est remplacer `bonk-logo.png` et relancer ceci.
-
-Usage, depuis le dépôt : python3 .github/scripts/icones.py
-Sorties : .ico pour Windows, .icns pour macOS, PNG par taille pour les bureaux Linux, RGBA brut pour la fenêtre.
-"""
 from pathlib import Path
 
 from PIL import Image

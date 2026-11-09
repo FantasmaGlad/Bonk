@@ -1,7 +1,7 @@
 name: android
 
-# Chemins : l'application, sa bibliothèque Rust et tout ce dont elle dépend ; une PR de bonk-ui ou de bonk-ops
-# peut casser l'APK sans toucher à android/.
+# The app, its Rust library and everything it depends on: a bonk-ui or bonk-ops change can break the APK
+# without touching android/.
 on:
   pull_request:
     paths:
@@ -50,7 +50,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Le wrapper Gradle est un binaire exécuté par la CI : son empreinte doit être publiée par Gradle.
+      # The Gradle wrapper is a binary CI runs: its hash must be one Gradle publishes.
       - name: Wrapper Gradle
         uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - name: Plateforme Android

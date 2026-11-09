@@ -5,7 +5,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    # Une version toute fraîche n'est proposée qu'après 7 jours (retrait possible en cas de compromission).
+    # A brand-new version is only proposed after 7 days (time for it to be pulled if compromised).
     cooldown:
       default-days: 7
     open-pull-requests-limit: 2
@@ -17,7 +17,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    # Une version toute fraîche n'est proposée qu'après 7 jours (retrait possible en cas de compromission).
+    # A brand-new version is only proposed after 7 days (time for it to be pulled if compromised).
     cooldown:
       default-days: 7
     open-pull-requests-limit: 1
