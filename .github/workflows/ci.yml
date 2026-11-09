@@ -75,6 +75,9 @@ jobs:
           cargo clippy -p bonk-core -p bonk-ops -p bonk-cli -p bonk-android -p bonk-ui --all-targets --locked --target aarch64-linux-android -- -D warnings
       - name: Tests
         run: cargo test --workspace --locked
+      # fuzz/ is outside the workspace: an API change in bonk-core would otherwise break it unnoticed.
+      - name: Cibles de fuzz (compilation)
+        run: cargo check --manifest-path fuzz/Cargo.toml --locked
       # La version sans fenêtre ne doit pas casser sans bruit, ni tirer Iced par un autre chemin.
       - name: Version en ligne de commande seule
         run: |
