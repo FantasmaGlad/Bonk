@@ -298,6 +298,7 @@ mod tests {
             kind: crate::disk::DiskKind::Physical,
             removable_flag: true,
             logical_block_size: None,
+            location: None,
             fs_type: None,
             holders: vec![],
             partitions: vec![Partition {
@@ -328,6 +329,7 @@ mod tests {
             kind: crate::disk::DiskKind::Physical,
             removable_flag: true,
             logical_block_size: None,
+            location: None,
             fs_type: None,
             holders: vec![],
             partitions: vec![Partition {

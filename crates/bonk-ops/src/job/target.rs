@@ -193,11 +193,11 @@ pub(super) fn open_target(
             let node = opened.map_err(open_error)?;
             if node.size() != identity.size_bytes {
                 return Err(map_open_target(OpenTargetError::IdentityChanged {
-                    expected: identity.clone(),
-                    actual: TargetIdentity {
+                    expected: Box::new(identity.clone()),
+                    actual: Box::new(TargetIdentity {
                         size_bytes: node.size(),
                         ..identity
-                    },
+                    }),
                 }));
             }
             (node, unmounted)

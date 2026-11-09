@@ -3,11 +3,12 @@ use std::fmt;
 use crate::disk::Disk;
 use crate::safety::{Eligibility, FilterOptions, evaluate};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct TargetIdentity {
     pub id: String,
     pub serial: Option<String>,
     pub size_bytes: u64,
+    pub location: Option<String>,
 }
 
 impl From<&Disk> for TargetIdentity {
@@ -16,17 +17,30 @@ impl From<&Disk> for TargetIdentity {
             id: disk.id.clone(),
             serial: disk.serial.clone(),
             size_bytes: disk.size_bytes,
+            location: disk.location.clone(),
         }
     }
 }
+
+/// Without a serial number, two drives of the same model and size only differ by where they are plugged.
+impl PartialEq for TargetIdentity {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+            && self.serial == other.serial
+            && self.size_bytes == other.size_bytes
+            && (self.serial.is_some() || self.location == other.location)
+    }
+}
+
+impl Eq for TargetIdentity {}
 
 #[derive(Debug)]
 pub enum OpenTargetError {
     NotFound(String),
     Refused(Eligibility),
     IdentityChanged {
-        expected: TargetIdentity,
-        actual: TargetIdentity,
+        expected: Box<TargetIdentity>,
+        actual: Box<TargetIdentity>,
     },
     Unmount(String),
 }
@@ -76,8 +90,8 @@ pub fn reverify<'a>(
     let actual = TargetIdentity::from(disk);
     if actual != *expected {
         return Err(OpenTargetError::IdentityChanged {
-            expected: expected.clone(),
-            actual,
+            expected: Box::new(expected.clone()),
+            actual: Box::new(actual),
         });
     }
     Ok(disk)
@@ -125,6 +139,7 @@ mod tests {
             kind: DiskKind::Physical,
             removable_flag: true,
             logical_block_size: None,
+            location: None,
             fs_type: None,
             holders: vec![],
             partitions,
@@ -139,6 +154,28 @@ mod tests {
             Bus::Usb,
             vec![part("/dev/sdb1", &["/run/media/u/A"], false)],
         )
+    }
+
+    /// Sans numéro de série, une clé identique branchée sur un autre port n'est pas la même cible ; avec un
+    /// numéro de série, le port ne compte pas.
+    #[test]
+    fn sans_serie_l_emplacement_departage_deux_cles_identiques() {
+        let mut first = usb();
+        first.serial = None;
+        first.location = Some("pci-0000:05:00.3-usb-0:1:1.0".to_owned());
+        let mut moved = first.clone();
+        moved.location = Some("pci-0000:05:00.3-usb-0:2:1.0".to_owned());
+        let expected = TargetIdentity::from(&first);
+        assert!(matches!(
+            reverify(&expected, &[moved.clone()], FilterOptions::default()),
+            Err(OpenTargetError::IdentityChanged { .. })
+        ));
+        assert!(reverify(&expected, &[first], FilterOptions::default()).is_ok());
+        let mut with_serial = usb();
+        with_serial.location = Some("a".to_owned());
+        let expected = TargetIdentity::from(&with_serial);
+        with_serial.location = Some("b".to_owned());
+        assert!(reverify(&expected, &[with_serial], FilterOptions::default()).is_ok());
     }
 
     #[test]

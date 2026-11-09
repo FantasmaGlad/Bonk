@@ -42,6 +42,7 @@ fn disk_of(value: &Value) -> Option<Disk> {
             Some(serial) => format!("usb-{serial}-{port}"),
             None => format!("usb-{port}"),
         },
+        location: Some(port.clone()),
         path: name.to_owned(),
         model: value["model"].as_str()?.to_owned(),
         serial: serial.map(str::to_owned),

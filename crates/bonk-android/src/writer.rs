@@ -159,6 +159,7 @@ mod tests {
             kind: DiskKind::Physical,
             removable_flag: true,
             logical_block_size: None,
+            location: None,
             fs_type: None,
             holders: Vec::new(),
             partitions: Vec::new(),

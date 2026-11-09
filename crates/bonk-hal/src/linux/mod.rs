@@ -152,6 +152,7 @@ fn read_disk(ctx: &Context<'_>, dir: &Path, name: &str) -> Result<Option<Disk>, 
         removable_flag: read_optional(&dir.join("removable")).as_deref() == Some("1"),
         logical_block_size: read_optional(&dir.join("queue/logical_block_size"))
             .and_then(|text| text.parse().ok()),
+        location: udev.prop("ID_PATH").map(str::to_owned),
         fs_type,
         holders: list_dir_optional(&dir.join("holders"))?,
         partitions,

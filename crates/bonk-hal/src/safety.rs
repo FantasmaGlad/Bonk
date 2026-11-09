@@ -383,6 +383,7 @@ mod tests {
             kind: DiskKind::Physical,
             removable_flag: false,
             logical_block_size: None,
+            location: None,
             fs_type: None,
             holders: vec![],
             partitions,

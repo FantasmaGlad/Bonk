@@ -87,6 +87,9 @@ pub struct Disk {
     /// Logical sector size in bytes, when the system gives it; 512 is assumed otherwise.
     #[serde(default)]
     pub logical_block_size: Option<u32>,
+    /// Where the disk is plugged (controller and port), when the system gives it.
+    #[serde(default)]
+    pub location: Option<String>,
     /// Signature on the whole disk, without a partition table (bare LVM physical volume...).
     #[serde(default)]
     pub fs_type: Option<String>,
