@@ -1,3 +1,5 @@
+// `fsck.exfat`, seul juge indépendant ici, n'existe en CI que sous Linux.
+#![cfg(target_os = "linux")]
 #![allow(clippy::expect_used)]
 
 use std::process::Command;
