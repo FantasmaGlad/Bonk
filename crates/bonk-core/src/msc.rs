@@ -51,6 +51,7 @@ pub trait BulkTransport {
 }
 
 const SENSE_ILLEGAL_REQUEST: u8 = 5;
+const ASC_INVALID_OPCODE: u8 = 0x20;
 
 /// Ce que dit la clé d'une commande refusée : clé de sens, code et qualificatif SCSI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -364,10 +365,11 @@ impl<T: BulkTransport> MassStorage<T> {
 
     fn synchronize(&mut self) -> Result<(), MscError> {
         match self.command(&[0x35, 0, 0, 0, 0, 0, 0, 0, 0, 0], Data::None) {
-            // Des clés sans cache d'écriture rejettent cette commande comme invalide : il n'y a rien à
-            // vider, et la relecture après écriture reste le vrai contrôle. Tout autre refus est une erreur.
+            // Readers without a write cache reject the opcode itself (seen on a USB SD reader); the
+            // read-back stays the real check. Any other refusal is an error.
             Err(MscError::Check(Some(Sense {
                 key: SENSE_ILLEGAL_REQUEST,
+                code: ASC_INVALID_OPCODE,
                 ..
             }))) => Ok(()),
             result => result.map(|_| ()),
@@ -488,6 +490,7 @@ mod tests {
         commands: Vec<u8>,
         max_blocks: usize,
         sense_key: u8,
+        sense_code: u8,
         /// Octets que la clé rend à `INQUIRY` : moins que les 36 demandés, elle termine par un paquet court.
         inquiry_len: usize,
     }
@@ -496,6 +499,7 @@ mod tests {
         fn new(blocks: usize) -> Self {
             Self {
                 sense_key: 6,
+                sense_code: 0x28,
                 storage: vec![0; blocks * BLOCK],
                 huge: false,
                 fault: (0, Fault::None),
@@ -583,7 +587,7 @@ mod tests {
                     0x03 => {
                         let mut sense = vec![0u8; 18];
                         sense[2] = self.sense_key;
-                        sense[12] = 0x28;
+                        sense[12] = self.sense_code;
                         self.pending_in = sense;
                     }
                     0x12 => {
@@ -815,7 +819,18 @@ mod tests {
         let mut fake = Fake::new(16);
         fake.fault = (0x35, Fault::Check);
         fake.sense_key = SENSE_ILLEGAL_REQUEST;
+        fake.sense_code = ASC_INVALID_OPCODE;
         UsbDisk::open(&mut fake)?.flush()
+    }
+
+    #[test]
+    fn un_autre_refus_illegal_request_du_vidage_reste_une_erreur() -> Result<(), BlockError> {
+        let mut fake = Fake::new(16);
+        fake.fault = (0x35, Fault::Check);
+        fake.sense_key = SENSE_ILLEGAL_REQUEST;
+        fake.sense_code = 0x24;
+        assert!(UsbDisk::open(&mut fake)?.flush().is_err());
+        Ok(())
     }
 
     #[test]

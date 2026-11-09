@@ -138,10 +138,26 @@ pub enum Target {
     Image { path: PathBuf, size: Option<u64> },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TargetKind {
+    Disk,
+    Image,
+}
+
+impl TargetKind {
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Disk => "disk",
+            Self::Image => "image",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct TargetInfo {
-    /// `disk` or `image`.
-    pub kind: &'static str,
+    pub kind: TargetKind,
     pub id: Option<String>,
     pub path: String,
     pub size_bytes: Option<u64>,
@@ -207,8 +223,14 @@ pub struct VerifyDone {
 pub struct IgnoredRange {
     pub offset: u64,
     pub length: u64,
-    /// `gpt_repair`: fields the GPT repair rewrites on a drive larger than the image.
-    pub reason: &'static str,
+    pub reason: IgnoredReason,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum IgnoredReason {
+    /// Fields the GPT repair rewrites on a drive larger than the image.
+    GptRepair,
 }
 
 /// Result (or plan) of a GPT repair.

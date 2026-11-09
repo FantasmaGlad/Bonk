@@ -499,7 +499,7 @@ pub fn write(
 
     log::info!(
         target: "bonk::write",
-        target_kind = chosen.info.kind, target_path = chosen.info.path.as_str(),
+        target_kind = chosen.info.kind.name(), target_path = chosen.info.path.as_str(),
         source = source_info.path.as_str(), format = source_info.format.name();
         "write starting"
     );

@@ -8,7 +8,7 @@ use bonk_hal::{
     mount_points, reverify,
 };
 
-use super::types::{Deps, JobError, Target, TargetInfo, TraceIo, fail};
+use super::types::{Deps, JobError, Target, TargetInfo, TargetKind, TraceIo, fail};
 use crate::errors::Code;
 
 /// Cible ouverte : périphérique, informations et points démontés.
@@ -64,7 +64,7 @@ pub(super) fn choose(
             let disk = reverify(&identity, &disks, options).map_err(map_open_target)?;
             Ok(Chosen {
                 info: TargetInfo {
-                    kind: "disk",
+                    kind: TargetKind::Disk,
                     id: Some(disk.id.clone()),
                     path: disk.path.clone(),
                     size_bytes: Some(disk.size_bytes),
@@ -86,7 +86,7 @@ pub(super) fn choose(
             };
             Ok(Chosen {
                 info: TargetInfo {
-                    kind: "image",
+                    kind: TargetKind::Image,
                     id: None,
                     path: path.display().to_string(),
                     size_bytes,

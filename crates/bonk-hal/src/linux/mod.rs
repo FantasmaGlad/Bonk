@@ -329,7 +329,7 @@ impl LinuxRoots {
         Self {
             sys: "/sys".into(),
             proc: "/proc".into(),
-            udev_data: "/run/udev/data".into(),
+            udev_data: crate::enumerate::UDEV_DATA.into(),
             dev: "/dev".into(),
         }
     }
@@ -339,7 +339,7 @@ impl LinuxRoots {
         Self {
             sys: base.join("sys"),
             proc: base.join("proc"),
-            udev_data: base.join("run/udev/data"),
+            udev_data: base.join(crate::enumerate::UDEV_DATA.trim_start_matches('/')),
             dev: base.join("dev"),
         }
     }

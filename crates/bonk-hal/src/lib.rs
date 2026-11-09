@@ -19,7 +19,7 @@ pub mod windows_facts;
 pub use describe::{Lang, bus_label, format_size, kind_label, state_label, verdict_badge};
 pub use disk::{Bus, Disk, DiskKind, Partition};
 pub use enumerate::{
-    EnumerateError, SourceRead, enumerate_disks, enumerate_disks_from_capture,
+    EnumerateError, SourceRead, UDEV_DATA, enumerate_disks, enumerate_disks_from_capture,
     enumerate_disks_recorded,
 };
 pub use image::{Access, FileDevice, same_file};
