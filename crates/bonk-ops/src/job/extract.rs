@@ -2,8 +2,9 @@ use std::io::{self, Read};
 use std::path::Path;
 use std::time::Instant;
 
+use bonk_core::format::NewFile;
 use bonk_core::format::fat32::Volume;
-use bonk_core::format::fat32_tree::{self, Layout, MAX_FILE_BYTES, NewFile};
+use bonk_core::format::fat32_tree::{self, Layout, MAX_FILE_BYTES};
 use bonk_core::format::table::{self, PartitionPlan, TableKind};
 use bonk_core::format::{Filesystem, FormatError, Ids};
 use bonk_core::pe::{self, Machine, Signer};

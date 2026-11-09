@@ -1,9 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{self, Read};
-
-use sha2::{Digest, Sha256};
+use std::io::Read;
 
 use super::fat32::{self, FATS, Geometry, ROOT_CLUSTER, Volume, first_fat_sector, write_boot};
+use super::tree::{
+    ChildKind, Children, NewFile, collect_children, verify_contiguous, write_contiguous,
+};
 use super::{FormatError, zero_range};
 use crate::block::BlockDevice;
 use crate::partition::read_range;
@@ -18,31 +19,11 @@ const FIXED_DATE: u16 = 0x0021;
 const LONG_NAME_UNITS: usize = 13;
 const MAX_NAME_UNITS: usize = 255;
 pub const MAX_FILE_BYTES: u64 = u32::MAX as u64;
-const IO_CHUNK: usize = 4 << 20;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NewFile {
-    pub path: Vec<String>,
-    pub size: u64,
-}
 
 #[derive(Debug, Clone, Copy)]
 struct Placed {
     first_cluster: u32,
     clusters: u32,
-}
-
-/// Enfant d'un dossier : nom, attributs, et de quoi trouver son contenu.
-#[derive(Debug)]
-struct Child {
-    name: String,
-    kind: ChildKind,
-}
-
-#[derive(Debug)]
-enum ChildKind {
-    File(usize),
-    Directory(Vec<String>),
 }
 
 /// Entrées d'un enfant : noms longs, nom court, rang dans son dossier.
@@ -174,57 +155,8 @@ fn short_entry(short: &[u8; 11], attributes: u8, cluster: u32, size: u32) -> [u8
 const DOT: [u8; 11] = *b".          ";
 const DOT_DOT: [u8; 11] = *b"..         ";
 
-type Children = BTreeMap<Vec<String>, Vec<Child>>;
 type Encoded = BTreeMap<Vec<String>, Vec<Row>>;
 type PlacedDirs = BTreeMap<Vec<String>, (u32, u32)>;
-
-fn add_directory(children: &mut Children, path: &[String]) {
-    for depth in 1..=path.len() {
-        let here = path[..depth].to_vec();
-        if !children.contains_key(&here) {
-            children.insert(here.clone(), Vec::new());
-            if let Some(parent) = children.get_mut(&path[..depth - 1]) {
-                parent.push(Child {
-                    name: path[depth - 1].clone(),
-                    kind: ChildKind::Directory(here),
-                });
-            }
-        }
-    }
-}
-
-/// L'arbre des dossiers : chacun et ce qu'il contient.
-fn collect_children(
-    files: &[NewFile],
-    extra_directories: &[Vec<String>],
-) -> Result<Children, FormatError> {
-    let mut children = Children::new();
-    children.insert(Vec::new(), Vec::new());
-    for path in extra_directories {
-        add_directory(&mut children, path);
-    }
-    for (index, file) in files.iter().enumerate() {
-        if file.size > MAX_FILE_BYTES {
-            return Err(FormatError::TooLarge(format!(
-                "{}: {} bytes, FAT32 stops at {MAX_FILE_BYTES}",
-                file.path.join("/"),
-                file.size
-            )));
-        }
-        let (name, parent) = file
-            .path
-            .split_last()
-            .ok_or_else(|| FormatError::Name("empty path".to_owned()))?;
-        add_directory(&mut children, parent);
-        if let Some(list) = children.get_mut(parent) {
-            list.push(Child {
-                name: name.clone(),
-                kind: ChildKind::File(index),
-            });
-        }
-    }
-    Ok(children)
-}
 
 fn encode_names(children: &Children) -> Result<Encoded, FormatError> {
     let mut encoded = Encoded::new();
@@ -317,7 +249,7 @@ pub fn layout(
 ) -> Result<Layout, FormatError> {
     let geometry = fat32::geometry(volume.sectors, block)?;
     let cluster = u64::from(geometry.cluster_bytes);
-    let children = collect_children(files, extra_directories)?;
+    let children = collect_children(files, extra_directories, MAX_FILE_BYTES, "FAT32")?;
     let encoded = encode_names(&children)?;
 
     let mut next = u64::from(ROOT_CLUSTER);
@@ -376,6 +308,15 @@ fn narrow(value: u64) -> Result<u32, FormatError> {
 }
 
 impl Layout {
+    /// Début d'un fichier ; un fichier vide n'a pas de cluster, rien n'y sera lu ni écrit.
+    fn file_offset(&self, placed: Placed) -> u64 {
+        if placed.clusters == 0 {
+            0
+        } else {
+            self.cluster_offset(placed.first_cluster)
+        }
+    }
+
     fn cluster_offset(&self, cluster: u32) -> u64 {
         let data = self.geometry.reserved_sectors + FATS * self.geometry.fat_sectors;
         (self.first_lba + data) * self.block
@@ -452,27 +393,7 @@ impl Layout {
         advance: &mut dyn FnMut(u64) -> bool,
     ) -> Result<String, FormatError> {
         let (size, placed) = (self.sizes[index], self.files[index]);
-        let mut hasher = Sha256::new();
-        let mut done = 0;
-        let mut buffer = vec![0u8; IO_CHUNK];
-        while done < size {
-            let want = (size - done).min(IO_CHUNK as u64) as usize;
-            reader
-                .read_exact(&mut buffer[..want])
-                .map_err(FormatError::Source)?;
-            hasher.update(&buffer[..want]);
-            let padded = want.next_multiple_of(self.block as usize);
-            buffer[want..padded].fill(0);
-            dev.write_at(
-                self.cluster_offset(placed.first_cluster) + done,
-                &buffer[..padded],
-            )?;
-            done += want as u64;
-            if !advance(want as u64) {
-                return Err(FormatError::Source(io::ErrorKind::Interrupted.into()));
-            }
-        }
-        Ok(crate::write::hex(&hasher.finalize()))
+        write_contiguous(dev, self.file_offset(placed), size, reader, advance)
     }
 
     /// Relit un fichier sur le support et compare son empreinte à celle de la copie.
@@ -487,30 +408,14 @@ impl Layout {
         advance: &mut dyn FnMut(u64) -> bool,
     ) -> Result<(), FormatError> {
         let (size, placed) = (self.sizes[index], self.files[index]);
-        let mut hasher = Sha256::new();
-        let mut done = 0;
-        let mut buffer = vec![0u8; IO_CHUNK];
-        while done < size {
-            let want = (size - done).min(IO_CHUNK as u64) as usize;
-            let padded = want.next_multiple_of(self.block as usize);
-            dev.read_at(
-                self.cluster_offset(placed.first_cluster) + done,
-                &mut buffer[..padded],
-            )?;
-            hasher.update(&buffer[..want]);
-            done += want as u64;
-            if !advance(want as u64) {
-                return Err(FormatError::Source(io::ErrorKind::Interrupted.into()));
-            }
-        }
-        let actual = crate::write::hex(&hasher.finalize());
-        if actual == expected {
-            Ok(())
-        } else {
-            Err(FormatError::Mismatch(format!(
-                "file number {index}: the read-back differs from what was written"
-            )))
-        }
+        verify_contiguous(
+            dev,
+            self.file_offset(placed),
+            size,
+            expected,
+            &format!("file number {index}"),
+            advance,
+        )
     }
 
     /// Secteur de démarrage et informations du volume, en dernier.

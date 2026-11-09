@@ -1,7 +1,11 @@
 pub mod exfat;
+pub mod exfat_tree;
 pub mod fat32;
 pub mod fat32_tree;
 pub mod table;
+mod tree;
+
+pub use tree::NewFile;
 
 use std::fmt;
 
