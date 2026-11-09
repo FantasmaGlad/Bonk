@@ -238,24 +238,6 @@ impl BlockDevice for MacDisk {
     }
 }
 
-/// Pose exFAT par `diskutil eraseVolume`, qui exige un nom de volume.
-pub(super) fn format_exfat(partition: &Path, label: Option<&str>) -> Result<(), BlockError> {
-    let output = Command::new("/usr/sbin/diskutil")
-        .arg("eraseVolume")
-        .arg("ExFAT")
-        .arg(label.unwrap_or("BONK"))
-        .arg(partition)
-        .stdin(Stdio::null())
-        .output()?;
-    if output.status.success() {
-        return Ok(());
-    }
-    Err(BlockError::Io(io::Error::other(format!(
-        "diskutil eraseVolume: {}",
-        String::from_utf8_lossy(&output.stderr).trim()
-    ))))
-}
-
 pub(super) fn unmount(disk: &Disk) -> Result<Vec<String>, OpenTargetError> {
     let output = Command::new("/usr/sbin/diskutil")
         .args(["unmountDisk", &disk.path])

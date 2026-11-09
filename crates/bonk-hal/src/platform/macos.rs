@@ -169,13 +169,7 @@ impl Platform for Macos {
     }
 
     fn capabilities(&self) -> Vec<Capability> {
-        let mut all = native_capabilities(Capability::yes("elevate"));
-        for capability in &mut all {
-            if capability.name == "format.exfat" {
-                *capability = Capability::yes("format.exfat");
-            }
-        }
-        all
+        native_capabilities(Capability::yes("elevate"))
     }
 
     fn format_partition(
@@ -185,11 +179,7 @@ impl Platform for Macos {
         label: Option<&str>,
         elevation: Elevation,
     ) -> Result<(), BlockError> {
-        if fs == Filesystem::Exfat {
-            macos_disk::format_exfat(partition, label)
-        } else {
-            Unsupported.format_partition(partition, fs, label, elevation)
-        }
+        Unsupported.format_partition(partition, fs, label, elevation)
     }
 
     fn rescan(&self, _disk: &Path, _elevation: Elevation) -> Result<(), BlockError> {

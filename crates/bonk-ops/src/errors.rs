@@ -375,10 +375,10 @@ pub const CATALOG: &[Entry] = &[
         exit: EXIT_RUNTIME_ERROR,
         title: "Filesystem unavailable on this host",
         causes: &[
-            "exFAT, NTFS and ext4 go through system tools: the tool or service is missing",
-            "`--simulate`: only FAT32 can be written to an image file",
+            "NTFS and ext4 go through system tools: the tool or service is missing",
+            "`--simulate`: only FAT32 and exFAT can be written to an image file",
         ],
-        remedy: "See `bonk capabilities`. Install the named tool, or choose `--fs fat32`, written by Bonk itself.",
+        remedy: "See `bonk capabilities`. Install the named tool, or choose `--fs fat32` or `--fs exfat`, written by Bonk itself.",
     },
 ];
 

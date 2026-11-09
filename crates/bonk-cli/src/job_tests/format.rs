@@ -45,6 +45,25 @@ fn formater_une_cle_passe_par_tous_les_garde_fous_puis_relit() {
     assert_eq!(&written[512..520], b"EFI PART");
 }
 
+/// exFAT est écrit par Bonk comme FAT32 : aucun outil de l'hôte, la même relecture.
+#[test]
+fn exfat_est_ecrit_par_bonk_sans_outil_de_l_hote() {
+    let scenario = Scenario::new();
+    let (code, out, err) = scenario.run(&[
+        "format", "usb-a", "--fs", "exfat", "--label", "Clé", "--yes", "--json",
+    ]);
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        !scenario.log().iter().any(|l| l.starts_with("format:")),
+        "{:?}",
+        scenario.log()
+    );
+    let value: serde_json::Value = serde_json::from_str(&out).expect("JSON");
+    assert_eq!(value["filesystem"], "exfat");
+    assert_eq!(value["written_by"], "bonk");
+    assert_eq!(value["verified"], true);
+}
+
 #[test]
 fn formater_sans_confirmation_ou_en_plan_ne_touche_a_rien() {
     let scenario = Scenario::new();
@@ -87,33 +106,33 @@ fn etiquette_invalide_refusee_avant_tout_geste() {
     assert!(scenario.log().is_empty());
 }
 
-fn exfat_capability(available: bool) -> Capability {
+fn ntfs_capability(available: bool) -> Capability {
     if available {
-        Capability::yes("format.exfat")
+        Capability::yes("format.ntfs")
     } else {
         Capability::no(
-            "format.exfat",
+            "format.ntfs",
             Missing::MissingTool,
-            "tool missing: mkfs.exfat",
+            "tool missing: mkfs.ntfs",
         )
     }
 }
 
 #[test]
-fn un_outil_absent_refuse_exfat_sans_toucher_au_disque() {
+fn un_outil_absent_refuse_ntfs_sans_toucher_au_disque() {
     let mut scenario = Scenario::new();
-    scenario.capabilities = vec![exfat_capability(false)];
-    let (code, _, err) = scenario.run(&["format", "usb-a", "--fs", "exfat", "--yes"]);
+    scenario.capabilities = vec![ntfs_capability(false)];
+    let (code, _, err) = scenario.run(&["format", "usb-a", "--fs", "ntfs", "--yes"]);
     assert_eq!(code, 1, "{err}");
     assert!(err.contains("E7002"), "{err}");
-    assert!(err.contains("mkfs.exfat"), "{err}");
+    assert!(err.contains("mkfs.ntfs"), "{err}");
     assert!(scenario.log().is_empty());
 }
 
 #[test]
-fn exfat_ne_formate_jamais_l_ancienne_partition_encore_visible() {
+fn ntfs_ne_formate_jamais_l_ancienne_partition_encore_visible() {
     let mut scenario = Scenario::new();
-    scenario.capabilities = vec![exfat_capability(true)];
+    scenario.capabilities = vec![ntfs_capability(true)];
     // L'ancienne table reste visible un moment : même chemin /dev/sdb1, autre taille. C'est ce qu'a montré
     // l'essai sur la clé réelle.
     scenario.enumerations = vec![
@@ -122,26 +141,25 @@ fn exfat_ne_formate_jamais_l_ancienne_partition_encore_visible() {
         vec![usb("S1")],
         vec![usb("S1")],
         vec![usb_with_new_partition("")],
-        vec![usb_with_new_partition("exfat")],
+        vec![usb_with_new_partition("ntfs")],
     ];
-    let (code, _, err) = scenario.run(&[
-        "format", "usb-a", "--fs", "exfat", "--label", "Clé", "--yes",
-    ]);
+    let (code, _, err) =
+        scenario.run(&["format", "usb-a", "--fs", "ntfs", "--label", "Clé", "--yes"]);
     assert_eq!(code, 0, "{err}");
     let log = scenario.log();
     assert!(log.contains(&"rescan:/dev/sdb".to_owned()), "{log:?}");
     assert_eq!(
         log.last().map(String::as_str),
-        Some("format:/dev/sdb1:exfat:Clé")
+        Some("format:/dev/sdb1:ntfs:Clé")
     );
 }
 
 /// Entre la nouvelle table et le formatage par le système, une autre clé a pris la place : l'outil de
 /// l'hôte n'est jamais appelé sur elle.
 #[test]
-fn exfat_ne_formate_pas_une_autre_cle_arrivee_entre_temps() {
+fn ntfs_ne_formate_pas_une_autre_cle_arrivee_entre_temps() {
     let mut scenario = Scenario::new();
-    scenario.capabilities = vec![exfat_capability(true)];
+    scenario.capabilities = vec![ntfs_capability(true)];
     let mut autre = usb_with_new_partition("");
     autre.serial = Some("S2".to_owned());
     scenario.enumerations = vec![
@@ -152,7 +170,7 @@ fn exfat_ne_formate_pas_une_autre_cle_arrivee_entre_temps() {
         vec![usb_with_new_partition("")],
         vec![autre],
     ];
-    let (code, _, err) = scenario.run(&["format", "usb-a", "--fs", "exfat", "--yes"]);
+    let (code, _, err) = scenario.run(&["format", "usb-a", "--fs", "ntfs", "--yes"]);
     assert_eq!(code, EXIT_TARGET_REFUSED, "{err}");
     assert!(err.trim_end().ends_with("[E2002]"), "{err}");
     assert!(
@@ -163,25 +181,25 @@ fn exfat_ne_formate_pas_une_autre_cle_arrivee_entre_temps() {
 }
 
 #[test]
-fn exfat_sans_nouvelle_partition_ne_formate_rien() {
+fn ntfs_sans_nouvelle_partition_ne_formate_rien() {
     let mut scenario = Scenario::new();
-    scenario.capabilities = vec![exfat_capability(true)];
-    let (code, _, err) = scenario.run(&["format", "usb-a", "--fs", "exfat", "--yes"]);
+    scenario.capabilities = vec![ntfs_capability(true)];
+    let (code, _, err) = scenario.run(&["format", "usb-a", "--fs", "ntfs", "--yes"]);
     assert_eq!(code, 1, "{err}");
     assert!(err.contains("E7001"), "{err}");
     assert!(!scenario.log().iter().any(|l| l.starts_with("format:")));
 }
 
 #[test]
-fn exfat_que_le_systeme_ne_reconnait_pas_est_un_echec() {
+fn ntfs_que_le_systeme_ne_reconnait_pas_est_un_echec() {
     let mut scenario = Scenario::new();
-    scenario.capabilities = vec![exfat_capability(true)];
+    scenario.capabilities = vec![ntfs_capability(true)];
     scenario.enumerations = vec![
         vec![usb("S1")],
         vec![usb("S1")],
         vec![usb_with_new_partition("")],
     ];
-    let (code, _, err) = scenario.run(&["format", "usb-a", "--fs", "exfat", "--yes"]);
+    let (code, _, err) = scenario.run(&["format", "usb-a", "--fs", "ntfs", "--yes"]);
     assert_eq!(code, 1, "{err}");
     assert!(err.contains("does not recognize"), "{err}");
 }
@@ -189,12 +207,12 @@ fn exfat_que_le_systeme_ne_reconnait_pas_est_un_echec() {
 #[test]
 fn capabilities_dit_le_pourquoi() {
     let mut scenario = Scenario::new();
-    scenario.capabilities = vec![Capability::yes("write"), exfat_capability(false)];
+    scenario.capabilities = vec![Capability::yes("write"), ntfs_capability(false)];
     let (code, out, _) = scenario.run(&["capabilities"]);
     assert_eq!(code, 0);
     assert!(out.contains("write"), "{out}");
     assert!(
-        out.contains("format.exfat   no: tool missing (tool missing: mkfs.exfat)"),
+        out.contains("format.ntfs    no: tool missing (tool missing: mkfs.ntfs)"),
         "{out}"
     );
     let (code, out, _) = scenario.run(&["capabilities", "--json"]);
@@ -220,8 +238,7 @@ fn fat32_dit_sa_limite_par_fichier_et_propose_exfat() {
     let value: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert_eq!(value["file_size_limit_bytes"], (1u64 << 32) - 1);
 
-    let mut scenario = Scenario::new();
-    scenario.capabilities = vec![exfat_capability(true)];
+    let scenario = Scenario::new();
     let (code, out, err) = scenario.run(&["format", "usb-a", "--fs", "exfat", "--dry-run"]);
     assert_eq!((code, err.as_str()), (0, ""), "{out}");
     assert!(!out.contains("4 GiB"), "{out}");

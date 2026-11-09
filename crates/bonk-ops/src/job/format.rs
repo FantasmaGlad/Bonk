@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use bonk_core::BlockDevice;
 use bonk_core::format::table::{self, PartitionPlan, TableKind};
-use bonk_core::format::{Filesystem, FormatError, Ids, fat32, normalize_label};
+use bonk_core::format::{Filesystem, FormatError, Ids, exfat, fat32, normalize_label};
 use bonk_core::partition::{Severity, inspect};
 use bonk_hal::platform::format_capability;
 use bonk_hal::{Access, Elevation, FilterOptions, OpenTargetError, TargetIdentity};
@@ -50,6 +50,84 @@ fn format_error(err: FormatError) -> JobError {
     fail(Code::FormatFailed, err)
 }
 
+/// Taille de cluster d'un système de fichiers que Bonk écrit lui-même ; `None` pour l'outil de l'hôte.
+fn native_cluster_bytes(
+    filesystem: Filesystem,
+    sectors: u64,
+    block: u32,
+) -> Result<Option<u32>, FormatError> {
+    Ok(match filesystem {
+        Filesystem::Fat32 => Some(fat32::geometry(sectors, block)?.cluster_bytes),
+        Filesystem::Exfat => Some(exfat::geometry(sectors, block)?.cluster_bytes),
+        Filesystem::Ntfs | Filesystem::Ext4 => None,
+    })
+}
+
+/// Écrit puis relit le volume vide d'un système de fichiers natif.
+fn write_native(
+    device: &mut dyn BlockDevice,
+    filesystem: Filesystem,
+    partition: PartitionPlan,
+    label: Option<&str>,
+    volume_id: u32,
+) -> Result<(), FormatError> {
+    match filesystem {
+        Filesystem::Fat32 => fat32::write(
+            device,
+            &fat32::Volume {
+                first_lba: partition.first_lba,
+                sectors: partition.sectors(),
+                label,
+                volume_id,
+                bios_boot: false,
+            },
+        )
+        .map(drop),
+        Filesystem::Exfat => exfat::write(
+            device,
+            &exfat::Volume {
+                first_lba: partition.first_lba,
+                sectors: partition.sectors(),
+                label,
+                volume_id,
+            },
+        )
+        .map(drop),
+        Filesystem::Ntfs | Filesystem::Ext4 => Ok(()),
+    }
+}
+
+fn verify_native(
+    device: &dyn BlockDevice,
+    filesystem: Filesystem,
+    partition: PartitionPlan,
+    label: Option<&str>,
+    volume_id: u32,
+) -> Result<(), FormatError> {
+    match filesystem {
+        Filesystem::Fat32 => fat32::verify(
+            device,
+            &fat32::Volume {
+                first_lba: partition.first_lba,
+                sectors: partition.sectors(),
+                label,
+                volume_id,
+                bios_boot: false,
+            },
+        ),
+        Filesystem::Exfat => exfat::verify(
+            device,
+            &exfat::Volume {
+                first_lba: partition.first_lba,
+                sectors: partition.sectors(),
+                label,
+                volume_id,
+            },
+        ),
+        Filesystem::Ntfs | Filesystem::Ext4 => Ok(()),
+    }
+}
+
 /// Refuse avant tout geste un système de fichiers que cet hôte ne sait pas écrire sur cette cible.
 fn check_available(fs: Filesystem, chosen: &Chosen, deps: &Deps<'_>) -> Result<(), JobError> {
     if fs.is_native() {
@@ -58,7 +136,9 @@ fn check_available(fs: Filesystem, chosen: &Chosen, deps: &Deps<'_>) -> Result<(
     if chosen.disk.is_none() {
         return Err(fail(
             Code::FilesystemUnavailable,
-            format!("{fs} goes through system tools: not on an image file, only fat32 does"),
+            format!(
+                "{fs} goes through system tools: not on an image file, only fat32 and exfat do"
+            ),
         ));
     }
     let name = format_capability(fs);
@@ -70,7 +150,7 @@ fn check_available(fs: Filesystem, chosen: &Chosen, deps: &Deps<'_>) -> Result<(
         Some(capability) => Err(fail(
             Code::FilesystemUnavailable,
             format!(
-                "{fs} unavailable: {}; --fs fat32 needs no tool",
+                "{fs} unavailable: {}; --fs fat32 or exfat needs no tool",
                 capability.detail.unwrap_or_default()
             ),
         )),
@@ -187,10 +267,9 @@ fn write_volume(
     // Sur le vrai support, avant la table : le plan comptait en secteurs de 512 octets, et une table écrite
     // pour rien aurait déjà effacé la clé.
     let block = device.block_size();
-    if filesystem.is_native() {
-        let planned = table::plan(device.size(), block, kind).map_err(format_error)?;
-        fat32::geometry(planned.sectors(), block).map_err(format_error)?;
-    }
+    let planned = table::plan(device.size(), block, kind).map_err(format_error)?;
+    let cluster_bytes =
+        native_cluster_bytes(filesystem, planned.sectors(), block).map_err(format_error)?;
     let partition =
         table::write_table(device, kind, filesystem, label, ids, false).map_err(format_error)?;
     if cancelled() {
@@ -199,25 +278,11 @@ fn write_volume(
             "cancelled after writing the table: the drive must be formatted again",
         ));
     }
-    let volume = fat32::Volume {
-        first_lba: partition.first_lba,
-        sectors: partition.sectors(),
-        label,
-        volume_id: ids.volume_id,
-        bios_boot: false,
-    };
-    let cluster_bytes = if filesystem.is_native() {
-        let geometry = fat32::write(device, &volume).map_err(format_error)?;
-        Some(geometry.cluster_bytes)
-    } else {
-        None
-    };
+    write_native(device, filesystem, partition, label, ids.volume_id).map_err(format_error)?;
     device.flush().map_err(|e| fail(Code::FormatFailed, e))?;
     drop_cache_before_verify(device);
     check_table(device, partition)?;
-    if filesystem.is_native() {
-        fat32::verify(device, &volume).map_err(format_error)?;
-    }
+    verify_native(device, filesystem, partition, label, ids.volume_id).map_err(format_error)?;
     Ok((partition, cluster_bytes))
 }
 
@@ -291,12 +356,8 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
     // plan est recalculé à l'ouverture, avant d'écrire la table.
     let block = bonk_core::DEFAULT_BLOCK_SIZE;
     let planned = table::plan(size, block, job.table).map_err(format_error)?;
-    let cluster_bytes = if filesystem.is_native() {
-        let geometry = fat32::geometry(planned.sectors(), block).map_err(format_error)?;
-        Some(geometry.cluster_bytes)
-    } else {
-        None
-    };
+    let cluster_bytes =
+        native_cluster_bytes(filesystem, planned.sectors(), block).map_err(format_error)?;
     let result = |event, dry_run, info, partition, cluster_bytes, unmounted, verified| FormatDone {
         schema_version: SCHEMA_VERSION,
         event,

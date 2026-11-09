@@ -24,7 +24,7 @@ use crate::windows_facts::{disk_number, partition_numbers};
 /// Alignement mémoire exigé par `FILE_FLAG_NO_BUFFERING` : le secteur, 4 Kio au plus sur ces supports.
 const MEMORY_ALIGN: usize = 4096;
 
-/// Pose exFAT ou NTFS par `Format-Volume`. L'étiquette passe par l'environnement : rien de ce qu'elle
+/// Pose NTFS par `Format-Volume`. L'étiquette passe par l'environnement : rien de ce qu'elle
 /// contient n'est interprété par PowerShell.
 pub(super) fn format_partition(
     partition: &Path,
@@ -36,9 +36,8 @@ pub(super) fn format_partition(
         .and_then(partition_numbers)
         .ok_or_else(|| invalid("the path is not a partition"))?;
     let name = match fs {
-        Filesystem::Exfat => "exFAT",
         Filesystem::Ntfs => "NTFS",
-        Filesystem::Fat32 | Filesystem::Ext4 => {
+        Filesystem::Fat32 | Filesystem::Exfat | Filesystem::Ext4 => {
             return Err(BlockError::Io(io::ErrorKind::Unsupported.into()));
         }
     };

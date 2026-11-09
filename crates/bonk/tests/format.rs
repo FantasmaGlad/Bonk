@@ -96,6 +96,34 @@ mod relecture {
         }
     }
 
+    /// exFAT est écrit par Bonk : un fichier image suffit, sur chaque hôte, et l'outil officiel le relit.
+    #[test]
+    fn exfat_ecrit_par_bonk_accepte_par_fsck_exfat() {
+        if !outil_disponible("fsck.exfat") {
+            return;
+        }
+        for (size, table, label) in [
+            ("67108864", "gpt", "exfat-64m"),
+            ("1073741824", "mbr", "exfat-1g"),
+        ] {
+            let image = Image::new(label);
+            let value = format_json(
+                &image,
+                size,
+                &["--fs", "exfat", "--table", table, "--label", "Clé Bonk"],
+            );
+            assert_eq!(value["written_by"], "bonk");
+            let first = value["partition"]["first_lba"].as_u64().unwrap_or(0);
+            let last = value["partition"]["last_lba"].as_u64().unwrap_or(0);
+            let part = Image::new(&format!("{label}-partition"));
+            extract(&image.0, first, last - first + 1, &part.0);
+            let fsck = tool("fsck.exfat", &["-n", "-v", part.arg()]);
+            assert_eq!(fsck.status.code(), Some(0), "{}", diagnostic(&fsck));
+            let text = String::from_utf8_lossy(&fsck.stdout);
+            assert!(text.contains("Clé Bonk"), "{text}");
+        }
+    }
+
     #[test]
     fn mbr_et_fat32_acceptes_par_fsck_vfat() {
         if !outil_disponible("fsck.vfat") {
@@ -129,8 +157,8 @@ fn trop_petit_pour_fat32_ne_cree_pas_de_fichier_ecrit() {
 }
 
 #[test]
-fn les_autres_systemes_ne_s_ecrivent_pas_sur_un_fichier_image() {
-    let image = Image::new("exfat");
+fn les_systemes_de_l_hote_ne_s_ecrivent_pas_sur_un_fichier_image() {
+    let image = Image::new("ntfs");
     let sortie = bonk(&[
         "format",
         "--simulate",
@@ -138,7 +166,7 @@ fn les_autres_systemes_ne_s_ecrivent_pas_sur_un_fichier_image() {
         "--size",
         "67108864",
         "--fs",
-        "exfat",
+        "ntfs",
         "--yes",
     ]);
     assert_code(&sortie, 1);

@@ -11,3 +11,4 @@ zstd
 # Outils de référence qui relisent ce que `bonk format` écrit : table et système de fichiers.
 gdisk
 dosfstools
+exfatprogs
