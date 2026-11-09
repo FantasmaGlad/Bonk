@@ -102,11 +102,14 @@ pub(crate) fn refused(message: impl std::fmt::Display) -> JobError {
 }
 
 pub(crate) type FetchFn = Box<dyn Fn(&str) -> Result<Vec<u8>, String>>;
+/// A file named by the catalog, read up to its signed size.
+pub(crate) type FetchFileFn = Box<dyn Fn(&str, u64) -> Result<Vec<u8>, String>>;
 
 /// Keys the signature must match and how files are fetched: injectable for tests.
 pub(crate) struct Access {
     pub(crate) keys: Vec<[u8; 32]>,
     pub(crate) fetch: FetchFn,
+    pub(crate) fetch_file: FetchFileFn,
 }
 
 impl Default for Access {
@@ -115,6 +118,9 @@ impl Default for Access {
             keys: TRUSTED_KEYS.to_vec(),
             fetch: Box::new(|address| {
                 bonk_catalog::fetch_bytes(address).map_err(|e| e.to_string())
+            }),
+            fetch_file: Box::new(|address, size| {
+                bonk_catalog::fetch_limited(address, size).map_err(|e| e.to_string())
             }),
         }
     }

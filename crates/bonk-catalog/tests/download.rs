@@ -9,7 +9,9 @@ use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use bonk_catalog::{Advance, DownloadError, Hooks, download, fetch_text, file_name, is_url};
+use bonk_catalog::{
+    Advance, DownloadError, Hooks, download, fetch_limited, fetch_text, file_name, is_url,
+};
 
 const ETAG: &str = "\"v1\"";
 
@@ -373,6 +375,18 @@ fn le_texte_d_empreintes_se_lit_et_une_page_absente_se_dit() {
         fetch_text(&server.url()),
         Err(DownloadError::Refused { status: 404, .. })
     ));
+}
+
+/// A published file larger than the text bound (GRUB is 1.4 MB) is read up to its signed size.
+#[test]
+fn un_fichier_publie_se_lit_jusqu_a_sa_taille_signee() {
+    let body = data(1_429_504);
+    let server = Server::start(body.clone(), |_| Reply::Serve);
+    assert_eq!(
+        fetch_limited(&server.url(), body.len() as u64).unwrap(),
+        body
+    );
+    assert!(fetch_limited(&server.url(), body.len() as u64 - 1).is_err());
 }
 
 #[test]
