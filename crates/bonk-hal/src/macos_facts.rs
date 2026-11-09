@@ -27,6 +27,9 @@ pub struct RawMedia {
     /// `DeviceBlockSize` : octets par secteur logique.
     #[serde(default)]
     pub block_size: Option<u32>,
+    /// USB `locationID` from `ioreg`.
+    #[serde(default)]
+    pub location: Option<String>,
     /// Type de contenu : `EFI`, `Apple_APFS`, `Microsoft Basic Data`...
     pub content: Option<String>,
     pub file_system: Option<String>,
@@ -68,6 +71,7 @@ pub fn media_from_info(info: &Value) -> Result<RawMedia, EnumerateError> {
         block_size: info["DeviceBlockSize"]
             .as_u64()
             .and_then(|size| u32::try_from(size).ok()),
+        location: None,
         content: text("Content"),
         file_system: text("FilesystemType"),
         label: text("VolumeName"),
@@ -158,6 +162,7 @@ pub fn normalize(media: &[RawMedia]) -> Result<Vec<Disk>, EnumerateError> {
                 kind,
                 removable_flag: whole.removable,
                 logical_block_size: whole.block_size,
+                location: whole.location.clone(),
                 fs_type: None,
                 holders: Vec::new(),
                 partitions,
@@ -227,6 +232,31 @@ pub fn serials_from_ioreg(text: &str) -> Vec<(String, String)> {
             && raw_disk_path(&format!("/dev/{device}")).is_some()
         {
             found.push((device.to_owned(), serial.clone()));
+        }
+    }
+    found
+}
+
+/// USB `locationID` of each whole disk in `ioreg -r -l -w0 -c IOUSBHostDevice` output: `(disk, location)`.
+#[must_use]
+pub fn locations_from_ioreg(text: &str) -> Vec<(String, String)> {
+    let mut found = Vec::new();
+    let mut location: Option<String> = None;
+    for line in text.lines() {
+        if line.starts_with("+-o ") {
+            location = None;
+        }
+        if let Some((_, value)) = line.split_once("\"locationID\"") {
+            let value = value.trim_start().trim_start_matches('=').trim();
+            if !value.is_empty() {
+                location = Some(value.to_owned());
+            }
+        }
+        if let (Some(location), Some((_, rest))) = (&location, line.split_once("\"BSD Name\""))
+            && let Some(device) = rest.split('"').nth(1)
+            && raw_disk_path(&format!("/dev/{device}")).is_some()
+        {
+            found.push((device.to_owned(), location.clone()));
         }
     }
     found
@@ -396,6 +426,14 @@ mod tests {
         assert_eq!(
             serials_from_ioreg(usb),
             [("disk2".to_owned(), "ABC 123".to_owned())]
+        );
+        let located = usb.replace(
+            "\"USB Serial Number\" = \"ABC 123\"",
+            "\"USB Serial Number\" = \"ABC 123\"\n  |   \"locationID\" = 17825792",
+        );
+        assert_eq!(
+            locations_from_ioreg(&located),
+            [("disk2".to_owned(), "17825792".to_owned())]
         );
         let interne = r#"+-o NVMe  <class IOBlockStorageDevice>
     "Device Characteristics" = {"Product Name"="X","Serial Number"="S0"}

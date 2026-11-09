@@ -30,6 +30,7 @@ fn disk(id: &str, path: &str, bus: Bus, partitions: Vec<Partition>) -> Disk {
         kind: DiskKind::Physical,
         removable_flag: false,
         logical_block_size: None,
+        location: None,
         fs_type: None,
         holders: vec![],
         partitions,

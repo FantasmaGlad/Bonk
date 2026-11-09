@@ -229,6 +229,7 @@ pub fn normalize(facts: &WindowsFacts) -> Result<Vec<Disk>, EnumerateError> {
                 kind,
                 removable_flag: raw.removable,
                 logical_block_size: raw.block_size,
+                location: raw.instance.clone(),
                 fs_type: None,
                 holders,
                 partitions,

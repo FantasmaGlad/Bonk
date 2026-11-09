@@ -144,7 +144,7 @@ fn usb_stick(fake: &Fake) -> Result<(), Box<dyn Error>> {
     fake.partition(USB_PATH, "sdb1", 1, "8:17", 31_258_624)?;
     fake.udev(
         "8:16",
-        "S:disk/by-id/usb-SanDisk_Cruzer_Blade_4C530001-0:0\nE:ID_SERIAL_SHORT=4C530001\nE:ID_BUS=usb\n",
+        "S:disk/by-id/usb-SanDisk_Cruzer_Blade_4C530001-0:0\nE:ID_SERIAL_SHORT=4C530001\nE:ID_BUS=usb\nE:ID_PATH=pci-0000:00:14.0-usb-0:2:1.0-scsi-0:0:0:0\n",
     )?;
     fake.udev("8:17", "E:ID_FS_TYPE=vfat\nE:ID_FS_LABEL=CLE\n")
 }
@@ -209,6 +209,10 @@ fn cle_usb_montee_par_l_utilisateur_est_proposee() -> Result<(), Box<dyn Error>>
     assert_eq!(usb.partitions[0].label.as_deref(), Some("CLE"));
     assert_eq!(usb.partitions[0].mount_points, ["/run/media/alice/CLE"]);
     assert_eq!(usb.logical_block_size, Some(512));
+    assert_eq!(
+        usb.location.as_deref(),
+        Some("pci-0000:00:14.0-usb-0:2:1.0-scsi-0:0:0:0")
+    );
     assert!(verdict(usb).is_writable());
     Ok(())
 }

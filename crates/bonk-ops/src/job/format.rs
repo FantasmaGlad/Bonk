@@ -321,8 +321,8 @@ fn hand_over_to_host(
         let actual = TargetIdentity::from(found);
         if actual != *disk.identity {
             return Err(map_open_target(OpenTargetError::IdentityChanged {
-                expected: disk.identity.clone(),
-                actual,
+                expected: Box::new(disk.identity.clone()),
+                actual: Box::new(actual),
             }));
         }
         (deps.io.format_partition)(Path::new(&path), filesystem, label, disk.elevation)

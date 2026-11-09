@@ -11,7 +11,9 @@ use super::{Capability, Elevation, Platform, Unsupported, macos_disk, native_cap
 use crate::disk::Disk;
 use crate::enumerate::{EnumerateError, SourceRead};
 use crate::image::Access;
-use crate::macos_facts::{RawMedia, SOURCE, media_from_info, normalize, serials_from_ioreg};
+use crate::macos_facts::{
+    RawMedia, SOURCE, locations_from_ioreg, media_from_info, normalize, serials_from_ioreg,
+};
 use crate::target::OpenTargetError;
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -78,6 +80,15 @@ fn read_serials() -> Vec<(String, String)> {
         .collect()
 }
 
+/// Where each USB disk is plugged; descriptive, like the serials.
+fn read_locations() -> Vec<(String, String)> {
+    Command::new("/usr/sbin/ioreg")
+        .args(["-r", "-l", "-w0", "-c", "IOUSBHostDevice"])
+        .output()
+        .map(|output| locations_from_ioreg(&String::from_utf8_lossy(&output.stdout)))
+        .unwrap_or_default()
+}
+
 fn collect() -> Result<Vec<RawMedia>, EnumerateError> {
     let list = diskutil(&["list", "-plist"])?;
     let devices = list["AllDisks"]
@@ -87,6 +98,7 @@ fn collect() -> Result<Vec<RawMedia>, EnumerateError> {
             detail: "no AllDisks".to_owned(),
         })?;
     let serials = read_serials();
+    let locations = read_locations();
     devices
         .iter()
         .filter_map(Value::as_str)
@@ -97,6 +109,10 @@ fn collect() -> Result<Vec<RawMedia>, EnumerateError> {
                     .iter()
                     .find(|(disk, _)| *disk == media.device)
                     .map(|(_, serial)| serial.clone());
+                media.location = locations
+                    .iter()
+                    .find(|(disk, _)| *disk == media.device)
+                    .map(|(_, location)| location.clone());
             }
             Ok(media)
         })
