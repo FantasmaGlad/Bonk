@@ -293,3 +293,17 @@ fn une_iso_sans_bootmgr_pour_x86_reste_en_uefi_seul() {
     let value: serde_json::Value = serde_json::from_str(&text).expect("JSON");
     assert_eq!(value["extraction"]["firmware"], serde_json::json!(["uefi"]));
 }
+
+#[test]
+fn une_cle_windows_est_en_mbr_par_defaut() {
+    let d = Dossier::new("defaut");
+    let out = plan(&d, windows_iso_bios("efi/boot/bootx64.efi", 0x8664));
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{text}");
+    let value: serde_json::Value = serde_json::from_str(&text).expect("JSON");
+    assert_eq!(value["extraction"]["table"], "mbr");
+    assert_eq!(
+        value["extraction"]["firmware"],
+        serde_json::json!(["uefi", "bios"])
+    );
+}

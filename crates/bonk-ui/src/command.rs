@@ -5,14 +5,25 @@ pub struct ViewOptions {
     pub show_all: bool,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WriteView<'a> {
     pub image: &'a str,
     /// Empreinte en hexadécimal, ou chemin ou adresse d'un fichier d'empreintes ; vide : aucune.
     pub hash: &'a str,
     pub raw: bool,
-    /// Table MBR pour une clé Windows ; GPT sinon.
+    /// Table MBR pour une clé Windows, celle de `bonk write` par défaut ; GPT sinon.
     pub mbr: bool,
+}
+
+impl Default for WriteView<'_> {
+    fn default() -> Self {
+        Self {
+            image: "",
+            hash: "",
+            raw: false,
+            mbr: true,
+        }
+    }
 }
 
 impl<'a> WriteView<'a> {
@@ -44,9 +55,9 @@ impl<'a> WriteView<'a> {
             flags.push("--mode".to_owned());
             flags.push("raw".to_owned());
         }
-        if self.mbr {
+        if !self.mbr {
             flags.push("--table".to_owned());
-            flags.push("mbr".to_owned());
+            flags.push("gpt".to_owned());
         }
         flags
     }
@@ -192,7 +203,7 @@ mod tests_write {
             image: "https://a.org/x.iso",
             hash: &hex,
             raw: true,
-            mbr: false,
+            mbr: true,
         };
         let commands = equivalent_commands(ViewOptions::default(), Some("usb-a"), Some(view));
         assert_eq!(
@@ -203,7 +214,7 @@ mod tests_write {
             image: "x.iso",
             hash: "https://a.org/SHA256SUMS",
             raw: false,
-            mbr: true,
+            mbr: false,
         };
         assert_eq!(
             view.flags(),
@@ -211,7 +222,7 @@ mod tests_write {
                 "--sha256-file",
                 "https://a.org/SHA256SUMS",
                 "--table",
-                "mbr"
+                "gpt"
             ]
         );
     }

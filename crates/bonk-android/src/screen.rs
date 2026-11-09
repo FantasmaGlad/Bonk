@@ -353,8 +353,8 @@ fn panel_state(model: &Model) -> Value {
                 ),
                 "mbr": mbr,
                 "mbr_label": lang.pick(
-                    "Windows drive: MBR table, boots in BIOS and UEFI (GPT: UEFI only)",
-                    "Clé Windows : table MBR, démarre en BIOS et en UEFI (GPT : UEFI seul)",
+                    "Windows drive: MBR table, boots in BIOS and UEFI up to 2 TiB (unchecked: GPT, UEFI only)",
+                    "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
                 ),
                 "button": text::write_button(lang, elapsed, empty),
                 "enabled": elapsed >= WRITE_DELAY && !empty,
