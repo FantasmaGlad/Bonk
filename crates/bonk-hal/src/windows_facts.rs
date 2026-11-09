@@ -40,6 +40,9 @@ pub struct RawDisk {
     pub product: Option<String>,
     pub serial: Option<String>,
     pub size_bytes: u64,
+    /// Octets par secteur logique, lus dans la géométrie du disque.
+    #[serde(default)]
+    pub block_size: Option<u32>,
     /// Chemin d'instance du périphérique. Survit à une réécriture, contrairement à tout ce que porte la
     /// table, et à un rebranchement, contrairement au numéro.
     pub instance: Option<String>,
@@ -225,6 +228,7 @@ pub fn normalize(facts: &WindowsFacts) -> Result<Vec<Disk>, EnumerateError> {
                 bus,
                 kind,
                 removable_flag: raw.removable,
+                logical_block_size: raw.block_size,
                 fs_type: None,
                 holders,
                 partitions,

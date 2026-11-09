@@ -84,6 +84,9 @@ pub struct Disk {
     /// System "removable" flag, not reliable: informative only.
     #[serde(default)]
     pub removable_flag: bool,
+    /// Logical sector size in bytes, when the system gives it; 512 is assumed otherwise.
+    #[serde(default)]
+    pub logical_block_size: Option<u32>,
     /// Signature on the whole disk, without a partition table (bare LVM physical volume...).
     #[serde(default)]
     pub fs_type: Option<String>,

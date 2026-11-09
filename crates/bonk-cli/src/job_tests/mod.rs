@@ -176,6 +176,7 @@ fn usb(serial: &str) -> Disk {
         bus: Bus::Usb,
         kind: DiskKind::Physical,
         removable_flag: true,
+        logical_block_size: None,
         fs_type: None,
         holders: vec![],
         partitions: vec![partition("/dev/sdb1", &["/run/media/u/A"], false)],
@@ -404,6 +405,7 @@ fn internal() -> Disk {
         path: "/dev/sda".to_owned(),
         bus: Bus::Sata,
         removable_flag: false,
+        logical_block_size: None,
         partitions: vec![],
         ..usb("I1")
     }

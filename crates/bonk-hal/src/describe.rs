@@ -88,6 +88,12 @@ pub fn state_label(eligibility: &Eligibility, lang: Lang) -> String {
                     "non affiché (bus interne ; --show-internal pour l'afficher)",
                 )
                 .to_owned(),
+            HiddenReason::NoMedium => lang
+                .pick(
+                    "hidden (no medium: 0 bytes)",
+                    "non affiché (aucun support : 0 octet)",
+                )
+                .to_owned(),
         },
         Eligibility::Excluded { reasons } => {
             let texts: Vec<String> = reasons.iter().map(|r| exclusion_label(r, lang)).collect();

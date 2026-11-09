@@ -24,6 +24,9 @@ pub struct RawMedia {
     #[serde(default)]
     pub serial: Option<String>,
     pub size_bytes: u64,
+    /// `DeviceBlockSize` : octets par secteur logique.
+    #[serde(default)]
+    pub block_size: Option<u32>,
     /// Type de contenu : `EFI`, `Apple_APFS`, `Microsoft Basic Data`...
     pub content: Option<String>,
     pub file_system: Option<String>,
@@ -62,6 +65,9 @@ pub fn media_from_info(info: &Value) -> Result<RawMedia, EnumerateError> {
             .as_u64()
             .or_else(|| info["Size"].as_u64())
             .unwrap_or(0),
+        block_size: info["DeviceBlockSize"]
+            .as_u64()
+            .and_then(|size| u32::try_from(size).ok()),
         content: text("Content"),
         file_system: text("FilesystemType"),
         label: text("VolumeName"),
@@ -151,6 +157,7 @@ pub fn normalize(media: &[RawMedia]) -> Result<Vec<Disk>, EnumerateError> {
                 bus,
                 kind,
                 removable_flag: whole.removable,
+                logical_block_size: whole.block_size,
                 fs_type: None,
                 holders: Vec::new(),
                 partitions,

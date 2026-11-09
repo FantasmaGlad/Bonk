@@ -221,7 +221,10 @@ fn read_disk(number: u32, instance: Option<String>) -> io::Result<Option<RawDisk
         Err(error) => return Err(error),
     };
     // SAFETY : l'appel a réussi, le système a écrit la géométrie dans ce tampon aligné.
-    let size = unsafe { (*geometry.as_ptr().cast::<DISK_GEOMETRY_EX>()).DiskSize };
+    let (size, bytes_per_sector) = unsafe {
+        let geometry = &*geometry.as_ptr().cast::<DISK_GEOMETRY_EX>();
+        (geometry.DiskSize, geometry.Geometry.BytesPerSector)
+    };
     let partitions = layout(&handle)?;
     Ok(Some(RawDisk {
         number,
@@ -231,6 +234,7 @@ fn read_disk(number: u32, instance: Option<String>) -> io::Result<Option<RawDisk
         product: text_at(raw, descriptor.ProductIdOffset),
         serial: text_at(raw, descriptor.SerialNumberOffset),
         size_bytes: u64::try_from(size).unwrap_or(0),
+        block_size: (bytes_per_sector > 0).then_some(bytes_per_sector),
         instance,
         partitions,
     }))

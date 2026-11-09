@@ -1,12 +1,12 @@
 use std::path::{Path, PathBuf};
 
+use bonk_core::BlockDevice;
 use bonk_core::analysis::{self, ImageKind, ImageReport};
 use bonk_core::codec::Format;
 use bonk_core::format::table::TableKind;
 use bonk_core::partition::inspect;
 use bonk_core::repair::{RepairReport, needs_repair, repair_gpt};
 use bonk_core::write::{self as engine, Control, DEFAULT_CHUNK, Phase, Progress, VerifyError};
-use bonk_core::{BlockDevice, DEFAULT_BLOCK_SIZE};
 use bonk_hal::{Access, Elevation, Eligibility, FilterOptions, Warning, evaluate};
 
 use super::extract::Extraction;
@@ -344,12 +344,13 @@ fn write_windows(
     deps: &Deps<'_>,
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<WriteOutcome, JobError> {
-    windows.check_fits(chosen.info.size_bytes, job.table)?;
+    windows.check_fits(chosen.info.size_bytes, chosen.block_size(), job.table)?;
     if let Some(expected) = &job.expected_sha256 {
         check_sha256(file, &job.source, expected, deps, progress)?;
     }
     let sha256_checked = job.expected_sha256.is_some();
     if job.dry_run {
+        let block = chosen.block_size();
         let mut steps = vec!["unmount", "write_table", "write_fat32", "copy_files"];
         if chosen.disk.is_none() {
             steps.remove(0);
@@ -364,7 +365,7 @@ fn write_windows(
             image,
             sha256_checked,
             steps,
-            Some(windows.describe(job.table, DEFAULT_BLOCK_SIZE)),
+            Some(windows.describe(job.table, block)),
         ));
     }
     confirm(job, &chosen)?;
