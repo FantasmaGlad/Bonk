@@ -41,7 +41,6 @@ fn gpt_valide_sans_constat_grave() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(gpt.entries[1].name, "racine");
     let mbr = layout.mbr.as_ref().ok_or("MBR attendu")?;
     assert!(mbr.signature_valid && mbr.protective);
-    // 2048 secteurs de 512 octets = 1 Mio : aligné ; rien d'anormal.
     assert!(
         layout.findings.iter().all(|f| f.severity == Severity::Info),
         "{:?}",
@@ -53,14 +52,13 @@ fn gpt_valide_sans_constat_grave() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn en_tete_principal_corrompu() -> Result<(), Box<dyn std::error::Error>> {
     let mut img = gpt_image(4096, &[(2048, 4000, LINUX, "x")]);
-    img[512 + 40] ^= 0xFF; // premier secteur utilisable modifié sans recalcul de la somme
+    img[512 + 40] ^= 0xFF; // first usable LBA changed, checksum left stale
     let layout = inspect_bytes(img)?;
     assert!(
         codes(&layout).contains(&"gpt_primary_header_crc"),
         "{:?}",
         codes(&layout)
     );
-    // Le secours reste valide : la réparation sera possible.
     assert!(!codes(&layout).contains(&"gpt_backup_header_crc"));
     Ok(())
 }
@@ -68,11 +66,10 @@ fn en_tete_principal_corrompu() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn table_principale_corrompue() -> Result<(), Box<dyn std::error::Error>> {
     let mut img = gpt_image(4096, &[(2048, 4000, LINUX, "x")]);
-    img[2 * 512 + 40] ^= 0x01; // un octet de la table
+    img[2 * 512 + 40] ^= 0x01;
     let layout = inspect_bytes(img)?;
     assert!(codes(&layout).contains(&"gpt_primary_entries_crc"));
     assert!(!codes(&layout).contains(&"gpt_backup_entries_crc"));
-    // Les entrées rendues viennent de la table de secours, saine.
     assert_eq!(
         layout.gpt.as_ref().map(|g| g.entries[0].last_lba),
         Some(4000)
@@ -203,7 +200,7 @@ fn disque_vierge_et_image_minuscule() -> Result<(), Box<dyn std::error::Error>> 
 
 #[test]
 fn secteur_logique_de_4096_octets_detecte() -> Result<(), Box<dyn std::error::Error>> {
-    // Un en-tête GPT au secteur 1 d'un disque à secteurs de 4096 octets se trouve à l'octet 4096.
+    // A GPT header at sector 1 of a 4096-byte-sector disk is at byte 4096.
     let sectors = 64usize;
     let bs = 4096usize;
     let mut img = vec![0u8; sectors * bs];
@@ -225,19 +222,17 @@ fn secteur_logique_de_4096_octets_detecte() -> Result<(), Box<dyn std::error::Er
 fn table_aberrante_ne_fait_ni_lire_hors_bornes_ni_paniquer()
 -> Result<(), Box<dyn std::error::Error>> {
     let mut img = gpt_image(4096, &[(2048, 4000, LINUX, "x")]);
-    // Nombre d'entrées et taille démesurés dans l'en-tête principal.
     put_u32(&mut img, 512 + 80, u32::MAX);
     put_u32(&mut img, 512 + 84, u32::MAX);
     let layout = inspect_bytes(img)?;
     assert!(codes(&layout).contains(&"gpt_primary_entries_crc"));
-    // Début de table hors du disque.
     let mut img = gpt_image(4096, &[(2048, 4000, LINUX, "x")]);
     put_u64(&mut img, 512 + 72, u64::MAX / 2);
     assert!(inspect_bytes(img).is_ok());
     Ok(())
 }
 
-/// Le début de partition vient de l'image : le multiplier par la taille de bloc peut déborder.
+/// The partition start comes from the image: multiplying it by the block size can overflow.
 #[test]
 fn un_debut_de_partition_demesure_ne_fait_pas_paniquer() -> Result<(), Box<dyn std::error::Error>> {
     let huge = 1u64 << 62;

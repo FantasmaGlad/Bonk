@@ -15,9 +15,8 @@ pub enum TableKind {
 
 impl TableKind {
     pub const ALL: [Self; 2] = [Self::Gpt, Self::Mbr];
-    /// Table d'un support remis en état de stockage.
     pub const FORMAT_DEFAULT: Self = Self::Gpt;
-    /// Table d'une clé Windows : MBR démarre en BIOS et en UEFI, jusqu'à 2 Tio.
+    /// MBR boots in BIOS and UEFI, up to 2 TiB.
     pub const WINDOWS_DEFAULT: Self = Self::Mbr;
 
     #[must_use]
@@ -48,11 +47,11 @@ const GPT_ENTRY_SIZE: u32 = 128;
 const GPT_REVISION: u32 = 0x0001_0000;
 const GPT_HEADER_SIZE: u32 = 92;
 const GPT_ENTRIES_LBA: u64 = 2;
-/// « Basic data » : FAT, exFAT et NTFS, EBD0A0A2-B9E5-4433-87C0-68B6B72699C7.
+/// "Basic data" (FAT, exFAT, NTFS): EBD0A0A2-B9E5-4433-87C0-68B6B72699C7.
 const GUID_BASIC_DATA: [u8; 16] = [
     0xA2, 0xA0, 0xD0, 0xEB, 0xE5, 0xB9, 0x33, 0x44, 0x87, 0xC0, 0x68, 0xB6, 0xB7, 0x26, 0x99, 0xC7,
 ];
-/// « Linux filesystem », 0FC63DAF-8483-4772-8E79-3D69D8477DE4.
+/// "Linux filesystem": 0FC63DAF-8483-4772-8E79-3D69D8477DE4.
 const GUID_LINUX: [u8; 16] = [
     0xAF, 0x3D, 0xC6, 0x0F, 0x83, 0x84, 0x72, 0x47, 0x8E, 0x79, 0x3D, 0x69, 0xD8, 0x47, 0x7D, 0xE4,
 ];
@@ -76,8 +75,8 @@ fn gpt_table_sectors(block: u64) -> u64 {
     (u64::from(GPT_ENTRIES) * u64::from(GPT_ENTRY_SIZE)).div_ceil(block)
 }
 
-/// Où sera la partition, sans rien écrire : sert aussi à `--dry-run`, et à refuser avant le premier
-/// geste. Un MBR n'adresse pas au-delà de 2^32 secteurs.
+/// Where the partition goes, without writing: also used by `--dry-run`. MBR cannot address beyond 2^32
+/// sectors.
 pub fn plan(size: u64, block: u32, kind: TableKind) -> Result<PartitionPlan, FormatError> {
     let block = u64::from(block);
     let sectors = size / block;
@@ -104,11 +103,11 @@ pub fn plan(size: u64, block: u32, kind: TableKind) -> Result<PartitionPlan, For
     }
 }
 
-/// Un secteur 0 : la signature et une seule entrée, sans code d'amorçage (support de stockage).
+/// Signature and a single entry, no boot code.
 fn mbr_sector(block: usize, signature: u32, kind: u8, first: u32, sectors: u32) -> Vec<u8> {
     let mut sector = vec![0u8; block];
     put_u32(&mut sector, 440, signature);
-    // CHS hors de portée : seules les valeurs LBA comptent.
+    // CHS out of range: only LBA values count.
     sector[446 + 1..446 + 4].copy_from_slice(&[0xFE, 0xFF, 0xFF]);
     sector[446 + 4] = kind;
     sector[446 + 5..446 + 8].copy_from_slice(&[0xFE, 0xFF, 0xFF]);
@@ -186,8 +185,8 @@ fn write_gpt(
         table_crc,
         guid: ids.disk_guid,
     };
-    // Le secours d'abord : une coupure laisse un support sans table principale valide, jamais une table
-    // principale qui pointe vers un secours absent.
+    // Backup first: an interrupted write leaves no valid primary table rather than one pointing to a missing
+    // backup.
     dev.write_at(backup_entries * block, &table)?;
     dev.write_at(
         last * block,
@@ -208,10 +207,9 @@ fn write_gpt(
 
 const ACTIVE: u8 = 0x80;
 
-/// Efface les anciennes tables et le début de la nouvelle partition, puis écrit la table ; une
-/// géométrie refusée n'écrit rien. Le vidage reste à l'appelant, une fois le système de fichiers posé.
-/// `bios_boot` pose le code de [`crate::boot::MBR`] et rend la partition active : MBR seulement, le
-/// BIOS ne démarre pas une table GPT.
+/// Wipes old tables and the start of the new partition, then writes the table; a refused geometry writes
+/// nothing. Flushing is the caller's job. `bios_boot` writes [`crate::boot::MBR`] and marks the partition
+/// active: MBR only, BIOS does not boot GPT.
 pub fn write_table(
     dev: &mut dyn BlockDevice,
     kind: TableKind,
@@ -227,8 +225,8 @@ pub fn write_table(
     }
     let part = plan(dev.size(), dev.block_size(), kind)?;
     let block = u64::from(dev.block_size());
-    // Un ancien GPT de secours survivrait en fin de support, une ancienne signature au début de la
-    // partition : le système reconnaîtrait ce qui n'existe plus.
+    // An old backup GPT at the end, or an old signature at the partition start, would make the system see
+    // what no longer exists.
     let wiped = (part.first_lba * block + ALIGNMENT).min(dev.size());
     zero_range(dev, 0, wiped)?;
     let size = dev.size();
@@ -256,7 +254,6 @@ pub fn write_table(
     Ok(part)
 }
 
-/// Relit le code d'amorçage du MBR et l'état actif de la partition.
 pub fn verify_bios_boot(dev: &dyn BlockDevice) -> Result<(), FormatError> {
     let sector = read_range(dev, 0, 512)?;
     if sector[..crate::boot::MBR.len()] == crate::boot::MBR[..] && sector[446] == ACTIVE {

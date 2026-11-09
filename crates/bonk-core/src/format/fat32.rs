@@ -6,19 +6,19 @@ use super::{ALIGNMENT, FormatError, zero_range};
 use crate::block::BlockDevice;
 use crate::partition::read_range;
 
-/// Secteurs réservés avant les tables, au minimum (valeur de la spécification).
+/// Minimum reserved sectors (specification).
 const RESERVED: u64 = 32;
 pub(super) const FATS: u64 = 2;
 pub(super) const ROOT_CLUSTER: u32 = 2;
 const FSINFO_SECTOR: u64 = 1;
 const BACKUP_BOOT_SECTOR: u64 = 6;
-/// En deçà, un pilote conforme lit le volume comme du FAT16, d'après la seule valeur du nombre de clusters.
+/// Below this, a compliant driver reads the volume as FAT16, from the cluster count alone.
 const MIN_CLUSTERS: u64 = 65_525;
 const MAX_CLUSTERS: u64 = 0x0FFF_FFF5;
 const MEDIA: u8 = 0xF8;
 const NO_LABEL: &[u8; 11] = b"NO NAME    ";
 
-/// Forme d'un volume, calculée sans toucher au support.
+/// Volume shape, computed without touching the drive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct Geometry {
     pub cluster_bytes: u32,
@@ -27,7 +27,7 @@ pub struct Geometry {
     pub fat_sectors: u64,
 }
 
-/// Taille de cluster de la table de la spécification (`DskTableFAT32`), selon la taille du volume.
+/// Cluster size from the specification table (`DskTableFAT32`).
 fn cluster_bytes_for(volume_bytes: u64) -> u32 {
     const SECTOR: u64 = 512;
     match volume_bytes / SECTOR {
@@ -40,7 +40,7 @@ fn cluster_bytes_for(volume_bytes: u64) -> u32 {
 }
 
 /// # Errors
-/// [`FormatError::TooSmall`] sous 65 525 clusters, [`FormatError::TooLarge`] au-delà de ce que FAT32 adresse.
+/// [`FormatError::TooSmall`] under 65,525 clusters, [`FormatError::TooLarge`] beyond what FAT32 addresses.
 pub fn geometry(sectors: u64, block: u32) -> Result<Geometry, FormatError> {
     if !block.is_power_of_two() || !(512..=4096).contains(&block) {
         return Err(FormatError::Unsupported(format!(
@@ -56,10 +56,10 @@ pub fn geometry(sectors: u64, block: u32) -> Result<Geometry, FormatError> {
     }
     let cluster_bytes = cluster_bytes_for(volume_bytes).max(block);
     let per_cluster = u64::from(cluster_bytes / block);
-    // Une table comptée sur tout le volume couvre toujours les clusters restants : calculer au plus juste
-    // oscille, et une table trop courte de quelques entrées corromprait le volume. La marge est infime.
+    // Sized on the whole volume, the FAT always covers the remaining clusters: an exact fit oscillates, and a
+    // FAT a few entries short would corrupt the volume.
     let fat_sectors = ((sectors / per_cluster + 2) * 4).div_ceil(block64);
-    // La zone de données commence sur 1 Mio : les clusters tombent alors sur les blocs d'effacement.
+    // Data area on a 1 MiB boundary, aligned with erase blocks.
     let start = RESERVED + FATS * fat_sectors;
     let aligned = (start * block64).next_multiple_of(ALIGNMENT) / block64;
     let reserved_sectors = RESERVED + (aligned - start);
@@ -87,7 +87,7 @@ fn narrow<T: TryFrom<u64> + Default>(value: u64) -> T {
     T::try_from(value).unwrap_or_default()
 }
 
-/// Étiquette complétée d'espaces ; déjà validée par [`super::normalize_label`].
+/// Space-padded; already checked by [`super::normalize_label`].
 pub(super) fn label_field(label: Option<&str>) -> [u8; 11] {
     let mut field = *NO_LABEL;
     if let Some(label) = label {
@@ -99,14 +99,13 @@ pub(super) fn label_field(label: Option<&str>) -> [u8; 11] {
     field
 }
 
-/// Ce qu'on écrit sur un volume : ses paramètres, pour écrire puis pour relire.
 #[derive(Debug, Clone, Copy)]
 pub struct Volume<'a> {
     pub first_lba: u64,
     pub sectors: u64,
     pub label: Option<&'a str>,
     pub volume_id: u32,
-    /// Code de [`crate::boot::VBR`] autour du BPB, et [`crate::boot::STAGE2`] en zone réservée.
+    /// [`crate::boot::VBR`] around the BPB, [`crate::boot::STAGE2`] in the reserved area.
     pub bios_boot: bool,
 }
 
@@ -175,9 +174,8 @@ pub(super) fn first_fat_sector(block: u32) -> Vec<u8> {
     s
 }
 
-/// Écrit le volume vide ; une forme refusée n'écrit rien. Le secteur de démarrage vient en dernier :
-/// une coupure laisse un volume que personne ne prend pour un système de fichiers valide. Le vidage
-/// reste à l'appelant.
+/// Writes the empty volume; a refused shape writes nothing. The boot sector goes last, so an interrupted
+/// write never looks like a valid filesystem. Flushing is the caller's job.
 pub fn write(dev: &mut dyn BlockDevice, volume: &Volume<'_>) -> Result<Geometry, FormatError> {
     let block = dev.block_size();
     let block64 = u64::from(block);
@@ -202,12 +200,11 @@ pub fn write(dev: &mut dyn BlockDevice, volume: &Volume<'_>) -> Result<Geometry,
         entry[11] = 0x08;
         dev.write_at(at(data_start), &entry)?;
     }
-    // Le cluster racine est le seul occupé.
+    // Only the root cluster is in use.
     write_boot(dev, volume, &geo, geo.clusters - 1, ROOT_CLUSTER + 1)?;
     Ok(geo)
 }
 
-/// Secteur de démarrage, informations du volume et leurs copies : ce qui fait du support un volume.
 pub(super) fn write_boot(
     dev: &mut dyn BlockDevice,
     volume: &Volume<'_>,
@@ -237,7 +234,6 @@ pub(super) fn write_boot(
     Ok(())
 }
 
-/// Relit ce qui définit le volume vide : secteur de démarrage et sa copie, début des deux tables.
 pub fn verify(dev: &dyn BlockDevice, volume: &Volume<'_>) -> Result<(), FormatError> {
     let block = dev.block_size();
     let geo = verify_boot(dev, volume)?;
@@ -248,7 +244,6 @@ pub fn verify(dev: &dyn BlockDevice, volume: &Volume<'_>) -> Result<(), FormatEr
     Ok(())
 }
 
-/// Relit le secteur de démarrage et sa copie.
 pub(super) fn verify_boot(
     dev: &dyn BlockDevice,
     volume: &Volume<'_>,
@@ -321,7 +316,7 @@ mod tests {
             (10 * GIB, 8192),
             (20 * GIB, 16_384),
             (64 * GIB, 32_768),
-            // Au-delà des 32 Gio auxquels l'outil de Windows limite FAT32.
+            // Beyond the 32 GiB the Windows tool limits FAT32 to.
             (512 * GIB, 32_768),
         ] {
             assert_eq!(
@@ -340,7 +335,6 @@ mod tests {
             let start = (g.reserved_sectors + 2 * g.fat_sectors) * 512;
             assert_eq!(start % MIB, 0, "{sectors}");
             assert!(g.reserved_sectors >= RESERVED);
-            // La table couvre tous les clusters.
             assert!(g.fat_sectors * 512 >= (g.clusters + 2) * 4);
         }
         Ok(())

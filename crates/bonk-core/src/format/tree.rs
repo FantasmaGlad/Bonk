@@ -14,7 +14,6 @@ pub struct NewFile {
     pub size: u64,
 }
 
-/// Enfant d'un dossier : son nom, et de quoi trouver son contenu.
 #[derive(Debug)]
 pub(super) struct Child {
     pub(super) name: String,
@@ -27,7 +26,7 @@ pub(super) enum ChildKind {
     Directory(Vec<String>),
 }
 
-/// Chaque dossier et ce qu'il contient, racine comprise (chemin vide).
+/// Each directory and its content; the root is the empty path.
 pub(super) type Children = BTreeMap<Vec<String>, Vec<Child>>;
 
 fn add_directory(children: &mut Children, path: &[String]) {
@@ -45,7 +44,7 @@ fn add_directory(children: &mut Children, path: &[String]) {
     }
 }
 
-/// L'arbre des dossiers ; un fichier au-delà de `max_file_bytes` est refusé au nom de `filesystem`.
+/// A file over `max_file_bytes` is refused, naming `filesystem`.
 pub(super) fn collect_children(
     files: &[NewFile],
     extra_directories: &[Vec<String>],
@@ -80,8 +79,8 @@ pub(super) fn collect_children(
     Ok(children)
 }
 
-/// Copie `size` octets lus dans `reader` à partir de `offset`, d'un seul tenant, et rend leur empreinte.
-/// `advance` reçoit les octets de chaque bloc écrit, et rend faux pour arrêter.
+/// Copies `size` bytes contiguously and returns their SHA-256. `advance` gets the bytes of each block and
+/// returns false to stop.
 pub(super) fn write_contiguous(
     dev: &mut dyn BlockDevice,
     offset: u64,
@@ -110,7 +109,6 @@ pub(super) fn write_contiguous(
     Ok(crate::write::hex(&hasher.finalize()))
 }
 
-/// Relit `size` octets à partir de `offset` et compare leur empreinte à `expected`.
 pub(super) fn verify_contiguous(
     dev: &dyn BlockDevice,
     offset: u64,

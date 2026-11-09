@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 
 use crate::block::{BlockDevice, BlockError};
 
-/// 4 Mio, comme le `dd bs=4M` contre lequel le débit est mesuré.
+/// 4 MiB, like the `dd bs=4M` that throughput is compared to.
 pub const DEFAULT_CHUNK: usize = 4 << 20;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -29,7 +29,7 @@ pub enum Phase {
     Verify,
 }
 
-/// Avancement d'une opération, rapporté à chaque bloc.
+/// Progress of an operation, reported at each block.
 #[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
 pub struct Progress {
     pub phase: Phase,
@@ -40,7 +40,6 @@ pub struct Progress {
     pub elapsed_ms: u64,
 }
 
-/// Réponse du rappel de progression.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Control {
     Continue,
@@ -50,9 +49,8 @@ pub enum Control {
 #[derive(Debug)]
 pub enum WriteError {
     Device(BlockError),
-    /// Lecture de l'image impossible (fichier illisible, flux compressé corrompu).
     Source(io::Error),
-    /// L'image dépasse le périphérique ; rien n'a été écrit au-delà de sa fin.
+    /// Nothing was written past the end of the device.
     TooLarge {
         device_size: u64,
         needed: Option<u64>,
@@ -186,11 +184,10 @@ fn read_full(src: &mut dyn Read, buf: &mut [u8]) -> io::Result<usize> {
     Ok(filled)
 }
 
-/// Écrit `src` au début de `dev`. Si `size_hint` dépasse le support, rien n'est touché.
+/// If `size_hint` exceeds the drive, nothing is touched.
 ///
 /// # Errors
-/// Sur annulation ou erreur d'entrée-sortie, le support est dans un état partiel et doit être
-/// réécrit en entier.
+/// On cancel or I/O error the drive is partially written and must be rewritten whole.
 pub fn write_image(
     src: &mut dyn Read,
     dev: &mut dyn BlockDevice,
@@ -249,7 +246,7 @@ pub fn write_image(
     })
 }
 
-/// Vide le cache, puis relit les `len` premiers octets de `dev` et compare leur SHA-256 à `expected`.
+/// Drops the cache, then compares the SHA-256 of the first `len` bytes with `expected`.
 pub fn verify(
     dev: &mut dyn BlockDevice,
     len: u64,
@@ -271,8 +268,7 @@ fn zero_ignored(buf: &mut [u8], offset: u64, ignore: &[Range<u64>]) {
     }
 }
 
-/// Comme [`verify`], avec les octets des plages `ignore` mis à zéro des deux côtés avant l'empreinte :
-/// la réparation du GPT réécrit légitimement quelques champs.
+/// The `ignore` ranges are zeroed on both sides: the GPT repair legitimately rewrites a few fields.
 pub fn verify_ignoring(
     dev: &mut dyn BlockDevice,
     len: u64,
@@ -316,8 +312,7 @@ pub fn verify_ignoring(
     }
 }
 
-/// Longueur et SHA-256 de `src`, sans rien écrire, avec les octets des plages `ignore` mis à zéro avant
-/// l'empreinte : pour comparer un support à une image.
+/// With the `ignore` ranges zeroed, to compare a drive with an image.
 pub fn hash_source_ignoring(
     src: &mut dyn Read,
     size_hint: Option<u64>,
@@ -355,8 +350,7 @@ fn hash_reader(
     Ok((total, hex(&hasher.finalize())))
 }
 
-/// SHA-256 du flux tel quel, compressé ou non : c'est sur le fichier téléchargé que les éditeurs
-/// publient leur empreinte.
+/// The stream as is, compressed or not: publishers hash the downloaded file.
 pub fn hash_stream(
     src: &mut dyn Read,
     total: Option<u64>,
@@ -431,7 +425,7 @@ mod tests {
     -> Result<(), Box<dyn std::error::Error>> {
         let image = data(10_000);
         let mut dev = MemoryDevice::new(8 * 4096, 4096)?;
-        // Un bloc demandé de 100 octets est relevé au secteur.
+        // A 100-byte chunk is raised to the sector.
         let report = write_image(
             &mut Cursor::new(image.clone()),
             &mut dev,
@@ -485,7 +479,7 @@ mod tests {
             error,
             Some(WriteError::TooLarge { needed: None, .. })
         ));
-        // Ce qui tenait a été écrit, rien au-delà (le support n'a que 2048 octets).
+        // What fit was written, nothing beyond (the drive has 2048 bytes).
         assert_eq!(dev.as_bytes(), &image[..2048]);
         Ok(())
     }
@@ -558,7 +552,6 @@ mod tests {
         assert!(
             matches!(error, Some(VerifyError::Mismatch { ref expected, ref actual }) if *expected == report.sha256 && actual != expected)
         );
-        // Même taille, mais une longueur plus courte que ce qui a été écrit ne correspond pas non plus.
         assert!(
             verify(
                 &mut dev,
@@ -603,8 +596,6 @@ mod tests {
         Ok(())
     }
 
-    /// Un cache que le système refuse de vider est dit dans le rapport : la relecture a pu lire la
-    /// mémoire et non le support.
     #[test]
     fn la_relecture_dit_si_le_cache_a_ete_vide() -> Result<(), Box<dyn std::error::Error>> {
         struct Sticky(MemoryDevice);
@@ -700,7 +691,7 @@ mod tests {
             &mut |_| Control::Continue,
         )?;
         assert_eq!(len, 4096);
-        // Le support diffère dans les plages ignorées (y compris à cheval sur deux blocs de lecture).
+        // The drive differs in the ignored ranges, including across two read blocks.
         let mut other = image.clone();
         other[12] ^= 0xFF;
         other[4092] ^= 0xFF;
@@ -711,7 +702,6 @@ mod tests {
             })
             .is_ok()
         );
-        // Sans ignorer, la même différence est détectée ; un octet hors plage l'est aussi.
         assert!(verify(&mut dev, len, &sha, 1024, &mut |_| Control::Continue).is_err());
         other[100] ^= 1;
         let mut dev = MemoryDevice::from_bytes(other, 512)?;

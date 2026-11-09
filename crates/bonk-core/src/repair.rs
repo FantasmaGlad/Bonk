@@ -8,7 +8,6 @@ use serde::Serialize;
 use crate::block::{BlockDevice, BlockError};
 use crate::partition::{GptHeader, Layout, MBR_PROTECTIVE, crc32, inspect, read_range};
 
-/// Constats d'inspection qui justifient une réparation.
 const REPAIRABLE: [&str; 8] = [
     "gpt_backup_not_at_end",
     "gpt_backup_missing",
@@ -20,10 +19,9 @@ const REPAIRABLE: [&str; 8] = [
     "gpt_headers_not_pointing_to_each_other",
 ];
 
-/// Plages d'octets d'une image GPT que [`repair_gpt`] réécrit quand l'image est posée sur un support
-/// plus grand : taille de l'entrée du MBR de protection, puis somme de contrôle et quatre positions de
-/// l'en-tête principal. La vérification les ignore et compare le reste des deux secteurs. `head` est le
-/// début de l'image (8 Kio couvrent les secteurs de 4 Kio) ; vide si ce n'est pas une image GPT.
+/// Byte ranges of a GPT image that [`repair_gpt`] rewrites on a larger drive: the protective MBR entry size,
+/// then the primary header checksum and four positions. The verification ignores them. `head` is the image
+/// start (8 KiB covers 4 KiB sectors); empty for a non-GPT image.
 #[must_use]
 pub fn ranges_rewritten_by_repair(head: &[u8]) -> Vec<Range<u64>> {
     for block in [512usize, 4096] {
@@ -47,7 +45,6 @@ pub fn ranges_rewritten_by_repair(head: &[u8]) -> Vec<Range<u64>> {
     Vec::new()
 }
 
-/// Vrai si l'inspection montre un défaut que [`repair_gpt`] sait corriger.
 #[must_use]
 pub fn needs_repair(layout: &Layout) -> bool {
     layout.gpt.is_some() && layout.findings.iter().any(|f| REPAIRABLE.contains(&f.code))
@@ -57,9 +54,9 @@ pub fn needs_repair(layout: &Layout) -> bool {
 pub enum RepairError {
     Device(BlockError),
     NotGpt,
-    /// Ni l'en-tête principal ni celui de secours n'est valide : rien ne peut servir de modèle.
+    /// Neither header is valid: nothing can serve as a model.
     NoValidHeader,
-    /// Le support est trop petit pour la table, ou une partition dépasse la zone utilisable.
+    /// Drive too small for the table, or a partition beyond the usable area.
     TooSmall,
 }
 
@@ -99,7 +96,6 @@ struct Placement {
     entries_lba: u64,
 }
 
-/// Ce qui est commun aux deux en-têtes d'un disque réparé.
 struct Common<'a> {
     model: &'a GptHeader,
     guid: [u8; 16],
@@ -108,7 +104,6 @@ struct Common<'a> {
     block: usize,
 }
 
-/// Octets d'un en-tête GPT de 92 octets, somme de contrôle comprise, dans un secteur.
 fn header_bytes(common: &Common<'_>, at: &Placement) -> Vec<u8> {
     let model = common.model;
     let mut h = vec![0u8; common.block];
@@ -129,7 +124,7 @@ fn header_bytes(common: &Common<'_>, at: &Placement) -> Vec<u8> {
     h
 }
 
-/// Le GUID du disque sous forme d'octets, relu depuis l'en-tête (le texte est en champs mixtes).
+/// Read back from the header: the text form has mixed-endian fields.
 fn disk_guid_bytes(
     dev: &dyn BlockDevice,
     header_lba: u64,
@@ -141,8 +136,7 @@ fn disk_guid_bytes(
     Ok(guid)
 }
 
-/// Reconstruit les en-têtes et la table manquants ou abîmés ; rien n'est écrit tant qu'un en-tête
-/// valide n'a pas été trouvé.
+/// Rebuilds missing or damaged headers and table; nothing is written until a valid header is found.
 pub fn repair_gpt(dev: &mut dyn BlockDevice) -> Result<RepairReport, RepairError> {
     let layout = inspect(dev)?;
     let gpt = layout.gpt.as_ref().ok_or(RepairError::NotGpt)?;
@@ -169,8 +163,8 @@ pub fn repair_gpt(dev: &mut dyn BlockDevice) -> Result<RepairReport, RepairError
     let last_usable = backup_table_lba
         .checked_sub(1)
         .ok_or(RepairError::TooSmall)?;
-    // La table principale reste où l'image l'a mise (une image hybride comme l'ISO de Debian la place
-    // au secteur 12, pas au 2) ; seule une table restaurée depuis le secours est écrite au secteur 2.
+    // The primary table stays where the image put it (sector 12 on Debian's hybrid ISO); only a table
+    // restored from the backup goes to sector 2.
     let primary_entries_lba = if from_primary { model.entries_lba } else { 2 };
     let first_usable = model
         .first_usable_lba
@@ -190,7 +184,7 @@ pub fn repair_gpt(dev: &mut dyn BlockDevice) -> Result<RepairReport, RepairError
     );
     let mut actions = Vec::new();
 
-    // Le secours d'abord : tant qu'il n'est pas à jour, le principal reste le seul bon exemplaire.
+    // Backup first: until it is current, the primary stays the only good copy.
     dev.write_at(backup_table_lba * block, &padded_table)?;
     actions.push("backup_table_written");
     let common = Common {
@@ -233,7 +227,7 @@ pub fn repair_gpt(dev: &mut dyn BlockDevice) -> Result<RepairReport, RepairError
         "primary_header_restored"
     });
 
-    // MBR de protection : sa taille doit couvrir le disque agrandi.
+    // The protective MBR must cover the grown drive.
     let mut sector0 = read_range(dev, 0, block)?;
     let protective = (0..4)
         .map(|i| 446 + i * 16)
@@ -274,8 +268,7 @@ mod tests {
         )
     }
 
-    /// Image dont la table principale est au secteur `lba` et non au 2 : c'est le cas des images
-    /// hybrides (ISO de Debian : table au secteur 12, 208 entrées).
+    /// Primary table at sector `lba`, as in hybrid images (Debian ISO: sector 12, 208 entries).
     fn image_table_at(lba: u64) -> Vec<u8> {
         let mut img = image();
         let count = u32::from_le_bytes([img[592], img[593], img[594], img[595]]) as usize;
@@ -324,14 +317,12 @@ mod tests {
             (8191, 8191, 1)
         );
         assert_eq!(p.disk_guid, "D1D1D1D1-D1D1-D1D1-D1D1-D1D1D1D1D1D1");
-        // Les partitions sont intactes.
         assert_eq!(gpt.entries.len(), 2);
         assert_eq!(
             (gpt.entries[1].first_lba, gpt.entries[1].last_lba),
             (2560, 4000)
         );
         assert_eq!(gpt.entries[1].name, "racine");
-        // Le MBR de protection couvre tout le disque.
         let mbr = after.mbr.as_ref().ok_or("MBR")?;
         assert_eq!(mbr.entries[0].sectors, 8191);
         Ok(())
@@ -351,8 +342,8 @@ mod tests {
     #[test]
     fn principal_abime_restaure_depuis_le_secours() -> Result<(), Box<dyn std::error::Error>> {
         let mut bytes = image();
-        bytes[512..1024].fill(0); // en-tête principal effacé
-        bytes[1024..1024 + 128].fill(0); // début de la table principale effacé
+        bytes[512..1024].fill(0);
+        bytes[1024..1024 + 128].fill(0);
         let mut dev = MemoryDevice::from_bytes(bytes, 512)?;
         let before = inspect(&dev)?;
         assert!(codes(&before).contains(&"gpt_primary_missing"));
@@ -401,18 +392,17 @@ mod tests {
     #[test]
     fn un_disque_trop_petit_pour_les_partitions_est_refuse()
     -> Result<(), Box<dyn std::error::Error>> {
-        // Image de 4096 secteurs rognée à 3000 : la partition 2 (jusqu'à 4000) dépasse.
+        // 4096-sector image cut to 3000: partition 2 (up to 4000) overflows.
         let bytes = image();
         let small = MemoryDevice::from_bytes(bytes[..3000 * 512].to_vec(), 512)?;
         let mut small = small;
-        // Le secours est perdu avec la coupure : seul le principal sert de modèle.
+        // The backup is lost with the cut: only the primary can serve as a model.
         assert!(matches!(repair_gpt(&mut small), Err(RepairError::TooSmall)));
         Ok(())
     }
 
-    /// Garde-fou : tout octet que la réparation change dans les deux premiers secteurs est annoncé par
-    /// `ranges_rewritten_by_repair`, et rien d'autre dans l'image n'est touché. Si `repair_gpt` se met à
-    /// écrire ailleurs, ce test échoue au lieu de laisser la vérification passer à côté.
+    /// Every byte the repair changes in the first two sectors is listed by `ranges_rewritten_by_repair`, and
+    /// nothing else in the image is touched.
     #[test]
     fn les_plages_annoncees_couvrent_exactement_ce_que_la_reparation_change()
     -> Result<(), Box<dyn std::error::Error>> {
@@ -425,7 +415,7 @@ mod tests {
     fn check_ranges_cover_repair(image: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
         let ranges = ranges_rewritten_by_repair(image);
         assert!(!ranges.is_empty());
-        // Support quatre fois plus grand que l'image : le secours n'est plus à la fin.
+        // Drive four times larger: the backup is no longer at the end.
         let mut dev = grown(image, 4096 * 4)?;
         let report = repair_gpt(&mut dev)?;
         assert!(!report.actions.is_empty());
@@ -444,8 +434,8 @@ mod tests {
         Ok(())
     }
 
-    /// L'en-tête principal réécrit désigne la table là où l'image l'a mise (secteur 12 sur l'ISO de
-    /// Debian), pas au secteur 2 où elle n'est pas copiée.
+    /// The rewritten primary header points to the table where the image put it (sector 12 on Debian's ISO),
+    /// not to sector 2.
     #[test]
     fn la_reparation_laisse_la_table_principale_la_ou_l_image_la_met()
     -> Result<(), Box<dyn std::error::Error>> {
@@ -462,7 +452,6 @@ mod tests {
             "{primary:?}"
         );
         assert!(!needs_repair(&layout), "{:?}", codes(&layout));
-        // La table elle-même est intacte à sa place d'origine.
         assert_eq!(
             dev.as_bytes()[40 * 512..72 * 512],
             source[40 * 512..72 * 512]

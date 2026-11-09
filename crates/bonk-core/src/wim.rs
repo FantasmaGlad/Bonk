@@ -4,7 +4,7 @@ const HEADER_LEN: usize = 208;
 const MAGIC: &[u8; 8] = b"MSWIM\0\0\0";
 const ENTRY_LEN: usize = 50;
 const RESOURCE_METADATA: u8 = 0x02;
-/// Plusieurs fichiers compressés ensemble (LZMS, `install.esd`) : découper imposerait de recompresser.
+/// Files compressed together (LZMS, `install.esd`): splitting would mean recompressing.
 const RESOURCE_SOLID: u8 = 0x10;
 const FLAG_SPANNED: u32 = 0x08;
 
@@ -21,9 +21,8 @@ const RESOURCE_LEN: usize = 24;
 pub enum WimError {
     NotWim,
     Malformed(&'static str),
-    /// Ressources solides : aucun découpage sans recompression.
     Solid,
-    /// Une ressource seule dépasse la taille permise pour un morceau.
+    /// A single resource exceeds the part size.
     ResourceTooLarge(u64),
 }
 
@@ -44,7 +43,7 @@ impl fmt::Display for WimError {
 
 impl std::error::Error for WimError {}
 
-/// Un morceau d'un fichier produit : des octets calculés, ou une plage du WIM d'origine.
+/// Computed bytes, or a range of the source WIM.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Segment {
     Bytes(Vec<u8>),
@@ -107,7 +106,7 @@ impl Resource {
     };
 }
 
-/// En-tête lu : où lire la table des ressources et le XML.
+/// Where to read the resource table and the XML.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Header {
     pub lookup_offset: u64,
@@ -115,7 +114,7 @@ pub struct Header {
 }
 
 /// # Errors
-/// [`WimError::NotWim`] sans signature ; une table compressée ou un WIM déjà découpé sont refusés.
+/// [`WimError::NotWim`] without a signature; a compressed table or an already split WIM is refused.
 pub fn read_header(header: &[u8]) -> Result<Header, WimError> {
     if header.len() < HEADER_LEN || &header[..8] != MAGIC {
         return Err(WimError::NotWim);
@@ -134,10 +133,8 @@ pub fn read_header(header: &[u8]) -> Result<Header, WimError> {
     })
 }
 
-/// Vrai si ce WIM contient des ressources solides.
-///
 /// # Errors
-/// Table mal formée.
+/// Malformed table.
 pub(crate) fn has_solid_resources(lookup: &[u8]) -> Result<bool, WimError> {
     if !lookup.len().is_multiple_of(ENTRY_LEN) {
         return Err(WimError::Malformed("resource table"));
@@ -149,7 +146,6 @@ pub(crate) fn has_solid_resources(lookup: &[u8]) -> Result<bool, WimError> {
         .any(|entry| Resource::read(entry).flags & RESOURCE_SOLID != 0))
 }
 
-/// Un morceau en construction : ses ressources, et leur place.
 #[derive(Default)]
 struct Part {
     entries: Vec<(Resource, [u8; ENTRY_LEN - RESOURCE_LEN])>,
@@ -162,12 +158,11 @@ impl Part {
     }
 }
 
-/// Découpe : chaque élément est la liste des segments d'un fichier, dans l'ordre (`install.swm`,
-/// `install2.swm`...). Les métadonnées vont toutes au premier morceau, que l'installateur lit d'abord.
-/// Aucun morceau ne dépasse `part_limit` octets.
+/// Each item lists the segments of one file, in order (`install.swm`, `install2.swm`...). All metadata goes
+/// to the first part, which the installer reads first. No part exceeds `part_limit` bytes.
 ///
 /// # Errors
-/// [`WimError::Solid`], [`WimError::ResourceTooLarge`], ou une structure incohérente.
+/// [`WimError::Solid`], [`WimError::ResourceTooLarge`], or an inconsistent structure.
 pub fn split(
     header: &[u8],
     lookup: &[u8],
@@ -279,7 +274,7 @@ pub fn split(
         head[AT_LOOKUP..AT_LOOKUP + RESOURCE_LEN].copy_from_slice(&lookup_resource.encode());
         head[AT_XML..AT_XML + RESOURCE_LEN].copy_from_slice(&xml_resource.encode());
         head[AT_BOOT..AT_BOOT + RESOURCE_LEN].copy_from_slice(&new_boot.encode());
-        // Les sommes d'intégrité portent sur le fichier d'origine : un morceau n'en a pas.
+        // Integrity hashes cover the source file: a part has none.
         head[AT_INTEGRITY..AT_INTEGRITY + RESOURCE_LEN].fill(0);
         let mut segments = vec![Segment::Bytes(head)];
         segments.extend(sources);
@@ -299,7 +294,7 @@ mod tests {
 
     use super::*;
 
-    /// WIM minimal : 1 métadonnée puis `streams` ressources de `each` octets, puis le XML.
+    /// One metadata resource, `streams` resources of `each` bytes, then the XML.
     fn wim(streams: usize, each: u64, solid: bool) -> (Vec<u8>, Vec<u8>, u64) {
         let mut table = Vec::new();
         let mut position = HEADER_LEN as u64;
@@ -394,7 +389,7 @@ mod tests {
                 panic!()
             };
             assert_eq!(lookup.stored, table.len() as u64);
-            // Dans sa table, chaque ressource est à sa nouvelle place, avec le numéro du morceau.
+            // Each resource at its new place, with the part number.
             let mut position = HEADER_LEN as u64;
             for entry in table.as_chunks::<ENTRY_LEN>().0 {
                 let resource = Resource::read(entry);
@@ -408,7 +403,7 @@ mod tests {
             assert_eq!(xml.offset + xml.stored, total(part));
             seen.extend(sources(part));
         }
-        // Rien de perdu ni de doublé : toutes les ressources, plus une fois le XML par morceau.
+        // Nothing lost or doubled: every resource, plus the XML once per part.
         let (xml_offset, xml_len) = (size - 50, 50);
         let resources: Vec<_> = seen.iter().filter(|s| s.0 != xml_offset).collect();
         assert_eq!(resources.len(), 6);
@@ -416,7 +411,7 @@ mod tests {
             seen.iter().filter(|s| **s == (xml_offset, xml_len)).count(),
             3
         );
-        // Les métadonnées et le démarrage sont au premier morceau.
+        // Metadata and boot data are in the first part.
         let Segment::Bytes(first) = &parts[0][0] else {
             panic!()
         };

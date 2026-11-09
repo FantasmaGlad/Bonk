@@ -26,9 +26,8 @@ const ALLOCATION_POSSIBLE: u8 = 0x01;
 const NO_FAT_CHAIN: u8 = 0x02;
 const NAME_UNITS: usize = 15;
 const MAX_NAME_UNITS: usize = 255;
-/// 1er janvier 1980 à minuit : rien ne dépend de l'horloge, deux écritures donnent les mêmes octets.
+/// 1 January 1980: nothing depends on the clock, two writes give the same bytes.
 const FIXED_TIMESTAMP: u32 = 0x0021_0000;
-/// Plafond d'un dossier fixé par la spécification.
 const MAX_DIRECTORY_BYTES: u64 = 256 << 20;
 const END_OF_CHAIN: u32 = 0xFFFF_FFFF;
 const MEDIA: u32 = 0xFFFF_FFF8;
@@ -39,22 +38,21 @@ struct Placed {
     clusters: u32,
 }
 
-/// Où va chaque octet d'un volume exFAT et de ses fichiers, calculé avant le premier octet écrit. Chaque
-/// fichier et chaque dossier hors racine occupe des clusters contigus, sans chaîne dans la table.
+/// Where every byte goes, computed before the first write. Each file and non-root directory is contiguous,
+/// without a FAT chain.
 #[derive(Debug)]
 pub struct Layout {
     geometry: Geometry,
     first_lba: u64,
     block: u32,
     root: Placed,
-    /// Racine d'abord, puis les autres dossiers : premier cluster, nombre de clusters, contenu.
+    /// Root first.
     directories: Vec<(Placed, Vec<u8>)>,
     files: Vec<Placed>,
     sizes: Vec<u64>,
     used_clusters: u32,
 }
 
-/// Unités UTF-16 d'un nom accepté par exFAT.
 fn name_units(name: &str) -> Result<Vec<u16>, FormatError> {
     let units: Vec<u16> = name.encode_utf16().collect();
     let forbidden = |c: char| c < ' ' || "\"*/:<>?\\|".contains(c);
@@ -68,7 +66,6 @@ fn entries_for(units: &[u16]) -> usize {
     2 + units.len().div_ceil(NAME_UNITS)
 }
 
-/// Jeu d'entrées d'un fichier ou d'un dossier : fichier, extension de flux, noms, puis sa somme.
 fn entry_set(
     units: &[u16],
     upcase: &[u16],
@@ -120,7 +117,7 @@ fn entry_set(
     set
 }
 
-/// Entrées imposées en tête de la racine : table d'allocation, table de majuscules, étiquette.
+/// Entries the root must start with.
 fn system_entries(geo: &Geometry, label: Option<&str>) -> Vec<u8> {
     let mut bytes = vec![0u8; if label.is_some() { 3 } else { 2 } * ENTRY];
     let bitmap = &mut bytes[..ENTRY];
@@ -148,10 +145,8 @@ fn narrow(value: u64) -> Result<u32, FormatError> {
     u32::try_from(value).map_err(|_| FormatError::TooLarge(format!("{value}: too large for exFAT")))
 }
 
-/// Calcule la place de tout : refuse ce qui ne tient pas avant le premier octet écrit.
-///
 /// # Errors
-/// Volume trop petit, nom refusé, deux noms égaux une fois en majuscules, dossier de plus de 256 Mio.
+/// Volume too small, refused name, names equal once upper-cased, or directory over 256 MiB.
 pub fn layout(
     volume: &Volume<'_>,
     block: u32,
@@ -162,7 +157,6 @@ pub fn layout(
     let upcase = upcase_map();
     let children: Children = collect_children(files, extra_directories, u64::MAX, "exFAT")?;
 
-    // Noms validés et uniques dans chaque dossier, selon la table de majuscules du volume.
     let mut names: BTreeMap<Vec<String>, Vec<Vec<u16>>> = BTreeMap::new();
     for (path, list) in &children {
         let mut seen = BTreeSet::new();
@@ -256,7 +250,7 @@ pub fn layout(
         bytes.resize((u64::from(placed.clusters) * cluster_bytes) as usize, 0);
         directories.push((placed, bytes));
     }
-    // La racine en tête : la table la chaîne, les autres dossiers sont contigus.
+    // Root first: only it is chained in the FAT.
     directories.sort_by_key(|(placed, _)| placed.first_cluster);
     Ok(Layout {
         geometry: geo,
@@ -276,7 +270,6 @@ impl Layout {
         &self.geometry
     }
 
-    /// Octets à copier : le contenu des fichiers.
     #[must_use]
     pub fn data_bytes(&self) -> u64 {
         self.sizes.iter().sum()
@@ -291,8 +284,8 @@ impl Layout {
         (self.first_lba + sector) * u64::from(self.block)
     }
 
-    /// Début de la table : entrées 0 et 1, puis les chaînes de la table d'allocation, de la table de
-    /// majuscules et de la racine. Fichiers et autres dossiers n'y figurent pas.
+    /// Entries 0 and 1, then the chains of the bitmap, up-case table and root. Contiguous files and
+    /// directories are not in it.
     fn fat_head(&self) -> Vec<u8> {
         let geo = &self.geometry;
         let mut entries = vec![MEDIA, END_OF_CHAIN];
@@ -331,7 +324,6 @@ impl Layout {
         UPCASE.to_vec()
     }
 
-    /// Ce que porte la zone de métadonnées, avec sa place : début de la table, tables, dossiers.
     fn metadata(&self) -> Vec<(&'static str, u64, Vec<u8>)> {
         let geo = &self.geometry;
         let mut parts = vec![
@@ -361,11 +353,10 @@ impl Layout {
         parts
     }
 
-    /// Table, tables d'allocation et de majuscules, dossiers, sans les régions de démarrage : tant
-    /// qu'elles manquent, personne ne prend le support pour un volume valide.
+    /// Everything but the boot regions, so an interrupted write never looks like a valid volume.
     ///
     /// # Errors
-    /// Écriture impossible.
+    /// Write failure.
     pub fn write_structures(&self, dev: &mut dyn BlockDevice) -> Result<(), FormatError> {
         let start = self.sector_offset(0);
         let end = self.cluster_offset(self.root.first_cluster)
@@ -386,11 +377,11 @@ impl Layout {
         }
     }
 
-    /// Copie un fichier à sa place et rend l'empreinte de ce qui a été lu. `advance` reçoit les octets de
-    /// chaque bloc écrit, et rend faux pour arrêter.
+    /// Returns the SHA-256 of what was read. `advance` gets the bytes of each block and returns false to
+    /// stop.
     ///
     /// # Errors
-    /// Lecture ou écriture impossible, fichier plus court qu'annoncé, arrêt demandé (`Interrupted`).
+    /// Read or write failure, short file, or stop requested (`Interrupted`).
     pub fn write_file(
         &self,
         dev: &mut dyn BlockDevice,
@@ -402,10 +393,8 @@ impl Layout {
         write_contiguous(dev, offset, self.sizes[index], reader, advance)
     }
 
-    /// Relit un fichier sur le support et compare son empreinte à celle de la copie.
-    ///
     /// # Errors
-    /// Lecture impossible, empreinte différente, arrêt demandé.
+    /// Read failure, hash mismatch, or stop requested.
     pub fn verify_file(
         &self,
         dev: &dyn BlockDevice,
@@ -428,10 +417,10 @@ impl Layout {
         )
     }
 
-    /// Les deux régions de démarrage, en dernier, la copie de secours d'abord.
+    /// Boot regions last, backup first.
     ///
     /// # Errors
-    /// Écriture impossible.
+    /// Write failure.
     pub fn finish(
         &self,
         dev: &mut dyn BlockDevice,
@@ -444,10 +433,8 @@ impl Layout {
         Ok(())
     }
 
-    /// Relit régions de démarrage, table, tables d'allocation et de majuscules, dossiers.
-    ///
     /// # Errors
-    /// Lecture impossible, ou écart.
+    /// Read failure, or mismatch.
     pub fn verify_structures(
         &self,
         dev: &dyn BlockDevice,
@@ -506,7 +493,7 @@ mod tests {
         assert!(layout(&v, 512, &[file("été.iso", 1), file("ete.iso", 1)], &[]).is_ok());
     }
 
-    /// Somme et empreinte d'un jeu d'entrées, refaites à la main d'après la spécification.
+    /// Checksum and name hash recomputed by hand from the specification.
     #[test]
     fn jeu_d_entrees_selon_la_specification() {
         let upcase = upcase_map();

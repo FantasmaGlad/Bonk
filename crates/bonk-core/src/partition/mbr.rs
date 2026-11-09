@@ -18,7 +18,6 @@ pub(super) fn parse_mbr(sector: &[u8]) -> Option<Mbr> {
             })
         })
         .collect();
-    // Un premier secteur sans signature ni entrée n'est pas un MBR.
     if !signature_valid && entries.is_empty() {
         return None;
     }

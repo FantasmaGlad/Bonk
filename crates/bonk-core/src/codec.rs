@@ -27,7 +27,7 @@ pub enum Format {
 }
 
 impl Format {
-    /// Un contenu plus court que toute signature est brut.
+    /// Content shorter than any signature is raw.
     #[must_use]
     pub fn detect(head: &[u8]) -> Self {
         if head.starts_with(&XZ) {
@@ -67,7 +67,6 @@ impl fmt::Display for Format {
 #[derive(Debug)]
 pub enum CodecError {
     Unsupported(Format),
-    /// Lecture ou en-tête de compression illisible.
     Io(io::Error),
 }
 
@@ -96,9 +95,8 @@ fn zstd_error(err: impl fmt::Display) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, format!("zstd: {err}"))
 }
 
-/// Toutes les trames d'un flux zstd. `ruzstd::StreamingDecoder` s'arrête à la première et rend une fin de
-/// flux normale : un fichier de `pzstd` serait écrit à moitié, avec une relecture conforme. Contrôle aussi
-/// la somme de chaque trame, que ce décodeur ne compare pas.
+/// All frames of a zstd stream. `ruzstd::StreamingDecoder` stops after the first one with a normal end, so a
+/// `pzstd` file would be half written yet verify. Also checks each frame checksum, which that decoder skips.
 struct ZstdFrames<R> {
     source: R,
     decoder: FrameDecoder,
@@ -116,8 +114,7 @@ impl<R: BufRead> ZstdFrames<R> {
         Ok(frames)
     }
 
-    /// Passe à la trame suivante, en sautant les trames ignorables ; faux à la fin du flux. Des octets
-    /// qui ne sont pas une trame sont une erreur, comme pour gzip et xz.
+    /// Skips skippable frames; false at the end. Bytes that are not a frame are an error, as for gzip and xz.
     fn next_frame(&mut self) -> io::Result<bool> {
         loop {
             if self.source.fill_buf()?.is_empty() {
@@ -177,18 +174,15 @@ impl<R: BufRead> Read for ZstdFrames<R> {
     }
 }
 
-/// Une image ouverte, prête à être lue décompressée.
 pub struct Source {
     pub reader: Box<dyn Read + Send>,
     pub format: Format,
-    /// Taille des octets lus (après décompression) quand on la connaît d'avance : image brute seulement.
+    /// Decompressed size when known in advance: raw images only.
     pub output_len: Option<u64>,
 }
 
-/// Ouvre une image et rend un lecteur de ses octets décompressés.
-///
 /// # Errors
-/// [`CodecError::Unsupported`] pour bzip2 et zip.
+/// [`CodecError::Unsupported`] for bzip2 and zip.
 pub fn open(
     input: impl Read + Send + 'static,
     input_len: Option<u64>,
@@ -198,8 +192,8 @@ pub fn open(
     let (reader, output_len): (Box<dyn Read + Send>, Option<u64>) = match format {
         Format::Raw => (Box::new(buffered), input_len),
         Format::Gzip => (Box::new(flate2::read::MultiGzDecoder::new(buffered)), None),
-        // Flux xz bloc par bloc, `lzma-rust2` : `lzma-rs` décompresse un bloc entier en mémoire avant de
-        // le rendre, ce qui exigerait toute l'image en RAM pour un `.img.xz` à bloc unique.
+        // Block by block with `lzma-rust2`: `lzma-rs` decodes a whole block in memory, the whole image for a
+        // single-block `.img.xz`.
         Format::Xz => (Box::new(lzma_rust2::XzReader::new(buffered, true)), None),
         Format::Zstd => (Box::new(ZstdFrames::new(buffered)?), None),
         Format::Bzip2 | Format::Zip => return Err(CodecError::Unsupported(format)),
@@ -222,8 +216,8 @@ pub(crate) mod testing {
         encoder.finish().unwrap_or_default()
     }
 
-    /// Image xz minimale valide : en-tête, bloc LZMA2 non compressé, index, pied. Écrite à la main
-    /// d'après la spécification du format xz : `lzma-rust2` n'est utilisé ici que pour décompresser.
+    /// Minimal valid xz: header, one stored LZMA2 block, index, footer. Hand-written from the xz
+    /// specification.
     pub(crate) fn xz_stored(data: &[u8]) -> Vec<u8> {
         fn crc32(bytes: &[u8]) -> u32 {
             crate::partition::crc32(bytes)
@@ -238,11 +232,11 @@ pub(crate) mod testing {
             out
         }
         let mut out = vec![0xFD, b'7', b'z', b'X', b'Z', 0x00];
-        let flags = [0x00u8, 0x00]; // pas de somme de contrôle (check = none)
+        let flags = [0x00u8, 0x00]; // check type: none
         out.extend_from_slice(&flags);
         out.extend_from_slice(&crc32(&flags).to_le_bytes());
 
-        // LZMA2 : blocs non compressés de 64 Kio au plus, puis 0x00 de fin.
+        // Stored LZMA2 chunks of at most 64 KiB, then 0x00.
         let mut lzma2 = Vec::new();
         for (i, chunk) in data.chunks(1 << 16).enumerate() {
             lzma2.push(if i == 0 { 0x01 } else { 0x02 });
@@ -251,7 +245,7 @@ pub(crate) mod testing {
         }
         lzma2.push(0x00);
 
-        // En-tête de bloc : taille (4 octets × 4 + ...), un filtre LZMA2 (id 0x21, 1 octet de propriétés).
+        // Block header: size, one LZMA2 filter (id 0x21, one property byte).
         let mut header = vec![0x00, 0x00, 0x21, 0x01, 0x16];
         while (header.len() + 4) % 4 != 0 {
             header.push(0x00);
@@ -262,7 +256,7 @@ pub(crate) mod testing {
         out.extend_from_slice(&header);
         out.extend_from_slice(&header_crc.to_le_bytes());
         out.extend_from_slice(&lzma2);
-        // Taille sans remplissage : en-tête (avec sa somme) et données, aucune somme de contenu.
+        // Unpadded size: header with its checksum, and data.
         let unpadded = out.len() - block_start;
         while (out.len() - block_start) % 4 != 0 {
             out.push(0x00);
@@ -356,7 +350,6 @@ mod tests {
 
     #[test]
     fn xz_decompresse_en_flux() -> Result<(), Box<dyn std::error::Error>> {
-        // Plus de 64 Kio : plusieurs blocs LZMA2, et plus d'un bloc de transfert.
         let data = sample(200_000);
         let mut source = open(Cursor::new(xz_stored(&data)), None)?;
         assert_eq!(source.format, Format::Xz);
@@ -372,7 +365,6 @@ mod tests {
         let mut source = open(Cursor::new(packed), None)?;
         let mut out = Vec::new();
         assert!(source.reader.read_to_end(&mut out).is_err());
-        // Ce qui a été rendu avant l'erreur est bien le début de l'image.
         assert!(data.starts_with(&out));
         Ok(())
     }
@@ -384,7 +376,6 @@ mod tests {
         let mut first = [0u8; 100];
         source.reader.read_exact(&mut first)?;
         assert_eq!(&first[..], &data[..100]);
-        // Annulation : abandonner le lecteur ne laisse rien tourner derrière lui.
         drop(source);
         Ok(())
     }
@@ -416,7 +407,7 @@ mod tests {
         ruzstd::encoding::compress_to_vec(data, ruzstd::encoding::CompressionLevel::Fastest)
     }
 
-    /// Fichier produit par `pzstd`, ou `cat a.zst b.zst` : toutes les trames font partie de l'image.
+    /// Output of `pzstd` or `cat a.zst b.zst`: every frame belongs to the image.
     #[test]
     fn zstd_a_plusieurs_trames_est_lu_en_entier() -> Result<(), Box<dyn std::error::Error>> {
         let (a, b) = (sample(100_000), sample(70_000));
@@ -456,7 +447,6 @@ mod tests {
 
     #[test]
     fn zstd_a_somme_fausse_est_une_erreur() -> Result<(), Box<dyn std::error::Error>> {
-        // Trame écrite à la main : bloc brut, somme présente et fausse.
         let data = b"bonk";
         let mut packed = vec![0x28, 0xB5, 0x2F, 0xFD, 0x24, data.len() as u8];
         packed.extend([(data.len() as u8) << 3 | 1, 0, 0]);

@@ -67,10 +67,10 @@ impl From<io::Error> for BlockError {
 }
 
 pub trait BlockDevice {
-    /// Taille totale en octets, multiple de [`Self::block_size`].
+    /// A multiple of [`Self::block_size`].
     fn size(&self) -> u64;
 
-    /// Taille de bloc logique en octets (puissance de deux, au moins 512).
+    /// A power of two, at least 512.
     fn block_size(&self) -> u32;
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), BlockError>;
@@ -79,8 +79,8 @@ pub trait BlockDevice {
 
     fn flush(&mut self) -> Result<(), BlockError>;
 
-    /// Oublie les copies en cache pour que la relecture de contrôle vienne du support et non de la
-    /// mémoire du noyau, qui masquerait une écriture ratée. À appeler après [`Self::flush`].
+    /// Forgets cached copies so the read-back comes from the drive, not from kernel memory that would hide a
+    /// failed write. Call after [`Self::flush`].
     fn drop_cache(&mut self) -> Result<(), BlockError> {
         Ok(())
     }
@@ -97,8 +97,7 @@ pub fn check_geometry(size: u64, block_size: u32) -> Result<(), BlockError> {
     }
 }
 
-/// Valide l'alignement puis les bornes d'un accès, dépassement arithmétique compris. Toute
-/// implémentation de [`BlockDevice`] l'appelle avant de toucher au support.
+/// Checks alignment and bounds, overflow included. Every [`BlockDevice`] calls it before touching the drive.
 pub fn check_access(size: u64, block_size: u32, offset: u64, len: usize) -> Result<(), BlockError> {
     let len = len as u64;
     let block = u64::from(block_size);
@@ -115,7 +114,7 @@ pub fn check_access(size: u64, block_size: u32, offset: u64, len: usize) -> Resu
     }
 }
 
-/// Périphérique en mémoire, initialisé à zéro : l'implémentation de référence pour les tests purs.
+/// Zero-filled in-memory device for tests.
 #[derive(Debug, Clone)]
 pub struct MemoryDevice {
     data: Vec<u8>,
@@ -155,7 +154,7 @@ impl BlockDevice for MemoryDevice {
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), BlockError> {
         check_access(self.size(), self.block_size, offset, buf.len())?;
-        // Les bornes sont validées : `offset + len <= size`, donc l'indexation ne peut pas échouer.
+        // Bounds checked above: indexing cannot fail.
         let start = offset as usize;
         buf.copy_from_slice(&self.data[start..start + buf.len()]);
         Ok(())
@@ -274,7 +273,6 @@ mod tests {
             dev.write_at(4 * 512, &[1; 512]),
             Err(BlockError::OutOfRange { .. })
         ));
-        // Dépassement arithmétique de `offset + len`.
         assert!(matches!(
             dev.write_at(u64::MAX - 511, &[1; 1024]),
             Err(BlockError::OutOfRange { .. })

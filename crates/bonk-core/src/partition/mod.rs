@@ -15,18 +15,17 @@ use mbr::{check_mbr, parse_mbr};
 
 const GPT_SIGNATURE: &[u8; 8] = b"EFI PART";
 
-/// Taille minimale d'un en-tête GPT (UEFI 2.x).
+/// Minimum GPT header size (UEFI 2.x).
 const GPT_HEADER_MIN: usize = 92;
 
-/// Plafond de la table des partitions lue : 1 Mio, très au-delà des 16 Kio usuels (128 entrées).
+/// Cap on the entry table read: 1 MiB, far above the usual 16 KiB.
 const GPT_ENTRIES_LIMIT: u64 = 1 << 20;
 
-/// Alignement recommandé du début des partitions : 1 Mio.
 pub(crate) const ALIGNMENT_BYTES: u64 = 1 << 20;
 
 pub(crate) const MBR_PROTECTIVE: u8 = 0xEE;
 
-/// Somme de contrôle CRC-32 (IEEE 802.3) utilisée par le GPT.
+/// CRC-32 (IEEE 802.3), as GPT uses it.
 #[must_use]
 pub fn crc32(data: &[u8]) -> u32 {
     let mut crc = !0u32;
@@ -124,7 +123,7 @@ pub struct Layout {
     pub findings: Vec<Finding>,
 }
 
-/// Lit la structure de `dev`. Un contenu illisible ou incohérent devient un constat, pas une erreur.
+/// Unreadable or inconsistent content becomes a finding, not an error.
 pub fn inspect(dev: &dyn BlockDevice) -> Result<Layout, BlockError> {
     let size = dev.size();
     let mut findings = Vec::new();
@@ -151,7 +150,7 @@ pub fn inspect(dev: &dyn BlockDevice) -> Result<Layout, BlockError> {
         });
     }
 
-    // Secteur logique : l'en-tête GPT est au secteur 1, donc à 512 ou 4096 octets du début.
+    // The GPT header is at sector 1, so 512 or 4096 bytes in.
     let logical = [512u32, 4096]
         .into_iter()
         .find(|bs| {
@@ -231,8 +230,8 @@ pub fn inspect(dev: &dyn BlockDevice) -> Result<Layout, BlockError> {
     })
 }
 
-/// Lit `len` octets à `offset` en arrondissant la lecture au bloc du périphérique, et rend exactement
-/// ce qui a été demandé : le contrat du trait n'accepte que des accès alignés, pas les outils de lecture.
+/// Rounds the read to the device block and returns exactly what was asked: the trait only accepts aligned
+/// access.
 pub fn read_range(dev: &dyn BlockDevice, offset: u64, len: u64) -> Result<Vec<u8>, BlockError> {
     let block = u64::from(dev.block_size());
     let start = offset - offset % block;
@@ -259,7 +258,7 @@ fn u64_le(b: &[u8], at: usize) -> u64 {
     u64::from_le_bytes(raw)
 }
 
-/// GUID au format texte usuel (les trois premiers champs sont en petit-boutiste).
+/// Usual text form; the first three fields are little-endian.
 fn guid(b: &[u8]) -> String {
     format!(
         "{:08X}-{:04X}-{:04X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
