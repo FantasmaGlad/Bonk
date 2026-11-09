@@ -1,11 +1,85 @@
+use std::collections::HashMap;
+
+use ring::digest::{SHA256, digest};
+use ring::signature::{Ed25519KeyPair, KeyPair};
+
 use super::*;
 
 const VAULT_DISK: u64 = 256 << 20;
+const BASE: &str = "https://catalogue.test/";
+const GRUB: &[u8] = b"MZ grub de test";
+
+fn hex(bytes: &[u8]) -> String {
+    digest(&SHA256, bytes)
+        .as_ref()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+/// A catalog signed by a test key, offering `grub` when given, and the files it names.
+fn served_catalog(grub: Option<&[u8]>) -> ServedCatalog {
+    let pair = Ed25519KeyPair::from_seed_unchecked(&[7; 32]).expect("clé de test");
+    let public: [u8; 32] = pair.public_key().as_ref().try_into().expect("32 octets");
+    let fake = "c".repeat(64);
+    let entry = grub.map_or_else(String::new, |bytes| {
+        format!(
+            r#","grub":{{"version":"2.14","released":"2026-01-14","build":"6e330c761ee82877","efi":{{"x86_64":{{"path":"grub/2.14/BOOTX64.EFI","sha256":"{}","size_bytes":{}}}}},"source":{{"path":"grub/2.14/grub-2.14.tar.xz","sha256":"{fake}","size_bytes":1}},"source_signature":{{"path":"grub/2.14/grub-2.14.tar.xz.sig","sha256":"{fake}","size_bytes":1}}}}"#,
+            hex(bytes),
+            bytes.len()
+        )
+    });
+    let expires = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("horloge")
+        .as_secs()
+        + 3600;
+    let manifest = format!(
+        r#"{{"schema_version":1,"sequence":1,"expires_unix":{expires},"families":[],"images":[]{entry}}}"#
+    )
+    .into_bytes();
+    let mut files = HashMap::new();
+    files.insert(
+        format!("{BASE}catalog.json.sig"),
+        pair.sign(&manifest).as_ref().to_vec(),
+    );
+    files.insert(format!("{BASE}catalog.json"), manifest);
+    if let Some(bytes) = grub {
+        files.insert(format!("{BASE}grub/2.14/BOOTX64.EFI"), bytes.to_vec());
+    }
+    ServedCatalog {
+        keys: vec![public],
+        files: Rc::new(files),
+    }
+}
+
+fn vault_scenario(grub: Option<&[u8]>, cache: &str) -> (Scenario, TempSource) {
+    let mut scenario = Scenario::sized(VAULT_DISK);
+    scenario.catalog = served_catalog(grub);
+    (scenario, TempSource::dir(cache))
+}
+
+fn init_args<'a>(cache: &'a str, extra: &[&'a str]) -> Vec<&'a str> {
+    let mut args = vec![
+        "vault",
+        "init",
+        "usb-a",
+        "--yes",
+        "--json",
+        "--catalog-url",
+        BASE,
+        "--cache-dir",
+        cache,
+    ];
+    args.extend_from_slice(extra);
+    args
+}
 
 #[test]
-fn preparer_un_coffre_passe_par_les_garde_fous_puis_le_relit() {
-    let scenario = Scenario::sized(VAULT_DISK);
-    let (code, out, err) = scenario.run(&["vault", "init", "usb-a", "--yes", "--json"]);
+fn preparer_un_coffre_ecrit_grub_du_catalogue_puis_relit() {
+    let (scenario, cache) = vault_scenario(Some(GRUB), "cache-preparer");
+    let cache = cache.arg();
+    let (code, out, err) = scenario.run(&init_args(&cache, &[]));
     assert_eq!(code, 0, "{err}");
     assert_eq!(
         scenario.log(),
@@ -19,8 +93,9 @@ fn preparer_un_coffre_passe_par_les_garde_fous_puis_le_relit() {
     );
     let value: serde_json::Value = serde_json::from_str(&out).expect("JSON");
     assert_eq!(value["layout"]["table"], "mbr");
-    assert_eq!(value["layout"]["vault"]["first_lba"], 2048);
     assert_eq!(value["vault_label"], "BonkVault");
+    assert_eq!(value["grub"]["version"], "2.14");
+    assert_eq!(value["grub"]["sha256"], hex(GRUB));
     assert_eq!(value["verified"], true);
 
     let (code, out, err) = scenario.run(&["vault", "list", "usb-a", "--json"]);
@@ -33,6 +108,45 @@ fn preparer_un_coffre_passe_par_les_garde_fous_puis_le_relit() {
             && !listing.iter().any(|l| l.starts_with("unmount")),
         "{listing:?}"
     );
+}
+
+/// The second preparation needs no network: GRUB comes from the cache, checked again.
+#[test]
+fn grub_en_cache_sert_sans_reseau() {
+    let (mut scenario, cache) = vault_scenario(Some(GRUB), "cache-hors-ligne");
+    let cache = cache.arg();
+    assert_eq!(scenario.run(&init_args(&cache, &[])).0, 0);
+    scenario.catalog.files = Rc::new(HashMap::new());
+    let (code, out, err) = scenario.run(&init_args(&cache, &[]));
+    assert_eq!(code, 0, "{err}");
+    assert!(out.contains("\"2.14\""), "{out}");
+}
+
+#[test]
+fn sans_grub_au_catalogue_rien_n_est_ecrit() {
+    let (scenario, cache) = vault_scenario(None, "cache-sans-grub");
+    let cache = cache.arg();
+    let (code, _, err) = scenario.run(&init_args(&cache, &[]));
+    assert_eq!(code, EXIT_SOURCE, "{err}");
+    assert!(err.contains("E3009") && err.contains("GRUB"), "{err}");
+    assert!(scenario.log().is_empty(), "{:?}", scenario.log());
+}
+
+#[test]
+fn grub_local_controle_contre_le_catalogue() {
+    let (scenario, cache) = vault_scenario(Some(GRUB), "cache-local");
+    let cache = cache.arg();
+    let folder = TempSource::dir("grub-local");
+    std::fs::create_dir_all(&folder.0).expect("dossier");
+    std::fs::write(folder.0.join("BOOTX64.EFI"), b"autre grub").expect("fichier");
+    let dir = folder.arg();
+    let (code, _, err) = scenario.run(&init_args(&cache, &["--grub-dir", &dir]));
+    assert_eq!(code, EXIT_SOURCE, "{err}");
+    assert!(err.contains("hash differs"), "{err}");
+    assert!(scenario.log().is_empty(), "{:?}", scenario.log());
+    std::fs::write(folder.0.join("BOOTX64.EFI"), GRUB).expect("fichier");
+    let (code, _, err) = scenario.run(&init_args(&cache, &["--grub-dir", &dir]));
+    assert_eq!(code, 0, "{err}");
 }
 
 #[test]
@@ -50,11 +164,21 @@ fn sans_confirmation_ou_en_plan_rien_n_est_ecrit() {
 
 #[test]
 fn un_disque_trop_petit_ou_systeme_est_refuse_avant_tout_geste() {
-    let scenario = Scenario::new();
-    let (code, _, err) = scenario.run(&["vault", "init", "usb-a", "--yes"]);
+    let mut scenario = Scenario::new();
+    scenario.catalog = served_catalog(Some(GRUB));
+    let cache = TempSource::dir("cache-petit");
+    let cache = cache.arg();
+    let (code, _, err) = scenario.run(&init_args(&cache, &[]));
     assert_eq!(code, 1, "{err}");
     assert!(err.contains("E7001"), "{err}");
-    let (code, _, err) = scenario.run(&["vault", "init", "nvme-sys", "--force", "--show-internal"]);
+    let (code, _, err) = scenario.run(&[
+        "vault",
+        "init",
+        "nvme-sys",
+        "--force",
+        "--show-internal",
+        "--dry-run",
+    ]);
     assert_eq!(code, EXIT_TARGET_REFUSED, "{err}");
     assert!(scenario.log().is_empty(), "{:?}", scenario.log());
 }

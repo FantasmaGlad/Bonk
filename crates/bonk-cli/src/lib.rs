@@ -308,6 +308,7 @@ struct Env {
     /// `BONK_*` variables: those named after a setting override it.
     vars: Vec<(String, String)>,
     io: job::Io,
+    catalog: catalog::Access,
     /// Running as administrator: the window refuses to open.
     privileged: bool,
 }
@@ -322,6 +323,7 @@ impl Env {
                 .filter(|(name, _)| name.starts_with("BONK_"))
                 .collect(),
             io: job::Io::default(),
+            catalog: catalog::Access::default(),
             privileged: bonk_hal::platform::current().is_privileged(),
         }
     }
@@ -506,7 +508,7 @@ where
         Some(Command::Verify(args)) => transfer::run_verify(&args, &view, deps, quiet, out, err),
         Some(Command::RepairGpt(args)) => transfer::run_repair(&args, deps, out, err),
         Some(Command::Format(args)) => format::run_format(&args, deps, out, err),
-        Some(Command::Vault { action }) => vault::run(&action, &view, deps, out, err),
+        Some(Command::Vault { action }) => vault::run(&action, &view, &env.catalog, deps, out, err),
         Some(Command::Capabilities(args)) => format::run_capabilities(&args, deps, out, err),
         Some(Command::List(args)) => run_list(&args, &view, out, err, enumerate),
         Some(Command::Info(args)) => run_info(&args, &view, out, err, enumerate),

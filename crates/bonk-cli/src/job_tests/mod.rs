@@ -242,6 +242,27 @@ impl Drop for TempSource {
 
 type Log = Rc<RefCell<Vec<String>>>;
 
+#[derive(Default)]
+struct ServedCatalog {
+    keys: Vec<[u8; 32]>,
+    files: Rc<std::collections::HashMap<String, Vec<u8>>>,
+}
+
+impl ServedCatalog {
+    fn access(&self) -> crate::catalog::Access {
+        let files = Rc::clone(&self.files);
+        crate::catalog::Access {
+            keys: self.keys.clone(),
+            fetch: Box::new(move |address| {
+                files
+                    .get(address)
+                    .cloned()
+                    .ok_or_else(|| format!("{address}: not served"))
+            }),
+        }
+    }
+}
+
 struct Scenario {
     log: Log,
     device: Shared,
@@ -258,6 +279,8 @@ struct Scenario {
     on_first_enumeration: Option<Rc<dyn Fn()>>,
     vars: Vec<(String, String)>,
     capabilities: Vec<Capability>,
+    /// Files served by address, and the keys the catalog must be signed with: never the network.
+    catalog: ServedCatalog,
 }
 
 impl Scenario {
@@ -277,6 +300,7 @@ impl Scenario {
             on_first_enumeration: None,
             vars: Vec::new(),
             capabilities: Vec::new(),
+            catalog: ServedCatalog::default(),
         }
     }
 
@@ -388,6 +412,7 @@ impl Scenario {
         let env = Env {
             io,
             vars: self.vars.clone(),
+            catalog: self.catalog.access(),
             ..Env::default()
         };
         let (mut out, mut err) = (Vec::new(), Vec::new());

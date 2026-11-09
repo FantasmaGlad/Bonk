@@ -94,18 +94,39 @@ fn base_url(given: Option<&str>, variable: Option<String>) -> String {
     }
 }
 
-fn refused(message: impl std::fmt::Display) -> JobError {
+pub(crate) fn refused(message: impl std::fmt::Display) -> JobError {
     JobError {
         code: Code::CatalogRefused,
         message: message.to_string(),
     }
 }
 
-/// Network, signature, then the saved copy when the network fails.
-pub(crate) fn load(
+pub(crate) type FetchFn = Box<dyn Fn(&str) -> Result<Vec<u8>, String>>;
+
+/// Keys the signature must match and how files are fetched: injectable for tests.
+pub(crate) struct Access {
+    pub(crate) keys: Vec<[u8; 32]>,
+    pub(crate) fetch: FetchFn,
+}
+
+impl Default for Access {
+    fn default() -> Self {
+        Self {
+            keys: TRUSTED_KEYS.to_vec(),
+            fetch: Box::new(|address| {
+                bonk_catalog::fetch_bytes(address).map_err(|e| e.to_string())
+            }),
+        }
+    }
+}
+
+/// Network, signature, then the saved copy when the network fails. Also returns the cache directory and the
+/// address the catalog's files are relative to.
+pub(crate) fn load_from(
+    access: &Access,
     url: Option<&str>,
     cache_dir: Option<&Path>,
-) -> Result<(Loaded, PathBuf), JobError> {
+) -> Result<(Loaded, PathBuf, String), JobError> {
     let base = base_url(url, std::env::var("BONK_CATALOG_URL").ok());
     let dir = crate::cache::directory(cache_dir)
         .ok_or_else(|| refused("no known cache directory: give it with --cache-dir"))?
@@ -113,12 +134,18 @@ pub(crate) fn load(
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_secs());
-    let fetch = |address: &str| bonk_catalog::fetch_bytes(address).map_err(|e| e.to_string());
-    let loaded = manifest::load(&base, &dir, now, &TRUSTED_KEYS, &fetch).map_err(refused)?;
+    let loaded = manifest::load(&base, &dir, now, &access.keys, &*access.fetch).map_err(refused)?;
     if loaded.saved_copy {
         log::warn!(target: "bonk::catalog", "catalog not reachable: using the saved copy");
     }
-    Ok((loaded, dir))
+    Ok((loaded, dir, base))
+}
+
+pub(crate) fn load(
+    url: Option<&str>,
+    cache_dir: Option<&Path>,
+) -> Result<(Loaded, PathBuf), JobError> {
+    load_from(&Access::default(), url, cache_dir).map(|(loaded, dir, _)| (loaded, dir))
 }
 
 /// Address and hash of a catalog image.
@@ -386,6 +413,7 @@ mod tests {
                 image("u22", "ubuntu", "2024-09-11", download()),
                 image("u26", "ubuntu", "2026-08-26", download()),
             ],
+            grub: None,
         }
     }
 

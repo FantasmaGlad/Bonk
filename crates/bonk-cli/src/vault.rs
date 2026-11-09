@@ -1,14 +1,20 @@
+use std::fs;
 use std::io::Write;
+use std::path::{Path, PathBuf};
 
+use bonk_catalog::manifest;
 use bonk_core::format::table::{PartitionPlan, TableKind};
+use bonk_core::vault::{self as core_vault, BootFile};
 use bonk_hal::format_size;
 use clap::{Args, Subcommand};
 
+use crate::catalog;
 use crate::config::ViewDefaults;
 use crate::format::TableArg;
 use crate::transfer::{CommonArgs, finish, target_line};
 use bonk_ops::job::{
-    self, Deps, TraceIo, VaultInitDone, VaultInitJob, VaultListDone, VaultListJob,
+    self, Deps, GrubInfo, JobError, TraceIo, VaultInitDone, VaultInitJob, VaultListDone,
+    VaultListJob,
 };
 
 #[derive(Debug, Subcommand)]
@@ -42,6 +48,19 @@ pub(crate) struct InitArgs {
     /// Never a system disk: the safety filter stays in charge
     #[arg(long)]
     force: bool,
+
+    /// Folder holding BOOTX64.EFI, for a machine without network: checked against the hash of the
+    /// last catalog seen
+    #[arg(long, value_name = "DIR")]
+    grub_dir: Option<PathBuf>,
+
+    /// Catalog address (`BONK_CATALOG_URL`); its signature is checked wherever it comes from
+    #[arg(long, value_name = "URL")]
+    catalog_url: Option<String>,
+
+    /// Download directory; by default the user's cache directory
+    #[arg(long, value_name = "DIR")]
+    cache_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -75,20 +94,91 @@ fn size(part: PartitionPlan, block_size: u32) -> String {
 pub(crate) fn run(
     action: &VaultAction,
     view: &ViewDefaults,
+    access: &catalog::Access,
     deps: &Deps<'_>,
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> u8 {
     bonk_hal::interrupt::install();
     match action {
-        VaultAction::Init(args) => run_init(args, deps, out, err),
+        VaultAction::Init(args) => run_init(args, access, deps, out, err),
         VaultAction::List(args) => run_list(args, view, deps, out, err),
     }
 }
 
-fn run_init(args: &InitArgs, deps: &Deps<'_>, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+/// Architecture of the GRUB written: the one the vault boots today.
+const GRUB_ARCH: &str = "x86_64";
+
+/// GRUB named by the signed catalog: from its address through the cache, or from `--grub-dir`, always
+/// checked against the signed hash.
+fn grub(args: &InitArgs, access: &catalog::Access) -> Result<(Vec<BootFile>, GrubInfo), JobError> {
+    let (loaded, dir, base) = catalog::load_from(
+        access,
+        args.catalog_url.as_deref(),
+        args.cache_dir.as_deref(),
+    )?;
+    let entry = loaded
+        .catalog
+        .grub
+        .ok_or_else(|| catalog::refused("the catalog does not offer GRUB yet: try again later"))?;
+    let asset = entry
+        .efi
+        .get(GRUB_ARCH)
+        .ok_or_else(|| catalog::refused(format!("the catalog offers no GRUB for {GRUB_ARCH}")))?;
+    let data = match &args.grub_dir {
+        Some(folder) => local_grub(folder, asset, &entry.version)?,
+        None => {
+            let path = manifest::asset_path(&base, &dir, "grub", asset, &*access.fetch)
+                .map_err(|e| catalog::refused(format!("GRUB {}: {e}", entry.version)))?;
+            fs::read(&path).map_err(|e| catalog::refused(format!("{}: {e}", path.display())))?
+        }
+    };
+    let files = core_vault::boot_files(&[(GRUB_ARCH, data)])
+        .map_err(|e| catalog::refused(e.to_string()))?;
+    let info = GrubInfo {
+        version: entry.version,
+        build: entry.build,
+        arch: GRUB_ARCH.to_owned(),
+        sha256: asset.sha256.clone(),
+    };
+    Ok((files, info))
+}
+
+fn local_grub(folder: &Path, asset: &manifest::Asset, version: &str) -> Result<Vec<u8>, JobError> {
+    let name = core_vault::efi_file_name(GRUB_ARCH).unwrap_or("BOOTX64.EFI");
+    let path = folder.join(name);
+    let data = fs::read(&path).map_err(|e| catalog::refused(format!("{}: {e}", path.display())))?;
+    if !manifest::asset_matches(asset, &data) {
+        return Err(catalog::refused(format!(
+            "{} is not the GRUB {version} of the catalog (hash differs)",
+            path.display()
+        )));
+    }
+    Ok(data)
+}
+
+fn run_init(
+    args: &InitArgs,
+    access: &catalog::Access,
+    deps: &Deps<'_>,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> u8 {
+    // A plan, or a refusal for want of confirmation, writes nothing: neither needs the network nor GRUB.
+    let (boot, grub) = if args.dry_run || !(args.yes || args.force) {
+        (Vec::new(), None)
+    } else {
+        match grub(args, access) {
+            Ok((boot, info)) => (boot, Some(info)),
+            Err(error) => {
+                return finish::<VaultInitDone>(Err(error), &args.common, out, err, |_, _| Ok(()));
+            }
+        }
+    };
     let job = VaultInitJob {
         target: args.common.target(),
+        boot,
+        grub,
         table: args.table.into(),
         options: args.common.write_options(),
         trace_io: args.common.trace_io.map(TraceIo::from),
@@ -126,6 +216,13 @@ fn run_init(args: &InitArgs, deps: &Deps<'_>, out: &mut dyn Write, err: &mut dyn
                 done.efi_label,
                 size(done.layout.efi, done.block_size)
             )?;
+            if let Some(grub) = &done.grub {
+                writeln!(
+                    out,
+                    "  GRUB {} ({}), build {}, sha256 {}",
+                    grub.version, grub.arch, grub.build, grub.sha256
+                )?;
+            }
             if !done.unmounted.is_empty() {
                 writeln!(out, "  Unmount: {}", done.unmounted.join(", "))?;
             }

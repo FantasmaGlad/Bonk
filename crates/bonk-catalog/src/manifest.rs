@@ -1,5 +1,5 @@
 use crate::sums::is_sha256;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -141,6 +141,31 @@ pub struct Catalog {
     pub expires_unix: u64,
     pub families: Vec<Family>,
     pub images: Vec<Image>,
+    /// Boot loader of the vault. Absent from older catalogs.
+    #[serde(default)]
+    pub grub: Option<Grub>,
+}
+
+/// A file published next to the manifest.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Asset {
+    /// Relative to the manifest.
+    pub path: String,
+    pub sha256: String,
+    pub size_bytes: u64,
+}
+
+/// GRUB built from the signed GNU archive, with its source.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Grub {
+    pub version: String,
+    pub released: String,
+    /// Changes when the build changes, even for the same version.
+    pub build: String,
+    /// One standalone EFI image per architecture: `x86_64`, later `aarch64` and `riscv64`.
+    pub efi: BTreeMap<String, Asset>,
+    pub source: Asset,
+    pub source_signature: Asset,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -159,6 +184,7 @@ pub enum CatalogError {
         id: String,
         reason: &'static str,
     },
+    InvalidGrub(&'static str),
     /// Neither the network nor a saved copy.
     Unavailable(String),
 }
@@ -181,6 +207,7 @@ impl fmt::Display for CatalogError {
                 )
             }
             Self::InvalidImage { id, reason } => write!(f, "catalog image '{id}': {reason}"),
+            Self::InvalidGrub(reason) => write!(f, "catalog GRUB entry: {reason}"),
             Self::Unavailable(detail) => write!(f, "catalog unavailable: {detail}"),
         }
     }
@@ -217,19 +244,38 @@ fn is_date(text: &str) -> bool {
         })
 }
 
+/// Stays under the manifest directory: no absolute path, no parent, no other host.
+fn is_relative(path: &str) -> bool {
+    !path.starts_with('/')
+        && !path.contains('\\')
+        && !path.contains(':')
+        && path.split('/').all(|part| !part.is_empty() && part != "..")
+}
+
+fn check_grub(grub: &Grub) -> Result<(), &'static str> {
+    if grub.efi.is_empty() {
+        return Err("no EFI image");
+    }
+    let assets = grub
+        .efi
+        .values()
+        .chain([&grub.source, &grub.source_signature]);
+    for asset in assets {
+        if !is_relative(&asset.path) {
+            return Err("file path must be relative");
+        }
+        if !is_sha256(&asset.sha256) {
+            return Err("sha256 must be 64 hexadecimal characters");
+        }
+    }
+    Ok(())
+}
+
 fn check_family(family: &Family) -> Result<(), &'static str> {
     if !is_identifier(&family.id) {
         return Err("identifier must be lowercase ASCII");
     }
-    // Stays under the manifest directory: no absolute path, no parent, no other host.
-    let relative = !family.icon.starts_with('/')
-        && !family.icon.contains('\\')
-        && !family.icon.contains(':')
-        && family
-            .icon
-            .split('/')
-            .all(|part| !part.is_empty() && part != "..");
-    if !relative {
+    if !is_relative(&family.icon) {
         return Err("icon must be a relative path");
     }
     if !is_sha256(&family.icon_sha256) {
@@ -349,6 +395,9 @@ pub fn verify(
             });
         }
     }
+    if let Some(grub) = &catalog.grub {
+        check_grub(grub).map_err(CatalogError::InvalidGrub)?;
+    }
     Ok(catalog)
 }
 
@@ -426,6 +475,42 @@ pub fn load(
 
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// The bytes carry the signed hash of `asset`.
+#[must_use]
+pub fn asset_matches(asset: &Asset, bytes: &[u8]) -> bool {
+    hex(digest(&SHA256, bytes).as_ref()).eq_ignore_ascii_case(&asset.sha256)
+}
+
+/// In the cache under `folder`, named by its signed hash, downloaded when missing. A cached copy is hashed
+/// again before use: a file changed on disk is downloaded anew.
+///
+/// # Errors
+/// Download failure, or bytes that do not match the signed hash.
+pub fn asset_path(
+    base: &str,
+    dir: &Path,
+    folder: &str,
+    asset: &Asset,
+    fetch: &dyn Fn(&str) -> Result<Vec<u8>, String>,
+) -> Result<PathBuf, String> {
+    let name = Path::new(&asset.path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("file");
+    let path = dir.join(folder).join(&asset.sha256).join(name);
+    if fs::read(&path).is_ok_and(|bytes| asset_matches(asset, &bytes)) {
+        return Ok(path);
+    }
+    let bytes = fetch(&format!("{base}{}", asset.path))?;
+    if !asset_matches(asset, &bytes) {
+        return Err(format!("{} does not match its signed hash", asset.path));
+    }
+    let parent = path.parent().unwrap_or(dir);
+    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    replace(&path, &bytes).map_err(|e| e.to_string())?;
+    Ok(path)
 }
 
 /// In the cache, checked by its signed hash. Descriptive: `None` when missing.
@@ -688,6 +773,75 @@ mod tests {
         // Already saved: no network.
         let hors_ligne = |_: &str| Err("coupure".to_owned());
         assert!(icon_path("https://c/", &dossier.0, &family(empreinte), &hors_ligne).is_some());
+    }
+
+    fn avec_grub(grub: &str) -> Vec<u8> {
+        let mut bytes = manifest(1, NOW + 1, &debian());
+        bytes.truncate(bytes.len() - 1);
+        bytes.extend(format!(r#","grub":{grub}}}"#).into_bytes());
+        bytes
+    }
+
+    fn grub(efi_path: &str) -> String {
+        let (a, b) = ("a".repeat(64), "b".repeat(64));
+        format!(
+            r#"{{"version":"2.14","released":"2026-01-14","build":"6e330c761ee82877","efi":{{"x86_64":{{"path":"{efi_path}","sha256":"{a}","size_bytes":1}}}},"source":{{"path":"grub/2.14/grub-2.14.tar.xz","sha256":"{b}","size_bytes":2}},"source_signature":{{"path":"grub/2.14/grub-2.14.tar.xz.sig","sha256":"{b}","size_bytes":3}}}}"#
+        )
+    }
+
+    #[test]
+    fn l_entree_grub_se_lit_et_reste_dans_le_dossier_du_catalogue()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (key, public) = pair(1)?;
+        let catalog = check(&manifest(1, NOW + 1, &debian()), &key, &[public], 0)?;
+        assert_eq!(catalog.grub, None);
+        let catalog = check(
+            &avec_grub(&grub("grub/2.14/BOOTX64.EFI")),
+            &key,
+            &[public],
+            0,
+        )?;
+        let entry = catalog.grub.ok_or("pas d'entrée grub")?;
+        assert_eq!(entry.efi["x86_64"].path, "grub/2.14/BOOTX64.EFI");
+        for chemin in [
+            "../BOOTX64.EFI",
+            "/BOOTX64.EFI",
+            "https://autre/BOOTX64.EFI",
+        ] {
+            assert!(matches!(
+                check(&avec_grub(&grub(chemin)), &key, &[public], 0),
+                Err(CatalogError::InvalidGrub(_))
+            ));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn un_fichier_publie_est_controle_puis_garde_en_cache() -> Result<(), String> {
+        let dossier = Dossier::new("asset");
+        let contenu = b"MZ grub".to_vec();
+        let asset = Asset {
+            path: "grub/2.14/BOOTX64.EFI".to_owned(),
+            sha256: hex(digest(&SHA256, &contenu).as_ref()),
+            size_bytes: 7,
+        };
+        let faux = |_: &str| Ok(b"autre".to_vec());
+        assert!(asset_path("https://c/", &dossier.0, "grub", &asset, &faux).is_err());
+        let servi = |url: &str| {
+            assert_eq!(url, "https://c/grub/2.14/BOOTX64.EFI");
+            Ok(contenu.clone())
+        };
+        let chemin = asset_path("https://c/", &dossier.0, "grub", &asset, &servi)?;
+        assert_eq!(fs::read(&chemin).map_err(|e| e.to_string())?, contenu);
+        let hors_ligne = |_: &str| Err("coupure".to_owned());
+        assert_eq!(
+            asset_path("https://c/", &dossier.0, "grub", &asset, &hors_ligne)?,
+            chemin
+        );
+        // A cached copy changed on disk is not trusted.
+        fs::write(&chemin, b"abime").map_err(|e| e.to_string())?;
+        assert!(asset_path("https://c/", &dossier.0, "grub", &asset, &hors_ligne).is_err());
+        Ok(())
     }
 
     #[test]
