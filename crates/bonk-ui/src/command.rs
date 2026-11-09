@@ -1,3 +1,5 @@
+use bonk_core::format::table::TableKind;
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ViewOptions {
     pub show_internal: bool,
@@ -21,7 +23,7 @@ impl Default for WriteView<'_> {
             image: "",
             hash: "",
             raw: false,
-            mbr: true,
+            mbr: TableKind::WINDOWS_DEFAULT == TableKind::Mbr,
         }
     }
 }

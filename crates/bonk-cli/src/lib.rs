@@ -360,6 +360,72 @@ where
     Cli::from_arg_matches(&matches)
 }
 
+/// Ce qu'il reste à faire une fois les arguments lus, le journal installé et la capture éventuelle chargée.
+struct Prepared {
+    command: Option<Command>,
+    no_gui: bool,
+    quiet: bool,
+    view: ViewDefaults,
+    fixture_reads: Option<Vec<bonk_hal::SourceRead>>,
+}
+
+/// Arguments, mandataire, réglages et journal, capture rejouée. `Err` porte le code de sortie.
+fn prepare<I, T, E, L>(args: I, env: &Env, err: &mut E, install_log: L) -> Result<Prepared, u8>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+    E: Write,
+    L: FnOnce(Settings) -> Result<(), String>,
+{
+    let cli = match parse(args) {
+        Ok(cli) => cli,
+        Err(erreur) => {
+            // `print` choisit la sortie adaptée : aide et version sur stdout, erreurs sur stderr.
+            // Un échec d'écriture sur ces flux ne doit pas masquer le code de sortie.
+            let _ = erreur.print();
+            return Err(u8::try_from(erreur.exit_code()).unwrap_or(EXIT_USAGE));
+        }
+    };
+    if let Some(proxy) = cli.global.proxy(&env.vars)
+        && let Err(erreur) = bonk_catalog::set_proxy(&proxy)
+    {
+        return Err(report(err, Code::InvalidArgument, erreur));
+    }
+    let (view, default_format, config_error) = stored_settings(env);
+    let settings = Settings::from_args(&cli.log, env.bonk_log.as_deref(), default_format)
+        .map_err(|erreur| report(err, Code::LogSettingInvalid, erreur))?;
+    install_log(settings).map_err(|erreur| report(err, Code::LogUnusable, erreur))?;
+    if let Some(erreur) = &config_error {
+        log::warn!(target: "bonk::cli", reason = erreur.as_str(); "configuration unreadable, using defaults");
+    }
+    log::info!(
+        target: "bonk::cli",
+        version = env!("CARGO_PKG_VERSION"),
+        os = std::env::consts::OS,
+        arch = std::env::consts::ARCH;
+        "start"
+    );
+    // Capture rejouée : l'énumération vient du fichier, et rien ne peut écrire sur un vrai disque.
+    let fixture_reads = cli
+        .global
+        .path()
+        .map(fixture::load)
+        .transpose()
+        .map_err(|erreur| report(err, Code::FixtureInvalid, erreur))?;
+    if fixture_reads.is_some()
+        && let Some(raison) = fixture_conflict(&cli.command)
+    {
+        return Err(report(err, Code::FixtureInvalid, raison));
+    }
+    Ok(Prepared {
+        quiet: cli.log.quiet(),
+        no_gui: cli.no_gui,
+        command: cli.command,
+        view,
+        fixture_reads,
+    })
+}
+
 fn execute<I, T, O, E, L, F, G>(
     args: I,
     env: &Env,
@@ -378,54 +444,11 @@ where
     F: Fn() -> Result<Vec<Disk>, EnumerateError>,
     G: FnOnce(ViewDefaults) -> Result<(), String>,
 {
-    let cli = match parse(args) {
-        Ok(cli) => cli,
-        Err(erreur) => {
-            // `print` choisit la sortie adaptée : aide et version sur stdout, erreurs sur stderr.
-            // Un échec d'écriture sur ces flux ne doit pas masquer le code de sortie.
-            let _ = erreur.print();
-            return u8::try_from(erreur.exit_code()).unwrap_or(EXIT_USAGE);
-        }
+    let mut prepared = match prepare(args, env, err, install_log) {
+        Ok(prepared) => prepared,
+        Err(code) => return code,
     };
-
-    let no_gui = cli.no_gui;
-    if let Some(proxy) = cli.global.proxy(&env.vars)
-        && let Err(erreur) = bonk_catalog::set_proxy(&proxy)
-    {
-        return report(err, Code::InvalidArgument, erreur);
-    }
-    let quiet = cli.log.quiet();
-    let (view, default_format, config_error) = stored_settings(env);
-
-    let settings = match Settings::from_args(&cli.log, env.bonk_log.as_deref(), default_format) {
-        Ok(settings) => settings,
-        Err(erreur) => return report(err, Code::LogSettingInvalid, erreur),
-    };
-    if let Err(erreur) = install_log(settings) {
-        return report(err, Code::LogUnusable, erreur);
-    }
-    if let Some(erreur) = &config_error {
-        log::warn!(target: "bonk::cli", reason = erreur.as_str(); "configuration unreadable, using defaults");
-    }
-    log::info!(
-        target: "bonk::cli",
-        version = env!("CARGO_PKG_VERSION"),
-        os = std::env::consts::OS,
-        arch = std::env::consts::ARCH;
-        "start"
-    );
-
-    // Capture rejouée : l'énumération vient du fichier, et rien ne peut écrire sur un vrai disque.
-    let fixture_reads = match cli.global.path().map(fixture::load) {
-        Some(Ok(reads)) => Some(reads),
-        Some(Err(erreur)) => return report(err, Code::FixtureInvalid, erreur),
-        None => None,
-    };
-    if fixture_reads.is_some()
-        && let Some(raison) = fixture_conflict(&cli.command)
-    {
-        return report(err, Code::FixtureInvalid, raison);
-    }
+    let fixture_reads = prepared.fixture_reads.take();
     let fixture_enumerate;
     let enumerate: &dyn Fn() -> Result<Vec<Disk>, EnumerateError> = match &fixture_reads {
         Some(reads) => {
@@ -439,7 +462,32 @@ where
         enumerate,
         io: &env.io,
     };
-    match cli.command {
+    dispatch(prepared, env, &deps, out, err, gui)
+}
+
+/// Lance la commande demandée.
+fn dispatch<O, E, G>(
+    prepared: Prepared,
+    env: &Env,
+    deps: &job::Deps<'_>,
+    out: &mut O,
+    err: &mut E,
+    gui: G,
+) -> u8
+where
+    O: Write,
+    E: Write,
+    G: FnOnce(ViewDefaults) -> Result<(), String>,
+{
+    let Prepared {
+        command,
+        no_gui,
+        quiet,
+        view,
+        ..
+    } = prepared;
+    let enumerate = deps.enumerate;
+    match command {
         None | Some(Command::Gui) if no_gui => {
             let _ = writeln!(err, "{}", Cli::command().render_help());
             report(err, Code::InvalidArgument, "--no-gui requires a command")
@@ -448,15 +496,15 @@ where
         Some(Command::Disk { action }) => match action {
             DiskAction::List(args) => run_list(&args, &view, out, err, enumerate),
             DiskAction::Info(args) => run_info(&args, &view, out, err, enumerate),
-            DiskAction::Write(args) => transfer::run_write(&args, &deps, quiet, out, err),
-            DiskAction::Verify(args) => transfer::run_verify(&args, &view, &deps, quiet, out, err),
-            DiskAction::RepairGpt(args) => transfer::run_repair(&args, &deps, out, err),
+            DiskAction::Write(args) => transfer::run_write(&args, deps, quiet, out, err),
+            DiskAction::Verify(args) => transfer::run_verify(&args, &view, deps, quiet, out, err),
+            DiskAction::RepairGpt(args) => transfer::run_repair(&args, deps, out, err),
         },
-        Some(Command::Write(args)) => transfer::run_write(&args, &deps, quiet, out, err),
-        Some(Command::Verify(args)) => transfer::run_verify(&args, &view, &deps, quiet, out, err),
-        Some(Command::RepairGpt(args)) => transfer::run_repair(&args, &deps, out, err),
-        Some(Command::Format(args)) => format::run_format(&args, &deps, out, err),
-        Some(Command::Capabilities(args)) => format::run_capabilities(&args, &deps, out, err),
+        Some(Command::Write(args)) => transfer::run_write(&args, deps, quiet, out, err),
+        Some(Command::Verify(args)) => transfer::run_verify(&args, &view, deps, quiet, out, err),
+        Some(Command::RepairGpt(args)) => transfer::run_repair(&args, deps, out, err),
+        Some(Command::Format(args)) => format::run_format(&args, deps, out, err),
+        Some(Command::Capabilities(args)) => format::run_capabilities(&args, deps, out, err),
         Some(Command::List(args)) => run_list(&args, &view, out, err, enumerate),
         Some(Command::Info(args)) => run_info(&args, &view, out, err, enumerate),
         Some(Command::Config { action }) => run_config(&action, env, out, err),
