@@ -1,4 +1,3 @@
-# Paquet natif d'Arch, construit par le workflow `paquets` à partir du binaire publié, sans recompiler.
 pkgname=bonk
 pkgver=@VERSION@
 pkgrel=1
