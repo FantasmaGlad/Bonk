@@ -26,7 +26,7 @@ class ProtocolTest {
                 LoadCatalog,
                 PickImage,
                 SaveLanguage("fr"),
-                Write("usb-S1-001-002", "/dev/bus/usb/001/002", "/x.iso", "", raw = false, mbr = false),
+                Write("usb-S1-001-002", "/dev/bus/usb/001/002", "/x.iso", "", raw = false, mbr = true),
             ),
             answer.effects,
         )
