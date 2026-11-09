@@ -26,9 +26,9 @@ pub(crate) fn enumerate_from_reads(reads: &[SourceRead]) -> Result<Vec<Disk>, En
 }
 
 /// Chemin tel qu'il est sur un vrai système : une capture faite sous une autre racine (les tests)
-/// garde son préfixe, qu'on retire en repartant de `/sys/`, `/proc/` ou `/run/udev/`.
+/// garde son préfixe, qu'on retire en repartant de `/sys/`, `/proc/` ou de la base udev.
 pub(super) fn standard_path(path: &str) -> &str {
-    ["/sys/", "/proc/", "/run/udev/"]
+    ["/sys/", "/proc/", crate::enumerate::UDEV_DATA]
         .iter()
         .filter_map(|anchor| path.find(anchor))
         .min()
@@ -37,7 +37,8 @@ pub(super) fn standard_path(path: &str) -> &str {
 
 pub(super) fn build_tree(base: &Path, reads: &[SourceRead]) -> io::Result<()> {
     use std::collections::BTreeMap;
-    for dir in ["sys/block", "proc/self", "run/udev/data", "dev"] {
+    let udev = crate::enumerate::UDEV_DATA.trim_start_matches('/');
+    for dir in ["sys/block", "proc/self", udev, "dev"] {
         fs::create_dir_all(base.join(dir))?;
     }
     // `/sys/block/<nom>` : lien vers le chemin canonique du périphérique.

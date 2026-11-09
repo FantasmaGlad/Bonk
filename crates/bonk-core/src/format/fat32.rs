@@ -42,6 +42,11 @@ fn cluster_bytes_for(volume_bytes: u64) -> u32 {
 /// # Errors
 /// [`FormatError::TooSmall`] sous 65 525 clusters, [`FormatError::TooLarge`] au-delà de ce que FAT32 adresse.
 pub fn geometry(sectors: u64, block: u32) -> Result<Geometry, FormatError> {
+    if !block.is_power_of_two() || !(512..=4096).contains(&block) {
+        return Err(FormatError::Unsupported(format!(
+            "FAT32 needs sectors of 512 to 4096 bytes, not {block}"
+        )));
+    }
     let block64 = u64::from(block);
     let volume_bytes = sectors.saturating_mul(block64);
     if u32::try_from(sectors).is_err() {
@@ -77,7 +82,7 @@ pub fn geometry(sectors: u64, block: u32) -> Result<Geometry, FormatError> {
     })
 }
 
-/// Valeurs bornées par [`geometry`] : la conversion ne peut pas échouer.
+/// Bounded by [`geometry`] (sector size, sector count): the conversion cannot fail.
 fn narrow<T: TryFrom<u64> + Default>(value: u64) -> T {
     T::try_from(value).unwrap_or_default()
 }
@@ -347,6 +352,10 @@ mod tests {
         assert!(matches!(
             geometry(1 << 33, 512),
             Err(FormatError::TooLarge(_))
+        ));
+        assert!(matches!(
+            geometry(1 << 20, 1 << 17),
+            Err(FormatError::Unsupported(_))
         ));
         let mut dev = MemoryDevice::new(MIB, 512)?;
         assert!(write(&mut dev, &volume(100)).is_err());

@@ -255,7 +255,7 @@ fn serials_read(read: &SourceRead) -> Vec<&str> {
     if read.path.ends_with("/serial") {
         return vec![content.trim()];
     }
-    if !read.path.contains("/run/udev/") {
+    if !read.path.contains(bonk_hal::UDEV_DATA) {
         return Vec::new();
     }
     content
@@ -278,7 +278,7 @@ fn sanitize_reads(reads: &[SourceRead]) -> Vec<SourceRead> {
             if read.path == bonk_hal::macos_facts::SOURCE {
                 read.content = read.content.as_deref().map(bonk_hal::macos_facts::sanitize);
             }
-            if read.kind == "file" && read.path.contains("/run/udev/") {
+            if read.kind == "file" && read.path.contains(bonk_hal::UDEV_DATA) {
                 read.content = read.content.as_deref().map(sanitize_udev);
             }
             // Sans disque énuméré, `redact` ne connaît aucun numéro : celui-ci se masque d'après sa source.

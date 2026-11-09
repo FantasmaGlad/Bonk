@@ -8,7 +8,7 @@ use super::source::ImageFile;
 use super::target::open_read_only;
 use super::translate::{guarded, map_verify_error};
 use super::types::{
-    Deps, IgnoredRange, JobError, SCHEMA_VERSION, Target, TraceIo, VerifyDone, fail,
+    Deps, IgnoredRange, IgnoredReason, JobError, SCHEMA_VERSION, Target, TraceIo, VerifyDone, fail,
 };
 use crate::errors::Code;
 
@@ -75,7 +75,7 @@ pub fn verify(
             .map(|r| IgnoredRange {
                 offset: r.start,
                 length: r.end - r.start,
-                reason: "gpt_repair",
+                reason: IgnoredReason::GptRepair,
             })
             .collect(),
     })

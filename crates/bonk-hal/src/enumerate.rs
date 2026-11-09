@@ -41,6 +41,9 @@ pub fn enumerate_disks() -> Result<Vec<Disk>, EnumerateError> {
     crate::platform::current().enumerate()
 }
 
+/// udev database on Linux; captures replayed on any host still name it.
+pub const UDEV_DATA: &str = "/run/udev/data";
+
 /// A read of a system source, as it happened.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SourceRead {
