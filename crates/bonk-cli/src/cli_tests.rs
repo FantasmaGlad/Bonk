@@ -471,6 +471,7 @@ fn lancer_config(
             .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
             .collect(),
         io: job::Io::default(),
+        catalog: crate::catalog::Access::default(),
         privileged: bonk_hal::platform::current().is_privileged(),
     };
     let code = execute(

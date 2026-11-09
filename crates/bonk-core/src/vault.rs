@@ -8,6 +8,7 @@ use crate::format::table::{
     self, GUID_ESP, MBR_ESP, PartitionPlan, Slot, TableKind, gpt_type, mbr_type, usable_end,
 };
 use crate::format::{ALIGNMENT, Filesystem, FormatError, Ids, exfat, fat32, guid};
+use crate::format::{NewFile, fat32_tree};
 use crate::partition::{MbrEntry, Severity, inspect};
 
 /// exFAT volume label and partition name of the data partition.
@@ -20,6 +21,66 @@ const EFI_MIN_BYTES: u64 = 64 << 20;
 const EFI_MAX_BYTES: u64 = 1 << 30;
 const VAULT_MIN_BYTES: u64 = 64 << 20;
 const ESP_GUID_TEXT: &str = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B";
+/// Menu read by GRUB: lists the ISO files of the data partition at boot, so copying one needs no tool.
+pub const MENU: &str = include_str!("vault_menu.cfg");
+/// The path the GRUB image searches for.
+pub const MENU_PATH: &str = "bonk/grub.cfg";
+
+/// A file of the boot partition: path from its root, `/` separated.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BootFile {
+    pub path: String,
+    pub data: Vec<u8>,
+}
+
+/// Removable-media name of an architecture's EFI image: firmware loads the one of its own processor.
+#[must_use]
+pub fn efi_file_name(arch: &str) -> Option<&'static str> {
+    match arch {
+        "x86_64" => Some("BOOTX64.EFI"),
+        "aarch64" => Some("BOOTAA64.EFI"),
+        "riscv64" => Some("BOOTRISCV64.EFI"),
+        _ => None,
+    }
+}
+
+/// GRUB images by architecture, then the menu.
+///
+/// # Errors
+/// [`FormatError::Unsupported`] for an architecture without an EFI removable-media name.
+pub fn boot_files(efi: &[(&str, Vec<u8>)]) -> Result<Vec<BootFile>, FormatError> {
+    let mut files = efi
+        .iter()
+        .map(|(arch, data)| {
+            let name = efi_file_name(arch)
+                .ok_or_else(|| FormatError::Unsupported(format!("no EFI boot file for {arch}")))?;
+            Ok(BootFile {
+                path: format!("EFI/BOOT/{name}"),
+                data: data.clone(),
+            })
+        })
+        .collect::<Result<Vec<_>, FormatError>>()?;
+    files.push(BootFile {
+        path: MENU_PATH.to_owned(),
+        data: MENU.as_bytes().to_vec(),
+    });
+    Ok(files)
+}
+
+fn boot_layout(
+    dev_block: u32,
+    volume: &fat32::Volume<'_>,
+    files: &[BootFile],
+) -> Result<fat32_tree::Layout, FormatError> {
+    let new: Vec<NewFile> = files
+        .iter()
+        .map(|file| NewFile {
+            path: file.path.split('/').map(str::to_owned).collect(),
+            size: file.data.len() as u64,
+        })
+        .collect();
+    fat32_tree::layout(volume, dev_block, &new, &[])
+}
 
 /// Data partition first, so systems that mount only the first partition of a removable drive show the
 /// images; boot partition at the end.
@@ -132,26 +193,45 @@ pub fn write_table(
     table::write_slots(dev, plan.table, &slots, ids, false)
 }
 
-/// Empty exFAT and FAT32 volumes, after [`write_table`].
+/// Empty exFAT volume and FAT32 boot volume carrying `boot`, after [`write_table`].
 pub fn write_volumes(
     dev: &mut dyn BlockDevice,
     plan: &VaultPlan,
     ids: &Ids,
+    boot: &[BootFile],
 ) -> Result<(), FormatError> {
     exfat::write(dev, &exfat_volume(plan, ids))?;
-    fat32::write(dev, &fat32_volume(plan, ids))?;
-    Ok(())
+    let volume = fat32_volume(plan, ids);
+    let layout = boot_layout(dev.block_size(), &volume, boot)?;
+    layout.write_structures(dev)?;
+    for (index, file) in boot.iter().enumerate() {
+        layout.write_file(dev, index, &mut file.data.as_slice(), &mut |_| true)?;
+    }
+    layout.finish(dev, &volume)
 }
 
 /// Table and both volumes read back as written.
-pub fn verify(dev: &dyn BlockDevice, plan: &VaultPlan, ids: &Ids) -> Result<(), FormatError> {
+/// Table, both volumes and every boot file read back as written.
+pub fn verify(
+    dev: &dyn BlockDevice,
+    plan: &VaultPlan,
+    ids: &Ids,
+    boot: &[BootFile],
+) -> Result<(), FormatError> {
     if detect(dev)? != Some(*plan) {
         return Err(FormatError::Mismatch(
             "vault table read back differently".to_owned(),
         ));
     }
     exfat::verify(dev, &exfat_volume(plan, ids))?;
-    fat32::verify(dev, &fat32_volume(plan, ids))
+    let volume = fat32_volume(plan, ids);
+    let layout = boot_layout(dev.block_size(), &volume, boot)?;
+    layout.verify_structures(dev, &volume)?;
+    for (index, file) in boot.iter().enumerate() {
+        let expected = crate::write::hex(&Sha256::digest(&file.data));
+        layout.verify_file(dev, index, &expected, &mut |_| true)?;
+    }
+    Ok(())
 }
 
 /// `Some` when the drive carries exactly the two vault partitions, the first an exFAT volume labelled
@@ -251,10 +331,14 @@ mod tests {
         Ids::from_seed(b"vault")
     }
 
+    fn boot() -> Vec<BootFile> {
+        boot_files(&[("x86_64", b"MZ grub x86_64".repeat(1000))]).unwrap_or_default()
+    }
+
     fn init(dev: &mut MemoryDevice, table: TableKind) -> Result<VaultPlan, FormatError> {
         let plan = plan(dev.size(), dev.block_size(), table)?;
         write_table(dev, &plan, &ids())?;
-        write_volumes(dev, &plan, &ids())?;
+        write_volumes(dev, &plan, &ids(), &boot())?;
         Ok(plan)
     }
 
@@ -304,7 +388,7 @@ mod tests {
         for table in TableKind::ALL {
             let mut dev = MemoryDevice::new(256 * MIB, 512)?;
             let plan = init(&mut dev, table)?;
-            verify(&dev, &plan, &ids())?;
+            verify(&dev, &plan, &ids(), &boot())?;
             assert_eq!(detect(&dev)?, Some(plan));
             assert!(images(&dev, &plan)?.is_empty());
             let layout = inspect(&dev)?;
@@ -386,6 +470,44 @@ mod tests {
         assert_eq!(detect(&dev)?, Some(plan));
         let found: Vec<String> = images(&dev, &plan)?.into_iter().map(|f| f.path).collect();
         assert_eq!(found, ["Linux/Fedora.ISO", "debian-13.iso"]);
+        Ok(())
+    }
+
+    #[test]
+    fn les_fichiers_de_demarrage_portent_les_noms_uefi_et_le_menu() -> Result<(), FormatError> {
+        let files = boot_files(&[
+            ("x86_64", vec![1]),
+            ("aarch64", vec![2]),
+            ("riscv64", vec![3]),
+        ])?;
+        let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
+        assert_eq!(
+            paths,
+            [
+                "EFI/BOOT/BOOTX64.EFI",
+                "EFI/BOOT/BOOTAA64.EFI",
+                "EFI/BOOT/BOOTRISCV64.EFI",
+                "bonk/grub.cfg"
+            ]
+        );
+        assert!(files[3].data.starts_with(b"set timeout="));
+        assert!(matches!(
+            boot_files(&[("mips", vec![])]),
+            Err(FormatError::Unsupported(_))
+        ));
+        Ok(())
+    }
+
+    /// The read-back compares every boot file: a changed byte of GRUB is caught.
+    #[test]
+    fn un_octet_de_grub_change_fait_echouer_la_relecture() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let mut dev = MemoryDevice::new(256 * MIB, 512)?;
+        let plan = init(&mut dev, TableKind::Mbr)?;
+        let mut other = boot();
+        other[0].data[10] ^= 1;
+        assert!(verify(&dev, &plan, &ids(), &other).is_err());
+        verify(&dev, &plan, &ids(), &boot())?;
         Ok(())
     }
 
