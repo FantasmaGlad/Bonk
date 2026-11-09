@@ -91,7 +91,7 @@ impl<'a> Reader<'a> {
         }
         let sector_shift = boot[108];
         let cluster_shift = boot[109];
-        if !(9..=12).contains(&sector_shift) || sector_shift + cluster_shift > 25 {
+        if !(9..=12).contains(&sector_shift) || cluster_shift > 25 - sector_shift {
             return Err(invalid("exFAT sector or cluster size out of range"));
         }
         let sector = 1u64 << sector_shift;
@@ -359,6 +359,25 @@ mod tests {
             Err(FormatError::Invalid(_))
         ));
         assert!(Reader::open(&dev, 8000, 8192).is_err());
+        Ok(())
+    }
+
+    /// Shifts come from the drive: their sum must not overflow, whatever their values.
+    #[test]
+    fn des_tailles_de_grappe_aberrantes_sont_refusees() -> Result<(), Box<dyn std::error::Error>> {
+        for (sector_shift, cluster_shift) in [(9u8, 255u8), (255, 255), (12, 14)] {
+            let mut bytes = vec![0u8; 4096];
+            bytes[3..11].copy_from_slice(b"EXFAT   ");
+            bytes[108] = sector_shift;
+            bytes[109] = cluster_shift;
+            bytes[510] = 0x55;
+            bytes[511] = 0xAA;
+            let dev = MemoryDevice::from_bytes(bytes, 512)?;
+            assert!(matches!(
+                Reader::open(&dev, 0, 8),
+                Err(FormatError::Invalid(_))
+            ));
+        }
         Ok(())
     }
 
