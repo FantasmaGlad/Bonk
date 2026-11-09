@@ -37,7 +37,7 @@ use crate::safety::{Eligibility, Exclusion, FilterOptions, evaluate};
 use crate::target::OpenTargetError;
 use crate::windows_facts::partition_numbers;
 
-/// Sous-commande cachée du binaire, lancée élevée.
+/// Hidden subcommand of the binary, started elevated.
 const HELPER_COMMAND: &str = "elevated-helper";
 
 fn access_name(access: Access) -> &'static str {
@@ -47,7 +47,7 @@ fn access_name(access: Access) -> &'static str {
     }
 }
 
-/// Le côté client : tube ouvert vers le helper, gardé jusqu'à la fin du processus.
+/// Client side: pipe to the helper, kept until exit.
 struct Session {
     pipe: File,
     reader: BufReader<File>,
@@ -66,7 +66,7 @@ fn start() -> io::Result<Session> {
     let client = std::process::id();
     let name = format!(r"\\.\pipe\bonk-helper-{client}-{nanos}");
     let wide_name = wide(&name);
-    // SAFETY : nom terminé par un zéro ; `FIRST_PIPE_INSTANCE` refuse un tube déjà créé par un autre.
+    // SAFETY: zero-terminated name; `FIRST_PIPE_INSTANCE` refuses a pipe someone else created.
     let pipe = unsafe {
         CreateNamedPipeW(
             wide_name.as_ptr(),
@@ -82,7 +82,7 @@ fn start() -> io::Result<Session> {
     if pipe == INVALID_HANDLE_VALUE {
         return Err(io::Error::last_os_error());
     }
-    // SAFETY : poignée valide, dont ce `File` devient seul propriétaire.
+    // SAFETY: valid handle, now solely owned by this `File`.
     let pipe = unsafe { File::from_raw_handle(pipe) };
 
     let exe = wide(&std::env::current_exe()?.to_string_lossy());
@@ -90,7 +90,7 @@ fn start() -> io::Result<Session> {
     let parameters = wide(&format!(
         "{HELPER_COMMAND} --client-pid {client} --pipe {name}"
     ));
-    // SAFETY : structure simple remplie de zéros, puis champs valides pendant tout l'appel.
+    // SAFETY: zeroed plain struct, then fields valid for the whole call.
     let process = unsafe {
         let mut info: SHELLEXECUTEINFOW = std::mem::zeroed();
         info.cbSize = u32::try_from(size_of::<SHELLEXECUTEINFOW>()).unwrap_or(0);
@@ -111,21 +111,21 @@ fn start() -> io::Result<Session> {
     if process.is_null() {
         return Err(denied("the system started no helper"));
     }
-    // SAFETY : poignée valide rendue par `ShellExecuteExW`.
+    // SAFETY: valid handle from `ShellExecuteExW`.
     let helper = unsafe { GetProcessId(process) };
 
-    // Un helper mort avant de se connecter laisserait `ConnectNamedPipe` bloqué : ce fil le débloque à sa
-    // mort, et le contrôle du numéro de processus écarte cette connexion.
+    // A helper that dies before connecting would leave `ConnectNamedPipe` blocked: this thread unblocks it,
+    // and the process id check rejects that connection.
     let (watched, watched_name) = (process as isize, name.clone());
     std::thread::spawn(move || {
-        // SAFETY : poignée gardée ouverte jusqu'à la fin du processus (jamais fermée ici).
+        // SAFETY: handle kept open until exit, never closed here.
         unsafe {
             WaitForSingleObject(watched as HANDLE, INFINITE);
         }
         let _ = OpenOptions::new().read(true).open(watched_name);
     });
 
-    // SAFETY : poignée de tube valide, sans chevauchement.
+    // SAFETY: valid pipe handle, not overlapped.
     if unsafe { ConnectNamedPipe(pipe.as_raw_handle(), null_mut()) } == 0 {
         let error = io::Error::last_os_error();
         if error.raw_os_error() != i32::try_from(ERROR_PIPE_CONNECTED).ok() {
@@ -133,7 +133,7 @@ fn start() -> io::Result<Session> {
         }
     }
     let mut peer = 0u32;
-    // SAFETY : tube valide, sortie valide.
+    // SAFETY: valid pipe, valid output.
     let known = unsafe { GetNamedPipeClientProcessId(pipe.as_raw_handle(), &raw mut peer) };
     if known == 0 || peer != helper {
         return Err(denied(
@@ -146,7 +146,7 @@ fn start() -> io::Result<Session> {
     })
 }
 
-/// Lance le helper si besoin (une seule invite par processus), puis envoie la requête.
+/// Starts the helper if needed (one prompt per process), then sends the request.
 fn ask(request: &Value) -> io::Result<Value> {
     let mut slot = SESSION
         .lock()
@@ -182,7 +182,7 @@ pub(super) fn open(path: &Path, access: Access) -> Result<Box<dyn BlockDevice>, 
         .as_u64()
         .and_then(|h| usize::try_from(h).ok())
         .ok_or_else(|| io::Error::other("no handle in the helper reply"))?;
-    // SAFETY : le helper vient de créer cette poignée dans ce processus, qui en est seul propriétaire.
+    // SAFETY: the helper just created this handle in this process, its sole owner.
     let file = File::from(unsafe { OwnedHandle::from_raw_handle(handle as *mut c_void) });
     Ok(Box::new(windows_disk::from_file(file, access)?))
 }
@@ -217,12 +217,11 @@ pub(super) fn format(
     Ok(())
 }
 
-/// Le disque doit exister et ne pas être interdit, avec les options les plus larges : ce que le client a
-/// demandé n'est pas cru, mais il peut avoir admis un disque interne ou virtuel. Le disque système et
-/// ses semblables restent refusés ici quoi qu'il arrive.
+/// With the widest options: the client's request is not trusted, but it may have allowed an internal or
+/// virtual disk. The system disk and its kind stay refused regardless.
 ///
-/// `fresh_table` : Bonk vient d'écrire la table, et Windows a pu donner une lettre à la nouvelle partition.
-/// Ce montage-là ne dit rien du disque.
+/// `fresh_table`: Bonk just wrote the table, and Windows may have given the new partition a letter. That
+/// mount says nothing about the disk.
 fn check_allowed(path: &str, fresh_table: bool) -> Result<(), String> {
     let disks = Windows.enumerate().map_err(|e| e.to_string())?;
     let disk = disks
@@ -245,17 +244,17 @@ fn check_allowed(path: &str, fresh_table: bool) -> Result<(), String> {
     Ok(())
 }
 
-/// Copie la poignée dans le client ; sa valeur n'a de sens que là-bas.
+/// The handle value only means something in the client.
 fn hand_over(file: &File, client: u32) -> io::Result<usize> {
-    // SAFETY : numéro de processus simple.
+    // SAFETY: plain process id.
     let target = unsafe { OpenProcess(PROCESS_DUP_HANDLE, 0, client) };
     if target.is_null() {
         return Err(io::Error::last_os_error());
     }
-    // SAFETY : `target` vient d'être ouvert et n'est fermé qu'ici.
+    // SAFETY: `target` was just opened and is closed only here.
     let target = unsafe { OwnedHandle::from_raw_handle(target) };
     let mut copy: HANDLE = null_mut();
-    // SAFETY : poignées valides ; la copie appartient au client.
+    // SAFETY: valid handles; the copy belongs to the client.
     let done = unsafe {
         DuplicateHandle(
             GetCurrentProcess(),
@@ -319,7 +318,7 @@ fn respond(request: &Value, client: u32) -> Result<Value, String> {
     }
 }
 
-/// Boucle du helper. À la fermeture du tube, le processus se termine et ses verrous tombent.
+/// When the pipe closes the process exits and its locks go.
 pub(super) fn serve(client: u32, pipe: &str) -> Result<(), String> {
     let text = |e: io::Error| e.to_string();
     let mut writer = OpenOptions::new()
@@ -328,7 +327,7 @@ pub(super) fn serve(client: u32, pipe: &str) -> Result<(), String> {
         .open(pipe)
         .map_err(text)?;
     let mut server = 0u32;
-    // SAFETY : tube valide, sortie valide.
+    // SAFETY: valid pipe, valid output.
     let known = unsafe { GetNamedPipeServerProcessId(writer.as_raw_handle(), &raw mut server) };
     if known == 0 || server != client {
         return Err("the pipe does not belong to the announced client".to_owned());

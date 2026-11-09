@@ -13,7 +13,7 @@ pub(super) fn en_cours_d_ecriture() -> App {
     app
 }
 
-/// Débranché ou énumération en échec : le sous-processus continue, la progression et « Annuler » restent.
+/// Unplugged, or enumeration failing: the child keeps running, progress and Cancel stay.
 #[test]
 fn l_ecriture_reste_visible_si_le_disque_quitte_la_liste() {
     let mut app = en_cours_d_ecriture();
@@ -25,7 +25,7 @@ fn l_ecriture_reste_visible_si_le_disque_quitte_la_liste() {
     assert!(contient(&app, "Annuler"));
 }
 
-/// Le résultat reste à l'écran jusqu'à « Fermer », code d'erreur compris, même si le disque est parti.
+/// The result stays on screen until Close, error code included, even if the disk is gone.
 #[test]
 fn le_resultat_reste_jusqu_a_la_fermeture() {
     let mut app = en_cours_d_ecriture();
@@ -58,7 +58,7 @@ fn fermer_le_resultat_ne_rouvre_pas_le_panneau() {
     assert!(app.selected.is_none());
 }
 
-/// Le journal de la fenêtre ne porte jamais le chemin de l'image, même dans la commande équivalente.
+/// The window log never holds the image path, even in the equivalent command.
 #[test]
 fn le_journal_ne_porte_pas_le_chemin_de_l_image() {
     let mut app = app_avec_panneau();
@@ -67,7 +67,7 @@ fn le_journal_ne_porte_pas_le_chemin_de_l_image() {
     assert!(!app.logged_equivalents().contains("secret.iso"));
 }
 
-/// L'empreinte et le mode saisis passent dans la commande équivalente, comme dans ce qui sera lancé.
+/// The hash and mode entered go into the equivalent command, as into what will run.
 #[test]
 fn empreinte_et_mode_brut_arrivent_dans_la_commande() {
     let mut app = app_avec_panneau();

@@ -10,7 +10,7 @@ fn la_fenetre_affiche_la_cle_et_pas_le_disque_systeme() {
     assert!(contient(&app, "Cle de test"));
     assert!(contient(&app, "PROPOSÉ"));
     assert!(!contient(&app, "Disque systeme"));
-    // Pas de bouton d'écriture : la fenêtre est en lecture seule.
+    // No write button: the window is read-only.
     assert!(!contient(&app, "Écrire"));
 }
 
@@ -56,8 +56,8 @@ fn un_echec_s_affiche_en_toutes_lettres() {
     assert!(contient(&app, "base udev introuvable"));
 }
 
-/// Écrit des captures PNG de la fenêtre dans le dossier désigné par `BONK_GUI_CAPTURES`, pour les
-/// regarder. Sans cette variable, le test ne fait rien : aucune image n'est comparée ni versionnée.
+/// Writes PNG captures of the window to the directory `BONK_GUI_CAPTURES` names, to look at. Without the
+/// variable the test does nothing: no image is compared or versioned.
 #[test]
 fn captures_facultatives() -> Result<(), Box<dyn std::error::Error>> {
     let Some(dossier) = std::env::var_os("BONK_GUI_CAPTURES") else {
@@ -83,7 +83,7 @@ fn captures_facultatives() -> Result<(), Box<dyn std::error::Error>> {
     )
     .snapshot(&theme)?
     .matches_image(dossier.join("fenetre-tout"))?;
-    // Focus clavier sur la deuxième carte, détail fermé.
+    // Keyboard focus on the second card, detail closed.
     let _ = app.update(Message::Select("usb-cle".to_owned()));
     nav(&mut app, Nav::Escape);
     nav(&mut app, Nav::Previous);
@@ -103,7 +103,7 @@ fn captures_facultatives() -> Result<(), Box<dyn std::error::Error>> {
     )
     .snapshot(&theme)?
     .matches_image(dossier.join("fenetre-focus-case"))?;
-    // Panneau d'écriture : saisie d'une image, puis progression.
+    // Write panel: an image entered, then progress.
     let mut ecriture = loaded(sample());
     let _ = ecriture.update(Message::Select("usb-cle".to_owned()));
     let _ = ecriture.update(Message::ImageInput(

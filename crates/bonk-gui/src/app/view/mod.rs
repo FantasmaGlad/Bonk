@@ -17,7 +17,7 @@ pub(super) use bonk_ui::text::secondes_restantes;
 
 pub(super) use disk::internal_dialog;
 
-/// Entoure un composant de l'indicateur de focus (visible seulement s'il a le focus).
+/// Visible only when the widget has focus.
 pub(super) fn ring<'a>(
     content: impl Into<Element<'a, Message>>,
     focused: bool,
@@ -54,7 +54,7 @@ impl App {
             ]
             .spacing(4)
             .width(Fill),
-            // Chaque langue est nommée dans sa propre langue : elle reste trouvable sans lire l'autre.
+            // Each language is named in itself: findable without reading the other.
             ring(
                 button(text(lang.pick("Français", "English")).size(14))
                     .on_press(Message::SwitchLanguage)
@@ -156,7 +156,7 @@ impl App {
         .into()
     }
 
-    /// La liste des disques, ou ce qui en tient lieu : erreur de détection, liste vide.
+    /// Or what stands for it: detection error, empty list.
     fn disk_list<'a>(&'a self, entries: Vec<(&'a Disk, Eligibility)>) -> Element<'a, Message> {
         let lang = self.lang;
         if let Some(erreur) = &self.error {
@@ -199,7 +199,7 @@ impl App {
             let mut cards: Vec<Element<'_, Message>> = Vec::new();
             for (disk, verdict) in entries {
                 cards.push(self.card(disk, verdict));
-                // Le panneau d'écriture est hors de la carte : un clic dedans ne referme pas le disque.
+                // The write panel is outside the card: a click in it does not close the disk.
                 if self.selected.as_deref() == Some(disk.id.as_str())
                     && let Some(panel) = self.write_panel(disk)
                 {

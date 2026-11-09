@@ -31,7 +31,7 @@ fn toutes_les_commandes_equivalentes_sont_acceptees_par_la_cli() -> Result<(), S
                 let mots = bonk_cli::check_command_line(commande)
                     .map_err(|e| format!("{commande:?} refusée : {e}"))?;
                 verifiees += 1;
-                // Les réglages affichés sont exactement ceux de la vue.
+                // The settings shown are exactly the view's.
                 assert_eq!(
                     mots.iter().any(|m| m == "--all"),
                     options.show_all && mots[1] == "list"
@@ -48,7 +48,7 @@ fn toutes_les_commandes_equivalentes_sont_acceptees_par_la_cli() -> Result<(), S
                     assert_eq!(Some(mots[2].as_str()), selection, "{commande:?}");
                 }
                 if mots[1] == "write" {
-                    // L'image arrive intacte, et la confirmation fait partie de la commande copiée.
+                    // The image arrives intact, and the confirmation is part of the copied command.
                     assert_eq!(mots[3], image, "{commande:?}");
                     assert!(mots.iter().any(|m| m == "--yes"));
                 }

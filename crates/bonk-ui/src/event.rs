@@ -6,7 +6,7 @@ use crate::command::{ViewOptions, WriteView};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Event {
-    /// Le processus est lancé (numéro de processus, pour l'annulation).
+    /// Process id, for cancelling.
     Started(u32),
     Progress {
         phase: Phase,
@@ -23,13 +23,13 @@ pub enum Outcome {
         bytes: u64,
         verified: bool,
         gpt_repaired: bool,
-        /// Clé Windows : le certificat du chargeur, dont l'écran dit ce qu'il implique dans sa langue.
+        /// Windows drive: the loader certificate; the screen says what it means in its language.
         secure_boot: Option<bonk_core::pe::Signer>,
-        /// Clé Windows qui démarre aussi en BIOS hérité.
+        /// Windows drive that also boots in legacy BIOS.
         bios_boot: bool,
     },
     Failed {
-        /// Code d'erreur stable (`bonk explain`), quand le processus en a donné un.
+        /// Stable error code (`bonk explain`), when the process gave one.
         code: Option<String>,
         message: String,
     },
@@ -56,7 +56,7 @@ pub fn write_args(
     if options.allow_virtual {
         args.push("--allow-virtual".to_owned());
     }
-    // La personne a confirmé dans la fenêtre : `bonk write` exige alors `--force`.
+    // Confirmed in the window: `bonk write` then requires `--force`.
     if internal_confirmed {
         args.push("--force".to_owned());
     }
@@ -89,8 +89,8 @@ pub fn parse_line(line: &str) -> Option<Event> {
     }
 }
 
-/// Échec d'un processus qui n'a pas pu donner son événement `error` (arguments refusés, arrêt brutal),
-/// d'après la sortie d'erreur : la dernière ligne `bonk: error: message [Exxxx]`.
+/// A process that could not emit its `error` event (arguments refused, crash), read from stderr: the last
+/// `bonk: error: message [Exxxx]` line.
 pub fn parse_failure(stderr: &str, status: &str) -> Outcome {
     let line = stderr
         .lines()
@@ -109,8 +109,8 @@ pub fn parse_failure(stderr: &str, status: &str) -> Outcome {
                 message: message.to_owned(),
             }
         }
-        // Arrêté sans ligne d'erreur (tué, plantage) : rattaché à l'échec d'écriture, dont la fenêtre affiche le
-        // titre dans sa langue ; le détail suit la langue des messages du moteur.
+        // Stopped without an error line (killed, crash): filed as a write failure, whose title the window
+        // shows in its language; the detail follows the engine's message language.
         None => Outcome::Failed {
             code: Some("E4001".to_owned()),
             message: format!("the write process stopped ({status})"),

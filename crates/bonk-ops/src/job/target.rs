@@ -11,12 +11,10 @@ use bonk_hal::{
 use super::types::{Deps, JobError, Target, TargetInfo, TargetKind, TraceIo, fail};
 use crate::errors::Code;
 
-/// Cible ouverte : périphérique, informations et points démontés.
 pub(super) type OpenedTarget = (Box<dyn BlockDevice>, TargetInfo, Vec<String>);
 
-/// Cible reconnue : informations, disque s'il y en a un, et ce qui sera démonté. Son identité est
-/// fixée une fois, au choix : c'est elle que l'on revérifie avant d'ouvrir, jamais celle d'une
-/// énumération plus récente (sinon un disque remplacé entre-temps serait accepté sans le dire).
+/// Its identity is fixed once, at choice time: that is what is re-checked before opening, never a later
+/// enumeration's (a disk swapped meanwhile would pass unnoticed).
 pub(super) struct Chosen {
     pub(super) info: TargetInfo,
     pub(super) disk: Option<Disk>,
@@ -24,8 +22,7 @@ pub(super) struct Chosen {
 }
 
 impl Chosen {
-    /// Taille de secteur du disque choisi, que le plan doit employer avant d'ouvrir le support ; 512 quand
-    /// le système ne la donne pas ou pour un fichier image.
+    /// What the plan must use before opening; 512 when the system does not say, or for an image file.
     pub(super) fn block_size(&self) -> u32 {
         self.disk
             .as_ref()
@@ -107,10 +104,9 @@ fn open_error(err: BlockError) -> JobError {
     }
 }
 
-/// Fait relire au système la table du disque qui vient d'être écrit, une fois le disque refermé : le service
-/// ne relit pas la table d'un disque ouvert en exclusif. Sans cela, le noyau peut garder l'ancienne taille
-/// d'une partition, et la lire sur cette machine échoue jusqu'au prochain branchement. Un échec n'enlève
-/// rien à ce qui est écrit : il est signalé, pas fatal.
+/// Once the disk is closed: the service does not reread the table of a disk opened exclusively. Without it
+/// the kernel may keep a partition's old size, and reading it here fails until replug. A failure is reported,
+/// not fatal.
 pub(super) fn reread_table(disk: &Path, elevation: Elevation, deps: &Deps<'_>) {
     if let Err(error) = (deps.io.rescan)(disk, elevation) {
         log::warn!(
@@ -129,7 +125,7 @@ pub(super) struct OpenRequest {
     pub(super) trace_io: Option<TraceIo>,
 }
 
-/// Choisit et ouvre la cible en lecture seule : rien à démonter, rien à écrire.
+/// Nothing to unmount, nothing to write.
 pub(super) fn open_read_only(
     target: &Target,
     options: FilterOptions,
@@ -170,20 +166,20 @@ pub(super) fn open_target(
     let (device, unmounted): (Box<dyn BlockDevice>, Vec<String>) = match (&chosen.disk, target) {
         (Some(disk), _) => {
             let identity = TargetIdentity::from(disk);
-            // Le droit d'abord : un refus ne doit laisser la clé ni démontée ni touchée.
+            // Rights first: a refusal must leave the key neither unmounted nor touched.
             let prepared = (deps.io.prepare)(Path::new(&disk.path), access, elevation);
-            // Annulé pendant l'attente de l'autorisation : la clé reste montée, intacte.
+            // Cancelled while waiting for authorization: the key stays mounted and untouched.
             if (deps.io.cancelled)() {
                 return Err(fail(Code::Cancelled, "cancelled before opening the disk"));
             }
             prepared.map_err(open_error)?;
-            // Démonter seulement pour écrire : relire un volume monté ne le perturbe pas.
+            // Unmount only to write: reading a mounted volume does not disturb it.
             let unmounted = if writing {
                 (deps.io.unmount)(disk, elevation).map_err(map_open_target)?
             } else {
                 Vec::new()
             };
-            // Identité revérifiée immédiatement avant d'ouvrir.
+            // Identity re-checked right before opening.
             let fresh = enumerate(deps)?;
             let again = reverify(&identity, &fresh, options).map_err(map_open_target)?;
             let opened = (deps.io.open_node)(Path::new(&again.path), access, elevation);
@@ -230,7 +226,7 @@ pub(super) fn open_target(
     };
     let device: Box<dyn BlockDevice> = match trace_io {
         Some(mode) => {
-            // Les données d'un disque réel ne sont jamais journalisées, même sur demande.
+            // Data of a real disk is never logged, even on request.
             let head = mode == TraceIo::Data && chosen.disk.is_none();
             if mode == TraceIo::Data && !head {
                 log::warn!(target: "bonk::write", "--trace-io=data ignored: reserved for image files");

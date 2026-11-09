@@ -36,7 +36,7 @@ const FRENCH_TITLES: &[(&str, &str)] = &[
     ("E7002", "Système de fichiers indisponible sur cet hôte"),
 ];
 
-/// Le titre français d'un code. Public pour que le test du binaire compare à la liste de `bonk explain`.
+/// French title of a code. Public so the binary test compares it with `bonk explain`.
 #[must_use]
 pub fn french_title(code: &str) -> Option<&'static str> {
     FRENCH_TITLES

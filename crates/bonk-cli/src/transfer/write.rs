@@ -72,7 +72,7 @@ pub(crate) fn run_write(
             WriteOutcome::Done(done) => done_lines(done, no_repair_gpt, out),
         },
     );
-    // Le téléchargement a pu faire grossir le cache : le dire, seulement à qui lit du texte.
+    // The download may have grown the cache: say so, only to text readers.
     let text = !args.common.json && args.common.progress != ProgressMode::Json;
     let downloaded = source.to_str().is_some_and(bonk_catalog::is_url);
     if code == 0

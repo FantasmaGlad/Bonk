@@ -7,8 +7,7 @@ use bonk_ui::event::write_args;
 pub(crate) use bonk_ui::event::{Event, Outcome, parse_failure, parse_line};
 use iced::futures::channel::mpsc::{UnboundedReceiver, unbounded};
 
-/// Lance `program args...` et rend le flux de ses événements. Les lectures se font dans des fils : la
-/// fenêtre ne bloque jamais.
+/// Returns the stream of its events. Reads happen on threads: the window never blocks.
 pub(crate) fn spawn(program: &Path, args: &[String]) -> UnboundedReceiver<Event> {
     let (sender, receiver) = unbounded();
     let (program, args) = (program.to_path_buf(), args.to_vec());
@@ -34,7 +33,7 @@ pub(crate) fn spawn(program: &Path, args: &[String]) -> UnboundedReceiver<Event>
             }
         };
         let _ = sender.unbounded_send(Event::Started(child.id()));
-        // La sortie d'erreur est lue à part : un processus bavard ne doit pas se bloquer dessus.
+        // stderr is read separately: a chatty process must not block on it.
         let stderr_reader = child.stderr.take().map(|mut pipe| {
             std::thread::spawn(move || {
                 let mut text = String::new();
@@ -68,7 +67,7 @@ pub(crate) fn spawn(program: &Path, args: &[String]) -> UnboundedReceiver<Event>
     receiver
 }
 
-/// Demande l'arrêt propre du processus d'écriture (il s'arrête entre deux blocs).
+/// Clean stop: it stops between two blocks.
 pub(crate) fn cancel(pid: u32) {
     if let Err(error) = bonk_hal::interrupt::stop_process(pid) {
         log::warn!(target: "bonk::gui", pid = pid, error = error.to_string().as_str(); "write process not stopped");
@@ -79,7 +78,7 @@ pub(crate) fn cancel(pid: u32) {
 mod tests {
     #![allow(clippy::expect_used)]
 
-    // Lu seulement par les tests qui lancent un vrai processus (Unix).
+    // Only read by tests that start a real process (Unix).
     #[cfg(unix)]
     use iced::futures::StreamExt;
 
@@ -128,7 +127,7 @@ mod tests {
                 && args.contains(&"--allow-virtual".to_owned())
         );
         assert!(args.contains(&"--force".to_owned()));
-        // `--all` n'a pas de sens pour une écriture.
+        // `--all` makes no sense for a write.
         assert!(!args.contains(&"--all".to_owned()));
     }
 
@@ -256,7 +255,7 @@ mod tests {
                 message: "cible refusée".into()
             }))
         );
-        // Un résultat affiché mais un code de sortie non nul reste un échec.
+        // A result shown with a non-zero exit code is still a failure.
         let events = iced::futures::executor::block_on(collect(
             r#"echo '{"event":"result","write":{"bytes":1}}'; echo 'bonk: error: après coup [E4001]' >&2; exit 1"#,
         ));
@@ -277,7 +276,7 @@ mod tests {
         assert!(
             matches!(events.as_slice(), [Event::Finished(Outcome::Failed { message, .. })] if message.contains("cannot start"))
         );
-        // L'annulation envoie SIGTERM au processus.
+        // Cancel sends SIGTERM to the process.
         let mut stream = spawn(
             Path::new("/bin/sh"),
             &["-c".to_owned(), "sleep 30".to_owned()],

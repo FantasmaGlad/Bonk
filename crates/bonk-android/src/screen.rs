@@ -14,9 +14,9 @@ use serde_json::{Value, json};
 
 pub(crate) static CANCEL: AtomicBool = AtomicBool::new(false);
 pub(crate) static EVENTS: Mutex<VecDeque<Event>> = Mutex::new(VecDeque::new());
-/// Une panique en tenant un verrou l'empoisonne : refuser ensuite tout accès laisserait l'écran mort jusqu'au
-/// redémarrage de l'application. L'état est repris tel qu'il était ; une écriture en cours a ses propres
-/// contrôles (relecture, empreinte), et le pire est un écran à rafraîchir.
+/// A panic while holding a lock poisons it: refusing access afterwards would leave the screen dead until the
+/// app restarts. The state is taken as it was; a running write has its own checks (read-back, hash), and the
+/// worst case is a screen to refresh.
 pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
@@ -24,15 +24,14 @@ pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 pub(crate) static MODEL: LazyLock<Mutex<Model>> =
     LazyLock::new(|| Mutex::new(Model::new(ViewOptions::default(), Lang::En).0));
 
-/// Le disque tel que le filtre de sécurité le juge. Android ne montre que de l'USB : ni le stockage interne
-/// du téléphone, ni ses partitions, que le système garde pour lui.
+/// As the safety filter judges it. Android only shows USB: neither the phone's internal storage nor its
+/// partitions, which the system keeps.
 fn disk_of(value: &Value) -> Option<Disk> {
     let serial = value["serial"].as_str().filter(|s| !s.is_empty());
     let name = value["device"].as_str()?;
-    // La série seule ne suffit pas : des clés clones la partagent, et la carte touchée désignerait alors la
-    // première de la liste. Le point de branchement la départage ; rebrancher la clé change donc son
-    // identifiant, et le brouillon repart de zéro (image vide, nouveau délai) au lieu de viser ce qui
-    // occupe la place.
+    // The serial alone is not enough: cloned keys share it, and the tapped card would then name the first in
+    // the list. The plug point tells them apart; replugging the key changes its id, and the draft starts over
+    // (empty image, new delay) instead of targeting whatever took the place.
     let port = name
         .strip_prefix("/dev/bus/usb/")
         .unwrap_or(name)
@@ -63,8 +62,8 @@ fn disk_of(value: &Value) -> Option<Disk> {
     })
 }
 
-/// Les partitions lues sur la clé, telles que la sonde les rend à l'application : sans elles, le récapitulatif
-/// avant effacement présenterait une clé pleine comme vide. GPT d'abord ; sinon MBR hors table protectrice.
+/// Without them the summary before erasing would show a full key as empty. GPT first, else MBR without the
+/// protective entry.
 pub(crate) fn partitions_of(layout: &Layout) -> Vec<Value> {
     let block = u64::from(layout.logical_block_size);
     if let Some(gpt) = layout.gpt.as_ref().filter(|gpt| !gpt.entries.is_empty()) {
@@ -148,8 +147,8 @@ fn message_of(input: &Value, model: &Model) -> Option<Message> {
             total: input["total"].as_u64(),
             rate: input["rate"].as_f64().unwrap_or(0.0),
         }),
-        // Échec né dans l'application (annulation, clé partie, téléchargement) : son code, quand il en a un,
-        // fait afficher le titre traduit, comme pour une erreur du moteur.
+        // Failure born in the app (cancel, key gone, download): its code, when it has one, shows the
+        // translated title, as for an engine error.
         "failed" => Message::Write(Event::Finished(Outcome::Failed {
             code: text_of("code"),
             message: text_of("message")?,
@@ -158,7 +157,7 @@ fn message_of(input: &Value, model: &Model) -> Option<Message> {
     })
 }
 
-/// Ce que Kotlin doit faire. Ce que Rust sait faire seul ne sort pas d'ici.
+/// What Kotlin must do; what Rust can do alone does not leave here.
 fn effects_out(model: &mut Model, effects: Vec<Effect>, draft: Option<Value>) -> Vec<Value> {
     let mut out = Vec::new();
     for effect in effects {
@@ -170,7 +169,7 @@ fn effects_out(model: &mut Model, effects: Vec<Effect>, draft: Option<Value>) ->
                 "do": "save_language",
                 "value": if lang == Lang::Fr { "fr" } else { "en" },
             })),
-            // Tor n'existe pas sur le téléphone sans application dédiée : l'option reste éteinte.
+            // No Tor on the phone without a dedicated app: the option stays off.
             Effect::DetectTor => {
                 let _ = model.update(Message::TorDetected(None));
             }
@@ -269,7 +268,7 @@ fn menu_state(model: &Model) -> Value {
     names.sort();
     let mut index = 0;
     let mut rows = Vec::new();
-    // Liste longue : la fabriquer et la relire à chaque battement ralentirait tout l'écran pour rien.
+    // Long list: building and rereading it at every tick would slow the whole screen for nothing.
     let shown: &[&bonk_ui::catalog::System] = if model.menu_open { &filtered } else { &[] };
     for system in shown {
         for choice in &system.choices {
@@ -394,7 +393,7 @@ pub fn state(model: &Model) -> Value {
             "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
         ),
         "language": lang.pick("Français", "English"),
-        // La langue choisie : l'application y lit ses propres textes (ressources Android, notification).
+        // The app reads its own texts (Android resources, notification) in this language.
         "lang": lang.pick("en", "fr"),
         "status": model.status_line(model.entries().len()),
         "show_all": model.show_all,
@@ -409,7 +408,7 @@ pub fn state(model: &Model) -> Value {
     })
 }
 
-/// Un message, ou seulement un regard sur l'état avec `{}` : l'état et les effets à accomplir.
+/// A message, or just a look at the state with `{}`: the state and the effects to perform.
 #[must_use]
 pub fn dispatch(input: &str) -> String {
     let mut model = lock(&MODEL);
@@ -427,7 +426,7 @@ pub fn dispatch(input: &str) -> String {
     json!({"state": state(&model), "effects": effects}).to_string()
 }
 
-/// Pose la langue de départ, celle du système ou celle choisie la fois d'avant.
+/// The system's language, or the one chosen last time.
 pub fn set_language(fr: bool) {
     lock(&MODEL).lang = if fr { Lang::Fr } else { Lang::En };
 }
@@ -496,7 +495,7 @@ mod tests {
         assert!(matches!(model.write, WriteState::Running { .. }));
     }
 
-    /// Une ligne qui change de hauteur à chaque détection fait sauter tout l'écran.
+    /// A row that changes height at each detection makes the whole screen jump.
     #[test]
     fn la_detection_periodique_ne_change_pas_l_etat_affiche() {
         let mut model = Model {
@@ -512,8 +511,8 @@ mod tests {
         assert_eq!(state(&model), before);
     }
 
-    /// Deux clés clones ont souvent la même série : chacune doit garder sa propre carte, et toucher la
-    /// seconde doit faire écrire la seconde, jamais la première de la liste.
+    /// Cloned keys often share a serial: each must keep its own card, and tapping the second must write the
+    /// second, never the first in the list.
     #[test]
     fn deux_cles_de_meme_serie_restent_distinctes() {
         let mut model = Model {
@@ -547,7 +546,7 @@ mod tests {
         );
     }
 
-    /// Le récapitulatif avant effacement dit ce que contient la clé : une table lue, jamais « 0 » par défaut.
+    /// The summary before erasing says what the key holds: a table read, never 0 by default.
     #[test]
     fn le_recapitulatif_compte_les_partitions_lues_sur_la_cle()
     -> Result<(), Box<dyn std::error::Error>> {
@@ -578,13 +577,13 @@ mod tests {
             .unwrap_or_default()
             .to_owned();
         assert!(recap.contains("1 partition(s)"), "{recap}");
-        // Une clé vierge n'a vraiment aucune partition.
+        // A blank key really has no partition.
         let blank = MemoryDevice::new(64 << 20, 512)?;
         assert!(partitions_of(&bonk_core::partition::inspect(&blank)?).is_empty());
         Ok(())
     }
 
-    /// Chaque forme de l'état d'écran : rien en cours, brouillon avec le menu ouvert, écriture, résultat.
+    /// Every shape of the screen state: idle, draft with the menu open, writing, result.
     fn state_samples() -> Vec<Value> {
         use bonk_ui::catalog::{Choice, System};
 
@@ -616,7 +615,7 @@ mod tests {
         }]);
         let _ = model.update(Message::ToggleMenu);
         let _ = model.update(Message::ImageInput("/x.iso".to_owned()));
-        // Le libellé du bouton compte les secondes de réflexion : l'échantillon les veut écoulées.
+        // The button label counts the seconds to think: the sample wants them elapsed.
         if let WriteState::Draft { opened, .. } = &mut model.write {
             *opened = Instant::now()
                 .checked_sub(Duration::from_secs(4))
@@ -640,9 +639,9 @@ mod tests {
         samples
     }
 
-    /// Le contrat entre Rust et l'application, écrit dans un fichier que les tests Kotlin relisent : les effets
-    /// tels que Rust les émet, les messages tels qu'il les accepte. Un changement d'un côté casse l'autre en CI.
-    /// `BONK_UPDATE_PROTOCOL=1 cargo test -p bonk-android` réécrit le fichier après un changement voulu.
+    /// The contract between Rust and the app, written to a file the Kotlin tests read back: effects as Rust
+    /// emits them, messages as it accepts them. A change on one side breaks the other in CI.
+    /// `BONK_UPDATE_PROTOCOL=1 cargo test -p bonk-android` rewrites the file after an intended change.
     #[test]
     fn le_protocole_avec_kotlin_suit_ses_echantillons() -> Result<(), Box<dyn std::error::Error>> {
         let mut model = loaded();
@@ -689,7 +688,7 @@ mod tests {
             json!({"type": "failed", "message": "unexpected"}),
             json!({"type": "catalog_failed", "message": "404"}),
         ];
-        // `choose` n'a de sens qu'avec un catalogue chargé : son échantillon fixe la forme seulement.
+        // `choose` only means something with a loaded catalog: its sample fixes the shape only.
         for message in messages.iter().filter(|m| m["type"] != "choose") {
             assert!(
                 message_of(message, &model).is_some(),
@@ -715,8 +714,8 @@ mod tests {
         Ok(())
     }
 
-    /// Un échec né côté application (annulation, clé partie) porte un code de Bonk : l'écran en montre le
-    /// titre traduit et le code, comme pour une erreur du moteur.
+    /// A failure born in the app (cancel, key gone) carries a Bonk code: the screen shows its translated
+    /// title and code, as for an engine error.
     #[test]
     fn un_echec_de_l_application_porte_son_code() -> Result<(), Box<dyn std::error::Error>> {
         let mut model = loaded();
@@ -739,8 +738,8 @@ mod tests {
         Ok(())
     }
 
-    /// Une panique survenue en tenant l'état ne doit pas laisser l'écran mort : le verrou empoisonné est repris
-    /// avec l'état tel qu'il était, au lieu de répondre « indisponible » à chaque message suivant.
+    /// A panic while holding the state must not leave the screen dead: the poisoned lock is taken back with
+    /// the state as it was, instead of answering unavailable to every later message.
     #[test]
     fn un_verrou_empoisonne_est_repris() {
         let etat = std::sync::Arc::new(Mutex::new(1));

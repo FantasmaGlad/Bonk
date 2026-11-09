@@ -7,10 +7,10 @@ use bonk_hal::{Disk, Eligibility, FilterOptions, Lang, Warning, evaluate};
 use crate::command::{ViewOptions, WriteView, equivalent_commands};
 use crate::event::{Event, Outcome};
 
-/// Intervalle d'actualisation automatique : un disque branché apparaît sans geste de l'utilisateur.
+/// A plugged disk appears without a user action.
 pub const REFRESH_EVERY: Duration = Duration::from_secs(2);
 
-/// Ce que l'interface doit accomplir après un message ; le résultat revient par un autre message.
+/// What the interface must do after a message; the result comes back as another message.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Effect {
     Enumerate,
@@ -19,7 +19,7 @@ pub enum Effect {
     Copy(String),
     PickImage,
     SaveLanguage(Lang),
-    /// Arguments de `bonk write` ; une interface sans ligne de commande les ignore.
+    /// `bonk write` arguments; an interface without a command line ignores them.
     StartWrite(Vec<String>),
     CancelWrite(u32),
     ScrollList(f32),
@@ -32,12 +32,12 @@ pub type Effects = Vec<Effect>;
 pub enum Message {
     Refresh,
     Tick,
-    /// Résultat d'une énumération ; l'erreur est déjà mise en texte (`EnumerateError` n'est pas `Clone`).
+    /// The error is already text (`EnumerateError` is not `Clone`).
     Loaded(Result<Vec<Disk>, String>),
     ToggleInternal(bool),
     ToggleVirtual(bool),
     ToggleAll(bool),
-    /// Sélectionne (ou désélectionne) un disque, par identifiant.
+    /// Selects or deselects a disk, by id.
     Select(String),
     Nav(Nav),
     Copy,
@@ -49,29 +49,29 @@ pub enum Message {
     SwitchLanguage,
     ToggleMbr(bool),
     BrowseImage,
-    /// Réponse du sélecteur ; `None` : fermé sans choix.
+    /// `None`: closed without a choice.
     ImagePicked(Option<PathBuf>),
     ToggleMenu,
     MenuCategory(Option<String>),
     MenuSystem(Option<String>),
     CatalogLoaded(Result<Vec<crate::catalog::System>, String>),
-    /// Une version choisie : adresse, empreinte et réglages automatiques.
+    /// Address, hash and automatic settings.
     MenuChose(crate::catalog::Choice),
     ToggleAdvanced,
-    /// Battement qui rafraîchit le décompte avant d'autoriser l'écriture.
+    /// Refreshes the countdown before the write is allowed.
     Clock,
-    /// Lance l'écriture (après le délai de réflexion).
+    /// After the delay to think.
     StartWrite,
     CancelWrite,
     DismissWrite,
-    /// Dans la demande de confirmation d'un disque interne : effacer quand même.
+    /// Internal disk confirmation: erase anyway.
     ConfirmInternal,
-    /// Dans la demande de confirmation d'un disque interne : renoncer.
+    /// Internal disk confirmation: give up.
     CloseInternal,
     Write(Event),
 }
 
-/// Actions de la navigation au clavier : chacune a le même effet qu'un clic.
+/// Each has the same effect as a click.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Nav {
     Next,
@@ -98,19 +98,19 @@ pub enum Focus {
     Language,
     Raw,
     Mbr,
-    /// Bouton du panneau d'écriture : écrire, annuler ou fermer selon l'état.
+    /// Write panel button: write, cancel or close depending on the state.
     Action,
     Copy,
 }
 
-/// Délai de réflexion avant que « Écrire » ne s'active.
+/// Delay to think before Write enables.
 pub const WRITE_DELAY: Duration = Duration::from_secs(3);
 
 #[derive(Debug, Default)]
 pub enum WriteState {
     #[default]
     Idle,
-    /// Récapitulatif affiché, chemin en cours de saisie ; `opened` démarre le délai de réflexion.
+    /// `opened` starts the delay to think.
     Draft {
         disk_id: String,
         image: String,
@@ -137,7 +137,7 @@ pub enum WriteState {
 pub struct Model {
     pub disks: Vec<Disk>,
     pub loading: bool,
-    /// Une première réponse est arrivée : la détection périodique ne se montre plus à l'écran.
+    /// A first answer arrived: periodic detection no longer shows on screen.
     pub answered: bool,
     pub error: Option<String>,
     pub show_internal: bool,
@@ -149,15 +149,15 @@ pub struct Model {
     pub confirming_internal: bool,
     pub catalog: crate::catalog::CatalogState,
     pub menu_filter: crate::catalog::MenuFilter,
-    /// Adresse d'un Tor local, proposé dans les options ; jamais utilisé sans la case.
+    /// A local Tor, offered in the options; never used without the box.
     pub tor: Option<String>,
     pub lang: Lang,
     pub use_tor: bool,
     pub menu_open: bool,
     pub menu_index: usize,
     pub advanced: bool,
-    /// À l'ouverture de la fenêtre, un seul disque proposé se sélectionne seul, une fois pour chaque disque :
-    /// écrire reste un geste explicite, avec le disque nommé à l'écran.
+    /// When the window opens a single offered disk selects itself, once per disk: writing stays an explicit
+    /// act, with the disk named on screen.
     pub auto_select: bool,
     pub auto_selected: Option<String>,
 }
@@ -171,7 +171,7 @@ pub fn ui_event(message: &Message) -> Option<(&'static str, String)> {
         Message::Select(id) => ("select_disk", id.clone()),
         Message::Nav(nav) => ("key", format!("{nav:?}")),
         Message::Copy => ("click_copy", String::new()),
-        // Le détail de l'événement ne porte que la longueur du chemin saisi.
+        // The event detail only carries the path length.
         Message::ImageInput(text) => (
             "type_image_path",
             format!("{} caractères", text.chars().count()),
@@ -183,7 +183,7 @@ pub fn ui_event(message: &Message) -> Option<(&'static str, String)> {
         Message::TorDetected(found) => ("tor_detected", found.is_some().to_string()),
         Message::ToggleMbr(on) => ("toggle_mbr", on.to_string()),
         Message::BrowseImage => ("click_browse", String::new()),
-        // Comme pour la saisie, le détail de l'événement ne porte pas le chemin choisi.
+        // As for typing, the event detail does not carry the chosen path.
         Message::ImagePicked(path) => (
             "image_picked",
             if path.is_some() { "choisie" } else { "aucune" }.to_owned(),
@@ -219,7 +219,7 @@ impl WriteState {
 }
 
 impl Model {
-    /// Une fenêtre qui vient de s'ouvrir, et ce qu'elle doit faire d'abord.
+    /// And what it must do first.
     #[must_use]
     pub fn new(initial: ViewOptions, lang: Lang) -> (Self, Effects) {
         (
@@ -236,8 +236,8 @@ impl Model {
         )
     }
 
-    /// Applique un message et journalise l'événement : ce que l'utilisateur a fait, ce que
-    /// la fenêtre en a tiré, et la commande équivalente à la vue qui en résulte.
+    /// Logs the event: what the user did, what the window made of it, and the equivalent command of the
+    /// resulting view.
     pub fn update(&mut self, message: Message) -> Effects {
         let event = ui_event(&message);
         let effects = self.apply(message);
@@ -262,7 +262,7 @@ impl Model {
         }
     }
 
-    /// Commandes pour le journal : sans l'image, dont le chemin peut dire qui l'on est.
+    /// Without the image, whose path may say who the user is.
     pub fn logged_equivalents(&self) -> String {
         equivalent_commands(self.view_options(), self.selected.as_deref(), None).join(" ; ")
     }
@@ -286,7 +286,6 @@ impl Model {
         equivalent_commands(self.view_options(), self.selected.as_deref(), write)
     }
 
-    /// Disques à afficher avec leur verdict, selon les réglages.
     pub fn entries(&self) -> Vec<(&Disk, Eligibility)> {
         let options = FilterOptions {
             show_internal: self.show_internal,
@@ -305,7 +304,6 @@ impl Model {
             .any(|(disk, verdict)| disk.id == id && verdict.is_writable())
     }
 
-    /// Le disque est-il proposé en tant que disque interne ?
     pub fn is_internal(&self, id: &str) -> bool {
         self.entries().iter().any(|(disk, verdict)| {
             disk.id == id
@@ -316,7 +314,7 @@ impl Model {
         })
     }
 
-    /// Le disque dont la confirmation est demandée : le panneau peut avoir changé depuis l'ouverture.
+    /// The panel may have changed since the prompt opened.
     pub fn internal_to_confirm(&self) -> Option<&Disk> {
         let id = self.write.disk_id().filter(|_| {
             self.confirming_internal && matches!(self.write, WriteState::Draft { .. })

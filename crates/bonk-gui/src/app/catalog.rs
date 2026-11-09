@@ -10,7 +10,7 @@ use crate::theme;
 
 use super::Message;
 
-/// Lit le catalogue dans un processus séparé. La dernière ligne d'erreur dit pourquoi il a échoué.
+/// In a separate process. The last error line says why it failed.
 pub(crate) fn read(program: PathBuf) -> Result<Vec<System>, String> {
     let mut command = std::process::Command::new(&program);
     bonk_hal::console::hide_child_console(&mut command);
@@ -47,7 +47,7 @@ fn logo(icon: Option<&PathBuf>) -> Element<'_, Message> {
     }
 }
 
-/// Le bouton fermé du menu : le choix en cours avec son logo, ou l'invitation à choisir.
+/// The current choice with its logo, or an invitation to choose.
 pub(crate) fn menu_button<'a>(
     state: &'a CatalogState,
     image_url: &str,
@@ -104,7 +104,7 @@ fn without_doubles(mut values: Vec<String>, first: &str) -> Vec<String> {
     values
 }
 
-/// Les deux sélecteurs : une catégorie, ou un seul système et ses versions.
+/// A category, or a single system and its versions.
 fn menu_filters<'a>(systems: &[System], filter: &MenuFilter, lang: Lang) -> Element<'a, Message> {
     let (all_cat, all_sys) = (all_categories(lang), all_systems(lang));
     let categories = without_doubles(
@@ -142,7 +142,7 @@ fn menu_filters<'a>(systems: &[System], filter: &MenuFilter, lang: Lang) -> Elem
     .into()
 }
 
-/// La liste ouverte : les filtres, puis une ligne par version, avec le logo de son système.
+/// The filters, then one row per version with its system logo.
 pub(crate) fn menu_list<'a>(
     systems: &'a [System],
     filter: &MenuFilter,
@@ -189,7 +189,7 @@ pub(crate) fn menu_list<'a>(
             });
         }
     }
-    // Marge à droite : la barre de défilement ne doit pas couvrir le texte d'une ligne.
+    // Right margin: the scrollbar must not cover a row's text.
     column![
         menu_filters(systems, filter, lang),
         scrollable(lines.padding(iced::Padding::ZERO.right(16)))

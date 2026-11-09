@@ -1,6 +1,6 @@
 use bonk_hal::Lang;
 
-/// `fr`, `fr-FR`, `fr_CA.UTF-8` : français. Tout le reste, ou rien : anglais, la langue de la CLI.
+/// `fr`, `fr-FR`, `fr_CA.UTF-8`: French. Anything else, or nothing: English, the CLI's language.
 fn from_locale(locale: Option<&str>) -> Lang {
     let primary = locale
         .and_then(|name| name.split(['-', '_', '.']).next())

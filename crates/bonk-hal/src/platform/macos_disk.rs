@@ -16,13 +16,13 @@ use crate::image::Access;
 use crate::macos_facts::raw_disk_path;
 use crate::target::OpenTargetError;
 
-/// `_IOR('d', 24, u32)` et `_IOR('d', 25, u64)` de `sys/disk.h`.
+/// `_IOR('d', 24, u32)` and `_IOR('d', 25, u64)` from `sys/disk.h`.
 const DKIOCGETBLOCKSIZE: libc::c_ulong = 0x4004_6418;
 const DKIOCGETBLOCKCOUNT: libc::c_ulong = 0x4008_6419;
-/// `_IO('d', 22)` de `sys/disk.h`.
+/// `_IO('d', 22)` from `sys/disk.h`.
 const DKIOCSYNCHRONIZECACHE: libc::c_ulong = 0x2000_6416;
 
-/// Descripteur obtenu d'`authopen` avant le démontage, repris à l'ouverture : une seule invite.
+/// Descriptor from `authopen` before the unmount, reused at open: a single prompt.
 static AUTHORIZED: Mutex<Option<(PathBuf, Access, OwnedFd)>> = Mutex::new(None);
 
 fn raw_path(path: &Path) -> Result<String, BlockError> {
@@ -42,16 +42,16 @@ fn has_access(raw: &str, access: Access) -> bool {
         Access::ReadOnly => libc::R_OK,
         Access::ReadWrite => libc::R_OK | libc::W_OK,
     };
-    // SAFETY : `name` est une chaîne C valide pendant tout l'appel.
+    // SAFETY: `name` is a valid C string for the whole call.
     unsafe { libc::access(name.as_ptr(), mode) == 0 }
 }
 
 fn receive_fd(socket: &UnixStream) -> io::Result<OwnedFd> {
     let mut byte = [0u8; 1];
     let mut slices = [IoSliceMut::new(&mut byte)];
-    // Assez pour un en-tête et un descripteur, aligné comme l'exige `cmsghdr`.
+    // Room for one header and one descriptor, aligned as `cmsghdr` requires.
     let mut control = [0u64; 8];
-    // SAFETY : structure simple remplie de zéros, puis champs valides pendant tout l'appel.
+    // SAFETY: zeroed plain struct, then fields valid for the whole call.
     let received = unsafe {
         let mut message: libc::msghdr = std::mem::zeroed();
         message.msg_iov = slices.as_mut_ptr().cast();
@@ -81,7 +81,7 @@ fn receive_fd(socket: &UnixStream) -> io::Result<OwnedFd> {
             "authorization refused or cancelled",
         )
     })?;
-    // SAFETY : le noyau vient de créer ce descripteur pour ce processus, qui en est seul propriétaire.
+    // SAFETY: the kernel just created this descriptor for this process, its sole owner.
     Ok(unsafe { OwnedFd::from_raw_fd(fd) })
 }
 
@@ -114,7 +114,7 @@ fn authorize(
         }
         std::thread::sleep(Duration::from_millis(100));
     }
-    // L'enfant a fermé sa copie : sans descripteur reçu, la lecture finit au lieu de bloquer.
+    // The child closed its copy: without a descriptor the read ends instead of blocking.
     Ok(receive_fd(&ours)?)
 }
 
@@ -179,7 +179,7 @@ pub(super) fn open(
         }
     };
     let (mut block_size, mut blocks) = (0u32, 0u64);
-    // SAFETY : descripteur valide ; chaque requête écrit dans la variable de la taille qu'elle annonce.
+    // SAFETY: valid descriptor; each request writes into a variable of the size it declares.
     let read = unsafe {
         libc::ioctl(file.as_raw_fd(), DKIOCGETBLOCKSIZE, &raw mut block_size) == 0
             && libc::ioctl(file.as_raw_fd(), DKIOCGETBLOCKCOUNT, &raw mut blocks) == 0
@@ -225,9 +225,9 @@ impl BlockDevice for MacDisk {
         if self.read_only {
             return Ok(());
         }
-        // `sync_all` passe par `F_FULLFSYNC`, que le périphérique brut refuse. Un support sans cache (disque
-        // RAM) n'a rien à vider et le dit par `ENOTTY`.
-        // SAFETY : descripteur valide ; la requête n'a pas d'argument.
+        // `sync_all` uses `F_FULLFSYNC`, which the raw device refuses. A cacheless medium (RAM disk) has
+        // nothing to flush and says so with `ENOTTY`.
+        // SAFETY: valid descriptor; the request takes no argument.
         if unsafe { libc::ioctl(self.file.as_raw_fd(), DKIOCSYNCHRONIZECACHE) } != 0 {
             let error = io::Error::last_os_error();
             if error.raw_os_error() != Some(libc::ENOTTY) {

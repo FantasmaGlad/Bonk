@@ -22,7 +22,6 @@ pub enum Bus {
 }
 
 impl Bus {
-    /// Les bus sur lesquels un disque est proposé par défaut.
     #[must_use]
     pub(crate) fn is_removable(self) -> bool {
         matches!(self, Self::Usb | Self::Sd | Self::Thunderbolt)

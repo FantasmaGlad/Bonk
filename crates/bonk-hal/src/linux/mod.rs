@@ -42,7 +42,7 @@ pub fn enumerate(roots: &LinuxRoots) -> Result<Vec<Disk>, EnumerateError> {
     let mounts = parse_mountinfo(&read_required(&mountinfo_path)?)?;
     let swaps = active_swaps(roots)?;
     if !roots.udev_data.is_dir() {
-        // Sans base udev, aucune signature RAID, LVM, swap ou ZFS n'est connue : ne rien proposer.
+        // Without the udev database no RAID, LVM, swap or ZFS signature is known: offer nothing.
         return Err(EnumerateError::Malformed {
             what: roots.udev_data.display().to_string(),
             detail: "udev database not found: disk signatures cannot be checked".to_owned(),
@@ -96,13 +96,11 @@ struct Context<'a> {
     roots: &'a LinuxRoots,
     canonical_sys: PathBuf,
     mounts: MountIndex,
-    /// Noms des périphériques utilisés comme espace d'échange en ce moment.
     swaps: BTreeSet<String>,
 }
 
 fn read_disk(ctx: &Context<'_>, dir: &Path, name: &str) -> Result<Option<Disk>, EnumerateError> {
-    // Périphériques empilés (device-mapper, RAID logiciel), disques mémoire et lecteurs optiques :
-    // ce ne sont pas des cibles, ils apparaissent comme `holders` des vrais disques.
+    // Stacked devices, RAM disks and optical drives are not targets; they show up as `holders` of real disks.
     if is_ignored(name) || read_optional(&dir.join("hidden")).as_deref() == Some("1") {
         return Ok(None);
     }
@@ -124,8 +122,7 @@ fn read_disk(ctx: &Context<'_>, dir: &Path, name: &str) -> Result<Option<Disk>, 
     let mut partitions = read_partitions(ctx, dir)?;
     let disk_mounts = ctx.mounts.of(&devnum, name);
     if partitions.is_empty() && !disk_mounts.is_empty() {
-        // Système de fichiers posé sur le disque entier, sans table de partitions : il faut quand
-        // même voir son montage.
+        // A filesystem on the whole disk, without a partition table: its mount must still be seen.
         partitions.push(Partition {
             path: path.clone(),
             label: udev.prop("ID_FS_LABEL").map(str::to_owned),
@@ -199,7 +196,7 @@ fn is_ignored(name: &str) -> bool {
     name.starts_with("dm-") || numbered("md") || numbered("ram") || numbered("sr") || numbered("fd")
 }
 
-/// Nature et bus d'un disque, déduits du chemin canonique de son périphérique sous `/sys`.
+/// From the canonical device path under `/sys`.
 fn classify(components: &[&str], name: &str, dir: &Path) -> (DiskKind, Bus) {
     if components.starts_with(&["devices", "virtual"]) {
         let kind = if name.starts_with("loop") {
@@ -218,7 +215,7 @@ fn classify(components: &[&str], name: &str, dir: &Path) -> (DiskKind, Bus) {
     let bus = if components.iter().any(|c| numbered(c, "usb")) {
         Bus::Usb
     } else if components.contains(&"mmc_host") {
-        // Une carte SD est amovible ; une mémoire eMMC soldée ne l'est pas.
+        // An SD card is removable; soldered eMMC is not.
         match read_optional(&dir.join("device/type")).as_deref() {
             Some("SD") => Bus::Sd,
             _ => Bus::Unknown,
@@ -251,7 +248,7 @@ fn model(dir: &Path, udev: &UdevRecord, name: &str) -> String {
         (Some(v), None) => v,
         (None, None) => String::new(),
     };
-    // Les attributs sysfs sont complétés d'espaces à largeur fixe.
+    // sysfs attributes are space-padded to a fixed width.
     let collapsed = joined.split_whitespace().collect::<Vec<_>>().join(" ");
     if collapsed.is_empty() {
         name.to_owned()
@@ -260,15 +257,15 @@ fn model(dir: &Path, udev: &UdevRecord, name: &str) -> String {
     }
 }
 
-/// Identifiant stable : le lien `by-id` le plus lisible, jamais `/dev/sdX`. À défaut (loop,
-/// zram, certains lecteurs de carte), `dev-<nom>` : stable seulement le temps du branchement.
+/// The most readable `by-id` link, never `/dev/sdX`. Without one (loop, zram, some card readers),
+/// `dev-<name>`: stable only while plugged.
 fn stable_id(udev: &UdevRecord, name: &str) -> String {
     let mut candidates: Vec<&str> = udev
         .symlinks
         .iter()
         .filter_map(|s| s.strip_prefix("disk/by-id/"))
         .collect();
-    // Les identifiants WWN et EUI sont stables mais illisibles : seulement en dernier recours.
+    // WWN and EUI ids are stable but unreadable: last resort only.
     let readable =
         |s: &&str| !(s.starts_with("wwn-") || s.contains("eui.") || s.starts_with("nvme-uuid."));
     candidates.sort_by_key(|s| (!readable(s), s.len(), s.to_owned()));
@@ -290,7 +287,7 @@ fn is_active_esp(udev: &UdevRecord, mounts: &[String]) -> bool {
     is_esp && mounts.iter().any(|m| ESP_MOUNTS.contains(&m.as_str()))
 }
 
-/// Ordre « naturel » : `loop2` avant `loop10`.
+/// `loop2` before `loop10`.
 fn natural_cmp(a: &str, b: &str) -> Ordering {
     fn chunks(s: &str) -> Vec<(bool, &str)> {
         let mut out = Vec::new();

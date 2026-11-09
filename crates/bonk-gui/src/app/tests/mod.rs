@@ -128,7 +128,7 @@ fn la_selection_bascule_et_disparait_avec_le_disque() {
     let _ = app.update(Message::Select("usb-cle".to_owned()));
     assert_eq!(app.selected, None);
     let _ = app.update(Message::Select("usb-cle".to_owned()));
-    // La clé est débranchée : la sélection tombe.
+    // The key is unplugged: the selection drops.
     let _ = app.update(Message::Loaded(Ok(vec![])));
     assert_eq!(app.selected, None);
 }
@@ -138,7 +138,7 @@ fn une_enumeration_a_la_fois() {
     let mut app = App::default();
     let _ = app.update(Message::Refresh);
     assert!(app.loading);
-    // Le minuteur ne relance rien tant que la précédente n'est pas finie : l'état reste « en cours ».
+    // The timer starts nothing until the previous one is done: the state stays in progress.
     let _ = app.update(Message::Tick);
     assert!(app.loading);
     let _ = app.update(Message::Loaded(Ok(vec![])));
@@ -153,7 +153,7 @@ fn un_echec_vide_la_liste_au_lieu_de_la_garder() {
     assert!(app.disks.is_empty());
     assert_eq!(app.selected, None);
     assert_eq!(app.error.as_deref(), Some("base udev introuvable"));
-    // Une énumération réussie efface l'erreur.
+    // A successful enumeration clears the error.
     let _ = app.update(Message::Loaded(Ok(sample())));
     assert_eq!(app.error, None);
 }

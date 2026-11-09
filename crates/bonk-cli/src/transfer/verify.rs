@@ -49,8 +49,8 @@ pub(crate) fn run_verify(
         if done.ignored_ranges.is_empty() {
             writeln!(out, "  SHA-256: {}", done.verify.sha256)
         } else {
-            // Les octets réparés sont mis à zéro des deux côtés avant l'empreinte : comparée à celle publiée
-            // par l'éditeur, elle passerait pour le signe d'une image fausse.
+            // Repaired bytes are zeroed on both sides before hashing: compared with the publisher's hash, it
+            // would look like a wrong image.
             writeln!(
                 out,
                 "  SHA-256 of the compared content, excluded bytes zeroed (it differs from the image's own hash): {}",

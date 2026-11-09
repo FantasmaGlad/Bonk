@@ -9,12 +9,18 @@ use crate::disk::Disk;
 
 #[derive(Debug)]
 pub enum EnumerateError {
-    /// Une source système nécessaire est illisible.
-    Io { what: String, source: io::Error },
-    /// Une source système est lisible mais son contenu n'a pas la forme attendue.
-    Malformed { what: String, detail: String },
-    /// Pas d'énumération pour ce système d'exploitation.
-    Unsupported { os: &'static str },
+    Io {
+        what: String,
+        source: io::Error,
+    },
+    /// Readable, but not in the expected shape.
+    Malformed {
+        what: String,
+        detail: String,
+    },
+    Unsupported {
+        os: &'static str,
+    },
 }
 
 impl fmt::Display for EnumerateError {
@@ -36,7 +42,6 @@ impl Error for EnumerateError {
     }
 }
 
-/// Énumère les disques du système en cours.
 pub fn enumerate_disks() -> Result<Vec<Disk>, EnumerateError> {
     crate::platform::current().enumerate()
 }
@@ -58,15 +63,13 @@ pub struct SourceRead {
     pub content: Option<String>,
 }
 
-/// Comme [`enumerate_disks`], et rend aussi chaque lecture de source système avec son contenu, pour
-/// `bonk debug sources`.
+/// Also returns every system source read with its content, for `bonk debug sources`.
 pub fn enumerate_disks_recorded() -> (Result<Vec<Disk>, EnumerateError>, Vec<SourceRead>) {
     crate::platform::current().enumerate_recorded()
 }
 
-/// Énumère les disques à partir d'une capture de sources (`bonk diagnose --capture`), sans toucher au
-/// système : sert à rejouer ailleurs un cas de support (`--fixture`) et à écrire des tests sur de vraies
-/// machines. Une capture de Windows ou de macOS se rejoue partout ; celle d'un Linux, sur Linux.
+/// From a capture (`bonk diagnose --capture`), without touching the system: replays a support case elsewhere
+/// (`--fixture`). Windows and macOS captures replay anywhere; Linux ones on Linux.
 pub fn enumerate_disks_from_capture(reads: &[SourceRead]) -> Result<Vec<Disk>, EnumerateError> {
     if let Some(result) = crate::windows_facts::from_capture(reads) {
         return result;

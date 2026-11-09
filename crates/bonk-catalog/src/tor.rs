@@ -1,7 +1,7 @@
 use std::net::{SocketAddr, TcpStream};
 use std::time::Duration;
 
-/// Le démon, puis Tor Browser. Sur la boucle locale, une réponse lente n'est pas un Tor utilisable.
+/// The daemon, then Tor Browser. On loopback a slow answer is not a usable Tor.
 const PORTS: [u16; 2] = [9050, 9150];
 const PATIENCE: Duration = Duration::from_millis(300);
 
@@ -12,8 +12,7 @@ fn first_open(ports: &[u16]) -> Option<SocketAddr> {
         .find(|address| TcpStream::connect_timeout(address, PATIENCE).is_ok())
 }
 
-/// L'adresse d'un proxy qui écoute sur un port de Tor. Le port seul ne prouve pas que c'est Tor :
-/// l'appelant propose, sans jamais activer.
+/// The port alone does not prove it is Tor: the caller offers it, never enables it.
 #[must_use]
 pub fn detect() -> Option<String> {
     first_open(&PORTS).map(|address| format!("socks5h://{address}"))

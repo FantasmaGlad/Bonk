@@ -50,7 +50,7 @@ fn sample() -> Vec<Disk> {
     ]
 }
 
-/// Ce que `execute` a fait : code, sorties, et réglages de journal reçus.
+/// What `execute` did: code, outputs, log settings received.
 struct Resultat {
     code: u8,
     out: String,
@@ -95,7 +95,6 @@ fn lancer_avec(
     }
 }
 
-/// Lance la commande avec des disques fixes ; renvoie code, sortie standard, sortie d'erreur.
 fn lancer(args: &[&str], disks: Vec<Disk>) -> (u8, String, String) {
     let r = lancer_avec(args, None, disks, Ok(()));
     (r.code, r.out, r.err)
@@ -390,11 +389,11 @@ fn debug_filter_suit_les_reglages_et_refuse_un_inconnu() {
     assert!(out.is_empty() && err.contains("disk not found"), "{err}");
 }
 
-/// Un verrou de la sortie d'erreur tenu pendant que la fenêtre est ouverte bloquerait pour toujours
-/// tout autre fil qui journalise (énumération, minuteur) sous `bonk -v`.
+/// A stderr lock held while the window is open would block forever every other thread that logs (enumeration,
+/// timer) under `bonk -v`.
 #[test]
 fn un_autre_fil_peut_journaliser_pendant_que_la_fenetre_est_ouverte() {
-    // Élevé (runner Windows), la fenêtre refuse de s'ouvrir avant d'atteindre ce qu'on teste ici.
+    // Elevated (Windows runner), the window refuses to open before reaching what is tested here.
     if bonk_hal::platform::current().is_privileged() {
         return;
     }
@@ -519,10 +518,10 @@ fn config_set_puis_list_puis_effet_sur_list_et_la_fenetre() -> Result<(), Box<dy
         "{}",
         r.out
     );
-    // Sans option, `list` suit le réglage et montre aussi les disques écartés.
+    // Without an option, `list` follows the setting and also shows excluded disks.
     let r = lancer_config(&["list"], &file, &[], sample());
     assert!(r.out.contains("nvme-systeme"), "{}", r.out);
-    // La variable d'environnement l'emporte sur le fichier.
+    // The environment variable wins over the file.
     let r = lancer_config(
         &["list"],
         &file,
@@ -530,7 +529,6 @@ fn config_set_puis_list_puis_effet_sur_list_et_la_fenetre() -> Result<(), Box<dy
         sample(),
     );
     assert!(!r.out.contains("nvme-systeme"), "{}", r.out);
-    // La fenêtre démarre avec ces réglages.
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let vue = RefCell::new(ViewDefaults::default());
     let env = Env {
@@ -578,7 +576,6 @@ fn un_fichier_de_config_illisible_n_empeche_pas_list() -> Result<(), Box<dyn std
     let r = lancer_config(&["list"], &file, &[], sample());
     assert_eq!(r.code, 0, "{}", r.err);
     assert!(r.out.contains("usb-cle"));
-    // `config list` en revanche le dit.
     let r = lancer_config(&["config", "list"], &file, &[], vec![]);
     assert_eq!(r.code, EXIT_USAGE);
     assert!(r.err.contains("unreadable"), "{}", r.err);
@@ -604,7 +601,7 @@ fn schema_liste_et_decrit() -> Result<(), serde_json::Error> {
     Ok(())
 }
 
-/// La sortie réelle de `list --json` respecte son propre schéma : mêmes champs de premier niveau.
+/// The real `list --json` output follows its own schema: same top-level fields.
 #[test]
 fn la_sortie_json_correspond_a_son_schema() -> Result<(), serde_json::Error> {
     let (_, out, _) = lancer(&["list", "--json", "--all"], sample());

@@ -51,7 +51,7 @@ fn evenements_de_l_interface_journalises() {
         ui_event(&Message::Copy),
         Some(("click_copy", String::new()))
     );
-    // Le minuteur et les résultats ont leur propre journal.
+    // The timer and the results have their own log.
     assert_eq!(ui_event(&Message::Tick), None);
     assert_eq!(ui_event(&Message::Loaded(Ok(vec![]))), None);
 }

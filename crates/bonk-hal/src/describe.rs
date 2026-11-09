@@ -4,7 +4,7 @@ use crate::safety::{Eligibility, Exclusion, HiddenReason, Warning};
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Lang {
     En,
-    /// Langue de développement de l'interface ; le lancement réel la choisit toujours explicitement.
+    /// Development language; a real launch always picks one explicitly.
     #[default]
     Fr,
 }
@@ -19,9 +19,7 @@ impl Lang {
     }
 }
 
-/// Taille en unités décimales, comme l'indiquent les fabricants (une clé de 16 Go fait 16 000 000 000
-/// octets ou un peu plus). Troncature, jamais d'arrondi vers le haut : une clé ne paraît pas plus grande
-/// qu'elle n'est.
+/// Decimal units, as vendors state sizes. Truncated, never rounded up: a drive never looks bigger than it is.
 #[must_use]
 pub fn format_size(bytes: u64, lang: Lang) -> String {
     let (units, separator, byte) = match lang {
@@ -62,7 +60,6 @@ pub fn kind_label(kind: DiskKind, lang: Lang) -> &'static str {
     }
 }
 
-/// Phrase d'état d'un disque : proposé, non affiché ou interdit avec ses motifs.
 #[must_use]
 pub fn state_label(eligibility: &Eligibility, lang: Lang) -> String {
     match eligibility {
@@ -105,7 +102,7 @@ pub fn state_label(eligibility: &Eligibility, lang: Lang) -> String {
     }
 }
 
-/// Mot d'état court, en majuscules : le verdict ne repose jamais sur la couleur seule.
+/// Short upper-case word: the verdict never relies on colour alone.
 #[must_use]
 pub fn verdict_badge(eligibility: &Eligibility, lang: Lang) -> &'static str {
     match eligibility {
@@ -175,7 +172,6 @@ mod tests {
         assert_eq!(format_size(16_008_609_792, Lang::Fr), "16,0 Go");
         assert_eq!(format_size(512_110_190_592, Lang::En), "512.1 GB");
         assert_eq!(format_size(2_000_398_934_016, Lang::Fr), "2,0 To");
-        // Troncature, jamais d'arrondi vers le haut.
         assert_eq!(format_size(15_999_999_999, Lang::En), "15.9 GB");
     }
 

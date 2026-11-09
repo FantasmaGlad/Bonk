@@ -30,13 +30,12 @@ use crate::enumerate::{EnumerateError, SourceRead};
 use crate::image::Access;
 use crate::target::OpenTargetError;
 
-/// Faut-il demander au système les droits qui manquent ?
+/// Whether to ask the system for missing rights.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Elevation {
-    /// Oui : l'autorisation du système apparaît au moment voulu.
     #[default]
     Auto,
-    /// Non : droits de l'appelant seulement. Pour un service sans personne devant l'écran.
+    /// Caller's rights only: for a service with nobody in front of the screen.
     Never,
 }
 
@@ -84,29 +83,25 @@ impl Capability {
     }
 }
 
-/// Nom de la capacité de formatage d'un système de fichiers.
 #[must_use]
 pub fn format_capability(fs: Filesystem) -> String {
     format!("format.{}", fs.name())
 }
 
-/// Accès d'un système d'exploitation aux disques.
 pub trait Platform: Send + Sync {
-    /// Énumère les disques : des faits bruts, que [`crate::safety::evaluate`] juge ensuite.
+    /// Raw facts, judged afterwards by [`crate::safety::evaluate`].
     fn enumerate(&self) -> Result<Vec<Disk>, EnumerateError>;
 
-    /// Comme [`Platform::enumerate`], et rend chaque lecture de source système avec son contenu.
     fn enumerate_recorded(&self) -> (Result<Vec<Disk>, EnumerateError>, Vec<SourceRead>);
 
-    /// Énumère à partir d'une capture de sources, sans toucher au système.
     fn enumerate_from_capture(&self, reads: &[SourceRead]) -> Result<Vec<Disk>, EnumerateError>;
 
-    /// Démonte tout ce que porte le disque et rend les points démontés ; s'arrête au premier échec.
-    /// Avec [`Elevation::Never`], aucune autorisation n'est demandée au système.
+    /// Returns the unmounted points; stops at the first failure. With [`Elevation::Never`] no authorization
+    /// is asked.
     fn unmount(&self, disk: &Disk, elevation: Elevation) -> Result<Vec<String>, OpenTargetError>;
 
-    /// Obtient le droit d'ouvrir le disque, sans le garder ouvert. Appelé avant tout démontage : un
-    /// refus ne doit laisser aucune trace sur la clé.
+    /// Gets the right to open the disk without keeping it open. Called before any unmount: a refusal must
+    /// leave no trace on the key.
     fn prepare_access(
         &self,
         path: &Path,
@@ -115,8 +110,8 @@ pub trait Platform: Send + Sync {
         cancelled: &dyn Fn() -> bool,
     ) -> Result<(), BlockError>;
 
-    /// Ouvre un disque entier en accès brut. N'est appelé qu'après les garde-fous de `bonk-ops`.
-    /// `cancelled` abandonne l'attente d'une autorisation du système (`ErrorKind::Interrupted`).
+    /// Only called after the `bonk-ops` guards. `cancelled` gives up waiting for an authorization
+    /// (`ErrorKind::Interrupted`).
     fn open_disk(
         &self,
         path: &Path,
@@ -125,11 +120,9 @@ pub trait Platform: Send + Sync {
         cancelled: &dyn Fn() -> bool,
     ) -> Result<Box<dyn BlockDevice>, BlockError>;
 
-    /// Ce que ce système permet, et pourquoi pas le reste (`bonk capabilities`).
     fn capabilities(&self) -> Vec<Capability>;
 
-    /// Formate une partition avec les outils de l'hôte (NTFS, ext4). Seul le résultat de
-    /// l'outil compte, sa sortie n'est pas interprétée.
+    /// Host tools (NTFS, ext4). Only the tool's result counts; its output is not parsed.
     fn format_partition(
         &self,
         partition: &Path,
@@ -138,28 +131,26 @@ pub trait Platform: Send + Sync {
         elevation: Elevation,
     ) -> Result<(), BlockError>;
 
-    /// Demande au système de relire la table de partitions du disque, qu'on vient de remplacer : sans
-    /// cela, il peut montrer un moment les anciennes partitions, ou aucune.
+    /// Asks the system to reread the partition table just replaced: otherwise it may show the old partitions,
+    /// or none, for a while.
     fn rescan(&self, disk: &Path, elevation: Elevation) -> Result<(), BlockError>;
 
-    /// Le processus tourne-t-il en administrateur ? La fenêtre refuse alors de s'ouvrir.
+    /// The window refuses to open as administrator.
     fn is_privileged(&self) -> bool;
 
-    /// Version du noyau, pour le rapport de diagnostic, quand le système la donne.
     fn kernel_release(&self) -> Option<String>;
 }
 
-/// Ce chemin désigne-t-il un périphérique, sur n'importe quel système ? Lu dans sa forme : `debug layout` doit
-/// le dire même quand il n'existe pas.
+/// From its shape: `debug layout` must say so even when the path does not exist.
 #[must_use]
 pub fn is_device_path(path: &str) -> bool {
     path.starts_with("/dev/") || path.starts_with(r"\\.\")
 }
 
-/// Point d'entrée du helper élevé (`bonk elevated-helper`), qui n'existe que sous Windows.
+/// `bonk elevated-helper`, Windows only.
 ///
 /// # Errors
-/// Tube inutilisable, ou client qui n'est pas celui annoncé ; hors Windows, toujours.
+/// Unusable pipe, or a client that is not the announced one; always elsewhere.
 pub fn run_elevated_helper(client: u32, pipe: &str) -> Result<(), String> {
     #[cfg(windows)]
     {
@@ -172,8 +163,7 @@ pub fn run_elevated_helper(client: u32, pipe: &str) -> Result<(), String> {
     }
 }
 
-/// Capacités d'un système où Bonk écrit lui-même, sans outil de formatage de l'hôte.
-/// Ce que tout hôte qui écrit annonce ; seuls l'élévation et les formats écrits par l'hôte y varient.
+/// What every writing host reports; only elevation and host-written filesystems vary.
 #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
 fn writing_capabilities(
     elevate: Capability,
@@ -207,7 +197,6 @@ fn native_capabilities(elevate: Capability) -> Vec<Capability> {
     })
 }
 
-/// L'implémentation du système en cours.
 #[must_use]
 pub fn current() -> &'static dyn Platform {
     #[cfg(target_os = "linux")]
@@ -228,13 +217,11 @@ pub fn current() -> &'static dyn Platform {
     }
 }
 
-/// Emplacement habituel du fichier de configuration sur le système en cours.
 #[must_use]
 pub fn config_file(var: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
     config_file_for(std::env::consts::OS, var)
 }
 
-/// Dossier de cache habituel de Bonk sur le système en cours.
 #[must_use]
 pub fn cache_dir(var: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
     cache_dir_for(std::env::consts::OS, var)
@@ -252,7 +239,7 @@ fn cache_dir_for(os: &str, var: &dyn Fn(&str) -> Option<String>) -> Option<PathB
     }
 }
 
-/// Sépare le choix du système de sa lecture : les règles de chaque système se testent partout.
+/// Takes the OS as input, so each system's rule is tested everywhere.
 fn config_file_for(os: &str, var: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
     match os {
         "windows" => var("APPDATA").map(|dir| PathBuf::from(dir).join("Bonk").join("config.json")),
@@ -324,7 +311,7 @@ mod tests {
             path("linux", &[("XDG_CONFIG_HOME", "X"), ("HOME", "H")]),
             Some(PathBuf::from("X").join("bonk").join("config.json"))
         );
-        // Une variable vide équivaut à son absence (spécification XDG).
+        // An empty variable counts as unset (XDG specification).
         assert_eq!(
             path("linux", &[("XDG_CONFIG_HOME", ""), ("HOME", "H")]),
             Some(

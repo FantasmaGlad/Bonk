@@ -12,19 +12,19 @@ use jni::{Env, EnvUnowned};
 
 use crate::{bench, screen, writer};
 
-/// Copie le descripteur : celui de l'application reste à l'application, et se referme avec sa connexion.
+/// Duplicates the descriptor: the app's own stays with the app and closes with its connection.
 fn transport(fd: RawFd, descriptors: &[u8]) -> Result<UsbfsTransport, String> {
-    // SAFETY : `dup` ne touche qu'au descripteur passé, et un échec est contrôlé juste après.
+    // SAFETY: `dup` only touches the given descriptor, and a failure is checked right after.
     let copy = unsafe { libc::dup(fd) };
     if copy < 0 {
         return Err(std::io::Error::last_os_error().to_string());
     }
-    // SAFETY : `copy` vient d'être créé par `dup` et n'a pas d'autre propriétaire.
+    // SAFETY: `copy` was just created by `dup` and has no other owner.
     let device = unsafe { File::from_raw_fd(copy) };
     let mut transport =
         UsbfsTransport::from_claimed(device, descriptors).map_err(|error| error.to_string())?;
-    // Un échange interrompu (application tuée, clé rendue au système) laisse la clé en attente d'une suite que
-    // personne n'enverra. Certaines clés refusent cette remise à zéro sans en avoir besoin : l'échec n'arrête rien.
+    // An interrupted exchange (app killed, key given back) leaves the key waiting for a sequel nobody sends.
+    // Some keys refuse this reset without needing it: a failure stops nothing.
     let _ = transport.reset();
     Ok(transport)
 }
@@ -37,7 +37,7 @@ fn answer<'caller>(
     env.new_string(value.to_string())
 }
 
-/// Taille et partitions : ce que l'écran montre de la clé avant de proposer de l'effacer.
+/// Size and partitions: what the screen shows before offering to erase the key.
 fn probe(fd: RawFd, descriptors: &[u8]) -> Result<serde_json::Value, String> {
     let disk = UsbDisk::open(transport(fd, descriptors)?).map_err(|error| error.to_string())?;
     let layout = partition::inspect(&disk).map_err(|error| error.to_string())?;
@@ -107,7 +107,7 @@ fn text_of<'caller>(env: &mut Env<'caller>, value: &JString<'caller>) -> Result<
     value.try_to_string(env)
 }
 
-/// Un message pour l'écran commun : l'état à dessiner et les effets à accomplir.
+/// A message for the shared screen: the state to draw and the effects to perform.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_app_bonkos_bonk_Native_dispatch<'caller>(
     mut env: EnvUnowned<'caller>,
@@ -130,8 +130,8 @@ pub extern "system" fn Java_app_bonkos_bonk_Native_setLanguage<'caller>(
     screen::set_language(french);
 }
 
-/// Vérifie la signature du catalogue que Kotlin a téléchargé (HTTPS du système) et le donne à l'écran. Sans
-/// réseau, `manifest::load` reprend la dernière copie vérifiée.
+/// Checks the signature of the catalog Kotlin downloaded (system HTTPS) and hands it to the screen. Without
+/// network, `manifest::load` falls back to the last verified copy.
 fn load_catalog(dir: &str, json: Vec<u8>, signature: Vec<u8>) -> Result<(), String> {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -197,7 +197,7 @@ pub extern "system" fn Java_app_bonkos_bonk_Native_loadCatalog<'caller>(
     .resolve::<jni::errors::ThrowRuntimeExAndDefault>()
 }
 
-/// Bloque jusqu'à la fin de l'écriture : à appeler hors du fil de l'écran.
+/// Blocks until the write ends: call off the UI thread.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_app_bonkos_bonk_Native_write<'caller>(
     mut env: EnvUnowned<'caller>,

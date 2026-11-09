@@ -5,8 +5,7 @@ use std::io::{self, Cursor, Read};
 use bonk_core::codec::open;
 use libfuzzer_sys::fuzz_target;
 
-/// Borne de sortie : une bombe de décompression est légitime pour le décodeur, elle ne doit pas
-/// épuiser la mémoire ou le temps du fuzzeur.
+/// Output cap: a decompression bomb is legitimate input, it must not exhaust the fuzzer's memory or time.
 const MAX_OUTPUT: u64 = 16 * 1024 * 1024;
 
 fuzz_target!(|data: &[u8]| {

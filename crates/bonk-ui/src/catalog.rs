@@ -5,17 +5,17 @@ use bonk_hal::Lang;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Choice {
-    /// Peut différer du système : Kubuntu est rangé sous Ubuntu.
+    /// May differ from the system: Kubuntu is filed under Ubuntu.
     pub name: String,
     pub label: String,
     pub end_of_life: bool,
-    /// Ce qu'il faut savoir avant de la choisir (évaluation, CD seulement).
+    /// What to know before choosing it (evaluation, CD only).
     pub note: Option<String>,
     pub source: ChoiceSource,
 }
 
 impl Choice {
-    /// Le libellé vient du catalogue ; ce qu'y ajoute Bonk suit la langue de la fenêtre.
+    /// The label comes from the catalog; what Bonk adds follows the window language.
     pub fn title(&self, lang: Lang) -> String {
         if self.end_of_life {
             format!(
@@ -35,9 +35,9 @@ pub enum ChoiceSource {
         url: String,
         sha256: String,
     },
-    /// Pas de lien stable chez l'éditeur : l'adresse de sa page, à ouvrir soi-même.
+    /// No stable link at the publisher: the address of its page, to open oneself.
     OfficialPage(String),
-    /// Ne démarre pas d'une clé : montrée sans pouvoir être écrite.
+    /// Does not boot from a key: shown, not writable.
     NotForUsb,
 }
 
@@ -49,7 +49,7 @@ pub struct System {
     pub choices: Vec<Choice>,
 }
 
-/// Ce que le menu garde : une catégorie, ou un seul système et ses versions. Vide : tout.
+/// A category, or a single system and its versions. Empty: everything.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct MenuFilter {
     pub category: Option<String>,
@@ -66,7 +66,7 @@ impl MenuFilter {
     }
 }
 
-/// Sans catégorie dans le catalogue : un seul groupe, celui de tout le monde.
+/// Without a category in the catalog: a single group for everyone.
 const NO_CATEGORY: &str = "Other systems";
 
 #[derive(Debug, Default)]
@@ -114,7 +114,7 @@ fn choice(image: &Image) -> Choice {
     }
 }
 
-/// Les systèmes du rapport : ses images y sont déjà rangées, de la version la plus récente à la plus ancienne.
+/// The report already sorts each system's images newest first.
 #[must_use]
 pub fn systems(report: &CatalogReport) -> Vec<System> {
     report
@@ -140,7 +140,7 @@ pub fn systems(report: &CatalogReport) -> Vec<System> {
         .collect()
 }
 
-/// Les versions qu'un clic peut écrire, dans l'ordre du menu : l'indice du clavier s'y rapporte.
+/// In menu order: the keyboard index refers to it.
 pub fn writable<'a>(systems: &[&'a System]) -> Vec<&'a Choice> {
     systems
         .iter()
@@ -182,7 +182,7 @@ mod tests {
             .unwrap_or_default()
     }
 
-    /// Ajoute à chaque image ce que le test ne regarde pas.
+    /// Adds to each image what the test does not look at.
     fn complete(mut report: Value) -> Value {
         report["schema_version"] = json!(1);
         report["sequence"] = json!(1);

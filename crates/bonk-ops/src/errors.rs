@@ -1,19 +1,15 @@
 use bonk_hal::EnumerateError;
 
-/// Code de sortie d'une erreur d'exécution générale.
 pub const EXIT_RUNTIME_ERROR: u8 = 1;
-/// Code de sortie d'une erreur d'usage, celui de clap.
+/// Same as clap.
 pub const EXIT_USAGE: u8 = 2;
-/// Cible refusée par le filtre de sécurité, ou dont l'identité a changé.
+/// Refused by the safety filter, or the identity changed.
 pub const EXIT_TARGET_REFUSED: u8 = 3;
-/// La vérification après écriture a échoué.
 pub const EXIT_VERIFY_FAILED: u8 = 4;
-/// Opération annulée par l'utilisateur.
 pub const EXIT_CANCELLED: u8 = 5;
-/// Source (image) illisible, de format inconnu ou trop grande.
+/// Unreadable, unknown format or too large.
 pub const EXIT_SOURCE: u8 = 6;
 
-/// Une erreur connue de Bonk.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Code {
     InvalidArgument,
@@ -51,7 +47,7 @@ pub enum Code {
     ProtocolError,
 }
 
-/// Fiche d'un code, telle que la montre `bonk explain`.
+/// As `bonk explain` shows it.
 pub struct Entry {
     pub code: Code,
     pub id: &'static str,
@@ -61,7 +57,7 @@ pub struct Entry {
     pub remedy: &'static str,
 }
 
-/// Le catalogue. Ordre = ordre des numéros.
+/// In code number order.
 pub const CATALOG: &[Entry] = &[
     Entry {
         code: Code::InvalidArgument,
@@ -384,7 +380,7 @@ pub const CATALOG: &[Entry] = &[
 
 impl Code {
     pub fn entry(self) -> &'static Entry {
-        // Le catalogue contient tous les codes : vérifié par un test.
+        // A test checks the catalog has every code.
         CATALOG
             .iter()
             .find(|entry| entry.code == self)
@@ -399,7 +395,6 @@ impl Code {
         self.entry().exit
     }
 
-    /// Le code qui décrit un échec d'énumération.
     pub fn of_enumeration(error: &EnumerateError) -> Self {
         match error {
             EnumerateError::Unsupported { .. } => Self::EnumerationUnsupported,
@@ -408,7 +403,7 @@ impl Code {
     }
 }
 
-/// Cherche un code, avec ou sans majuscule (`e1003` comme `E1003`).
+/// Case-insensitive: `e1003` as `E1003`.
 pub fn lookup(text: &str) -> Option<&'static Entry> {
     CATALOG
         .iter()

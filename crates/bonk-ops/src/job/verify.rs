@@ -30,8 +30,8 @@ pub fn verify(
     let (mut device, info) =
         open_read_only(&job.target, job.options, job.elevation, job.trace_io, deps)?;
     let mut report_progress = guarded(deps, progress);
-    // Une image GPT posée sur un support plus grand a vu quelques champs réécrits par la réparation du
-    // GPT (MBR de protection, positions de l'en-tête) : les comparer à l'image donnerait un faux échec.
+    // A GPT image on a larger drive had a few fields rewritten by the GPT repair (protective MBR, header
+    // positions): comparing them to the image would fail falsely.
     let ignore = if source_info.size_bytes.is_none_or(|n| n < device.size()) {
         repair_ranges(&file)
     } else {
@@ -81,24 +81,23 @@ pub fn verify(
     })
 }
 
-/// Vide le cache avant la relecture du formatage. Un échec n'arrête pas l'opération et n'est que
-/// journalisé : la relecture pourrait alors porter sur le cache du système et non sur le support.
+/// A failure does not stop the operation, it is only logged: the read-back may then read the system cache
+/// rather than the drive.
 pub(super) fn drop_cache_before_verify(device: &mut dyn BlockDevice) {
     if let Err(e) = device.drop_cache() {
         log::warn!(target: "bonk::write", error = e.to_string().as_str(); "cache not dropped: the verification may read cached data");
     }
 }
 
-/// La relecture dit dans son rapport si le cache a été vidé ; le journal le signale en plus.
+/// The report already says whether the cache was dropped; the log says it too.
 pub(super) fn warn_if_cache_kept(report: &engine::VerifyReport) {
     if !report.cache_dropped {
         log::warn!(target: "bonk::write", "cache not dropped: the verification may have read cached data");
     }
 }
 
-/// Plages d'une image GPT que la réparation du GPT peut réécrire (début de l'image relu à part, car le
-/// flux principal est consommé par le calcul de l'empreinte). Vide si l'image est illisible : l'erreur
-/// sera remontée par la lecture principale.
+/// The image head is read separately, since the main stream is consumed by hashing. Empty if unreadable: the
+/// main read reports the error.
 fn repair_ranges(image: &ImageFile) -> Vec<std::ops::Range<u64>> {
     use std::io::Read;
 

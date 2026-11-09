@@ -69,7 +69,7 @@ const COMMANDES: &[&[&str]] = &[
     &["debug", "layout", "missing-image.bin"],
 ];
 
-/// Mots français courants, sans équivalent anglais de même graphie. Les accents se voient à part.
+/// Common French words with no English homograph. Accents are checked separately.
 const MOTS: &[&str] = &[
     "le",
     "la",
@@ -134,7 +134,7 @@ fn toutes_les_sorties_sont_en_anglais() -> Result<(), Box<dyn std::error::Error>
             }
         }
     }
-    // Les schémas JSON font partie de la sortie : leurs descriptions aussi.
+    // JSON schemas are part of the output: their descriptions too.
     let noms = Command::new(env!("CARGO_BIN_EXE_bonk"))
         .arg("schema")
         .output()?;

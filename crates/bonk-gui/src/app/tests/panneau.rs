@@ -14,7 +14,7 @@ pub(super) fn figer_le_decompte(app: &mut App) {
 
 pub(super) fn app_avec_panneau() -> App {
     let mut app = loaded(sample());
-    // Jamais le vrai binaire : le lancement échoue tout de suite, sans rien écrire.
+    // Never the real binary: the launch fails at once, writing nothing.
     app.program = Some(PathBuf::from("/n/existe/pas"));
     let _ = app.update(Message::Select("usb-cle".to_owned()));
     app
@@ -36,12 +36,12 @@ fn le_panneau_d_ecriture_ne_s_ouvre_que_sur_un_disque_propose() {
         matches!(app.write, WriteState::Idle),
         "désélectionner referme le panneau"
     );
-    // Un disque interne n'est proposé (donc écrivable) qu'avec l'option.
+    // An internal disk is offered, so writable, only with the option.
     let _ = app.update(Message::Select("sata-libre".to_owned()));
     assert!(matches!(app.write, WriteState::Idle));
     let _ = app.update(Message::ToggleInternal(true));
     assert!(matches!(&app.write, WriteState::Draft { disk_id, .. } if disk_id == "sata-libre"));
-    // Retirer l'option referme le panneau : le disque n'est plus proposé.
+    // Removing the option closes the panel: the disk is no longer offered.
     let _ = app.update(Message::ToggleInternal(false));
     assert!(matches!(app.write, WriteState::Idle));
 }
@@ -50,7 +50,7 @@ fn le_panneau_d_ecriture_ne_s_ouvre_que_sur_un_disque_propose() {
 fn l_ecriture_exige_une_image_et_trois_secondes() {
     let mut app = app_avec_panneau();
     figer_le_decompte(&mut app);
-    // Immédiatement : refusé, même avec une image.
+    // Immediately: refused, even with an image.
     let _ = app.update(Message::ImageInput("/tmp/x.img".to_owned()));
     let _ = app.update(Message::StartWrite);
     assert!(
@@ -58,11 +58,11 @@ fn l_ecriture_exige_une_image_et_trois_secondes() {
         "le délai de réflexion n'est pas écoulé"
     );
     vieillir_le_panneau(&mut app);
-    // Délai écoulé mais champ vide : refusé.
+    // Delay over but empty field: refused.
     let _ = app.update(Message::ImageInput("   ".to_owned()));
     let _ = app.update(Message::StartWrite);
     assert!(matches!(app.write, WriteState::Draft { .. }));
-    // Image saisie et délai écoulé : l'écriture démarre.
+    // Image entered and delay over: the write starts.
     let _ = app.update(Message::ImageInput("/tmp/x.img".to_owned()));
     let _ = app.update(Message::StartWrite);
     assert!(matches!(&app.write, WriteState::Running { disk_id, .. } if disk_id == "usb-cle"));
@@ -73,7 +73,7 @@ fn un_disque_devenu_interdit_n_est_pas_ecrit() {
     let mut app = app_avec_panneau();
     let _ = app.update(Message::ImageInput("/tmp/x.img".to_owned()));
     vieillir_le_panneau(&mut app);
-    // La clé est débranchée entre-temps : la liste ne la contient plus.
+    // The key was unplugged meanwhile: the list no longer has it.
     let _ = app.update(Message::Loaded(Ok(vec![])));
     let _ = app.update(Message::StartWrite);
     assert!(matches!(app.write, WriteState::Idle));
@@ -106,13 +106,12 @@ fn un_disque_interne_demande_confirmation_avant_de_lancer() {
     let _ = app.update(Message::StartWrite);
     assert!(app.confirming_internal);
     assert!(matches!(app.write, WriteState::Draft { .. }));
-    // Le clavier ne confirme pas : Entrée ne fait rien, Échap renonce.
+    // The keyboard does not confirm: Enter does nothing, Escape gives up.
     let _ = app.update(Message::Nav(Nav::Activate));
     assert!(matches!(app.write, WriteState::Draft { .. }));
     let _ = app.update(Message::Nav(Nav::Escape));
     assert!(!app.confirming_internal);
     assert!(matches!(app.write, WriteState::Draft { .. }));
-    // Confirmer lance l'écriture.
     let _ = app.update(Message::StartWrite);
     let _ = app.update(Message::ConfirmInternal);
     assert!(!app.confirming_internal);
@@ -167,7 +166,7 @@ fn progression_puis_resultat() {
     ));
     assert!(contient(&app, "Écriture : 1,0 Mo sur 4,0 Mo  (2,0 Mo/s)"));
     assert!(contient(&app, "Annuler"));
-    // Pendant l'écriture, désélectionner le disque ne cache pas la progression ni l'annulation.
+    // During a write, deselecting the disk hides neither the progress nor the cancel.
     let _ = app.update(Message::Select("usb-cle".to_owned()));
     assert!(app.selected.is_none());
     assert!(matches!(app.write, WriteState::Running { .. }));
@@ -185,7 +184,7 @@ fn progression_puis_resultat() {
         "ÉCRITURE TERMINÉE : 4,0 Mo écrits, relus et vérifiés, GPT de secours réparé."
     ));
     let _ = app.update(Message::DismissWrite);
-    // Fermé : le disque n'est plus sélectionné, rien ne s'ouvre ; le resélectionner rouvre un panneau neuf.
+    // Closed: the disk is no longer selected, nothing opens; selecting it again opens a fresh panel.
     assert!(matches!(app.write, WriteState::Idle));
     let _ = app.update(Message::Select("usb-cle".to_owned()));
     assert!(matches!(app.write, WriteState::Draft { .. }));
@@ -224,8 +223,8 @@ fn le_panneau_montre_le_recapitulatif_et_le_decompte() {
         &app,
         "Cle de test  série 4C530001  16,0 Go  1 partition(s)  étiquettes : CLE"
     ));
-    // Horloge figée : un instant d'ouverture dans le futur donne un temps écoulé nul, quelle que soit la
-    // lenteur du rendu (un exécuteur lent a déjà dépassé 3 s avant la première vérification).
+    // Frozen clock: an opening time in the future gives zero elapsed time, however slow the rendering (a slow
+    // runner already passed 3 s before the first check).
     let mut figee = app_avec_panneau();
     figer_le_decompte(&mut figee);
     assert!(contient(&figee, "Écrire et effacer ce disque (dans 3 s)"));
@@ -246,7 +245,7 @@ fn le_decompte_diminue_avec_le_temps_ecoule() {
     assert_eq!(secondes_restantes(Duration::from_secs(1)), 2);
     assert_eq!(secondes_restantes(Duration::from_millis(1500)), 2);
     assert_eq!(secondes_restantes(Duration::from_millis(2999)), 1);
-    // Une fois le délai passé, le bouton n'affiche plus de décompte.
+    // Once the delay is over, the button shows no countdown.
     assert_eq!(secondes_restantes(Duration::from_secs(10)), 0);
 }
 
@@ -264,12 +263,12 @@ fn la_commande_equivalente_inclut_l_ecriture_saisie() {
 #[test]
 fn le_chemin_saisi_n_est_jamais_journalise() {
     let event = ui_event(&Message::ImageInput("/home/alice/secret.img".to_owned()));
-    // Seul le nombre de caractères est connu du journal, jamais le chemin.
+    // The log only knows the character count, never the path.
     assert_eq!(event, Some(("type_image_path", "22 caractères".to_owned())));
 }
 
-/// L'image choisie dans le sélecteur du système remplit le champ, comme une saisie ; fermer le
-/// sélecteur sans choisir ne touche pas à ce qui était saisi.
+/// The image picked in the system picker fills the field, like typing; closing the picker without a choice
+/// leaves the field alone.
 #[test]
 fn l_image_choisie_remplit_le_champ() {
     let mut app = app_avec_panneau();
@@ -328,7 +327,7 @@ fn le_clavier_parcourt_le_panneau_et_l_action_respecte_le_delai() {
     assert_eq!(app.focus, Some(Focus::Mbr));
     nav(&mut app, Nav::Next);
     assert_eq!(app.focus, Some(Focus::Action));
-    // Espace sur le bouton avant le délai : sans effet.
+    // Space on the button before the delay: no effect.
     let _ = app.update(Message::ImageInput("/tmp/x.img".to_owned()));
     app.focus = Some(Focus::Action);
     nav(&mut app, Nav::Activate);
@@ -336,7 +335,7 @@ fn le_clavier_parcourt_le_panneau_et_l_action_respecte_le_delai() {
     vieillir_le_panneau(&mut app);
     nav(&mut app, Nav::Activate);
     assert!(matches!(app.write, WriteState::Running { .. }));
-    // Les flèches sautent le panneau : Bas ne s'arrête pas sur le champ ou le bouton.
+    // The arrows skip the panel: Down does not stop on the field or the button.
     let mut autre = app_avec_panneau();
     let _ = autre.update(Message::ToggleAll(true));
     autre.focus = Some(Focus::Disk("usb-cle".to_owned()));
@@ -346,8 +345,7 @@ fn le_clavier_parcourt_le_panneau_et_l_action_respecte_le_delai() {
 
 #[test]
 fn les_touches_prises_par_le_champ_ne_sont_pas_des_commandes() {
-    // Le filtre de l'abonnement ne transmet que les touches ignorées par les composants : ici, la
-    // correspondance elle-même, qui reste inchangée.
+    // The subscription filter only passes keys the widgets ignored: here, the mapping itself, unchanged.
     assert!(matches!(
         map_key(
             &Key::Named(Named::Space),

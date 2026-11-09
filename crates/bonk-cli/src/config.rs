@@ -19,7 +19,6 @@ pub(crate) struct Key {
     pub(crate) help: &'static str,
 }
 
-/// Les réglages existants.
 pub(crate) const KEYS: &[Key] = &[
     Key {
         name: "lang",
@@ -53,7 +52,6 @@ pub(crate) const KEYS: &[Key] = &[
     },
 ];
 
-/// Contenu du fichier de configuration.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Stored {
     #[serde(default)]
@@ -80,17 +78,17 @@ pub(crate) struct Effective {
     pub(crate) help: &'static str,
 }
 
-/// Réglages d'affichage qui s'appliquent à la fenêtre et aux commandes de lecture.
+/// Display settings shared by the window and read commands.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ViewDefaults {
     pub show_internal: bool,
     pub show_all: bool,
     pub allow_virtual: bool,
-    /// Langue de la fenêtre ; absente : celle du système.
+    /// `None`: the system's.
     pub lang: Option<bonk_hal::Lang>,
 }
 
-/// Nom de la variable d'environnement d'une clé : `view.show_all` donne `BONK_VIEW_SHOW_ALL`.
+/// `view.show_all` gives `BONK_VIEW_SHOW_ALL`.
 pub(crate) fn variable_name(key: &str) -> String {
     format!("BONK_{}", key.replace('.', "_").to_uppercase())
 }
@@ -99,7 +97,7 @@ pub(crate) fn find_key(name: &str) -> Option<&'static Key> {
     KEYS.iter().find(|key| key.name == name)
 }
 
-/// Valide et normalise une valeur pour une clé : `oui`, `1`, `true` donnent `true`.
+/// `oui`, `1`, `true` give `true`.
 pub(crate) fn normalize(key: &Key, value: &str) -> Result<String, String> {
     let value = value.trim();
     match &key.kind {
@@ -126,7 +124,7 @@ pub(crate) fn normalize(key: &Key, value: &str) -> Result<String, String> {
     }
 }
 
-/// Emplacement du fichier : `BONK_CONFIG`, sinon le dossier de configuration du système.
+/// `BONK_CONFIG`, else the system configuration directory.
 pub(crate) fn default_path(var: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
     if let Some(explicit) = var("BONK_CONFIG").filter(|p| !p.is_empty()) {
         return Some(PathBuf::from(explicit));
@@ -134,7 +132,7 @@ pub(crate) fn default_path(var: &dyn Fn(&str) -> Option<String>) -> Option<PathB
     bonk_hal::platform::config_file(var)
 }
 
-/// Lit le fichier ; un fichier absent donne une configuration vide.
+/// A missing file gives an empty configuration.
 pub(crate) fn load(path: &Path) -> Result<Stored, String> {
     match fs::read_to_string(path) {
         Ok(text) => serde_json::from_str(&text)
@@ -144,8 +142,7 @@ pub(crate) fn load(path: &Path) -> Result<Stored, String> {
     }
 }
 
-/// Écrit le fichier d'un seul geste (fichier temporaire puis renommage) : une coupure ne laisse jamais
-/// un fichier à moitié écrit.
+/// In one step (temporary file, then rename): a cut never leaves a half-written file.
 pub(crate) fn save(path: &Path, stored: &Stored) -> Result<(), String> {
     let fail = |e: io::Error| format!("{}: could not write: {e}", path.display());
     if let Some(parent) = path.parent() {
@@ -163,8 +160,8 @@ pub(crate) fn save(path: &Path, stored: &Stored) -> Result<(), String> {
     fs::rename(&tmp, path).map_err(fail)
 }
 
-/// Valeurs effectives : variable `BONK_*` valide, sinon fichier valide, sinon défaut. Une valeur
-/// invalide dans l'environnement ou le fichier est ignorée, jamais fatale pour une commande de lecture.
+/// A valid `BONK_*` variable, else a valid file value, else the default. An invalid value is ignored, never
+/// fatal for a read command.
 pub(crate) fn effective(stored: &Stored, vars: &[(String, String)]) -> Vec<Effective> {
     KEYS.iter()
         .map(|key| {
@@ -242,7 +239,7 @@ pub(crate) fn schema() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(ListReport)).unwrap_or_default()
 }
 
-/// Résultat d'une commande `config` : texte d'erreur à afficher, ou rien.
+/// Error text to print, or nothing.
 pub(crate) fn run(
     action: &ConfigAction,
     path: Option<&Path>,
@@ -437,7 +434,7 @@ mod tests {
     fn set_get_list_reset_de_bout_en_bout() -> Result<(), String> {
         let file = TempFile::new("cycle");
         let path = &file.0;
-        // Absent : tout est par défaut, rien n'est créé par une lecture.
+        // Missing: all defaults, nothing created by a read.
         let list = texte(&ConfigAction::List { json: false }, path, &[])?;
         assert!(
             list.contains("view.show_all") && list.contains("(default)"),
@@ -470,7 +467,7 @@ mod tests {
             "{list}"
         );
 
-        // La variable d'environnement l'emporte, et la liste dit laquelle.
+        // The environment variable wins, and the list says which.
         let vars = [("BONK_VIEW_SHOW_ALL".to_owned(), "false".to_owned())];
         assert_eq!(
             texte(
@@ -553,7 +550,7 @@ mod tests {
         fs::write(&file.0, "{ pas du json")?;
         let erreur = texte(&ConfigAction::List { json: false }, &file.0, &[]).err();
         assert!(erreur.is_some_and(|e| e.contains("unreadable configuration file")));
-        // `set` ne remplace pas en silence un fichier qu'il ne comprend pas.
+        // `set` does not silently replace a file it does not understand.
         assert!(
             texte(
                 &ConfigAction::Set {

@@ -8,8 +8,8 @@ use crate::enumerate::{EnumerateError, SourceRead};
 use super::sources::io_error;
 use super::{LinuxRoots, enumerate};
 
-/// Rejoue une capture : reconstruit sous un dossier temporaire l'arborescence que les lectures ont
-/// vue (fichiers, liens de `/sys/block`), énumère dessus, puis la supprime.
+/// Rebuilds the tree the reads saw (files, `/sys/block` links) in a temporary directory, enumerates it, then
+/// removes it.
 pub(crate) fn enumerate_from_reads(reads: &[SourceRead]) -> Result<Vec<Disk>, EnumerateError> {
     struct Cleanup(PathBuf);
     impl Drop for Cleanup {
@@ -25,8 +25,8 @@ pub(crate) fn enumerate_from_reads(reads: &[SourceRead]) -> Result<Vec<Disk>, En
     enumerate(&LinuxRoots::under(&base))
 }
 
-/// Chemin tel qu'il est sur un vrai système : une capture faite sous une autre racine (les tests)
-/// garde son préfixe, qu'on retire en repartant de `/sys/`, `/proc/` ou de la base udev.
+/// A capture made under another root (tests) keeps its prefix, removed from `/sys/`, `/proc/` or the udev
+/// database on.
 pub(super) fn standard_path(path: &str) -> &str {
     ["/sys/", "/proc/", crate::enumerate::UDEV_DATA]
         .iter()
@@ -41,7 +41,7 @@ pub(super) fn build_tree(base: &Path, reads: &[SourceRead]) -> io::Result<()> {
     for dir in ["sys/block", "proc/self", udev, "dev"] {
         fs::create_dir_all(base.join(dir))?;
     }
-    // `/sys/block/<nom>` : lien vers le chemin canonique du périphérique.
+    // `/sys/block/<name>` links to the canonical device path.
     let links: BTreeMap<&str, &str> = reads
         .iter()
         .filter(|r| r.kind == "link")
@@ -55,7 +55,7 @@ pub(super) fn build_tree(base: &Path, reads: &[SourceRead]) -> io::Result<()> {
         #[cfg(unix)]
         std::os::unix::fs::symlink(format!("../{relative}"), base.join("sys/block").join(name))?;
     }
-    // Un chemin lu à travers un lien est écrit à l'emplacement canonique.
+    // A path read through a link is written at the canonical place.
     let place = |path: &str| -> PathBuf {
         let path = standard_path(path);
         for (link, relative) in &links {
@@ -83,7 +83,7 @@ pub(super) fn build_tree(base: &Path, reads: &[SourceRead]) -> io::Result<()> {
             "dir" => {
                 let target = place(&read.path);
                 fs::create_dir_all(&target)?;
-                // Les périphériques empilés ne sont connus que par leurs noms.
+                // Stacked devices are only known by name.
                 if standard_path(&read.path).ends_with("/holders") {
                     for name in read.content.as_deref().unwrap_or_default().lines() {
                         fs::write(target.join(name), "")?;

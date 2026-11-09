@@ -3,13 +3,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::disk::{Bus, Disk, DiskKind, Partition};
 
-/// Chemins de montage réservés à l'utilisateur sous Unix. Le montage doit être
-/// sous ce chemin : `/media` lui-même ne compte pas.
+/// The mount must be under one of these: `/media` itself does not count.
 const USER_MOUNT_PREFIXES: [&str; 3] = ["/media/", "/run/media/", "/Volumes/"];
 
-/// Signatures de membres de RAID, LVM, ZFS et Storage Spaces, en minuscules. Les
-/// adaptateurs d'OS ramènent leur vocabulaire à celui de `blkid`/`lsblk` ; Storage Spaces n'en a pas,
-/// d'où `storage_spaces_member`.
+/// RAID, LVM, ZFS and Storage Spaces member signatures, lower case. OS adapters map their names to `blkid`'s;
+/// Storage Spaces has none, hence `storage_spaces_member`.
 const AGGREGATE_SIGNATURES: [&str; 8] = [
     "ldm_member",
     "linux_raid_member",
@@ -21,7 +19,6 @@ const AGGREGATE_SIGNATURES: [&str; 8] = [
     "storage_spaces_member",
 ];
 
-/// Signatures d'espace d'échange ou de reprise de mise en veille.
 const SWAP_SIGNATURES: [&str; 2] = ["swap", "swsuspend"];
 
 /// Explicit user settings; everything is refused by default.
@@ -91,22 +88,20 @@ pub enum Eligibility {
 }
 
 impl Eligibility {
-    /// Vrai seulement pour un disque proposé : la garde à appeler avant toute écriture.
+    /// The guard to call before any write.
     #[must_use]
     pub fn is_writable(&self) -> bool {
         matches!(self, Self::Offered { .. })
     }
 }
 
-/// Décide du sort d'un disque.
 #[must_use]
 pub fn evaluate(disk: &Disk, options: FilterOptions) -> Eligibility {
     decide(disk, options, &mut Tracer(None))
 }
 
-/// Comme [`evaluate`], et rend aussi l'examen de chaque règle, appliquée ou non, avec les faits lus :
-/// c'est ce que montre `bonk debug filter`. Le verdict est celui d'[`evaluate`], par construction (même
-/// code) et par test.
+/// Also returns the check of each rule, fired or not, with the facts read, as `bonk debug filter` shows. Same
+/// code as [`evaluate`], so the same verdict; a test checks it too.
 #[must_use]
 pub fn evaluate_traced(disk: &Disk, options: FilterOptions) -> (Eligibility, Vec<RuleTrace>) {
     let mut trace = Vec::new();
@@ -127,7 +122,7 @@ pub struct RuleTrace {
     pub fired: bool,
 }
 
-/// Enregistreur facultatif : sans trace, aucun texte n'est construit.
+/// Without a trace, no text is built.
 struct Tracer<'t>(Option<&'t mut Vec<RuleTrace>>);
 
 impl Tracer<'_> {
@@ -162,7 +157,7 @@ fn decide(disk: &Disk, options: FilterOptions, tracer: &mut Tracer<'_>) -> Eligi
     if virtual_disk {
         reasons.push(Exclusion::VirtualDisk { kind: disk.kind });
     }
-    // Espace d'échange posé sur le disque entier, sans partition : la règle des partitions ne le voit pas.
+    // Swap on the whole disk, without a partition: the partition rule does not see it.
     let swap = disk
         .fs_type
         .as_deref()
@@ -216,7 +211,7 @@ fn decide(disk: &Disk, options: FilterOptions, tracer: &mut Tracer<'_>) -> Eligi
             reason: HiddenReason::InternalBus,
         }
     };
-    // La règle du bus ne s'applique qu'à un disque qu'aucune exclusion n'a écarté.
+    // The bus rule only applies to a disk no exclusion removed.
     let excluded = matches!(verdict, Eligibility::Excluded { .. });
     tracer.note("bus", &disk.path, !excluded, || {
         format!(
@@ -235,8 +230,7 @@ fn decide(disk: &Disk, options: FilterOptions, tracer: &mut Tracer<'_>) -> Eligi
     verdict
 }
 
-/// Règles communes au disque entier et à ses partitions : signature d'agrégat et périphériques
-/// empilés.
+/// Rules shared by the whole disk and its partitions.
 fn push_device_exclusions(
     reasons: &mut Vec<Exclusion>,
     tracer: &mut Tracer<'_>,
@@ -331,13 +325,10 @@ fn is_one_of(signature: &str, list: &[&str]) -> bool {
         .any(|known| signature.eq_ignore_ascii_case(known))
 }
 
-/// Un point de montage est « utilisateur » s'il est sous `/media`, `/run/media` ou `/Volumes`, ou
-/// s'il est la racine d'une lettre de lecteur d'un disque à bus amovible. Une
-/// lettre sur un bus interne est un montage système : on ne distingue pas un disque de données d'un
-/// disque d'exploitation à partir de la seule lettre.
+/// Under `/media`, `/run/media` or `/Volumes`, or the root of a drive letter on a removable bus. A letter on
+/// an internal bus is a system mount: a letter alone does not tell data from system.
 fn is_user_mount(mount: &str, bus: Bus) -> bool {
-    // Un point de montage réel est canonique ; un `..` ne peut être qu'une tentative de sortir de
-    // l'arborescence utilisateur, ou une donnée corrompue : refuser dans les deux cas.
+    // A real mount point is canonical; `..` can only be an escape attempt or corrupt data: refuse both.
     if mount.split(['/', '\\']).any(|part| part == "..") {
         return false;
     }
@@ -349,7 +340,7 @@ fn is_user_mount(mount: &str, bus: Bus) -> bool {
     is_drive_letter_root(mount) && bus.is_removable()
 }
 
-/// `E:`, `E:\` ou `E:/` : la racine d'une lettre de lecteur, pas un dossier monté sous une lettre.
+/// `E:`, `E:\` or `E:/`, not a folder mounted under a letter.
 fn is_drive_letter_root(mount: &str) -> bool {
     let bytes = mount.as_bytes();
     matches!(bytes, [letter, b':'] | [letter, b':', b'\\' | b'/'] if letter.is_ascii_alphabetic())
@@ -615,7 +606,7 @@ mod tests {
                 ("mounted_outside_user_paths", "/dev/sdx1")
             ]
         );
-        // Les règles examinées mais non appliquées figurent aussi, avec leurs faits.
+        // Rules checked but not fired are listed too, with their facts.
         let esp = trace.iter().find(|t| t.rule == "active_esp");
         assert!(esp.is_some_and(|t| !t.fired && t.facts == "is_active_esp=false"));
         let mount = trace
@@ -624,7 +615,7 @@ mod tests {
         assert!(mount.is_some_and(
             |t| t.facts.contains("mount=\"/\"") && t.facts.contains("user_mount=false")
         ));
-        // Un disque exclu n'atteint pas la règle du bus : elle le dit.
+        // An excluded disk never reaches the bus rule, and the trace says so.
         let bus = trace.iter().find(|t| t.rule == "bus");
         assert!(bus.is_some_and(|t| !t.fired && t.facts.contains("not reached")));
     }
@@ -637,7 +628,7 @@ mod tests {
         assert!(fired(&trace).is_empty());
         let bus = trace.last();
         assert!(bus.is_some_and(|t| t.rule == "bus" && t.fired && t.facts.contains("OFFERED")));
-        // Une partition non montée est notée comme telle plutôt que passée sous silence.
+        // An unmounted partition is noted rather than skipped.
         assert!(
             trace
                 .iter()

@@ -403,7 +403,7 @@ mod tests {
     #[test]
     fn la_derniere_partie_est_completee_a_zero_sans_changer_l_empreinte()
     -> Result<(), Box<dyn std::error::Error>> {
-        let image = data(1000); // pas un multiple de 512
+        let image = data(1000); // not a multiple of 512
         let mut dev = MemoryDevice::new(8 * 512, 512)?;
         let report = write_image(
             &mut Cursor::new(image.clone()),

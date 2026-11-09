@@ -37,7 +37,7 @@ mod imp {
         ))
     }
 
-    /// Taille de secteur logique du disque d'après le noyau ; 512 si elle n'est pas lisible.
+    /// 512 when unreadable.
     fn logical_block_size(roots: &LinuxRoots, name: &str) -> u32 {
         fs::read_to_string(
             roots
@@ -56,7 +56,7 @@ mod imp {
             .exists()
     }
 
-    /// Le nom noyau du périphérique, s'il s'agit d'un disque entier : jamais une partition ni un fichier.
+    /// Kernel name, for a whole disk only: never a partition or a file.
     fn whole_disk_name(roots: &LinuxRoots, resolved: &Path) -> Result<String, BlockError> {
         if !fs::metadata(resolved)?.file_type().is_block_device() {
             return Err(invalid("the path is not a block device"));
@@ -66,7 +66,7 @@ mod imp {
             .and_then(|n| n.to_str())
             .ok_or_else(|| invalid("unreadable device name"))?
             .to_owned();
-        // Une partition porte un fichier `partition` dans sysfs : on n'écrit que des disques entiers.
+        // A partition has a `partition` file in sysfs: only whole disks are written.
         if is_partition(roots, &name) {
             return Err(invalid("the path is a partition, not a whole disk"));
         }
@@ -74,12 +74,11 @@ mod imp {
     }
 
     impl BlockNode {
-        /// Ouvre un disque entier. `O_EXCL` en écriture : le noyau refuse un disque déjà utilisé.
+        /// `O_EXCL` for writing: the kernel refuses a disk in use.
         ///
         /// # Errors
-        /// [`BlockError::Io`] : `InvalidInput` si le chemin n'est pas un disque entier (fichier,
-        /// partition, périphérique caractère), `PermissionDenied` sans les droits, `EBUSY` si le disque
-        /// est utilisé.
+        /// [`BlockError::Io`]: `InvalidInput` if the path is not a whole disk (file, partition, character
+        /// device), `PermissionDenied` without rights, `EBUSY` if the disk is in use.
         pub fn open(path: &Path, access: Access) -> Result<Self, BlockError> {
             let resolved = fs::canonicalize(path)?;
             let name = whole_disk_name(&LinuxRoots::system(), &resolved)?;
@@ -92,12 +91,12 @@ mod imp {
             Self::finish(options.open(&resolved)?, resolved, name, read_only)
         }
 
-        /// Reprend un descripteur ouvert par le service du système. Il n'est cru sur rien : c'est bien un
-        /// disque entier, et le même périphérique que `path`. Ne prouve pas que ce soit celui qui a été
-        /// choisi : `path` a pu changer de disque après la revérification.
+        /// Takes a descriptor opened by the system service and trusts nothing: it must be a whole disk and
+        /// the same device as `path`. It does not prove it is the chosen one: `path` may point to another
+        /// disk after the re-check.
         ///
         /// # Errors
-        /// [`BlockError::Io`] : `InvalidInput` si le descripteur n'est pas ce disque.
+        /// [`BlockError::Io`]: `InvalidInput` if the descriptor is not that disk.
         pub(crate) fn from_fd(
             fd: OwnedFd,
             path: &Path,
@@ -119,7 +118,7 @@ mod imp {
             name: String,
             read_only: bool,
         ) -> Result<Self, BlockError> {
-            // La taille d'un périphérique bloc ne se lit pas dans ses métadonnées.
+            // A block device size is not in its metadata.
             let size = file.seek(SeekFrom::End(0))?;
             let block_size = logical_block_size(&LinuxRoots::system(), &name);
             check_geometry(size, block_size)?;
@@ -170,14 +169,13 @@ mod imp {
             Ok(())
         }
 
-        /// `posix_fadvise(DONTNEED)` sur tout le périphérique : le noyau abandonne ses pages propres
-        /// (celles que `flush` vient d'écrire), donc la relecture qui suit lit le support. Constaté sur
-        /// une clé USB 2.0 : sans cela, la relecture de contrôle tournait à 2 193 Mo/s, c'est-à-dire
-        /// dans le cache. Ne demande aucun privilège, contrairement à `BLKFLSBUF`.
+        /// `posix_fadvise(DONTNEED)` on the whole device: the kernel drops its clean pages, so the read-back
+        /// reads the drive. Seen on a USB 2.0 key: without it the read-back ran at 2,193 MB/s, from cache.
+        /// Needs no privilege, unlike `BLKFLSBUF`.
         fn drop_cache(&mut self) -> Result<(), BlockError> {
             use std::os::fd::AsRawFd;
 
-            // SAFETY : le descripteur appartient à `self.file`, ouvert pour toute la durée de l'appel.
+            // SAFETY: the descriptor belongs to `self.file`, open for the whole call.
             let code = unsafe {
                 libc::posix_fadvise(self.file.as_raw_fd(), 0, 0, libc::POSIX_FADV_DONTNEED)
             };
@@ -236,21 +234,19 @@ mod tests {
         }
     }
 
-    /// Aucun test n'ouvre de vrai disque : on vérifie seulement ce que `BlockNode` refuse.
+    /// No test opens a real disk: only what `BlockNode` refuses is checked.
     #[test]
     fn refuse_tout_ce_qui_n_est_pas_un_disque_entier() {
         let kind = |path: &str| match BlockNode::open(Path::new(path), Access::ReadOnly) {
             Err(BlockError::Io(err)) => Some(err.kind()),
             _ => None,
         };
-        // Un fichier ordinaire, un répertoire et un périphérique caractère ne sont pas des disques.
         assert_eq!(
             kind("/proc/self/mountinfo"),
             Some(std::io::ErrorKind::InvalidInput)
         );
         assert_eq!(kind("/proc"), Some(std::io::ErrorKind::InvalidInput));
         assert_eq!(kind("/dev/null"), Some(std::io::ErrorKind::InvalidInput));
-        // Un chemin absent est une erreur d'entrée-sortie, pas une ouverture.
         assert_eq!(
             kind("/dev/disque-inexistant"),
             Some(std::io::ErrorKind::NotFound)

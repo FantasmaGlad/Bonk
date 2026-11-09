@@ -50,8 +50,8 @@ impl BlockDevice for Shared {
     }
 }
 
-/// Périphérique qui journalise le vidage du cache et signale toute relecture faite avant lui : sur un
-/// vrai disque, une relecture de contrôle qui précède le vidage lit le cache du noyau, pas le support.
+/// Logs the cache drop and flags any read before it: on a real disk, a check read before the drop reads the
+/// kernel cache, not the drive.
 struct Logged {
     inner: Box<dyn BlockDevice>,
     log: Log,
@@ -96,13 +96,13 @@ impl BlockDevice for Logged {
 
 #[derive(Clone, Copy, Default)]
 struct Faults {
-    /// Relectures fausses : support défectueux.
+    /// Wrong read-backs: faulty drive.
     reads: bool,
-    /// Vidage du cache refusé (`SYNCHRONIZE CACHE`, `fsync`) : les données peuvent ne jamais atteindre le support.
+    /// Cache flush refused (`SYNCHRONIZE CACHE`, `fsync`): the data may never reach the drive.
     flush: bool,
-    /// Clé débranchée une fois ce nombre d'octets écrit : toute écriture suivante échoue.
+    /// Unplugged once this many bytes are written: every later write fails.
     unplugged_after: Option<u64>,
-    /// Écritures acceptées mais perdues au-delà de cette position, comme une carte défaillante ou contrefaite.
+    /// Writes accepted but lost past this position, like a failing or fake card.
     lost_after: Option<u64>,
 }
 
@@ -201,7 +201,7 @@ impl TempSource {
         let path =
             std::env::temp_dir().join(format!("bonk-job-{}-{label}.img", std::process::id()));
         let mut data: Vec<u8> = (0..len).map(|i| (i * 13 % 251) as u8).collect();
-        // Signature d'amorçage : l'analyse y voit une image de disque.
+        // Boot signature: the analysis sees a disk image.
         if len >= 512 {
             data[446..510].fill(0);
             data[510] = 0x55;
@@ -210,7 +210,7 @@ impl TempSource {
         std::fs::write(&path, data).expect("écriture de l'image de test");
         Self(path)
     }
-    /// Un dossier pour le cache : il n'est pas créé, c'est le téléchargement qui le crée.
+    /// Not created: the download creates it.
     fn dir(label: &str) -> Self {
         Self(std::env::temp_dir().join(format!("bonk-job-{}-{label}", std::process::id())))
     }
@@ -240,7 +240,7 @@ type Log = Rc<RefCell<Vec<String>>>;
 struct Scenario {
     log: Log,
     device: Shared,
-    /// Énumérations successives : la n-ième appelée rend la n-ième liste (la dernière se répète).
+    /// Successive enumerations: the n-th call returns the n-th list (the last one repeats).
     enumerations: Vec<Vec<Disk>>,
     prepare: Result<(), String>,
     unmount: Result<Vec<String>, String>,
@@ -354,7 +354,7 @@ impl Scenario {
                 Ok(())
             }),
             rescan: Box::new(move |path, _| {
-                // Le service ne peut pas relire la table d'un disque encore ouvert en exclusif.
+                // The service cannot reread the table of a disk still opened exclusively.
                 let call = match open_devices_at_rescan.get() {
                     0 => "rescan",
                     _ => "rescan_disque_encore_ouvert",

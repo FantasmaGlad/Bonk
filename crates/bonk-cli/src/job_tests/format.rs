@@ -10,7 +10,7 @@ fn new_partition_bytes() -> u64 {
     plan.sectors() * 512
 }
 
-/// Le disque après formatage, avec le système de fichiers que le système y voit.
+/// The disk after formatting, with the filesystem the system sees.
 fn usb_with_new_partition(fs: &str) -> Disk {
     let mut disk = usb("S1");
     let mut part = partition("/dev/sdb1", &[], false);
@@ -45,7 +45,7 @@ fn formater_une_cle_passe_par_tous_les_garde_fous_puis_relit() {
     assert_eq!(&written[512..520], b"EFI PART");
 }
 
-/// exFAT est écrit par Bonk comme FAT32 : aucun outil de l'hôte, la même relecture.
+/// exFAT is written by Bonk like FAT32: no host tool, the same read-back.
 #[test]
 fn exfat_est_ecrit_par_bonk_sans_outil_de_l_hote() {
     let scenario = Scenario::new();
@@ -133,8 +133,7 @@ fn un_outil_absent_refuse_ntfs_sans_toucher_au_disque() {
 fn ntfs_ne_formate_jamais_l_ancienne_partition_encore_visible() {
     let mut scenario = Scenario::new();
     scenario.capabilities = vec![ntfs_capability(true)];
-    // L'ancienne table reste visible un moment : même chemin /dev/sdb1, autre taille. C'est ce qu'a montré
-    // l'essai sur la clé réelle.
+    // The old table stays visible for a while: same path /dev/sdb1, another size. Seen on the real key.
     scenario.enumerations = vec![
         vec![usb("S1")],
         vec![usb("S1")],
@@ -154,8 +153,7 @@ fn ntfs_ne_formate_jamais_l_ancienne_partition_encore_visible() {
     );
 }
 
-/// Entre la nouvelle table et le formatage par le système, une autre clé a pris la place : l'outil de
-/// l'hôte n'est jamais appelé sur elle.
+/// Between the new table and the host format, another key took the place: the host tool is never run on it.
 #[test]
 fn ntfs_ne_formate_pas_une_autre_cle_arrivee_entre_temps() {
     let mut scenario = Scenario::new();
@@ -222,8 +220,8 @@ fn capabilities_dit_le_pourquoi() {
     assert_eq!(value["capabilities"][1]["missing"], "missing_tool");
 }
 
-/// FAT32 ne garde pas un fichier de 4 GiB : la sortie le dit et donne le remède ; les autres systèmes
-/// n'ont pas cette limite à dire.
+/// FAT32 cannot keep a 4 GiB file: the output says so with the remedy; other filesystems have no such limit
+/// to report.
 #[test]
 fn fat32_dit_sa_limite_par_fichier_et_propose_exfat() {
     let scenario = Scenario::new();
@@ -247,7 +245,7 @@ fn fat32_dit_sa_limite_par_fichier_et_propose_exfat() {
     assert!(value["file_size_limit_bytes"].is_null(), "{json}");
 }
 
-/// Une image GPT de 8 Mio posée au début de la clé : sa GPT de secours manque à la fin, à réparer.
+/// An 8 MiB GPT image at the start of the key: its backup GPT is missing at the end.
 fn cle_a_reparer() -> Scenario {
     use bonk_core::format::table::{TableKind, write_table};
     use bonk_core::format::{Filesystem, Ids};
@@ -271,7 +269,7 @@ fn cle_a_reparer() -> Scenario {
     scenario
 }
 
-/// Réparée, la table est relue sur la clé puis par le système, comme après une écriture.
+/// Once repaired, the table is read back on the key and by the system, as after a write.
 #[test]
 fn reparer_relit_la_table_sur_la_cle_et_par_le_systeme() {
     let scenario = cle_a_reparer();
@@ -295,7 +293,7 @@ fn reparer_relit_la_table_sur_la_cle_et_par_le_systeme() {
     );
 }
 
-/// Une clé qui ne garde pas la fin : la réparation semblait faite, la relecture la dément.
+/// A key that does not keep the end: the repair looked done, the read-back says otherwise.
 #[test]
 fn une_reparation_que_la_cle_ne_garde_pas_echoue() {
     let mut scenario = cle_a_reparer();
@@ -305,7 +303,7 @@ fn une_reparation_que_la_cle_ne_garde_pas_echoue() {
     assert!(err.trim_end().ends_with("[E4005]"), "{err}");
 }
 
-/// Annulé juste après l'ouverture : le disque reste intact, la réparation n'a pas commencé.
+/// Cancelled right after opening: the disk stays intact, the repair did not start.
 #[test]
 fn reparer_s_annule_avant_d_ecrire() {
     let mut scenario = Scenario::new();

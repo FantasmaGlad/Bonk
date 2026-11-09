@@ -5,44 +5,43 @@ use serde_json::Value;
 use crate::disk::{Bus, Disk, DiskKind, Partition};
 use crate::enumerate::{EnumerateError, SourceRead};
 
-/// Nom de la source qui porte ces faits dans une capture.
 pub const SOURCE: &str = "macos:facts";
 
-/// Ce que `diskutil info` dit d'un disque, d'une partition ou d'un volume, sans interprétation.
+/// What `diskutil info` says of a disk, partition or volume, uninterpreted.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct RawMedia {
     /// `disk0`, `disk0s2`.
     pub device: String,
     pub whole: bool,
-    /// Disque entier de rattachement.
+    /// Whole disk it belongs to.
     pub parent: String,
     pub bus: Option<String>,
     pub internal: bool,
     pub removable: bool,
     pub name: Option<String>,
-    /// Numéro de série : `ioreg`, `diskutil` ne le donne pas.
+    /// From `ioreg`: `diskutil` does not give it.
     #[serde(default)]
     pub serial: Option<String>,
     pub size_bytes: u64,
-    /// `DeviceBlockSize` : octets par secteur logique.
+    /// `DeviceBlockSize`: bytes per logical sector.
     #[serde(default)]
     pub block_size: Option<u32>,
     /// USB `locationID` from `ioreg`.
     #[serde(default)]
     pub location: Option<String>,
-    /// Type de contenu : `EFI`, `Apple_APFS`, `Microsoft Basic Data`...
+    /// `EFI`, `Apple_APFS`, `Microsoft Basic Data`...
     pub content: Option<String>,
     pub file_system: Option<String>,
     pub label: Option<String>,
     pub mount: Option<String>,
-    /// Pour un volume ou un disque APFS : les partitions physiques qui le portent.
+    /// For an APFS volume or disk: the physical partitions behind it.
     pub physical_stores: Vec<String>,
 }
 
-/// Lit la sortie de `diskutil info -plist`, convertie en JSON.
+/// Reads `diskutil info -plist` output, converted to JSON.
 ///
 /// # Errors
-/// `DeviceIdentifier` absent : la sortie n'a pas la forme attendue.
+/// No `DeviceIdentifier`: unexpected output.
 pub fn media_from_info(info: &Value) -> Result<RawMedia, EnumerateError> {
     let text = |key: &str| {
         info[key]
@@ -89,8 +88,8 @@ pub fn media_from_info(info: &Value) -> Result<RawMedia, EnumerateError> {
     })
 }
 
-/// Valeurs de `BusProtocol`. Un bus inconnu reste interne par prudence, Thunderbolt compris : ce bus peut
-/// aussi être celui d'un disque interne.
+/// `BusProtocol` values. An unknown bus stays internal, Thunderbolt included: it can also be an internal
+/// disk.
 fn bus_of(media: &RawMedia) -> (Bus, DiskKind) {
     let bus = match media.bus.as_deref() {
         Some("USB") => Bus::Usb,
@@ -118,12 +117,10 @@ fn stable_id(whole: &RawMedia, bus: Bus) -> String {
     id.split_whitespace().collect::<Vec<_>>().join("_")
 }
 
-/// Traduit les faits en disques.
-///
 /// # Errors
-/// Aucun disque physique ne porte le système.
+/// No physical disk carries the system.
 pub fn normalize(media: &[RawMedia]) -> Result<Vec<Disk>, EnumerateError> {
-    // Les disques synthétisés ne sont pas écrivables : seuls leurs supports comptent.
+    // Synthesized disks cannot be written: only their stores count.
     let synthesized = |m: &RawMedia| !m.physical_stores.is_empty();
     let mut disks: Vec<Disk> = media
         .iter()
@@ -178,7 +175,7 @@ pub fn normalize(media: &[RawMedia]) -> Result<Vec<Disk>, EnumerateError> {
             detail: "no physical disk holds the system volume".to_owned(),
         });
     }
-    // L'ESP du disque qui porte le système est celle dont l'hôte a démarré.
+    // The ESP of the system disk is the one the host booted from.
     for disk in &mut disks {
         if disk.partitions.iter().any(|p| p.is_system_volume) {
             let esps: Vec<String> = media
@@ -200,11 +197,11 @@ pub fn normalize(media: &[RawMedia]) -> Result<Vec<Disk>, EnumerateError> {
     Ok(disks)
 }
 
-/// Numéros de série dans le texte de `ioreg -r -l -w0 -c <classe>` : chaque bloc de premier niveau est un
-/// périphérique, et les disques entiers qu'il porte y figurent par `"BSD Name"`. Rend `(disque, série)`.
+/// Serial numbers in `ioreg -r -l -w0 -c <class>` output: each top-level block is a device, and the whole
+/// disks it carries appear as `"BSD Name"`. Returns `(disk, serial)`.
 #[must_use]
 pub fn serials_from_ioreg(text: &str) -> Vec<(String, String)> {
-    /// Valeur entre guillemets qui suit `key`, avec ou sans espaces autour du `=`.
+    /// Quoted value after `key`, with or without spaces around `=`.
     fn value_after<'a>(line: &'a str, key: &str) -> Option<&'a str> {
         let rest = line.split_once(key)?.1.trim_start().strip_prefix('=')?;
         let rest = rest.trim_start().strip_prefix('"')?;
@@ -262,7 +259,7 @@ pub fn locations_from_ioreg(text: &str) -> Vec<(String, String)> {
     found
 }
 
-/// Chemin brut d'un disque entier : `/dev/disk2` donne `/dev/rdisk2`. Ni partition, ni autre périphérique.
+/// `/dev/disk2` gives `/dev/rdisk2`. Never a partition or another device.
 #[must_use]
 pub fn raw_disk_path(path: &str) -> Option<String> {
     let digits = path.strip_prefix("/dev/disk")?;
@@ -270,7 +267,6 @@ pub fn raw_disk_path(path: &str) -> Option<String> {
         .then(|| format!("/dev/rdisk{digits}"))
 }
 
-/// La lecture de la capture qui porte ces faits, s'il y en a une.
 pub(crate) fn from_capture(reads: &[SourceRead]) -> Option<Result<Vec<Disk>, EnumerateError>> {
     let read = reads.iter().find(|read| read.path == SOURCE)?;
     let parsed: Result<Vec<RawMedia>, String> = read
@@ -287,7 +283,7 @@ pub(crate) fn from_capture(reads: &[SourceRead]) -> Option<Result<Vec<Disk>, Enu
     })
 }
 
-/// Le contenu d'une capture, sans ce qui identifie le propriétaire. Un contenu illisible disparaît.
+/// Capture content without what identifies the owner. Unreadable content is dropped.
 #[must_use]
 pub fn sanitize(content: &str) -> String {
     let Ok(mut media) = serde_json::from_str::<Vec<RawMedia>>(content) else {
@@ -332,7 +328,7 @@ mod tests {
         }
     }
 
-    /// Mac : système sur APFS, ESP, clé USB montée dans `/Volumes`.
+    /// APFS system, ESP, USB key mounted under `/Volumes`.
     fn mac() -> Vec<RawMedia> {
         let mut container = whole("disk3", "PCI-Express");
         container.physical_stores = vec!["disk0s2".to_owned()];
@@ -356,7 +352,6 @@ mod tests {
     #[test]
     fn le_disque_qui_porte_apfs_est_interdit_et_la_cle_proposee() -> Result<(), EnumerateError> {
         let disks = normalize(&mac())?;
-        // Le disque synthétisé n'est pas listé.
         assert_eq!(disks.len(), 2);
         assert_eq!(disks[0].path, "/dev/disk0");
         assert!(disks[0].partitions[1].is_system_volume);
@@ -380,7 +375,7 @@ mod tests {
             .filter(|m| m.device != "disk3s1")
             .collect();
         assert!(normalize(&sans).is_err());
-        // Un montage ailleurs que sur `/` ne fait pas un système.
+        // A mount elsewhere than `/` does not make a system disk.
         let mut ailleurs = mac();
         ailleurs[4].mount = Some("/Volumes/x".to_owned());
         assert!(normalize(&ailleurs).is_err());

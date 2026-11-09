@@ -10,10 +10,10 @@ pub struct ViewOptions {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WriteView<'a> {
     pub image: &'a str,
-    /// Empreinte en hexadécimal, ou chemin ou adresse d'un fichier d'empreintes ; vide : aucune.
+    /// Hex hash, or path or address of a checksum file; empty: none.
     pub hash: &'a str,
     pub raw: bool,
-    /// Table MBR pour une clé Windows, celle de `bonk write` par défaut ; GPT sinon.
+    /// MBR for a Windows drive, the `bonk write` default; GPT otherwise.
     pub mbr: bool,
 }
 
@@ -65,8 +65,8 @@ impl<'a> WriteView<'a> {
     }
 }
 
-/// Les commandes qui donnent ce que montre la fenêtre : la liste, le détail du disque sélectionné et,
-/// quand une image est saisie pour l'écrire, l'écriture elle-même.
+/// Commands giving what the window shows: the list, the selected disk's detail and, when an image is entered,
+/// the write itself.
 #[must_use]
 pub fn equivalent_commands(
     options: ViewOptions,
@@ -103,8 +103,7 @@ pub fn equivalent_commands(
     commands
 }
 
-/// Entoure d'apostrophes ce qui ne serait pas un mot de shell sûr (syntaxe POSIX ; sous PowerShell,
-/// les apostrophes simples ont aussi cet effet).
+/// Quotes what would not be a safe shell word (POSIX; in PowerShell single quotes do the same).
 fn shell_quote(text: &str) -> String {
     let safe = !text.is_empty()
         && text
@@ -177,7 +176,7 @@ mod tests_write {
                 "bonk write usb-a '/home/u/Mes images/debian.iso' --yes --show-internal",
             ]
         );
-        // Sans disque sélectionné, ou avec une saisie vide, pas de commande d'écriture.
+        // No disk selected, or empty input: no write command.
         assert_eq!(
             equivalent_commands(
                 ViewOptions::default(),

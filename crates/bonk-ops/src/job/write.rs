@@ -32,18 +32,16 @@ pub struct WriteJob {
     pub yes: bool,
     pub expected_sha256: Option<String>,
     pub mode: WriteMode,
-    /// Table de la clé Windows ; sans effet sur une écriture brute, dont la table vient de l'image.
+    /// Windows drive table; no effect on a raw write, whose table comes from the image.
     pub table: TableKind,
     pub elevation: Elevation,
-    /// Tient lieu de `yes` et autorise un disque interne déjà admis par les options du filtre. Sans
-    /// aucune question : une commande doit pouvoir tourner sans personne devant l'écran.
+    /// Stands for `yes` and allows an internal disk the filter options already admit. No question: a command
+    /// must run with nobody at the screen.
     pub force: bool,
 }
 
-/// Empreinte SHA-256 en minuscules, ou le refus de ce qui n'en est pas une.
-///
 /// # Errors
-/// `InvalidArgument` si ce ne sont pas 64 caractères hexadécimaux.
+/// `InvalidArgument` unless 64 hexadecimal characters.
 pub fn normalize_sha256(text: &str) -> Result<String, JobError> {
     let hex = text.trim().to_ascii_lowercase();
     if hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit()) {
@@ -56,11 +54,11 @@ pub fn normalize_sha256(text: &str) -> Result<String, JobError> {
     }
 }
 
-/// Ce qui refuserait l'écriture quelle que soit l'image : à vérifier avant un long téléchargement, qui ne
-/// doit pas finir sur un refus déjà connu. Ne touche à rien.
+/// What would refuse the write whatever the image: checked before a long download, which must not end on a
+/// refusal already known. Touches nothing.
 ///
 /// # Errors
-/// Cible refusée, confirmation absente.
+/// Target refused, or confirmation missing.
 pub fn precheck(job: &WriteJob, deps: &Deps<'_>) -> Result<(), JobError> {
     let chosen = choose(&job.target, job.options, deps)?;
     if job.dry_run {
@@ -79,9 +77,9 @@ fn confirm(job: &WriteJob, chosen: &Chosen) -> Result<(), JobError> {
     confirm_internal(chosen, job.options, job.force)
 }
 
-/// Décompresse l'image une fois à blanc. Un flux décompressé ne montre sa fin qu'en dernier : sans ce
-/// passage, des données après le flux ou une image plus grande que la cible ne seraient vues qu'une fois
-/// la clé effacée. Une empreinte contrôlée rend ce passage inutile.
+/// Decompresses the image once without writing. A decompressed stream only shows its end last: without this
+/// pass, data after the stream or an image larger than the target would only be seen after the key is erased.
+/// A checked hash makes this pass unnecessary.
 fn rehearse(
     image_file: &ImageFile,
     image: &ImageReport,
@@ -104,8 +102,7 @@ fn rehearse(
     check_complete(image, len, mode)
 }
 
-/// Contrôle le fichier source contre l'empreinte attendue. Avant tout geste : un fichier faux ne doit
-/// coûter ni un démontage, ni le contenu de la clé.
+/// Before any action: a wrong file must cost neither an unmount nor the key's content.
 fn check_sha256(
     image: &ImageFile,
     path: &Path,
@@ -135,8 +132,7 @@ fn check_sha256(
     }
 }
 
-/// Lit le début de l'image (décompressé) et l'analyse, par un lecteur à part : le flux principal doit
-/// rester intact pour l'écriture.
+/// Through a separate reader: the main stream must stay intact for the write.
 fn analyze_source(
     image: &ImageFile,
     path: &Path,
@@ -156,7 +152,7 @@ fn analyze_source(
                 format!("{}: {e}", path.display()),
             )
         })?;
-    // Quel que soit le mode : ne rien écrire et annoncer un succès serait un mensonge.
+    // Whatever the mode: writing nothing and reporting success would be a lie.
     if head.is_empty() {
         return Err(fail(
             Code::SourceUnreadable,
@@ -166,7 +162,7 @@ fn analyze_source(
     Ok(analysis::analyze(&head, real_len))
 }
 
-/// Applique le mode d'écriture à l'analyse : `Raw` passe outre en le journalisant.
+/// `Raw` overrides it, and logs it.
 fn judge_image(report: &ImageReport, mode: WriteMode) -> Result<(), JobError> {
     let problem = if report.truncated == Some(true) {
         Some((
@@ -204,16 +200,16 @@ fn judge_image(report: &ImageReport, mode: WriteMode) -> Result<(), JobError> {
     }
 }
 
-/// Taille que l'image occupera sur la cible, quand on la connaît avant de la lire en entier : une image
-/// compressée ne donne que ce que sa structure annonce, écarté en mode `Raw` qui ne croit pas l'analyse.
+/// When known before reading the whole image: a compressed image only gives what its structure declares,
+/// ignored in `Raw` mode, which does not trust the analysis.
 fn needed_bytes(source: &SourceInfo, image: &ImageReport, mode: WriteMode) -> Option<u64> {
     source
         .size_bytes
         .or(image.declared_bytes.filter(|_| mode == WriteMode::Auto))
 }
 
-/// Une image compressée ne dit sa taille réelle qu'une fois lue : la relecture compare au flux, et ne voit
-/// donc pas un flux complet dont le contenu est coupé. Contrôlé après coup, faute de mieux.
+/// A compressed image only gives its real size once read: the read-back compares with the stream, so a
+/// complete stream with cut content goes unseen. Checked afterwards, for lack of better.
 fn check_complete(image: &ImageReport, written: u64, mode: WriteMode) -> Result<(), JobError> {
     let Some(declared) = image.declared_bytes.filter(|declared| written < *declared) else {
         return Ok(());
@@ -230,8 +226,8 @@ fn check_complete(image: &ImageReport, written: u64, mode: WriteMode) -> Result<
     }
 }
 
-/// Un disque interne proposé exige `force`, et `yes` ne suffit pas : effacer un disque de la machine ne doit
-/// pas partir d'une habitude de frappe. Rien n'a encore bougé : dernier contrôle avant le premier geste.
+/// An offered internal disk needs `force`, `yes` is not enough: erasing a disk of the machine must not come
+/// from typing habit. Nothing has moved yet: last check before the first action.
 pub(super) fn confirm_internal(
     chosen: &Chosen,
     options: FilterOptions,
@@ -278,15 +274,15 @@ fn planned_steps(job: &WriteJob, chosen: &Chosen) -> Vec<&'static str> {
     steps
 }
 
-/// Le support est plus grand que l'image : le GPT de secours n'est plus à la fin.
+/// The drive is larger than the image: the backup GPT is no longer at the end.
 fn repair_if_needed(device: &mut dyn BlockDevice) -> Result<Option<RepairReport>, JobError> {
     let layout = inspect(device).map_err(|e| fail(Code::GptRepairFailed, e))?;
     if !needs_repair(&layout) {
         return Ok(None);
     }
     let report = repair_gpt(device).map_err(|e| fail(Code::GptRepairFailed, e))?;
-    // Relue après vidage : un support qui n'a pas gardé les tables laisserait partir une clé sans GPT de
-    // secours, avec un succès annoncé.
+    // Read back after flushing: a drive that did not keep the tables would let a key without a backup GPT go
+    // out with a success.
     device.flush().map_err(|e| fail(Code::GptRepairFailed, e))?;
     let _ = device.drop_cache();
     let after = inspect(device).map_err(|e| fail(Code::GptRepairFailed, e))?;
@@ -300,8 +296,7 @@ fn repair_if_needed(device: &mut dyn BlockDevice) -> Result<Option<RepairReport>
     Ok(Some(report))
 }
 
-/// L'ISO d'installation de Windows que le mode demande d'extraire, s'il y en a une. `extract` exige d'en
-/// trouver une ; `auto` en cherche une là où l'écriture brute serait refusée ; `raw` n'en cherche jamais.
+/// `extract` requires one; `auto` looks for one where a raw write would be refused; `raw` never looks.
 fn windows_image(
     file: &ImageFile,
     source: &SourceInfo,
@@ -395,7 +390,7 @@ fn plan(
     }))
 }
 
-/// L'autorisation du système peut faire attendre : le dire, et laisser annuler avant d'ouvrir le disque.
+/// System authorization may take a while: say so, and allow cancelling before opening the disk.
 fn announce_authorization(
     total: Option<u64>,
     deps: &Deps<'_>,
@@ -414,7 +409,7 @@ fn announce_authorization(
     Ok(())
 }
 
-/// Refus avant tout geste quand la taille de l'image est connue et dépasse la cible.
+/// Refused before any action when the image size is known and exceeds the target.
 fn refuse_if_too_large(needed: Option<u64>, available: Option<u64>) -> Result<(), JobError> {
     if let (Some(needed), Some(available)) = (needed, available)
         && needed > available
@@ -427,7 +422,7 @@ fn refuse_if_too_large(needed: Option<u64>, available: Option<u64>) -> Result<()
     Ok(())
 }
 
-/// Simuler vers l'image elle-même l'écraserait pendant qu'on la lit : une image compressée serait détruite.
+/// Simulating onto the image itself would overwrite it while reading: a compressed image would be destroyed.
 fn refuse_source_as_target(job: &WriteJob) -> Result<(), JobError> {
     match &job.target {
         Target::Image { path, .. } if bonk_hal::same_file(path, &job.source) => Err(fail(
@@ -577,7 +572,7 @@ mod tests {
 
     use super::*;
 
-    /// Une image GPT plus petite que le support : la GPT de secours manque à la fin, à réparer.
+    /// A GPT image smaller than the drive: the backup GPT is missing at the end.
     fn image_sur_un_plus_grand_support() -> Result<MemoryDevice, Box<dyn std::error::Error>> {
         let mut image = MemoryDevice::new(8 << 20, 512)?;
         write_table(
@@ -593,7 +588,7 @@ mod tests {
         Ok(support)
     }
 
-    /// Support qui accepte sans rien garder les écritures au-delà d'un point, comme une carte défaillante.
+    /// Accepts writes past a point without keeping them, like a failing card.
     struct PerdLaFin {
         inner: MemoryDevice,
         limite: u64,

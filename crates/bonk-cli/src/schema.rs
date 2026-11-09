@@ -5,10 +5,9 @@ use serde_json::Value;
 
 use crate::{cache, catalog, config, debug, diagnose, errors, format, info, list, serve, transfer};
 
-/// Nom d'une commande et générateur du schéma de sa sortie.
+/// Command name and generator of its output schema.
 type Entry = (&'static str, fn() -> Value);
 
-/// Les schémas disponibles.
 pub(crate) fn registry() -> Vec<Entry> {
     vec![
         ("list", list::schema),
@@ -35,7 +34,7 @@ pub(crate) fn registry() -> Vec<Entry> {
     ]
 }
 
-/// Schéma d'une commande, pour le service ; `None` si le nom est inconnu.
+/// For the service; `None` for an unknown name.
 pub(crate) fn value(name: &str) -> Option<Value> {
     registry()
         .iter()
@@ -43,14 +42,13 @@ pub(crate) fn value(name: &str) -> Option<Value> {
         .map(|(_, make)| make())
 }
 
-/// Noms des schémas disponibles.
 pub(crate) fn names() -> Vec<&'static str> {
     registry().iter().map(|(n, _)| *n).collect()
 }
 
 /// JSON Schema of a command's output
 #[derive(Debug, Args)]
-// `long_about = None` : sans lui, clap reprendrait le commentaire ci-dessus comme texte long.
+// Without it clap would reuse the doc comment above as long help.
 #[command(long_about = None)]
 pub(crate) struct SchemaArgs {
     /// Command whose schema is wanted; without a name, list the commands
@@ -63,7 +61,7 @@ impl SchemaArgs {
     }
 }
 
-/// Écrit le schéma demandé (ou la liste). Renvoie `false` si le nom est inconnu.
+/// Or the list. Returns `false` for an unknown name.
 pub(crate) fn run(args: &SchemaArgs, out: &mut dyn Write) -> io::Result<bool> {
     let registry = registry();
     match &args.name {
@@ -99,8 +97,8 @@ mod tests {
             let schema = make();
             assert_eq!(schema["type"], "object", "{name}");
             let properties = schema["properties"].as_object();
-            // Les enveloppes du service sont versionnées par le protocole (événement `ready`), pas par
-            // un champ : seules les sorties de commande portent `schema_version`.
+            // Service envelopes are versioned by the protocol (`ready` event), not by a field: only command
+            // outputs carry `schema_version`.
             let key = if name.starts_with("serve-") {
                 "id"
             } else {

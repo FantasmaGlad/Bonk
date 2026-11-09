@@ -9,7 +9,6 @@ use crate::info;
 
 use super::{FilterArgs, Outcome};
 
-/// Version propre au schéma de `debug filter`.
 pub(super) const FILTER_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Serialize, JsonSchema)]
@@ -21,7 +20,7 @@ pub(super) struct FilterReport<'a> {
     rules: &'a [bonk_hal::RuleTrace],
 }
 
-/// Le rapport `debug filter`, en JSON, pour le service ; `None` si le disque est inconnu.
+/// For the service; `None` for an unknown disk.
 pub(crate) fn filter_value(
     target: &str,
     options: FilterOptions,
@@ -91,7 +90,7 @@ pub(crate) fn filter(
         .unwrap_or(0);
     let rule_width = rules.iter().map(|r| r.rule.len()).max().unwrap_or(0);
     for rule in &rules {
-        // La règle du bus ne refuse rien : quand elle « s'applique », elle décide de la proposition.
+        // The bus rule refuses nothing: when it fires, it decides the offer.
         let mark = match (rule.rule, rule.fired) {
             ("bus", true) => "VERDICT  ",
             (_, true) => "APPLIED  ",

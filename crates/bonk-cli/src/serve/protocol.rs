@@ -56,7 +56,7 @@ pub(super) fn failure(code: Code, message: impl std::fmt::Display) -> Failure {
     }
 }
 
-/// Flux de sortie partagé : chaque message est une ligne écrite d'un seul tenant.
+/// Shared output: each message is one line written in one piece.
 #[derive(Clone)]
 pub(super) struct Out(pub(super) Arc<Mutex<Box<dyn Write + Send>>>);
 

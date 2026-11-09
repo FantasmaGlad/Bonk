@@ -41,7 +41,6 @@ impl Fake {
         Ok(())
     }
 
-    /// Crée un disque sous `sys/<device_path>` et le lien `sys/block/<name>`.
     fn disk(
         &self,
         name: &str,
@@ -101,7 +100,7 @@ const USB_PATH: &str =
     "devices/pci0000:00/0000:00:14.0/usb1/1-1/1-1:1.0/host6/target6:0:0/6:0:0:0/block/sdb";
 const SATA_PATH: &str = "devices/pci0000:00/0000:00:17.0/ata1/host0/target0:0:0/0:0:0:0/block/sda";
 
-/// Un poste dont le système est sur NVMe, d'après la structure relevée sur une machine réelle.
+/// NVMe system disk, as read on a real machine.
 fn desktop(fake: &Fake) -> Result<(), Box<dyn Error>> {
     fake.disk(
         "nvme0n1",
@@ -172,7 +171,7 @@ fn disque_systeme_nvme_est_exclu() -> Result<(), Box<dyn Error>> {
     assert_eq!(nvme.size_bytes, 1_000_215_216 * 512);
     assert_eq!(nvme.model, "SAMSUNG MZVL2512HDJD-00BH1");
     assert_eq!(nvme.serial.as_deref(), Some("S6Z4"));
-    // Le lien lisible l'emporte sur l'identifiant EUI ; le plus court sur sa variante « _1 ».
+    // The readable link wins over the EUI id; the shortest over its `_1` variant.
     assert_eq!(nvme.id, "nvme-SAMSUNG_MZVL2512HDJD-00BH1_S6Z4");
     let [esp, root] = nvme.partitions.as_slice() else {
         return Err(format!("deux partitions attendues : {:?}", nvme.partitions).into());
@@ -217,8 +216,6 @@ fn cle_usb_montee_par_l_utilisateur_est_proposee() -> Result<(), Box<dyn Error>>
     Ok(())
 }
 
-/// Un périphérique loop détaché ou un lecteur de carte vide annonce 0 octet : jamais proposé, même en
-/// mode virtuel ; la raison est dite.
 #[test]
 fn un_peripherique_de_zero_octet_est_cache() -> Result<(), Box<dyn Error>> {
     let fake = Fake::new()?;
@@ -277,8 +274,8 @@ fn montage_btrfs_retrouve_par_la_source() -> Result<(), Box<dyn Error>> {
     let fake = Fake::new()?;
     desktop(&fake)?;
     usb_stick(&fake)?;
-    // btrfs rapporte un numéro anonyme (0:50) : seule la source désigne le périphérique, ici
-    // par un lien comme en crée udev.
+    // btrfs reports an anonymous number (0:50): only the source names the device, here through a udev-style
+    // link.
     fs::create_dir_all(fake.base.join("dev/disk/by-uuid"))?;
     fs::write(fake.base.join("dev/sdb1"), "")?;
     symlink("../../sdb1", fake.base.join("dev/disk/by-uuid/abcd"))?;
@@ -512,7 +509,7 @@ fn les_lectures_de_sources_sont_enregistrees_avec_leur_contenu() -> Result<(), B
             .as_deref()
             .is_some_and(|c| c.contains("/boot/efi"))
     );
-    // Les échecs sont enregistrés aussi : un fichier optionnel absent est une lecture ratée.
+    // Failures are recorded too: a missing optional file is a failed read.
     assert!(
         reads.iter().any(|r| !r.ok && r.error.is_some()),
         "{reads:?}"
@@ -522,7 +519,7 @@ fn les_lectures_de_sources_sont_enregistrees_avec_leur_contenu() -> Result<(), B
             .iter()
             .any(|r| r.kind == "dir" && r.path.ends_with("sys/block"))
     );
-    // L'enregistrement s'arrête avec l'appel : une énumération ordinaire ne garde rien.
+    // Recording stops with the call.
     let again = enumerate(&fake.roots())?;
     assert_eq!(again.len(), 1);
     let (_, none_left) = enumerate_recorded(&fake.roots());
@@ -558,19 +555,17 @@ fn une_capture_rejouee_redonne_les_memes_disques() -> Result<(), Box<dyn Error>>
             .any(|r| r.kind == "link" && r.path.ends_with("sys/block/sdb")),
         "liens non enregistrés"
     );
-    // Le fil de rejeu part d'un dossier vide : seul ce que la capture contient compte.
     let replayed = enumerate_from_reads(&reads)?;
     assert_eq!(replayed, original);
-    // Le bus vient du chemin canonique : s'il manquait, la clé ne serait plus reconnue comme USB.
+    // The bus comes from the canonical path.
     assert_eq!(find(&replayed, "/dev/sdb")?.bus, Bus::Usb);
     assert_eq!(find(&replayed, "/dev/sdb")?.partitions[0].holders, ["dm-0"]);
-    // Une capture sans les liens perd le bus : preuve que l'information passe bien par eux.
+    // Without the links the bus is lost: the information goes through them.
     let without_links: Vec<_> = reads.iter().filter(|r| r.kind != "link").cloned().collect();
     assert!(
         enumerate_from_reads(&without_links).map_or(true, |d| d.is_empty()
             || d.iter().all(|x| x.bus != Bus::Usb))
     );
-    // Le dossier temporaire est supprimé.
     assert!(
         !std::env::temp_dir()
             .read_dir()?

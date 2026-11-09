@@ -15,31 +15,28 @@ use serde::Serialize;
 
 use crate::errors::Code;
 
-/// Version des formats de résultat, incrémentée à chaque changement incompatible.
+/// Result format version, bumped at each incompatible change.
 pub const SCHEMA_VERSION: u32 = 1;
 
-/// Niveau de détail de `--trace-io`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TraceIo {
-    /// Décalage, longueur, durée et somme de contrôle de chaque accès.
+    /// Offset, length, duration and checksum of each access.
     Metadata,
-    /// Avec les 16 premiers octets : réservé aux fichiers image.
+    /// Plus the first 16 bytes: image files only.
     Data,
 }
 
-/// Que faire de l'analyse de l'image.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WriteMode {
-    /// Refuse une image qui ne démarrerait pas écrite telle quelle, ou tronquée.
+    /// Refuses an image that would not boot written as is, or a truncated one.
     #[default]
     Auto,
-    /// Écrit les octets tels quels, quelle que soit l'analyse.
+    /// Writes the bytes as is, whatever the analysis says.
     Raw,
-    /// Copie les fichiers d'une ISO d'installation de Windows sur une partition FAT32.
+    /// Copies the files of a Windows installation ISO to a FAT32 partition.
     Extract,
 }
 
-/// Une erreur d'opération, avec son code stable.
 #[derive(Debug)]
 pub struct JobError {
     pub code: Code,
@@ -53,22 +50,19 @@ pub(super) fn fail(code: Code, message: impl Display) -> JobError {
     }
 }
 
-/// Démontage des partitions d'un disque : rend les points démontés.
+/// Returns the unmounted points.
 pub type UnmountFn = Box<dyn Fn(&Disk, Elevation) -> Result<Vec<String>, OpenTargetError>>;
-/// Ouverture d'un disque entier en accès brut.
 pub type OpenNodeFn =
     Box<dyn Fn(&Path, Access, Elevation) -> Result<Box<dyn BlockDevice>, BlockError>>;
-/// Obtention du droit d'ouvrir un disque, avant tout geste sur lui.
+/// Before any action on the disk.
 pub type PrepareFn = Box<dyn Fn(&Path, Access, Elevation) -> Result<(), BlockError>>;
 
-/// Formatage d'une partition par les outils de l'hôte.
 pub type FormatPartitionFn =
     Box<dyn Fn(&Path, Filesystem, Option<&str>, Elevation) -> Result<(), BlockError>>;
 
-/// Relecture de la table de partitions d'un disque par le système.
 pub type RescanFn = Box<dyn Fn(&Path, Elevation) -> Result<(), BlockError>>;
 
-/// Ce que les opérations demandent au système : injectable pour les tests.
+/// What operations ask of the system: injectable for tests.
 pub struct Io {
     pub prepare: PrepareFn,
     pub unmount: UnmountFn,
@@ -77,8 +71,7 @@ pub struct Io {
     pub capabilities: Box<dyn Fn() -> Vec<Capability>>,
     pub format_partition: FormatPartitionFn,
     pub rescan: RescanFn,
-    /// Attente courte : entre deux regards sur une partition que le système n'a pas encore créée, entre deux
-    /// essais d'un téléchargement.
+    /// Short wait between looks at a partition the system has not created yet, and between download attempts.
     pub pause: Box<dyn Fn()>,
 }
 
@@ -89,9 +82,8 @@ impl Default for Io {
 }
 
 impl Io {
-    /// Accès système réels. `cancel` est un drapeau d'annulation propre à l'opération (le service en
-    /// donne un par opération) ; sous Unix, Ctrl+C et SIGTERM annulent aussi les commandes et le
-    /// service, qui appellent `interrupt::install`.
+    /// Real system access. `cancel` is a per-operation cancel flag (the service gives one per operation); on
+    /// Unix, Ctrl+C and SIGTERM also cancel commands and the service, which call `interrupt::install`.
     pub fn with_cancel(cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>) -> Self {
         let cancelled = std::sync::Arc::new(move || {
             bonk_hal::interrupt::requested()
@@ -123,18 +115,16 @@ impl Io {
     }
 }
 
-/// Dépendances d'une opération : énumération des disques et accès système.
 pub struct Deps<'a> {
     pub enumerate: &'a dyn Fn() -> Result<Vec<Disk>, EnumerateError>,
     pub io: &'a Io,
 }
 
-/// Où écrire.
 #[derive(Debug, Clone)]
 pub enum Target {
-    /// Un disque, par son identifiant stable (jamais `/dev/sdX`).
+    /// By stable id, never `/dev/sdX`.
     Disk(String),
-    /// Un fichier image (mode `--simulate`), créé à `size` octets s'il n'existe pas.
+    /// `--simulate`: created at `size` bytes if missing.
     Image { path: PathBuf, size: Option<u64> },
 }
 

@@ -10,7 +10,7 @@ use clap::{Args, ValueEnum};
 use log::kv::{Key, Value, VisitSource};
 use log::{LevelFilter, Log, Metadata, Record};
 
-/// Composants dont on règle le niveau séparément.
+/// Components whose level is set separately.
 const COMPONENTS: [&str; 7] = ["cli", "gui", "hal", "io", "write", "net", "render"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -19,7 +19,6 @@ pub(crate) enum LogFormat {
     Json,
 }
 
-/// Options de journal communes à toutes les commandes, et à la fenêtre.
 #[derive(Debug, Args)]
 pub(crate) struct LogArgs {
     /// Detailed log (-v), then very detailed (-vv) on standard error
@@ -45,9 +44,9 @@ impl LogArgs {
     }
 }
 
-/// Niveaux par composant. Sans réglage explicite : `-v` donne `debug` à Bonk et `info` au rendu,
-/// `-vv` donne `trace` et `debug` ; sans `-v`, avertissements de Bonk et erreurs du rendu seulement
-/// (les avertissements des pilotes graphiques sont du bruit pour l'utilisateur).
+/// Without an explicit setting `-v` gives `debug` to Bonk and `info` to rendering, `-vv` gives `trace` and
+/// `debug`; without `-v`, Bonk warnings and rendering errors only (graphics driver warnings are noise for the
+/// user).
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Filter {
     default: LevelFilter,
@@ -56,8 +55,8 @@ pub(crate) struct Filter {
 }
 
 impl Filter {
-    /// `verbose` vient de `-v`, `spec` de `BONK_LOG` : `gui=debug,hal=trace`, ou un niveau seul
-    /// (`debug`) qui vaut pour tous les composants.
+    /// `verbose` from `-v`, `spec` from `BONK_LOG`: `gui=debug,hal=trace`, or a single level (`debug`) for
+    /// every component.
     pub(crate) fn new(verbose: u8, spec: Option<&str>) -> Result<Self, String> {
         let (default, render) = match verbose {
             0 => (LevelFilter::Warn, LevelFilter::Error),
@@ -67,7 +66,7 @@ impl Filter {
         Self::with_levels(default, render, spec)
     }
 
-    /// `--quiet` : erreurs seulement. `BONK_LOG`, demandé explicitement, garde le dernier mot.
+    /// `--quiet`: errors only. `BONK_LOG`, asked explicitly, has the last word.
     fn quiet(spec: Option<&str>) -> Result<Self, String> {
         Self::with_levels(LevelFilter::Error, LevelFilter::Error, spec)
     }
@@ -119,7 +118,7 @@ impl Filter {
             })
     }
 
-    /// Niveau maximal demandé, pour `log::set_max_level` : au-delà, rien n'est même construit.
+    /// For `log::set_max_level`: beyond it nothing is even built.
     fn max_level(&self) -> LevelFilter {
         self.per_component
             .values()
@@ -136,8 +135,8 @@ fn parse_level(text: &str) -> Result<LevelFilter, String> {
     })
 }
 
-/// Composant d'un événement, d'après sa cible : `bonk::<composant>` explicite, sinon le crate qui
-/// l'émet ; tout ce qui n'est pas à nous (Iced, wgpu, winit...) est du rendu.
+/// An explicit `bonk::<component>` target, else the emitting crate; anything not ours (Iced, wgpu, winit...)
+/// is rendering.
 fn component_of(target: &str) -> &'static str {
     if let Some(explicit) = target.strip_prefix("bonk::") {
         let name = explicit.split("::").next().unwrap_or_default();
@@ -155,7 +154,7 @@ fn component_of(target: &str) -> &'static str {
     }
 }
 
-/// Date UTC au format ISO 8601, à la milliseconde (jours civils de Howard Hinnant : pas de dépendance).
+/// UTC ISO 8601 to the millisecond (Howard Hinnant's civil days: no dependency).
 pub(crate) fn iso8601(time: SystemTime) -> String {
     let since = time.duration_since(UNIX_EPOCH).unwrap_or_default();
     let secs = since.as_secs();
@@ -183,7 +182,7 @@ pub(crate) fn iso8601(time: SystemTime) -> String {
     )
 }
 
-/// Champs structurés d'un événement (`id = "usb-cle"; "message"`).
+/// Structured fields of an event (`id = "usb-cle"; "message"`).
 #[derive(Default)]
 struct Fields(Vec<(String, serde_json::Value)>);
 
@@ -205,12 +204,12 @@ impl<'kvs> VisitSource<'kvs> for Fields {
 
 fn fields_of(record: &Record<'_>) -> Fields {
     let mut fields = Fields::default();
-    // Une erreur de lecture des champs ne doit pas faire perdre l'événement lui-même.
+    // A field read error must not lose the event itself.
     let _ = record.key_values().visit(&mut fields);
     fields
 }
 
-/// Une ligne de journal, sans retour à la ligne final.
+/// No trailing newline.
 pub(crate) fn format_event(
     format: LogFormat,
     time: SystemTime,
@@ -258,7 +257,7 @@ pub(crate) fn format_event(
     }
 }
 
-/// Puits du journal : filtre par composant, sortie d'erreur et fichier facultatif.
+/// Filters by component; stderr and an optional file.
 struct Sink {
     filter: Filter,
     format: LogFormat,
@@ -276,7 +275,7 @@ impl Log for Sink {
             return;
         }
         let line = format_event(self.format, SystemTime::now(), &self.session, record);
-        // Un journal qui ne peut pas s'écrire ne doit jamais interrompre l'opération qu'il décrit.
+        // A log that cannot be written must never stop the operation it describes.
         let _ = writeln!(io::stderr().lock(), "{line}");
         if let Some(file) = &self.file
             && let Ok(mut file) = file.lock()
@@ -293,7 +292,7 @@ impl Log for Sink {
     }
 }
 
-/// Réglages de journal tels que lus sur la ligne de commande et dans l'environnement.
+/// As read from the command line and the environment.
 #[derive(Debug)]
 pub(crate) struct Settings {
     pub(crate) filter: Filter,
@@ -302,7 +301,7 @@ pub(crate) struct Settings {
 }
 
 impl Settings {
-    /// `default_format` vient de `bonk config` (`log.format`) ; `--log-format` l'emporte.
+    /// `default_format` comes from `bonk config` (`log.format`); `--log-format` wins.
     pub(crate) fn from_args(
         args: &LogArgs,
         env_spec: Option<&str>,
@@ -320,7 +319,7 @@ impl Settings {
     }
 }
 
-/// Installe le journal pour la durée du processus.
+/// For the life of the process.
 pub(crate) fn install(settings: Settings) -> Result<(), String> {
     let file = match &settings.file {
         Some(path) => Some(Mutex::new(
@@ -364,7 +363,7 @@ mod tests {
     fn dates_utc() {
         assert_eq!(iso8601(at(0, 0)), "1970-01-01T00:00:00.000Z");
         assert_eq!(iso8601(at(1_700_000_000, 42)), "2023-11-14T22:13:20.042Z");
-        // 29 février d'une année bissextile, et 1er mars qui suit.
+        // 29 February of a leap year, and the 1 March after.
         assert_eq!(iso8601(at(951_782_400, 0)), "2000-02-29T00:00:00.000Z");
         assert_eq!(iso8601(at(951_868_800, 0)), "2000-03-01T00:00:00.000Z");
         assert_eq!(iso8601(at(4_102_444_799, 999)), "2099-12-31T23:59:59.999Z");
@@ -377,7 +376,7 @@ mod tests {
         assert_eq!(component_of("bonk_core::block"), "io");
         assert_eq!(component_of("bonk_cli::list"), "cli");
         assert_eq!(component_of("bonk::write"), "write");
-        // Une cible « bonk::... » inconnue reste un événement de Bonk, pas du rendu.
+        // An unknown `bonk::...` target stays a Bonk event, not rendering.
         assert_eq!(component_of("bonk::inconnu"), "cli");
         assert_eq!(component_of("wgpu_hal::vulkan"), "render");
         assert_eq!(component_of("iced_winit"), "render");
@@ -408,7 +407,7 @@ mod tests {
         assert_eq!(filter.level_of("hal"), LevelFilter::Trace);
         assert_eq!(filter.level_of("cli"), LevelFilter::Warn);
         assert_eq!(filter.max_level(), LevelFilter::Trace);
-        // Un niveau seul vaut pour tous les composants, rendu compris ; un réglage précis l'emporte.
+        // A single level applies to every component, rendering included; a specific setting wins.
         let tout = Filter::new(0, Some("debug,render=warn"))?;
         assert_eq!(tout.level_of("io"), LevelFilter::Debug);
         assert_eq!(tout.level_of("render"), LevelFilter::Warn);
@@ -433,7 +432,7 @@ mod tests {
         Ok(())
     }
 
-    /// Construit un enregistrement le temps d'un appel : ses champs empruntent des données locales.
+    /// Its fields borrow local data, hence one call only.
     fn avec_enregistrement<R>(
         args: std::fmt::Arguments<'_>,
         level: Level,

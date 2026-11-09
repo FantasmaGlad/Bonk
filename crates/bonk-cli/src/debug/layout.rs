@@ -11,8 +11,7 @@ use crate::errors::Code;
 
 use super::{JSON_SCHEMA_VERSION, LayoutArgs, Outcome};
 
-/// Ouvre une image, ou un disque réel désigné par son chemin ou son identifiant stable, en lecture seule.
-/// Rien ne l'écrit : le type rendu ne sert ici qu'à lire.
+/// An image, or a real disk by path or stable id, read-only: nothing writes through the returned type.
 pub(super) fn open_read_only(target: &Path) -> Result<Box<dyn BlockDevice>, (Code, String)> {
     let platform = bonk_hal::platform::current();
     let disk_path = if target.is_file() || target.is_dir() {
@@ -27,7 +26,7 @@ pub(super) fn open_read_only(target: &Path) -> Result<Box<dyn BlockDevice>, (Cod
             .and_then(|disks| {
                 disks
                     .into_iter()
-                    // Sous Windows, un disque désigné par son chemin n'« existe » pas pour le fichier.
+                    // On Windows a disk named by its path does not exist as a file.
                     .find(|d| d.id == wanted || d.path.eq_ignore_ascii_case(&wanted))
             })
             .map(|d| PathBuf::from(d.path))

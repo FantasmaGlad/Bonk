@@ -29,8 +29,8 @@ fn bonk(args: &[&str]) -> std::process::Output {
         .unwrap_or_else(|e| panic!("bonk : {e}"))
 }
 
-/// Ces outils ne sont installés que sur les exécuteurs Linux (`.github/paquets-linux.txt`) : ce qu'ils
-/// prouvent ne dépend pas de l'hôte, FAT32 et les tables étant écrits par le même code partout.
+/// These tools are only installed on Linux runners (`.github/paquets-linux.txt`): what they prove does not
+/// depend on the host, the same code writing FAT32 and the tables everywhere.
 #[cfg(target_os = "linux")]
 mod relecture {
     use std::path::Path;
@@ -46,7 +46,7 @@ mod relecture {
             .unwrap_or_else(|e| panic!("{name} : {e}"))
     }
 
-    /// Découpe la partition dans un fichier à part : `fsck.vfat` ne connaît pas les décalages.
+    /// `fsck.vfat` does not know offsets: the partition goes to a separate file.
     fn extract(image: &Path, first_lba: u64, sectors: u64, out: &Path) {
         let data = std::fs::read(image).unwrap_or_else(|e| panic!("{e}"));
         let start = usize::try_from(first_lba * 512).unwrap_or(0);
@@ -84,7 +84,7 @@ mod relecture {
         if !outil_disponible("sgdisk") || !outil_disponible("fsck.vfat") {
             return;
         }
-        // Sous, à, et au-dessus des seuils de taille de cluster.
+        // Below, at and above the cluster size thresholds.
         for (size, label) in [("67108864", "64m"), ("536870912", "512m")] {
             let image = Image::new(label);
             let value = format_json(&image, size, &["--label", "bonk"]);
@@ -96,7 +96,7 @@ mod relecture {
         }
     }
 
-    /// exFAT est écrit par Bonk : un fichier image suffit, sur chaque hôte, et l'outil officiel le relit.
+    /// exFAT is written by Bonk: an image file is enough, on every host, and the official tool reads it back.
     #[test]
     fn exfat_ecrit_par_bonk_accepte_par_fsck_exfat() {
         if !outil_disponible("fsck.exfat") {

@@ -63,7 +63,7 @@ fn un_reglage_n_autorise_pas_a_ecrire_sur_un_disque_interne() {
     assert_eq!(code, EXIT_TARGET_REFUSED, "{err}");
     assert!(err.contains("E2001"), "{err}");
     assert!(scenario.log().is_empty());
-    // Le réglage garde son rôle d'affichage.
+    // The setting keeps its display role.
     let (code, out, _) = scenario.run(&["list"]);
     assert_eq!(code, 0);
     assert!(out.contains("sata-x"), "{out}");

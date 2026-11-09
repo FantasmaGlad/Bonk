@@ -12,20 +12,18 @@ use bonk_ops::job;
 
 const IMAGES: &str = "images";
 
-/// Où Bonk garde ses téléchargements : le dossier donné, sinon le dossier de cache de l'utilisateur.
+/// The given directory, else the user's cache directory.
 pub(crate) fn directory(given: Option<&Path>) -> Option<PathBuf> {
     given
         .map(Path::to_path_buf)
         .or_else(|| bonk_hal::platform::cache_dir(&|name| std::env::var(name).ok()))
 }
 
-/// Dossier d'une image dans le cache : rangée sous son empreinte, une nouvelle version de même nom ne reprend
-/// jamais l'ancienne.
+/// Stored under its hash: a new version with the same name never resumes the old one.
 pub(crate) fn image_path(cache: &Path, sha256: &str, name: &str) -> PathBuf {
     cache.join(IMAGES).join(sha256).join(name)
 }
 
-/// Les images téléchargées
 #[derive(Debug, Subcommand)]
 pub(crate) enum CacheAction {
     /// List the kept images, incomplete downloads included
@@ -80,7 +78,7 @@ pub(crate) fn schema() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(CacheReport)).unwrap_or_default()
 }
 
-/// Dossiers d'empreintes réels, sans suivre de lien : un lien posé là ne mène jamais une suppression ailleurs.
+/// Real hash directories, links not followed: a link placed there never sends a removal elsewhere.
 fn hash_directories(cache: &Path) -> io::Result<Vec<(String, PathBuf)>> {
     let root = cache.join(IMAGES);
     let reader = match fs::read_dir(&root) {
@@ -120,7 +118,6 @@ fn read_entries(cache: &Path) -> io::Result<Vec<Entry>> {
     Ok(entries)
 }
 
-/// Taille de ce que le cache garde.
 pub(crate) fn total_bytes(cache: &Path) -> io::Result<u64> {
     Ok(read_entries(cache)?.iter().map(|entry| entry.bytes).sum())
 }

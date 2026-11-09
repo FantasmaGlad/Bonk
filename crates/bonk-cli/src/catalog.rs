@@ -12,7 +12,7 @@ use serde::Deserialize;
 use crate::errors::{Code, report};
 use bonk_ops::job::{self, JobError};
 
-/// Adresse du catalogue, jusqu'au dossier de la version du format.
+/// Up to the format version directory.
 const DEFAULT_URL: &str = "https://catalog.bonk-os.app/v1/";
 
 #[derive(Debug, Subcommand)]
@@ -57,7 +57,7 @@ pub(crate) enum ChannelArg {
     EndOfLife,
 }
 
-/// Ordre de la liste. Le service reçoit les mêmes noms que la ligne de commande.
+/// The service gets the same names as the command line.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum SortBy {
@@ -72,7 +72,6 @@ pub(crate) enum SortBy {
     Size,
 }
 
-/// Ce que l'appelant garde de la liste, et dans quel ordre.
 #[derive(Debug, Default, Clone)]
 pub(crate) struct Query {
     pub(crate) family: Option<String>,
@@ -82,7 +81,7 @@ pub(crate) struct Query {
     pub(crate) sort: SortBy,
 }
 
-/// L'adresse donnée, sinon la variable, sinon celle de Bonk ; toujours terminée par `/`.
+/// The given address, else the variable, else Bonk's; always ending with `/`.
 fn base_url(given: Option<&str>, variable: Option<String>) -> String {
     let url = given
         .map(str::to_owned)
@@ -102,7 +101,7 @@ fn refused(message: impl std::fmt::Display) -> JobError {
     }
 }
 
-/// Lit le catalogue : réseau, signature, copie gardée si le réseau manque.
+/// Network, signature, then the saved copy when the network fails.
 pub(crate) fn load(
     url: Option<&str>,
     cache_dir: Option<&Path>,
@@ -122,7 +121,7 @@ pub(crate) fn load(
     Ok((loaded, dir))
 }
 
-/// Ce qu'il faut pour écrire une image du catalogue : son adresse et son empreinte.
+/// Address and hash of a catalog image.
 pub(crate) fn resolve_image(catalog: &Catalog, id: &str) -> Result<(PathBuf, String), JobError> {
     let image = catalog
         .images
@@ -155,7 +154,6 @@ pub(crate) fn resolve_image(catalog: &Catalog, id: &str) -> Result<(PathBuf, Str
     }
 }
 
-/// `--image` : l'adresse et l'empreinte de l'image demandée.
 pub(crate) fn image_source(
     id: &str,
     url: Option<&str>,
@@ -165,7 +163,7 @@ pub(crate) fn image_source(
     resolve_image(&loaded.catalog, id)
 }
 
-/// Par défaut, les systèmes dans l'ordre du catalogue, la version la plus récente d'abord.
+/// By default systems in catalog order, newest version first.
 pub(crate) fn sorted<'a>(catalog: &'a Catalog, query: &Query) -> Vec<&'a Image> {
     let rank = |image: &Image| {
         catalog
@@ -234,7 +232,7 @@ pub(crate) fn schema() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(CatalogReport)).unwrap_or_default()
 }
 
-/// Le rapport JSON, partagé avec le service.
+/// Shared with the service.
 pub(crate) fn report_value(
     url: Option<&str>,
     cache_dir: Option<&Path>,
@@ -470,7 +468,7 @@ mod tests {
             .collect();
         assert_eq!(ids, ["u22", "u26", "w"]);
         assert_eq!(sorted(&catalog, &of_family("windows")).len(), 1);
-        // Une version plus ancienne sortie plus tard reste après la plus récente.
+        // An older version released later stays after the newest.
         let mut tardive = catalog.clone();
         tardive.images[1].version = "24.04.5".to_owned();
         tardive.images[1].released = "2027-01-01".to_owned();

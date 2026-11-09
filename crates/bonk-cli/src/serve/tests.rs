@@ -13,8 +13,7 @@ use super::*;
 
 const DISK_SIZE: usize = 8 << 20;
 
-/// Périphérique en mémoire partagé entre fils ; `slow` ralentit les écritures pour qu'une
-/// opération reste en cours le temps d'envoyer une annulation.
+/// Shared between threads; `slow` slows writes so an operation is still running when a cancel is sent.
 #[derive(Clone)]
 struct Shared {
     memory: Arc<Mutex<MemoryDevice>>,
@@ -138,7 +137,7 @@ impl Write for Buffer {
     }
 }
 
-/// Entrée qui attend avant de se fermer : laisse le temps aux événements asynchrones.
+/// Waits before closing: gives asynchronous events time.
 struct SlowEof {
     inner: Cursor<Vec<u8>>,
     wait: Duration,
@@ -168,8 +167,8 @@ impl BufRead for SlowEof {
     }
 }
 
-/// Entrée qui ne se ferme qu'une fois qu'un message attendu est sorti : une opération longue a
-/// le temps de finir, sans durée fixe à deviner.
+/// Closes only once an expected message is out: a long operation has time to finish, without a fixed delay to
+/// guess.
 struct UntilSeen {
     inner: Cursor<Vec<u8>>,
     output: Buffer,
@@ -202,7 +201,7 @@ impl BufRead for UntilSeen {
     }
 }
 
-/// Comme [`session`], mais attend `needle` dans la sortie avant de fermer l'entrée.
+/// Waits for `needle` in the output before closing the input.
 fn session_until(requests: &[&str], cfg: &Config, needle: &str) -> Vec<Value> {
     let buffer = Buffer(Arc::new(Mutex::new(Vec::new())));
     let input = UntilSeen {
@@ -261,7 +260,7 @@ impl Drop for TempImage {
     }
 }
 
-/// Chaque nom désigne une seule méthode, et `methods` les rend toutes.
+/// Each name maps to one method, and `methods` returns them all.
 #[test]
 fn chaque_methode_a_un_nom_unique() {
     let noms: std::collections::BTreeSet<_> = Method::ALL.iter().map(|m| m.name()).collect();
@@ -403,7 +402,7 @@ fn explain_schema_et_configuration() {
 fn ecriture_avec_progression_puis_resultat() {
     let source = TempImage::new("ecriture", 9 << 20);
     let Fake { device, cfg } = fake(false, fixed());
-    // Image de 9 Mio sur un disque de 8 Mio : trop grande ; on en prend une qui tient.
+    // A 9 MiB image on an 8 MiB disk is too large; take one that fits.
     let small = TempImage::new("petite", 6 << 20);
     let request = format!(
         r#"{{"id":7,"method":"disk.write","params":{{"mode":"raw","target":"usb-a","source":{:?},"yes":true}}}}"#,
@@ -418,7 +417,7 @@ fn ecriture_avec_progression_puis_resultat() {
     assert_eq!(result["event"], "result", "{out:?}");
     assert_eq!(result["write"]["bytes"], 6 << 20);
     assert!(result["verify"]["bytes"] == 6 << 20);
-    // L'ordre des messages : prêt, démarrage, progression (avec l'id de la requête), résultat.
+    // Message order: ready, start, progress (with the request id), result.
     assert_eq!(out[1]["event"], "job_started");
     assert_eq!(out[1]["request_id"], 7);
     let progress: Vec<&Value> = out.iter().filter(|m| m["event"] == "progress").collect();
@@ -426,7 +425,7 @@ fn ecriture_avec_progression_puis_resultat() {
     assert_eq!(out.last().unwrap()["id"], 7);
     let written = device.memory.lock().unwrap().as_bytes()[..6 << 20].to_vec();
     assert_eq!(written, std::fs::read(&small.0).unwrap());
-    // Trop grande : refusée avec son code, sans toucher au disque.
+    // Too large: refused with its code, the disk untouched.
     let refused = session(&[&too_big], &fake(false, fixed()).cfg, Duration::ZERO);
     assert_eq!(response(&refused, 8)["error"]["code"], "E3003");
 }
@@ -450,7 +449,7 @@ fn les_garde_fous_de_la_cli_s_appliquent_au_service() {
     let sans_source =
         r#"{"id":5,"method":"disk.write","params":{"target":"usb-a","yes":true}}"#.to_owned();
     let f = fake(false, fixed());
-    // Les opérations s'enchaînent : une à la fois, chacune dans sa session.
+    // Operations follow one another: one at a time, each in its session.
     for (id, request, code) in [
         (1, sans_yes, "E2004"),
         (2, interdit, "E2001"),
@@ -462,7 +461,7 @@ fn les_garde_fous_de_la_cli_s_appliquent_au_service() {
     }
     let out = session(&[&plan], &f.cfg, Duration::ZERO);
     assert_eq!(response(&out, 3)["result"]["event"], "plan");
-    // Rien n'a été écrit par aucune de ces requêtes.
+    // None of these requests wrote anything.
     assert!(
         f.device
             .memory
@@ -489,7 +488,7 @@ fn annulation_et_une_seule_operation_a_la_fois() {
         &cfg,
         Duration::from_millis(0),
     );
-    // La seconde opération est refusée pendant que la première tourne.
+    // The second operation is refused while the first runs.
     assert_eq!(response(&out, 2)["error"]["code"], "E6001");
     assert!(
         response(&out, 2)["error"]["message"]
@@ -498,7 +497,7 @@ fn annulation_et_une_seule_operation_a_la_fois() {
             .contains("already running")
     );
     assert_eq!(response(&out, 3)["result"]["cancelling"], true);
-    // La première est annulée proprement : code dédié, support partiel.
+    // The first is cancelled cleanly: its own code, partial drive.
     let first = response(&out, 1);
     assert_eq!(first["error"]["code"], "E4003", "{first}");
     assert_eq!(first["error"]["exit_code"], 5);
@@ -511,14 +510,13 @@ fn annulation_et_une_seule_operation_a_la_fois() {
         .filter(|b| **b != 0)
         .count();
     assert!(written < 7 << 20, "l'écriture aurait dû s'arrêter en route");
-    // Sans opération en cours, cancel répond qu'il n'y a rien à annuler.
+    // Without a running operation, cancel says there is nothing to cancel.
     let idle = quick_session(&[r#"{"id":1,"method":"cancel"}"#]);
     assert_eq!(response(&idle, 1)["result"]["cancelling"], false);
 }
 
-/// Entrée que le client garde ouverte : rien n'arrive après les requêtes. Elle se ferme d'elle-même
-/// au bout de `deadline`, pour qu'un service qui ne s'arrêterait pas fasse échouer le test au lieu
-/// de le bloquer.
+/// Input the client keeps open: nothing comes after the requests. It closes by itself after `deadline`, so a
+/// service that never stops fails the test instead of hanging it.
 struct KeptOpen {
     inner: Cursor<Vec<u8>>,
     deadline: std::time::Instant,
@@ -550,8 +548,8 @@ impl BufRead for KeptOpen {
     }
 }
 
-/// Ctrl+C ou SIGTERM : l'opération en cours est annulée entre deux blocs, sa réponse part, et le
-/// service rend le code d'annulation sans attendre que le client ferme l'entrée.
+/// Ctrl+C or SIGTERM: the running operation is cancelled between two blocks, its response goes out, and the
+/// service returns the cancel code without waiting for the client to close the input.
 #[test]
 fn un_signal_d_arret_annule_l_operation_et_rend_la_main() {
     let source = TempImage::new("signal", 7 << 20);
@@ -590,7 +588,7 @@ fn fermer_l_entree_annule_l_operation_et_rend_la_main() {
     let f = fake(true, fixed());
     let started = std::time::Instant::now();
     let out = session(&[&write], &f.cfg, Duration::ZERO);
-    // La session se termine sans attendre les ~7 blocs lents, et l'opération est dite annulée.
+    // The session ends without waiting for the ~7 slow blocks, and the operation is reported cancelled.
     assert!(started.elapsed() < Duration::from_secs(3));
     assert_eq!(response(&out, 1)["error"]["code"], "E4003");
 }
@@ -600,7 +598,7 @@ fn surveillance_des_disques() {
     let calls = Arc::new(AtomicUsize::new(0));
     let counter = Arc::clone(&calls);
     let enumerate: EnumerateFn = Arc::new(move || {
-        // La troisième énumération voit une seconde clé.
+        // The third enumeration sees a second key.
         if counter.fetch_add(1, Ordering::SeqCst) >= 2 {
             Ok(vec![usb("usb-a"), usb("usb-b")])
         } else {
@@ -608,8 +606,8 @@ fn surveillance_des_disques() {
         }
     });
     let f = fake(false, enumerate);
-    // On attend le second événement au lieu de deviner une durée : sur un exécuteur chargé (macOS en CI),
-    // l'intervalle de 100 ms s'allonge et une attente fixe de 700 ms ne voyait que l'événement initial.
+    // Wait for the second event instead of guessing a delay: on a loaded runner (macOS in CI) the 100 ms
+    // interval stretches, and a fixed 700 ms wait only saw the initial event.
     let out = session_until(
         &[r#"{"id":1,"method":"watch.start","params":{"interval_ms":100}}"#],
         &f.cfg,
@@ -629,7 +627,6 @@ fn surveillance_des_disques() {
     assert_eq!(events[0]["report"]["disks"].as_array().unwrap().len(), 1);
     assert_eq!(events[1]["initial"], false);
     assert_eq!(events[1]["report"]["disks"].as_array().unwrap().len(), 2);
-    // watch.stop arrête la surveillance.
     let f = fake(false, fixed());
     let out = session(
         &[
@@ -640,7 +637,7 @@ fn surveillance_des_disques() {
         Duration::from_millis(300),
     );
     assert_eq!(response(&out, 2)["result"]["was_watching"], true);
-    // Arrêtée aussitôt, la surveillance a émis au plus l'événement initial, et plus rien ensuite.
+    // Stopped at once, the watch emitted at most the initial event, then nothing.
     assert!(out.iter().filter(|m| m["event"] == "disks_changed").count() <= 1);
 }
 
@@ -656,11 +653,11 @@ fn echec_d_enumeration_rapporte_avec_son_code() {
         Duration::ZERO,
     );
     assert_eq!(response(&out, 1)["error"]["code"], "E1002");
-    // `diagnose` rapporte l'échec dans son rapport au lieu d'échouer.
+    // `diagnose` reports the failure in its report instead of failing.
     assert_eq!(response(&out, 2)["result"]["enumeration"]["ok"], false);
 }
 
-/// Une adresse passe par le même contrôle que dans la ligne de commande : son empreinte est exigée.
+/// An address goes through the same check as on the command line: its hash is required.
 #[test]
 fn disk_write_exige_l_empreinte_d_une_adresse() {
     let write = r#"{"id":1,"method":"disk.write","params":{"target":"usb-a","source":"https://a.org/x.iso","yes":true}}"#;

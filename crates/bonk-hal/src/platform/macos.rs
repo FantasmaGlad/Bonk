@@ -26,8 +26,7 @@ fn failed(what: &str, source: io::Error) -> EnumerateError {
     }
 }
 
-/// Lance `diskutil <arguments> -plist` et rend sa sortie en JSON. Un outil absent ou en échec fait échouer
-/// l'énumération : proposer des disques sans ces faits serait deviner.
+/// A missing or failing tool fails the enumeration: offering disks without these facts would be guessing.
 fn diskutil(arguments: &[&str]) -> Result<Value, EnumerateError> {
     let what = format!("diskutil {}", arguments.join(" "));
     let output = Command::new("/usr/sbin/diskutil")
@@ -65,8 +64,8 @@ fn diskutil(arguments: &[&str]) -> Result<Value, EnumerateError> {
     })
 }
 
-/// Numéros de série : descriptifs, `ioreg` en échec n'empêche pas d'énumérer. La classe USB d'abord : sa série
-/// est celle de la clé, celle du pont de stockage n'en dit rien.
+/// Descriptive: a failing `ioreg` does not stop the enumeration. USB class first: its serial is the key's,
+/// the storage bridge's says nothing.
 fn read_serials() -> Vec<(String, String)> {
     ["IOUSBHostDevice", "IOBlockStorageDevice"]
         .iter()
@@ -199,12 +198,12 @@ impl Platform for Macos {
     }
 
     fn rescan(&self, _disk: &Path, _elevation: Elevation) -> Result<(), BlockError> {
-        // macOS relit la table de lui-même à la fermeture du disque.
+        // macOS rereads the table itself when the disk is closed.
         Ok(())
     }
 
     fn is_privileged(&self) -> bool {
-        // SAFETY : `geteuid` n'a ni argument ni effet de bord.
+        // SAFETY: `geteuid` has no argument and no side effect.
         unsafe { libc::geteuid() == 0 }
     }
 

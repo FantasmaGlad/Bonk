@@ -33,14 +33,14 @@ use windows_sys::core::GUID;
 use crate::enumerate::EnumerateError;
 use crate::windows_facts::{RawDisk, RawExtent, RawPartition, RawVolume, WindowsFacts};
 
-/// Au-delà, Windows ne numérote pas de disques en pratique ; les numéros peuvent avoir des trous.
+/// Windows does not number disks beyond this in practice; numbers may have gaps.
 const MAX_DISKS: u32 = 128;
 
 pub(super) struct Handle(pub(super) HANDLE);
 
 impl Drop for Handle {
     fn drop(&mut self) {
-        // SAFETY : la poignée vient de `CreateFileW`, valide, et n'est fermée qu'ici.
+        // SAFETY: the handle comes from `CreateFileW`, valid, and is closed only here.
         unsafe {
             CloseHandle(self.0);
         }
@@ -63,8 +63,8 @@ fn from_wide(buffer: &[u16]) -> String {
 
 fn open_for_query(path: &str) -> io::Result<Handle> {
     let name = wide(path);
-    // SAFETY : `name` est terminé par un zéro et vit le temps de l'appel ; accès 0 : aucune lecture ni
-    // écriture n'est possible par cette poignée.
+    // SAFETY: `name` is zero-terminated and lives for the call; access 0: nothing can be read or written
+    // through this handle.
     let handle = unsafe {
         CreateFileW(
             name.as_ptr(),
@@ -103,7 +103,7 @@ fn ioctl_on(handle: HANDLE, code: u32, input: &[u8], capacity: usize) -> io::Res
     loop {
         let mut output = vec![0u64; size.div_ceil(8)];
         let mut returned = 0u32;
-        // SAFETY : entrée et sortie valides pour les tailles annoncées ; la poignée vit le temps de l'appel.
+        // SAFETY: input and output valid for the declared sizes; the handle lives for the call.
         let done = unsafe {
             DeviceIoControl(
                 handle,
@@ -137,7 +137,7 @@ fn text_at(raw: &[u8], offset: u32) -> Option<String> {
 }
 
 fn as_bytes(buffer: &[u64]) -> &[u8] {
-    // SAFETY : un tampon de `u64` se lit toujours comme des octets, sur la même longueur.
+    // SAFETY: a `u64` buffer can always be read as bytes over the same length.
     unsafe { std::slice::from_raw_parts(buffer.as_ptr().cast::<u8>(), buffer.len() * 8) }
 }
 
@@ -152,28 +152,28 @@ fn guid_text(guid: &GUID) -> String {
 fn layout(handle: &Handle) -> io::Result<Vec<RawPartition>> {
     let buffer = ioctl(handle, IOCTL_DISK_GET_DRIVE_LAYOUT_EX, &[], 16 * 1024)?;
     let info = buffer.as_ptr().cast::<DRIVE_LAYOUT_INFORMATION_EX>();
-    // SAFETY : l'appel a réussi, le système a donc écrit l'en-tête dans ce tampon aligné.
+    // SAFETY: the call succeeded and wrote the header into this aligned buffer.
     let header = unsafe { &*info };
     let count = usize::try_from(header.PartitionCount).unwrap_or(0);
     let room = (buffer.len() * 8 - size_of::<DRIVE_LAYOUT_INFORMATION_EX>())
         / size_of::<PARTITION_INFORMATION_EX>()
         + 1;
-    // SAFETY : `count` est borné par ce que le tampon peut contenir ; le système a écrit ces entrées.
+    // SAFETY: `count` is bounded by what the buffer holds; the system wrote these entries.
     let entries =
         unsafe { std::slice::from_raw_parts(header.PartitionEntry.as_ptr(), count.min(room)) };
     Ok(entries
         .iter()
-        // Sous MBR, Windows liste aussi des entrées vides, de numéro 0.
+        // With MBR, Windows also lists empty entries numbered 0.
         .filter(|entry| entry.PartitionNumber != 0 && entry.PartitionLength > 0)
         .map(|entry| RawPartition {
             number: entry.PartitionNumber,
             offset: u64::try_from(entry.StartingOffset).unwrap_or(0),
             size_bytes: u64::try_from(entry.PartitionLength).unwrap_or(0),
-            // SAFETY : le style de l'entrée indique le membre valide de l'union.
+            // SAFETY: the entry style gives the valid union member.
             gpt_type: (entry.PartitionStyle == PARTITION_STYLE_GPT)
                 .then(|| guid_text(unsafe { &entry.Anonymous.Gpt.PartitionType })),
             mbr_type: if entry.PartitionStyle == PARTITION_STYLE_MBR {
-                // SAFETY : le style de l'entrée indique le membre valide de l'union.
+                // SAFETY: the entry style gives the valid union member.
                 Some(unsafe { entry.Anonymous.Mbr.PartitionType })
             } else {
                 None
@@ -182,7 +182,7 @@ fn layout(handle: &Handle) -> io::Result<Vec<RawPartition>> {
         .collect())
 }
 
-/// Lit un disque ; `None` s'il n'existe pas ou s'il n'a pas de support (lecteur de carte vide).
+/// `None` if it does not exist or has no medium (empty card reader).
 fn read_disk(number: u32, instance: Option<String>) -> io::Result<Option<RawDisk>> {
     let handle = match open_for_query(&format!(r"\\.\PhysicalDrive{number}")) {
         Ok(handle) => handle,
@@ -196,7 +196,7 @@ fn read_disk(number: u32, instance: Option<String>) -> io::Result<Option<RawDisk
         QueryType: PropertyStandardQuery,
         AdditionalParameters: [0],
     };
-    // SAFETY : structure simple, lue comme des octets sur sa propre taille.
+    // SAFETY: plain struct read as bytes over its own size.
     let input = unsafe {
         std::slice::from_raw_parts(
             (&raw const query).cast::<u8>(),
@@ -204,7 +204,7 @@ fn read_disk(number: u32, instance: Option<String>) -> io::Result<Option<RawDisk
         )
     };
     let property = ioctl(&handle, IOCTL_STORAGE_QUERY_PROPERTY, input, 4096)?;
-    // SAFETY : l'appel a réussi, le système a écrit le descripteur dans ce tampon aligné.
+    // SAFETY: the call succeeded and wrote the descriptor into this aligned buffer.
     let descriptor = unsafe { &*property.as_ptr().cast::<STORAGE_DEVICE_DESCRIPTOR>() };
     let raw = as_bytes(&property);
 
@@ -220,7 +220,7 @@ fn read_disk(number: u32, instance: Option<String>) -> io::Result<Option<RawDisk
         }
         Err(error) => return Err(error),
     };
-    // SAFETY : l'appel a réussi, le système a écrit la géométrie dans ce tampon aligné.
+    // SAFETY: the call succeeded and wrote the geometry into this aligned buffer.
     let (size, bytes_per_sector) = unsafe {
         let geometry = &*geometry.as_ptr().cast::<DISK_GEOMETRY_EX>();
         (geometry.DiskSize, geometry.Geometry.BytesPerSector)
@@ -240,11 +240,11 @@ fn read_disk(number: u32, instance: Option<String>) -> io::Result<Option<RawDisk
     }))
 }
 
-/// Chemin d'instance de chaque disque, par numéro. Descriptif : sans lui, l'identifiant retombe sur le numéro.
+/// Descriptive: without it the id falls back to the number.
 fn disk_instances() -> HashMap<u32, String> {
     let mut found = HashMap::new();
     let class = GUID_DEVINTERFACE_DISK;
-    // SAFETY : GUID valide ; les autres arguments sont facultatifs.
+    // SAFETY: valid GUID; the other arguments are optional.
     let set = unsafe {
         SetupDiGetClassDevsW(
             &raw const class,
@@ -257,10 +257,10 @@ fn disk_instances() -> HashMap<u32, String> {
         return found;
     }
     for index in 0.. {
-        // SAFETY : structure simple ; sa taille est annoncée comme l'exige l'API.
+        // SAFETY: plain struct; its size is set as the API requires.
         let mut interface: SP_DEVICE_INTERFACE_DATA = unsafe { std::mem::zeroed() };
         interface.cbSize = u32::try_from(size_of::<SP_DEVICE_INTERFACE_DATA>()).unwrap_or(0);
-        // SAFETY : ensemble valide, sortie valide.
+        // SAFETY: valid set, valid output.
         let more = unsafe {
             SetupDiEnumDeviceInterfaces(set, null(), &raw const class, index, &raw mut interface)
         };
@@ -276,12 +276,12 @@ fn disk_instances() -> HashMap<u32, String> {
                 size_of::<STORAGE_DEVICE_NUMBER>(),
             )
         {
-            // SAFETY : l'appel a réussi, le système a écrit le numéro dans ce tampon aligné.
+            // SAFETY: the call succeeded and wrote the number into this aligned buffer.
             let number = unsafe { (*number.as_ptr().cast::<STORAGE_DEVICE_NUMBER>()).DeviceNumber };
             found.insert(number, path);
         }
     }
-    // SAFETY : ensemble valide, fermé une seule fois.
+    // SAFETY: valid set, closed once.
     unsafe {
         SetupDiDestroyDeviceInfoList(set);
     }
@@ -289,13 +289,13 @@ fn disk_instances() -> HashMap<u32, String> {
 }
 
 fn interface_path(set: HDEVINFO, interface: &SP_DEVICE_INTERFACE_DATA) -> Option<String> {
-    // Tampon aligné : l'en-tête de la structure précède le chemin, en UTF-16.
+    // Aligned buffer: the struct header precedes the UTF-16 path.
     let mut buffer = vec![0u64; 512];
     let detail = buffer
         .as_mut_ptr()
         .cast::<SP_DEVICE_INTERFACE_DETAIL_DATA_W>();
     let capacity = u32::try_from(buffer.len() * 8).ok()?;
-    // SAFETY : tampon assez grand et aligné ; `cbSize` est celui de l'en-tête, comme l'exige l'API.
+    // SAFETY: large enough and aligned; `cbSize` is the header's, as the API requires.
     let path = unsafe {
         (*detail).cbSize = u32::try_from(size_of::<SP_DEVICE_INTERFACE_DETAIL_DATA_W>()).ok()?;
         if SetupDiGetDeviceInterfaceDetailW(
@@ -322,7 +322,7 @@ fn mount_points(volume: &str) -> io::Result<Vec<String>> {
     let mut buffer = vec![0u16; 1024];
     loop {
         let mut needed = 0u32;
-        // SAFETY : nom terminé par un zéro, tampon valide pour la longueur annoncée.
+        // SAFETY: zero-terminated name, buffer valid for the declared length.
         let done = unsafe {
             GetVolumePathNamesForVolumeNameW(
                 name.as_ptr(),
@@ -348,9 +348,9 @@ fn mount_points(volume: &str) -> io::Result<Vec<String>> {
         .collect())
 }
 
-/// Morceaux du volume sur les disques ; `None` pour un volume sans disque (lecteur optique, vide).
+/// `None` for a volume without a disk (optical drive, empty).
 fn extents(volume: &str) -> io::Result<Option<Vec<RawExtent>>> {
-    // Sans la barre finale : avec elle, le nom désigne le dossier racine et non le volume.
+    // Without the trailing backslash: with it the name means the root folder, not the volume.
     let handle = open_for_query(volume.trim_end_matches('\\'))?;
     let buffer = match ioctl(
         &handle,
@@ -373,11 +373,11 @@ fn extents(volume: &str) -> io::Result<Option<Vec<RawExtent>>> {
         }
         Err(error) => return Err(error),
     };
-    // SAFETY : l'appel a réussi, le système a écrit l'en-tête dans ce tampon aligné.
+    // SAFETY: the call succeeded and wrote the header into this aligned buffer.
     let header = unsafe { &*buffer.as_ptr().cast::<VOLUME_DISK_EXTENTS>() };
     let count = usize::try_from(header.NumberOfDiskExtents).unwrap_or(0);
     let room = (buffer.len() * 8 - size_of::<VOLUME_DISK_EXTENTS>()) / size_of::<DISK_EXTENT>() + 1;
-    // SAFETY : `count` est borné par ce que le tampon peut contenir ; le système a écrit ces entrées.
+    // SAFETY: `count` is bounded by what the buffer holds; the system wrote these entries.
     let entries = unsafe { std::slice::from_raw_parts(header.Extents.as_ptr(), count.min(room)) };
     Ok(Some(
         entries
@@ -390,13 +390,12 @@ fn extents(volume: &str) -> io::Result<Option<Vec<RawExtent>>> {
     ))
 }
 
-/// Système de fichiers et étiquette : descriptifs, un volume illisible n'en a simplement pas.
+/// Descriptive: an unreadable volume simply has none.
 fn volume_information(volume: &str) -> (Option<String>, Option<String>) {
     let name = wide(volume);
     let mut label = [0u16; 261];
     let mut file_system = [0u16; 261];
-    // SAFETY : nom terminé par un zéro, tampons valides pour les longueurs annoncées, autres sorties
-    // facultatives.
+    // SAFETY: zero-terminated name, buffers valid for the declared lengths, other outputs optional.
     let done = unsafe {
         GetVolumeInformationW(
             name.as_ptr(),
@@ -421,7 +420,7 @@ fn volume_information(volume: &str) -> (Option<String>, Option<String>) {
 
 pub(super) fn read_volumes() -> io::Result<Vec<RawVolume>> {
     let mut name = [0u16; 64];
-    // SAFETY : tampon valide pour la longueur annoncée.
+    // SAFETY: buffer valid for the declared length.
     let find = unsafe { FindFirstVolumeW(name.as_mut_ptr(), 64) };
     if find == INVALID_HANDLE_VALUE {
         return Err(io::Error::last_os_error());
@@ -443,7 +442,7 @@ pub(super) fn read_volumes() -> io::Result<Vec<RawVolume>> {
             (Ok(None), _) => {}
             (Err(error), _) | (_, Err(error)) => break Err(error),
         }
-        // SAFETY : `find` est valide jusqu'à `FindVolumeClose` ; tampon valide pour la longueur annoncée.
+        // SAFETY: `find` is valid until `FindVolumeClose`; buffer valid for the declared length.
         if unsafe { FindNextVolumeW(find, name.as_mut_ptr(), 64) } == 0 {
             let error = io::Error::last_os_error();
             break if has_code(&error, &[ERROR_NO_MORE_FILES]) {
@@ -453,7 +452,7 @@ pub(super) fn read_volumes() -> io::Result<Vec<RawVolume>> {
             };
         }
     };
-    // SAFETY : `find` vient de `FindFirstVolumeW` et n'est fermée qu'ici.
+    // SAFETY: `find` comes from `FindFirstVolumeW` and is closed only here.
     unsafe {
         FindVolumeClose(find);
     }

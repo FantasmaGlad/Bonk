@@ -32,7 +32,7 @@ use navigation::{LIST, map_key};
 #[derive(Debug, Default)]
 pub(crate) struct App {
     model: Model,
-    /// Programme lancé pour écrire : `bonk` lui-même, sauf dans les tests.
+    /// `bonk` itself, except in tests.
     program: Option<PathBuf>,
 }
 
@@ -121,7 +121,7 @@ impl App {
     pub(crate) fn subscription(&self) -> Subscription<Message> {
         let mut subscriptions = vec![
             iced::time::every(REFRESH_EVERY).map(|_| Message::Tick),
-            // Une touche prise par un champ de saisie (le chemin de l'image) n'est pas une commande.
+            // A key taken by an input field (the image path) is not a command.
             iced::event::listen_with(|event, status, _window| match event {
                 iced::Event::Keyboard(keyboard::Event::KeyPressed {
                     key,
@@ -129,14 +129,14 @@ impl App {
                     repeat,
                     ..
                 }) if status == iced::event::Status::Ignored => map_key(&key, modifiers, repeat),
-                // Sous Wayland, winit 0.30 ne remet aucun fichier déposé : le sélecteur reste la voie sûre.
+                // On Wayland, winit 0.30 delivers no dropped file: the picker stays the safe way.
                 iced::Event::Window(iced::window::Event::FileDropped(path)) => {
                     Some(Message::ImagePicked(Some(path)))
                 }
                 _ => None,
             }),
         ];
-        // Le décompte avant l'activation de « Écrire » se rafraîchit tant que le panneau est ouvert.
+        // The countdown before Write is enabled refreshes while the panel is open.
         if matches!(self.write, WriteState::Draft { .. }) {
             subscriptions
                 .push(iced::time::every(Duration::from_millis(500)).map(|_| Message::Clock));
@@ -149,8 +149,8 @@ impl App {
     }
 }
 
-/// La fenêtre change de langue même si l'enregistrement échoue : seul le prochain lancement l'oublie.
-/// Le réglage passe par la ligne de commande, seule propriétaire du fichier de configuration.
+/// The window switches language even if saving fails: only the next launch forgets it. The setting goes
+/// through the command line, the configuration file's only owner.
 fn save_language(program: &std::path::Path, lang: Lang) {
     let value = match lang {
         Lang::En => "en",

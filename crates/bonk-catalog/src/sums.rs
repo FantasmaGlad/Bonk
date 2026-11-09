@@ -1,6 +1,6 @@
-/// Empreinte SHA-256 de `name` dans un fichier d'empreintes, en minuscules. Formats reconnus : celui de
-/// `sha256sum` (`hex  nom`, `hex *nom`, `./nom`) et le format BSD (`SHA256 (nom) = hex`). Une ligne d'un autre
-/// format est ignorée : ces fichiers portent parfois des commentaires ou une signature en clair.
+/// Lower-case SHA-256 of `name` in a checksum file: `sha256sum` format (`hex  name`, `hex *name`, `./name`)
+/// and BSD format (`SHA256 (name) = hex`). Other lines are skipped: these files sometimes carry comments or a
+/// clear-signed signature.
 #[must_use]
 pub fn find_sha256(text: &str, name: &str) -> Option<String> {
     text.lines().find_map(|line| {

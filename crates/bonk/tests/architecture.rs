@@ -7,8 +7,7 @@ fn crates_dir() -> PathBuf {
         .map_or_else(|| PathBuf::from("crates"), Path::to_path_buf)
 }
 
-/// Lignes de la section `[dependencies]` d'un crate, cibles particulières comprises, sans les
-/// dépendances de test.
+/// `[dependencies]` lines of a crate, target-specific ones included, without dev-dependencies.
 fn dependencies(name: &str) -> Vec<String> {
     let text = fs::read_to_string(crates_dir().join(name).join("Cargo.toml")).unwrap_or_default();
     assert!(!text.is_empty(), "Cargo.toml de {name} illisible");
@@ -24,7 +23,6 @@ fn dependencies(name: &str) -> Vec<String> {
     found
 }
 
-/// Fichiers Rust de `src/`, récursivement.
 fn sources(dir: &Path, found: &mut Vec<PathBuf>) {
     for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
         let path = entry.path();
@@ -75,9 +73,9 @@ fn chaque_crate_ne_depend_que_de_ce_que_permet_sa_couche() {
     }
 }
 
-/// Le code de production d'un fichier : ses tests à part, comme pour le plafond de taille.
+/// Production code of a file: its tests apart, as for the size cap.
 fn production(file: &Path) -> String {
-    // Windows extrait les sources avec des fins de ligne CRLF.
+    // Windows checks out sources with CRLF line endings.
     let text = fs::read_to_string(file)
         .unwrap_or_default()
         .replace("\r\n", "\n");
@@ -87,7 +85,7 @@ fn production(file: &Path) -> String {
         .to_owned()
 }
 
-/// Ce qui trahit du code propre à un système : attributs de plateforme et appels directs à l'OS.
+/// What gives away OS-specific code: platform attributes and direct OS calls.
 const SYSTEM_MARKERS: &[&str] = &[
     "target_os",
     "target_family",
@@ -100,7 +98,7 @@ const SYSTEM_MARKERS: &[&str] = &[
     "std::os::",
 ];
 
-/// Exceptions connues, chacune avec sa raison ; une exception qui n'a plus lieu d'être fait échouer le test.
+/// Known exceptions, each with its reason; an exception no longer needed fails the test.
 const SYSTEM_EXCEPTIONS: &[(&str, &[&str], &str)] = &[(
     "bonk-gui/src/lib.rs",
     &["target_os", "cfg(all(unix", "cfg(not("],
@@ -152,8 +150,8 @@ fn le_code_propre_a_un_systeme_reste_dans_bonk_hal() {
     }
 }
 
-/// Une seule porte d'écriture : seuls les travaux de bonk-ops et la couche système ouvrent un disque en
-/// écriture. La fenêtre, l'écran commun, le catalogue, la CLI et l'application Android passent par eux.
+/// A single write door: only the bonk-ops jobs and the system layer open a disk for writing. The window, the
+/// shared screen, the catalog, the CLI and the Android app go through them.
 #[test]
 fn seule_la_porte_d_ecriture_ouvre_un_disque_en_ecriture() {
     for name in [
@@ -184,7 +182,7 @@ fn seule_la_porte_d_ecriture_ouvre_un_disque_en_ecriture() {
     }
 }
 
-/// Un fichier qui dépasse ce plafond, tests à part, se découpe : c'est là que naissent les fichiers fourre-tout.
+/// A file over this cap, tests apart, gets split: that is where catch-all files are born.
 #[test]
 fn aucun_fichier_de_production_ne_depasse_le_plafond() {
     const PLAFOND: usize = 700;
@@ -200,7 +198,7 @@ fn aucun_fichier_de_production_ne_depasse_le_plafond() {
                 && !nom.ends_with("tests.rs")
                 && !chemin.components().any(|c| c.as_os_str() == "tests")
             {
-                // Windows extrait les sources avec des fins de ligne CRLF.
+                // Windows checks out sources with CRLF line endings.
                 let texte = std::fs::read_to_string(&chemin)
                     .unwrap_or_default()
                     .replace("\r\n", "\n");

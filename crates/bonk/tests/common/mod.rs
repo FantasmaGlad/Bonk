@@ -2,13 +2,12 @@
 
 use std::process::Command;
 
-/// Vrai si l'environnement est celui d'une intégration continue (GitHub Actions et la plupart des autres
-/// posent `CI`).
+/// GitHub Actions and most others set `CI`.
 pub fn en_ci() -> bool {
     std::env::var_os("CI").is_some()
 }
 
-/// `command -v` : l'outil est-il trouvable dans le `PATH` ?
+/// `command -v`: is the tool in the `PATH`?
 fn installe(nom: &str) -> bool {
     Command::new("sh")
         .args(["-c", &format!("command -v {nom}")])
@@ -16,9 +15,8 @@ fn installe(nom: &str) -> bool {
         .is_ok_and(|s| s.status.success())
 }
 
-/// Décision pure, testable sans toucher à l'environnement : un outil absent saute le test hors CI (en le
-/// disant) et le fait échouer en CI, où l'exécuteur est figé (`ci.yml`) et où un saut ferait passer pour
-/// vérifié ce qui ne l'a pas été.
+/// Pure decision, testable without the environment: a missing tool skips the test outside CI (saying so) and
+/// fails it in CI, where the runner is fixed (`ci.yml`) and a skip would pass for a check that never ran.
 pub fn decider(nom: &str, present: bool, ci: bool) -> bool {
     if present {
         return true;
@@ -31,12 +29,12 @@ pub fn decider(nom: &str, present: bool, ci: bool) -> bool {
     false
 }
 
-/// L'outil est-il disponible ? Faux (avec message) hors CI s'il manque ; panique en CI.
+/// False (with a message) outside CI when missing; panics in CI.
 pub fn outil_disponible(nom: &str) -> bool {
     decider(nom, installe(nom), en_ci())
 }
 
-/// Un `xvfb-run` installé ne prouve pas qu'un serveur X démarre (poste sans `Xvfb` ou sans `xauth`).
+/// An installed `xvfb-run` does not prove an X server starts (machine without `Xvfb` or `xauth`).
 pub fn affichage_virtuel_disponible() -> bool {
     if !outil_disponible("xvfb-run") || !outil_disponible("timeout") {
         return false;
@@ -48,8 +46,8 @@ pub fn affichage_virtuel_disponible() -> bool {
     decider("un serveur X sous xvfb-run", demarre, en_ci())
 }
 
-/// Statut, sortie standard et sortie d'erreur d'un processus terminé, pour les messages d'assertion : un
-/// échec en CI doit se lire sans relancer le test.
+/// Status, stdout and stderr of a finished process, for assertion messages: a CI failure must be readable
+/// without rerunning the test.
 pub fn diagnostic(sortie: &std::process::Output) -> String {
     format!(
         "statut : {:?}\n--- stdout ---\n{}\n--- stderr ---\n{}",
@@ -59,7 +57,7 @@ pub fn diagnostic(sortie: &std::process::Output) -> String {
     )
 }
 
-/// Vérifie le code de sortie ; l'échec affiche le diagnostic complet.
+/// On failure, prints the full diagnostic.
 #[track_caller]
 pub fn assert_code(sortie: &std::process::Output, attendu: i32) {
     assert_eq!(
