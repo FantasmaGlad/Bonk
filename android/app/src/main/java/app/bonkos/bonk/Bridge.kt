@@ -5,19 +5,19 @@ import android.util.Log
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
-/** À l'échelle du processus : une écriture survit à l'écran, et ses messages ne visent jamais un écran détruit. */
+/** Process-wide: a write outlives the screen, and its messages never target a destroyed screen. */
 object Bridge {
-    /** Un seul fil pour Rust et le JSON, hors du fil de l'écran : un clic n'attend jamais le battement précédent. */
+    /** One thread for Rust and JSON, off the UI thread: a click never waits for the previous tick. */
     private val worker = Executors.newSingleThreadExecutor()
 
     @Volatile var listener: ((String) -> Unit)? = null
 
     @Volatile var language = "en"
 
-    /** Lu par le téléchargement, que Rust ne voit pas ; Rust arrête l'écriture de son côté. */
+    /** Read by the download, which Rust does not see; Rust stops the write on its side. */
     @Volatile var cancelled = false
 
-    /** Clés touchées par une écriture : leur sonde en cache décrit une table qui n'existe plus. */
+    /** Keys touched by a write: their cached probe describes a table that no longer exists. */
     val written: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     private var picked: ParcelFileDescriptor? = null
@@ -26,14 +26,14 @@ object Bridge {
         if (message == Cancel) cancelled = true
         val text = Protocol.encode(message)
         worker.execute {
-            // Une panique de Rust revient en exception : rattrapée, seul ce message est perdu.
+            // A Rust panic comes back as an exception: caught, only this message is lost.
             runCatching { Native.dispatch(text) }
                 .onSuccess { answer -> listener?.invoke(answer) }
                 .onFailure { Log.e("Bonk", "native dispatch failed", it) }
         }
     }
 
-    /** Ouvert jusqu'au choix suivant, même si l'écran qui l'a choisi est détruit. */
+    /** Open until the next choice, even if the screen that chose it is destroyed. */
     @Synchronized
     fun pick(file: ParcelFileDescriptor?): String? {
         picked?.close()

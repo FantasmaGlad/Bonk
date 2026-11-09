@@ -12,10 +12,10 @@ plugins {
 val jniOutput = layout.buildDirectory.dir("native/jniLibs")
 val tokensOutput = layout.buildDirectory.dir("generated/tokens")
 val iconsOutput = layout.buildDirectory.dir("generated/icons")
-// Seule la clé désignée reçoit l'essai d'écriture : sans cette valeur, le bouton n'existe pas.
+// Only the designated key gets the write test: without this value the button does not exist.
 val benchSerial = providers.gradleProperty("benchSerial").getOrElse("")
 
-// La version vient du workspace : une seule à relever pour une release.
+// The version comes from the workspace: a single one to bump for a release.
 val workspaceVersion =
     Regex("""(?m)^version = "(\d+)\.(\d+)\.(\d+)"""")
         .find(rootProject.file("../Cargo.toml").readText())!!
@@ -50,7 +50,7 @@ android {
     }
 
     buildTypes {
-        // Compose est très lent en débogage. Sans la clé officielle, la clé de débogage suffit aux essais.
+        // Compose is very slow in debug. Without the official key, the debug key is enough for tests.
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -59,7 +59,7 @@ android {
         }
     }
 
-    // Sans cette liste, AndroidX ferait annoncer armv7 et x86, sans bibliothèque Bonk.
+    // Without this list AndroidX would announce armv7 and x86, which have no Bonk library.
     splits {
         abi {
             isEnable = true
@@ -69,7 +69,7 @@ android {
         }
     }
 
-    // La langue se choisit dans Bonk : chaque installation garde le français et l'anglais.
+    // The language is chosen in Bonk: every install keeps French and English.
     bundle {
         language {
             enableSplit = false
@@ -123,7 +123,7 @@ val generateIcons by tasks.registering {
     doLast {
         val source = ImageIO.read(input)
         densities.forEach { (density, size) ->
-            // Réduction par moitiés successives : un seul pas de 512 à 48 crénelle le contour.
+            // Halving step by step: a single 512 to 48 step jags the outline.
             var image: BufferedImage = source
             while (image.width / 2 >= size) image = scaled(image, image.width / 2)
             image = scaled(image, size)

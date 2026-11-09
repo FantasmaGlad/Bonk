@@ -9,10 +9,10 @@ object Native {
 
     external fun setLanguage(french: Boolean)
 
-    /** Vérifie la signature ; sans octets, reprend la dernière copie vérifiée. */
+    /** Checks the signature; without bytes, falls back to the last verified copy. */
     external fun loadCatalog(directory: String, catalog: ByteArray, signature: ByteArray): String
 
-    /** Bloque. Rust refuse si `device` et `serial` ne sont pas ceux du disque choisi. */
+    /** Blocks. Rust refuses if `device` and `serial` are not the chosen disk's. */
     external fun write(
         fd: Int,
         descriptors: ByteArray,

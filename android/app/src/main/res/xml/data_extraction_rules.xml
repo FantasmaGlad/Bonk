@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Rien à sauvegarder ni à transférer : la langue choisie se redemande, et le catalogue se relit en ligne.
-     Même choix que allowBackup="false", sous la forme qu'attend Android 12 et plus. -->
+<!-- Nothing to back up or transfer: the language is asked again and the catalog reread online.
+     Same choice as allowBackup="false", in the form Android 12+ expects. -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="root" path="." />

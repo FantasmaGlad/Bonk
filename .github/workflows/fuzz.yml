@@ -20,7 +20,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # cargo-fuzz exige la chaîne nightly.
+      # cargo-fuzz requires nightly.
       - name: Installer nightly et cargo-fuzz
         run: |
           rustup toolchain install nightly --profile minimal

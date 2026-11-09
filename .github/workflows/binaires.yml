@@ -12,7 +12,7 @@ on:
       - ".github/pip/ziglang.txt"
       - "android/**"
     tags: ["v*.*.*"]
-  # Une modification du workflow est validée par sa propre PR (construction sans attestation).
+  # A workflow change is validated by its own PR (build without attestation).
   pull_request:
     paths: [".github/workflows/binaires.yml", ".github/pip/ziglang.txt"]
   schedule:
@@ -45,7 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # `zigbuild` fixe la glibc minimale (2.17) ; musl est statique, donc sans fenêtre.
+        # `zigbuild` pins the minimum glibc (2.17); musl is static, hence without a window.
         include:
           - { nom: linux-x86_64, os: ubuntu-24.04, target: x86_64-unknown-linux-gnu, outil: zigbuild, suffixe: ".2.17", fumee: true, glibc: true }
           - { nom: linux-aarch64, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, outil: zigbuild, suffixe: ".2.17", fumee: true, glibc: true }
@@ -71,7 +71,7 @@ jobs:
           rustup toolchain install
           rustup target add "$TARGET"
         shell: bash
-      # Pas de cache : un cache empoisonné n'a pas sa place dans une release.
+      # No cache: a poisoned cache has no place in a release.
       - name: Installer zig et cargo-zigbuild
         if: matrix.outil == 'zigbuild'
         run: |
@@ -90,14 +90,14 @@ jobs:
           # shellcheck disable=SC2086
           cargo "$OUTIL" --release --locked -p bonk $OPTIONS --target "$TARGET$SUFFIXE"
         shell: bash
-      # Un symbole de glibc plus récent que 2.17 ferait échouer le binaire sur les distributions anciennes.
+      # A glibc symbol newer than 2.17 would break the binary on older distributions.
       - name: Vérifier la version minimale de la glibc
         if: matrix.glibc
         run: |
           max=$(objdump -T "target/$TARGET/release/bonk" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -n 1)
           echo "glibc maximale exigée : $max"
           test "$(printf '%s\n2.17\n' "$max" | sort -V | tail -n 1)" = "2.17"
-      # Sans les secrets, ces deux étapes ne font rien ; jamais éprouvées faute de certificats.
+      # Without the secrets these two steps do nothing; never exercised, for lack of certificates.
       - name: Signer (Authenticode, Windows)
         if: runner.os == 'Windows'
         env:
@@ -136,13 +136,13 @@ jobs:
           security list-keychains -d user -s "$trousseau"
           codesign --force --options runtime --timestamp --sign "$MAC_SIGN_IDENTITY" --keychain "$trousseau" "$bin"
           codesign --verify --strict --verbose=2 "$bin"
-          # Un exécutable nu ne s'agrafe pas (stapler) : la notarisation est vérifiée en ligne par Gatekeeper.
+          # A bare executable cannot be stapled: Gatekeeper checks the notarization online.
           echo "$MAC_NOTARY_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
           ditto -c -k --keepParent "$bin" "$RUNNER_TEMP/bonk-notarisation.zip"
           xcrun notarytool submit "$RUNNER_TEMP/bonk-notarisation.zip" --key "$RUNNER_TEMP/notary.p8" --key-id "$MAC_NOTARY_KEY_ID" --issuer "$MAC_NOTARY_ISSUER" --wait
           security delete-keychain "$trousseau"
           rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/notary.p8"
-      # Le fichier publié porte bien son nom et sa version : sans ressources, Windows n'affiche rien.
+      # The published file carries its name and version: without resources Windows shows nothing.
       - name: Vérifier les informations de l'exécutable
         if: runner.os == 'Windows'
         shell: pwsh
@@ -210,7 +210,7 @@ jobs:
           $env:BONK_VERSION = $version
           $env:BONK_ARCH = $NOM = $env:NOM -replace '^windows-',''
           $env:BONK_ALLOWED = @{ 'x86_64' = 'x64compatible'; 'aarch64' = 'arm64'; 'i686' = 'x86compatible' }[$NOM]
-          # Un programme x86 reste dans Program Files (x86) : pas de mode 64 bits.
+          # An x86 program stays in Program Files (x86): no 64-bit mode.
           $env:BONK_64 = if ($NOM -eq 'i686') { '' } else { $env:BONK_ALLOWED }
           $env:BONK_EXE = (Resolve-Path "dist\$env:EXECUTABLE").Path
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
@@ -225,10 +225,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           $desinstalleur = Join-Path (Split-Path $cible) 'unins000.exe'
           Start-Process -Wait -FilePath $desinstalleur -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES'
-          # Fin de ligne Unix : la vérification de la release relit ce fichier sous Linux.
+          # Unix line endings: the release check reads this file on Linux.
           $somme = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLower() + "  " + $setup.Name + "`n"
           [IO.File]::WriteAllText("$PWD\dist\$($setup.Name).sha256", $somme)
-      # Attestations réservées aux dépôts publics hors offre Enterprise.
+      # Attestations are only available to public repositories outside Enterprise.
       - name: Attestation de provenance
         if: github.event_name != 'pull_request' && !github.event.repository.private
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
@@ -248,7 +248,7 @@ jobs:
           path: dist/bonk-*
           if-no-files-found: error
           retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
-      # Après l'archive : cette construction remplace le binaire dans target/.
+      # After the archive: this build replaces the binary in target/.
       - name: Version en ligne de commande seule
         id: cli
         if: matrix.cli
@@ -289,7 +289,7 @@ jobs:
           if-no-files-found: error
           retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
 
-  # centos:7 est le plancher réel de la glibc (2.17).
+  # centos:7 is the real glibc floor (2.17).
   compatibilite:
     name: ${{ matrix.image }} (${{ matrix.nom }})
     needs: construire
@@ -356,7 +356,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Le wrapper Gradle est un binaire exécuté par la CI : son empreinte doit être publiée par Gradle.
+      # The Gradle wrapper is a binary CI runs: its hash must be one Gradle publishes.
       - name: Wrapper Gradle
         uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - name: Plateforme Android
@@ -380,7 +380,7 @@ jobs:
           version=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
           mkdir dist
           apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
-          # Hors tag, l'APK porte une clé de débogage jetable : son nom le dit.
+          # Outside a tag the APK carries a throwaway debug key: its name says so.
           essai=$([ "$GITHUB_REF_TYPE" = tag ] || echo "-essai")
           for abi in arm64-v8a:arm64 x86_64:x86_64; do
             apk="dist/bonk-$version$essai-android-${abi#*:}.apk"
@@ -388,7 +388,7 @@ jobs:
             "$apksigner" verify --print-certs "$apk"
             (cd dist && sha256sum -- "$(basename "$apk")" > "$(basename "$apk").sha256")
           done
-      # Seule la release, signée de la clé officielle, est attestée : un APK d'essai ne doit pas en recevoir.
+      # Only the release, signed with the official key, is attested: a test APK must not get one.
       - name: Attestation de provenance
         if: github.ref_type == 'tag' && !github.event.repository.private
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2

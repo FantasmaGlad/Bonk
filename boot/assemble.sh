@@ -1,5 +1,4 @@
 #!/bin/sh
-# Assemble le code d'amorçage avec la seule chaîne Rust ; la CI relance ce script et refuse tout écart.
 set -eu
 cd "$(dirname "$0")"
 sysroot=$(rustc --print sysroot)
@@ -9,7 +8,7 @@ out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT
 rustc --edition 2024 --crate-type lib --emit obj --target x86_64-unknown-linux-gnu asm.rs -o "$out/boot.o"
 
-# Section, adresse où elle s'exécute, fichier produit.
+# Section, run address, output file.
 build() {
     printf 'SECTIONS { %s %s : { KEEP(*(%s)) } /DISCARD/ : { *(.bonk_*) } }\n' "$1" "$2" "$1" > "$out/link.ld"
     LD_LIBRARY_PATH="$sysroot/lib" "$bin/rust-lld" -flavor gnu -m elf_x86_64 -e 0 -T "$out/link.ld" \

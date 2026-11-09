@@ -9,7 +9,7 @@ repository.workspace = true
 publish.workspace = true
 
 [features]
-# Fabrique d'images GPT pour les tests des autres crates.
+# GPT image builder for other crates' tests.
 testing = []
 
 [dependencies]

@@ -28,7 +28,7 @@ data object SwitchLanguage : ToRust
 @Serializable @SerialName("menu")
 data object ToggleMenu : ToRust
 
-/** Filtre du menu des images ; sans valeur, le filtre est retiré. */
+/** Image menu filter; without a value the filter is removed. */
 @Serializable @SerialName("category")
 data class CategoryFilter(val value: String? = null) : ToRust
 
@@ -74,17 +74,17 @@ data class Download(val done: Long, val total: Long?, val rate: Double) : ToRust
 @Serializable @SerialName("failed")
 data class Failed(val message: String, val code: String? = null) : ToRust
 
-/** Échec né dans l'application, rattaché à un code de Bonk : l'écran en montre le titre traduit. */
+/** Failure born in the app, tied to a Bonk code: the screen shows its translated title. */
 class BonkFailure(val code: String, message: String) : Exception(message)
 
 @Serializable @SerialName("catalog_failed")
 data class CatalogFailed(val message: String) : ToRust
 
-/** Rien à signaler : seulement relire l'état, par exemple après une écriture. Rust ignore ce type. */
+/** Nothing to report: only reread the state, after a write for instance. Rust ignores this type. */
 @Serializable @SerialName("refresh")
 data object Refresh : ToRust
 
-/** Une clé telle que l'application la voit : périphérique USB, série et ce que la sonde a lu. */
+/** A key as the app sees it: USB device, serial and what the probe read. */
 @Serializable
 data class Drive(
     val device: String,
@@ -112,7 +112,7 @@ data object PickImage : Effect
 @Serializable @SerialName("save_language")
 data class SaveLanguage(val value: String) : Effect
 
-/** Le brouillon validé : `device` est le périphérique du disque choisi, absent s'il est parti entre-temps. */
+/** The confirmed draft: `device` is the chosen disk's device, absent if it left meanwhile. */
 @Serializable @SerialName("write")
 data class Write(
     @SerialName("disk_id") val diskId: String,
@@ -126,12 +126,12 @@ data class Write(
 @Serializable
 data class Answer(val state: ScreenState = ScreenState(), val effects: List<Effect> = emptyList())
 
-/** Tout ce que l'écran affiche ; les textes arrivent déjà dans la langue choisie. */
+/** Everything the screen shows; texts already come in the chosen language. */
 @Serializable
 data class ScreenState(
     val intro: String = "",
     val language: String = "",
-    /** Langue choisie dans Bonk (`fr`, `en`) : l'application y lit ses propres textes. */
+    /** Language chosen in Bonk (`fr`, `en`): the app reads its own texts in it. */
     val lang: String = "en",
     val status: String = "",
     @SerialName("show_all") val showAll: Boolean = false,
@@ -153,7 +153,7 @@ data class DiskView(
     val selected: Boolean,
 )
 
-/** Le panneau d'écriture ; `kind` le désigne. Absent quand aucun disque n'est choisi. */
+/** The write panel, named by `kind`. Absent when no disk is chosen. */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
 @JsonClassDiscriminator("kind")
@@ -162,7 +162,7 @@ sealed interface Panel
 @Serializable @SerialName("draft")
 data class DraftPanel(
     val title: String,
-    /** Absent si le disque choisi vient de disparaître de la liste. */
+    /** Absent if the chosen disk just left the list. */
     val summary: String? = null,
     val warning: String,
     val menu: MenuView,
@@ -187,7 +187,7 @@ data class RunningPanel(val line: String, val fraction: Float? = null, val cance
 @Serializable @SerialName("finished")
 data class FinishedPanel(val message: String, val close: String) : Panel
 
-/** Le menu des images : une ligne d'attente tant que le catalogue n'est pas lu. */
+/** The image menu: a waiting line until the catalog is read. */
 @Serializable
 data class MenuView(
     val ready: Boolean,
@@ -203,7 +203,7 @@ data class MenuView(
     val rows: List<MenuRow> = emptyList(),
 )
 
-/** Une image du menu ; sans `index`, elle se montre sans pouvoir être choisie. */
+/** A menu image; without `index` it is shown but cannot be chosen. */
 @Serializable
 data class MenuRow(val title: String, val note: String? = null, val index: Int? = null)
 
@@ -220,7 +220,7 @@ data class Probe(
 object Protocol {
     private val toRust = Json { classDiscriminator = "type" }
 
-    /** Un champ ajouté côté Rust ne doit pas casser une application plus ancienne. */
+    /** A field added on the Rust side must not break an older app. */
     private val fromRust =
         Json {
             classDiscriminator = "do"

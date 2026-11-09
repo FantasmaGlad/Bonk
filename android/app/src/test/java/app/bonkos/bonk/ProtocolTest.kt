@@ -9,7 +9,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 
-/** Les échantillons viennent du code Rust (`screen.rs`) : ces tests prouvent que les deux côtés parlent pareil. */
+/** Samples come from the Rust code (`screen.rs`): these tests prove both sides speak the same. */
 class ProtocolTest {
     private val samples: JsonObject =
         Json.parseToJsonElement(

@@ -14,7 +14,7 @@ import kotlin.concurrent.thread
 private const val TAG = "Bonk"
 private const val MEBIBYTE = 1_048_576
 
-/** Essais réservés au développement : ils décident si l'écriture marche sur cet appareil. */
+/** Development-only tests: they tell whether writing works on this device. */
 @Composable
 internal fun Tests(usb: UsbManager, revision: Int) {
     val drives = remember(revision) { usb.drives().filter(usb::hasPermission) }

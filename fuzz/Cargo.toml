@@ -12,7 +12,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 bonk-core = { path = "../crates/bonk-core" }
 
-# Hors du workspace : libfuzzer-sys exige nightly, le reste du dépôt reste sur la chaîne stable.
+# Outside the workspace: libfuzzer-sys needs nightly, the rest of the repository stays on stable.
 [workspace]
 
 [[bin]]

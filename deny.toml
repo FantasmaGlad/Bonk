@@ -1,5 +1,5 @@
 
-# Cibles construites seulement : une cible ajoutée aux workflows s'ajoute ici.
+# Built targets only: a target added to the workflows is added here.
 [graph]
 targets = [
     "x86_64-unknown-linux-gnu",
@@ -18,19 +18,19 @@ targets = [
 ]
 
 [advisories]
-# Chaque exception porte sa raison et son critère de retrait ; à relire à chaque montée d'Iced.
+# Each exception has its reason and removal criterion; review at each Iced upgrade.
 ignore = [
     { id = "RUSTSEC-2026-0253", reason = "lru unsound dans LruCache::pop si le Drop d'une clé panique ; cryoglyph 0.1.0 (Iced 0.14) exige lru 0.16, corrigé en 0.18.2, et n'appelle que pop_lru avec une clé Copy, donc sans Drop. Retrait : une version de cryoglyph qui tire lru 0.18.2 ou plus" },
     { id = "RUSTSEC-2024-0436", reason = "paste non maintenu ; dépendance de metal, via wgpu-hal (Iced 0.14). Retrait : une version d'Iced ou de wgpu qui ne tire plus paste" },
     { id = "RUSTSEC-2026-0192", reason = "ttf-parser non maintenu ; dépendance de la pile de texte d'Iced 0.14. Retrait : une version d'Iced ou de cosmic-text qui ne tire plus ttf-parser" },
 ]
-# Scorecard voit aussi les avis « unsound » des dépendances transitives.
+# Scorecard also sees "unsound" advisories of transitive dependencies.
 unsound = "all"
-# Une exception devenue inutile doit être retirée, pas rester en silence.
+# An exception no longer needed must be removed, not linger silently.
 unused-ignored-advisory = "deny"
 
 [licenses]
-# MPL-2.0 n'exige le partage que de ses propres fichiers modifiés : compatible avec MIT.
+# MPL-2.0 only requires sharing its own modified files: compatible with MIT.
 allow = [
     "MIT",
     "Apache-2.0",
@@ -43,25 +43,25 @@ allow = [
     "MPL-2.0",
     "CC0-1.0",
     "0BSD",
-    # Licence Boost, permissive : requise par clipboard-win et error-code (dépendances Windows d'Iced).
+    # Boost licence, permissive: required by clipboard-win and error-code (Iced's Windows dependencies).
     "BSL-1.0",
 ]
-# La liste couvre aussi des cas futurs : ne pas signaler les entrées pas encore utilisées.
+# The list also covers future cases: do not report unused entries.
 unused-allowed-license = "allow"
 
-# Tiré seulement pour wasm32 ; limité à ce crate pour ne pas admettre cette licence ailleurs.
+# Pulled only for wasm32; limited to this crate so the licence is not allowed elsewhere.
 [[licenses.exceptions]]
 crate = "webpki-root-certs"
 allow = ["CDLA-Permissive-2.0"]
 
-# Les crates du workspace (publish = false) portent la licence du projet : non contrôlées.
+# Workspace crates (publish = false) carry the project licence: not checked.
 [licenses.private]
 ignore = true
 
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
-# Les dépendances par chemin entre crates du workspace n'ont pas de version : autorisé pour les crates privées.
+# Path dependencies between workspace crates have no version: allowed for private crates.
 allow-wildcard-paths = true
 
 [sources]

@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Génère les manifestes de distribution (Scoop, Homebrew, AUR, winget) d'une release à partir de son fichier
-SHA256SUMS. Rien n'est publié : les fichiers sont joints à la release, le mainteneur les soumet aux canaux.
-
-Usage : manifestes.py <SHA256SUMS> <tag vX.Y.Z> <dossier de sortie>
-"""
+"""Usage: manifestes.py <SHA256SUMS> <tag vX.Y.Z> <output directory>"""
 import json
 import re
 import sys
@@ -16,7 +12,7 @@ LICENCE = "MIT"
 
 
 def lire_empreintes(chemin: Path) -> dict[str, str]:
-    """nom d'archive -> SHA-256."""
+    """Archive name to SHA-256."""
     empreintes = {}
     for ligne in chemin.read_text(encoding="utf-8").splitlines():
         m = re.fullmatch(r"([0-9a-f]{64}) [ *](\S+)", ligne.strip())

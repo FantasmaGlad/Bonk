@@ -1,5 +1,5 @@
-# Le BIOS charge ce secteur à 0000:7C00 ; il se recopie à 0000:0600 pour y lire le secteur de démarrage
-# de la partition active. 440 octets au plus : la signature du disque et la table suivent.
+# Loaded at 0000:7C00, relocates to 0000:0600 to read the active partition's boot sector there.
+# 440 bytes at most: the disk signature and the table follow.
 
 .pushsection .bonk_mbr, "ax"
 .code16
