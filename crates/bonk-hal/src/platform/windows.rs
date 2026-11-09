@@ -102,8 +102,8 @@ impl Platform for Windows {
     fn capabilities(&self) -> Vec<Capability> {
         let mut all = native_capabilities(Capability::yes("elevate"));
         for capability in &mut all {
-            // exFAT et NTFS passent par `Format-Volume`, présent sur tout Windows pris en charge.
-            if ["format.exfat", "format.ntfs"].contains(&capability.name.as_str()) {
+            // NTFS passe par `Format-Volume`, présent sur tout Windows pris en charge.
+            if capability.name == "format.ntfs" {
                 *capability = Capability::yes(&capability.name);
             }
         }

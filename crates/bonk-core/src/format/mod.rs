@@ -1,3 +1,4 @@
+pub mod exfat;
 pub mod fat32;
 pub mod fat32_tree;
 pub mod table;
@@ -44,7 +45,7 @@ impl Filesystem {
     /// Bonk l'écrit-il lui-même, sans outil de l'hôte ?
     #[must_use]
     pub fn is_native(self) -> bool {
-        self == Self::Fat32
+        matches!(self, Self::Fat32 | Self::Exfat)
     }
 
     /// Longueur maximale d'une étiquette : en caractères ASCII pour FAT32, en unités UTF-16 pour exFAT et

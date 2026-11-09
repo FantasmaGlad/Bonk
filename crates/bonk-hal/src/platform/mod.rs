@@ -128,7 +128,7 @@ pub trait Platform: Send + Sync {
     /// Ce que ce système permet, et pourquoi pas le reste (`bonk capabilities`).
     fn capabilities(&self) -> Vec<Capability>;
 
-    /// Formate une partition avec les outils de l'hôte (exFAT, NTFS, ext4). Seul le résultat de
+    /// Formate une partition avec les outils de l'hôte (NTFS, ext4). Seul le résultat de
     /// l'outil compte, sa sortie n'est pas interprétée.
     fn format_partition(
         &self,
