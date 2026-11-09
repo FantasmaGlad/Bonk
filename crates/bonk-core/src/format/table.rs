@@ -15,6 +15,10 @@ pub enum TableKind {
 
 impl TableKind {
     pub const ALL: [Self; 2] = [Self::Gpt, Self::Mbr];
+    /// Table d'un support remis en état de stockage.
+    pub const FORMAT_DEFAULT: Self = Self::Gpt;
+    /// Table d'une clé Windows : MBR démarre en BIOS et en UEFI, jusqu'à 2 Tio.
+    pub const WINDOWS_DEFAULT: Self = Self::Mbr;
 
     #[must_use]
     pub fn name(self) -> &'static str {

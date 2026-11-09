@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use bonk_core::format::table::TableKind;
 use bonk_core::write::Phase;
 use bonk_hal::{Disk, Lang};
 
@@ -265,7 +266,7 @@ impl Model {
             *image = url;
             *hash = sha256;
             *raw = false;
-            *mbr = true;
+            *mbr = TableKind::WINDOWS_DEFAULT == TableKind::Mbr;
             self.menu_open = false;
             self.focus = Some(Focus::Action);
         }
@@ -305,7 +306,7 @@ impl Model {
                     image: String::new(),
                     hash: String::new(),
                     raw: false,
-                    mbr: true,
+                    mbr: TableKind::WINDOWS_DEFAULT == TableKind::Mbr,
                     opened: Instant::now(),
                 };
             }

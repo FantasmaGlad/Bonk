@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use bonk_core::format::table::TableKind;
 use bonk_hal::{Elevation, FilterOptions};
 use clap::{Args, ValueEnum};
 
@@ -193,7 +194,7 @@ pub(crate) struct WriteArgs {
     pub(super) mode: ModeArg,
 
     /// Partition table of a Windows drive: mbr boots in BIOS and UEFI (up to 2 TiB), gpt in UEFI only
-    #[arg(long, value_enum, default_value_t = TableArg::Mbr)]
+    #[arg(long, value_enum, default_value_t = TableKind::WINDOWS_DEFAULT.into())]
     pub(super) table: TableArg,
 
     /// Do not read the drive back after writing

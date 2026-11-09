@@ -73,9 +73,9 @@ pub(super) fn prepare(kind: Kind, params: &Value, cfg: &Config) -> Result<Task, 
     let elevation = p.elevation()?;
     let filesystem = p.filesystem()?;
     let table = p.table(if matches!(kind, Kind::Format) {
-        TableKind::Gpt
+        TableKind::FORMAT_DEFAULT
     } else {
-        TableKind::Mbr
+        TableKind::WINDOWS_DEFAULT
     })?;
     let mut sha256 = p.sha256.clone();
     let source = match (kind, &p.image) {

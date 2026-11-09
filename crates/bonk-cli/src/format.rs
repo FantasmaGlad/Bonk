@@ -37,6 +37,15 @@ pub(crate) enum TableArg {
     Mbr,
 }
 
+impl From<TableKind> for TableArg {
+    fn from(kind: TableKind) -> Self {
+        match kind {
+            TableKind::Gpt => Self::Gpt,
+            TableKind::Mbr => Self::Mbr,
+        }
+    }
+}
+
 impl From<TableArg> for TableKind {
     fn from(arg: TableArg) -> Self {
         match arg {
@@ -58,7 +67,7 @@ pub(crate) struct FormatArgs {
     fs: Option<FsArg>,
 
     /// Partition table
-    #[arg(long, value_enum, default_value_t = TableArg::Gpt)]
+    #[arg(long, value_enum, default_value_t = TableKind::FORMAT_DEFAULT.into())]
     table: TableArg,
 
     /// Volume label
