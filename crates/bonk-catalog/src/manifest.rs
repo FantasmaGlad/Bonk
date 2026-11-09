@@ -9,11 +9,10 @@ use ring::signature::{ED25519, UnparsedPublicKey};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// Version du format comprise par ce binaire.
 pub const SCHEMA_VERSION: u32 = 1;
 
-/// Clés publiques admises : la courante, dans les secrets de publication, et celle de secours, hors ligne,
-/// qui permet de continuer à publier sans nouvelle version de Bonk si la première est perdue.
+/// The current key, in the publishing secrets, and an offline backup that keeps publishing possible without a
+/// new Bonk release if the first is lost.
 pub const TRUSTED_KEYS: [[u8; 32]; 2] = [
     [
         0x0a, 0xa9, 0xf4, 0x66, 0x76, 0x3f, 0x33, 0x45, 0x0a, 0xe8, 0x21, 0x17, 0xf3, 0x00, 0xd4,
@@ -27,16 +26,16 @@ pub const TRUSTED_KEYS: [[u8; 32]; 2] = [
     ],
 ];
 
-/// Un système, tel que l'écran de choix le présente : ses versions sont ses images.
+/// A system as the choice screen shows it: its versions are its images.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Family {
-    /// Identifiant stable : `ubuntu`.
+    /// Stable identifier: `ubuntu`.
     pub id: String,
     pub name: String,
     /// Group shown to sort systems: `Debian derivatives`. Absent from older catalogs.
     #[serde(default)]
     pub category: Option<String>,
-    /// Logo, chemin relatif au manifeste. Son empreinte, couverte par la signature, l'empêche d'être remplacé.
+    /// Logo, relative to the manifest. Its hash, covered by the signature, keeps it from being replaced.
     pub icon: String,
     pub icon_sha256: String,
 }
@@ -86,7 +85,7 @@ fn boots_from_usb() -> bool {
     true
 }
 
-/// Où trouver l'image.
+/// Where to get the image.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
 pub enum ImageSource {
@@ -100,7 +99,7 @@ pub enum ImageSource {
     OfficialPage { official_page: String },
 }
 
-/// Les nombres d'une version : `24.04.5` passe après `26.04.1`, même sorti plus tard, et `9` avant `10`.
+/// `24.04.5` sorts after `26.04.1` even if released later, and `9` before `10`.
 #[must_use]
 pub fn version_numbers(version: &str) -> Vec<u64> {
     version
@@ -133,18 +132,17 @@ pub struct CatalogReport {
     pub images: Vec<Image>,
 }
 
-/// Le manifeste, une fois vérifié.
+/// The manifest, once verified.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Catalog {
     pub schema_version: u32,
-    /// Croît à chaque publication : un miroir ne peut pas resservir un ancien manifeste à qui a vu plus récent.
+    /// Grows at each publication: a mirror cannot serve an older manifest to someone who saw a newer one.
     pub sequence: u64,
     pub expires_unix: u64,
     pub families: Vec<Family>,
     pub images: Vec<Image>,
 }
 
-/// Pourquoi un manifeste est refusé.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CatalogError {
     BadSignature,
@@ -161,7 +159,7 @@ pub enum CatalogError {
         id: String,
         reason: &'static str,
     },
-    /// Ni le réseau ni une copie gardée.
+    /// Neither the network nor a saved copy.
     Unavailable(String),
 }
 
@@ -190,10 +188,10 @@ impl fmt::Display for CatalogError {
 
 impl std::error::Error for CatalogError {}
 
-/// Ce que l'appelant sait : les clés admises, l'heure, le plus grand numéro déjà vu.
+/// Allowed keys, the time, the highest sequence already seen.
 #[derive(Debug, Clone, Copy)]
 pub struct Trust<'a> {
-    /// Clés publiques Ed25519 : la courante et celle de secours, pour survivre à une clé perdue.
+    /// Ed25519 public keys: current and backup, to survive a lost key.
     pub keys: &'a [[u8; 32]],
     pub now_unix: u64,
     pub seen_sequence: u64,
@@ -206,7 +204,7 @@ fn is_identifier(text: &str) -> bool {
         })
 }
 
-/// `AAAA-MM-JJ` : la forme seule, assez pour que le tri par texte soit le tri par date.
+/// `YYYY-MM-DD` shape only: enough for text order to be date order.
 fn is_date(text: &str) -> bool {
     let bytes = text.as_bytes();
     bytes.len() == 10
@@ -223,7 +221,7 @@ fn check_family(family: &Family) -> Result<(), &'static str> {
     if !is_identifier(&family.id) {
         return Err("identifier must be lowercase ASCII");
     }
-    // Reste sous le dossier du manifeste : ni chemin absolu, ni remontée, ni autre hôte.
+    // Stays under the manifest directory: no absolute path, no parent, no other host.
     let relative = !family.icon.starts_with('/')
         && !family.icon.contains('\\')
         && !family.icon.contains(':')
@@ -240,7 +238,7 @@ fn check_family(family: &Family) -> Result<(), &'static str> {
     Ok(())
 }
 
-/// Un service onion chiffre déjà tout le chemin : c'est le seul `http://` admis.
+/// An onion service already encrypts the whole path: the only `http://` allowed.
 fn is_mirror(address: &str) -> bool {
     let onion = address
         .strip_prefix("http://")
@@ -280,11 +278,10 @@ fn check_image(image: &Image) -> Result<(), &'static str> {
     Ok(())
 }
 
-/// Contrôle la signature, puis seulement lit et valide le manifeste.
+/// Checks the signature, and only then reads and validates the manifest.
 ///
 /// # Errors
-/// Signature fausse, format illisible ou trop récent, manifeste expiré ou plus ancien que le dernier vu,
-/// image invalide.
+/// Bad signature, unreadable or newer format, manifest expired or older than the last seen, invalid image.
 pub fn verify(
     manifest: &[u8],
     signature: &[u8],
@@ -298,7 +295,7 @@ pub fn verify(
     if !signed {
         return Err(CatalogError::BadSignature);
     }
-    // La version d'abord : un format plus récent peut ne pas se lire comme celui-ci.
+    // Version first: a newer format may not parse as this one.
     #[derive(Deserialize)]
     struct Header {
         schema_version: u32,
@@ -355,11 +352,10 @@ pub fn verify(
     Ok(catalog)
 }
 
-/// Le catalogue vérifié, et d'où il vient.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Loaded {
     pub catalog: Catalog,
-    /// Copie gardée, le réseau ayant manqué. Elle reste soumise à la signature et à l'expiration.
+    /// Saved copy, the network having failed. Still subject to the signature and the expiry.
     pub saved_copy: bool,
 }
 
@@ -374,18 +370,18 @@ fn seen_sequence(dir: &Path) -> u64 {
         .unwrap_or(0)
 }
 
-/// Écrit sans jamais laisser un fichier à moitié : une coupure garde l'ancien.
+/// Never leaves a half-written file: a cut keeps the old one.
 fn replace(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let partial = path.with_extension("part");
     fs::write(&partial, bytes)?;
     fs::rename(&partial, path)
 }
 
-/// Lit le catalogue sous `base`, ou, si le réseau seul a manqué, la dernière copie vérifiée. Un fichier
-/// reçu mais refusé reste une erreur : se rabattre en silence masquerait une falsification.
+/// Under `base` or, when only the network failed, the last verified copy. A file received but refused stays
+/// an error: silently falling back would hide tampering.
 ///
 /// # Errors
-/// Fichier refusé par [`verify`], ou ni réseau ni copie.
+/// File refused by [`verify`], or neither network nor copy.
 pub fn load(
     base: &str,
     dir: &Path,
@@ -403,7 +399,7 @@ pub fn load(
     match received {
         Ok((manifest, signature)) => {
             let catalog = verify(&manifest, &signature, &trust)?;
-            // Le cache n'est qu'un secours : ne pas pouvoir l'écrire n'empêche pas de lire le catalogue.
+            // The cache is only a fallback: failing to write it does not stop reading the catalog.
             let saved = fs::create_dir_all(dir)
                 .and_then(|()| replace(&dir.join(MANIFEST), &manifest))
                 .and_then(|()| replace(&dir.join(SIGNATURE), &signature))
@@ -432,7 +428,7 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// Le logo d'un système, dans le cache, contrôlé par son empreinte signée. Descriptif : `None` s'il manque.
+/// In the cache, checked by its signed hash. Descriptive: `None` when missing.
 #[must_use]
 pub fn icon_path(
     base: &str,
@@ -547,7 +543,6 @@ mod tests {
             check(&bytes, &autre, &[public], 0),
             Err(CatalogError::BadSignature)
         );
-        // La clé de secours est admise.
         assert!(check(&bytes, &autre, &[public, secours], 0).is_ok());
 
         let signature = key.sign(&bytes);
@@ -563,7 +558,7 @@ mod tests {
             Err(CatalogError::BadSignature)
         );
         assert_eq!(verify(&bytes, &[], &trust), Err(CatalogError::BadSignature));
-        // Sans clé, rien n'est jamais admis.
+        // Without a key nothing is ever allowed.
         assert_eq!(check(&bytes, &key, &[], 0), Err(CatalogError::BadSignature));
         Ok(())
     }
@@ -595,7 +590,6 @@ mod tests {
         Ok(())
     }
 
-    /// Dossier jetable, retiré à la fin du test.
     struct Dossier(PathBuf);
 
     impl Dossier {
@@ -630,7 +624,6 @@ mod tests {
             load("https://c/", &dossier.0, now, &[public], fetch)
         };
 
-        // Rien encore : ni réseau ni copie.
         assert!(matches!(
             lire(NOW, &hors_ligne),
             Err(CatalogError::Unavailable(_))
@@ -638,7 +631,7 @@ mod tests {
         assert!(!lire(NOW, &bon)?.saved_copy);
         assert!(lire(NOW, &hors_ligne)?.saved_copy);
 
-        // Reçu mais falsifié : refusé, même avec une bonne copie.
+        // Received but tampered: refused, even with a good copy.
         let (mut f, s2) = (bytes.clone(), signature.clone());
         f[20] ^= 1;
         let falsifie = move |url: &str| {
@@ -650,7 +643,7 @@ mod tests {
         };
         assert_eq!(lire(NOW, &falsifie), Err(CatalogError::BadSignature));
 
-        // Un ancien manifeste, même bien signé, ne repasse pas après un plus récent.
+        // An older manifest, even well signed, does not pass after a newer one.
         let ancien = manifest(4, NOW + 1, &debian());
         let s3 = key.sign(&ancien).as_ref().to_vec();
         let retour = move |url: &str| {
@@ -665,7 +658,7 @@ mod tests {
             Err(CatalogError::Rollback { .. })
         ));
 
-        // La copie expire aussi.
+        // The copy expires too.
         assert!(matches!(
             lire(NOW + 1, &hors_ligne),
             Err(CatalogError::Expired { .. })
@@ -692,7 +685,7 @@ mod tests {
         );
         let chemin = icon_path("https://c/", &dossier.0, &family(empreinte.clone()), &fetch);
         assert!(chemin.is_some_and(|p| p.is_file()));
-        // Déjà gardé : pas de réseau.
+        // Already saved: no network.
         let hors_ligne = |_: &str| Err("coupure".to_owned());
         assert!(icon_path("https://c/", &dossier.0, &family(empreinte), &hors_ligne).is_some());
     }

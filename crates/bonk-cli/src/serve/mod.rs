@@ -26,25 +26,25 @@ use protocol::{Out, Request, failure};
 
 pub(crate) use protocol::{schema_request, schema_response};
 
-/// Version du protocole, incrémentée à chaque changement incompatible.
+/// Bumped at each incompatible change.
 pub(crate) const PROTOCOL: u32 = 1;
 
 pub(crate) type EnumerateFn = Arc<dyn Fn() -> Result<Vec<Disk>, EnumerateError> + Send + Sync>;
 
 pub(crate) type IoFactory = Arc<dyn Fn(Arc<AtomicBool>) -> Io + Send + Sync>;
 
-/// Ce dont le service a besoin du système : substituable pour les tests.
+/// What the service needs from the system: replaceable for tests.
 pub(crate) struct Config {
     pub(crate) enumerate: EnumerateFn,
     pub(crate) make_io: IoFactory,
     pub(crate) config_path: Option<PathBuf>,
     pub(crate) vars: Vec<(String, String)>,
     pub(crate) view: ViewDefaults,
-    /// Ctrl+C ou SIGTERM reçu : le service annule l'opération en cours et s'arrête.
+    /// Ctrl+C or SIGTERM received: the service cancels the running operation and stops.
     pub(crate) interrupted: Arc<dyn Fn() -> bool + Send + Sync>,
 }
 
-/// Méthodes du service : le nom et la description vivent ici, et `handle` doit traiter chaque variante.
+/// Name and description live here, and `handle` must handle every variant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Method {
     Ping,
@@ -73,8 +73,8 @@ enum Method {
 
 #[derive(Default)]
 struct State {
-    /// Emplacement de l'opération longue : rendu avant la réponse (`slot.rs`), alors que
-    /// `thread.is_finished()` ne devient vrai qu'après et ferait refuser à tort la requête suivante.
+    /// Released before the response (`slot.rs`), while `thread.is_finished()` only becomes true afterwards
+    /// and would wrongly refuse the next request.
     slot: JobSlot,
     job: Option<JobHandle>,
     watch: Option<WatchHandle>,
@@ -130,8 +130,7 @@ fn handle(line: &str, cfg: &Config, out: &Out, state: &mut State) {
     }
 }
 
-/// Boucle du service : lit les requêtes jusqu'à la fin de l'entrée, puis annule l'opération en cours
-/// et s'arrête. Rend le code de sortie.
+/// Reads requests until end of input, then cancels the running operation and stops. Returns the exit code.
 pub(crate) fn serve(
     input: impl BufRead + Send + 'static,
     output: Box<dyn Write + Send>,
@@ -154,7 +153,7 @@ pub(crate) fn serve(
             Err(RecvTimeoutError::Disconnected) => break,
         }
     }
-    // Client parti ou arrêt demandé : l'opération en cours s'arrête entre deux blocs et répond.
+    // Client gone or stop asked: the running operation stops between two blocks and answers.
     if let Some(job) = state.job.take() {
         job.cancel.store(true, Ordering::SeqCst);
         let _ = job.thread.join();
@@ -163,11 +162,11 @@ pub(crate) fn serve(
     if interrupted { EXIT_CANCELLED } else { 0 }
 }
 
-/// Fréquence à laquelle la boucle regarde si un arrêt a été demandé pendant qu'elle attend une requête.
+/// How often the loop checks for a stop while waiting for a request.
 const INTERRUPT_POLL: Duration = Duration::from_millis(100);
 
-/// Lit l'entrée sur un fil à part : la boucle du service ne reste jamais bloquée sur une lecture et
-/// voit un arrêt demandé même quand le client se tait.
+/// On a separate thread: the service loop never blocks on a read and sees a stop even when the client is
+/// silent.
 fn read_lines(input: impl BufRead + Send + 'static) -> Receiver<String> {
     let (sender, receiver) = mpsc::channel();
     std::thread::spawn(move || {

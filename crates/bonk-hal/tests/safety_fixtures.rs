@@ -10,7 +10,7 @@ use serde_json::Value;
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Fixture {
-    // Lu pour être validé par `deny_unknown_fields`, utile au lecteur du fichier seulement.
+    // Read only so `deny_unknown_fields` validates it; useful to readers of the file.
     #[allow(dead_code)]
     description: String,
     disks: Vec<Disk>,
@@ -24,7 +24,7 @@ struct Scenario {
     #[serde(default)]
     options: FilterOptions,
     expected: Option<BTreeMap<String, Value>>,
-    /// Reprend les verdicts d'un autre jeu : les réglages ouverts ne doivent pas lever une exclusion.
+    /// Reuses another set's verdicts: open settings must not lift an exclusion.
     same_as: Option<String>,
 }
 
@@ -86,7 +86,7 @@ fn check_fixture(path: &PathBuf) -> Result<Vec<String>, Box<dyn Error>> {
 
         for disk in &fixture.disks {
             let verdict = evaluate(disk, scenario.options);
-            // L'examen règle par règle donne toujours le même verdict que le filtre lui-même.
+            // The rule-by-rule check always gives the filter's verdict.
             let (traced, trace) = evaluate_traced(disk, scenario.options);
             if traced != verdict || trace.is_empty() {
                 failures.push(format!(

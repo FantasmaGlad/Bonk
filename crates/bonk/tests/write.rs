@@ -32,7 +32,7 @@ fn bonk(args: &[&str]) -> Result<Output, std::io::Error> {
     Command::new(env!("CARGO_BIN_EXE_bonk")).args(args).output()
 }
 
-/// Motif reconnaissable, avec une signature d'amorçage : l'analyse y voit une image de disque.
+/// Recognizable pattern with a boot signature: the analysis sees a disk image.
 fn image(len: usize) -> Vec<u8> {
     let mut data: Vec<u8> = (0..len).map(|i| (i * 7 % 253) as u8).collect();
     if len >= 512 {
@@ -79,7 +79,7 @@ fn ecriture_simulee_d_une_image_brute_puis_verification() -> Resultat {
         "{out}"
     );
 
-    // Comparaison ultérieure sans écriture.
+    // Later comparison, writing nothing.
     let verify = bonk(&[
         "verify",
         "--simulate",
@@ -89,7 +89,7 @@ fn ecriture_simulee_d_une_image_brute_puis_verification() -> Resultat {
         "none",
     ])?;
     assert_eq!(verify.status.code(), Some(0), "{}", texte(&verify.stderr));
-    // Un octet qui change : code 4 et son identifiant.
+    // A changed byte: code 4 and its id.
     let mut tampered = ecrit;
     tampered[1000] ^= 1;
     fs::write(&cible, tampered)?;
@@ -169,13 +169,13 @@ fn garde_fous_de_la_ligne_de_commande() -> Resultat {
     fs::write(&source, image(1 << 20))?;
     let (s, c) = (chemin(&source), chemin(&cible));
 
-    // Sans --yes : usage, rien n'est créé.
+    // Without --yes: usage error, nothing created.
     let sortie = bonk(&["write", "--simulate", &c, &s, "--size", "2097152"])?;
     assert_eq!(sortie.status.code(), Some(2));
     assert!(texte(&sortie.stderr).trim_end().ends_with("[E2004]"));
     assert!(!cible.exists());
 
-    // --dry-run : le plan, rien n'est créé.
+    // --dry-run: the plan, nothing created.
     let sortie = bonk(&[
         "write",
         "--simulate",
@@ -192,19 +192,19 @@ fn garde_fous_de_la_ligne_de_commande() -> Resultat {
     assert_eq!(plan["steps"][0], "write");
     assert!(!cible.exists());
 
-    // Image plus grande que la cible : code 6, rien n'est créé.
+    // Image larger than the target: code 6, nothing created.
     let sortie = bonk(&["write", "--simulate", &c, &s, "--size", "524288", "--yes"])?;
     assert_eq!(sortie.status.code(), Some(6));
     assert!(texte(&sortie.stderr).trim_end().ends_with("[E3003]"));
     assert!(!cible.exists());
 
-    // Taille de la cible inconnue : usage clair.
+    // Unknown target size: clear usage error.
     let sortie = bonk(&["write", "--simulate", &c, &s, "--yes"])?;
-    // L'image brute donne sa taille : la cible est créée à cette taille.
+    // A raw image gives its size: the target is created at that size.
     assert_eq!(sortie.status.code(), Some(0), "{}", texte(&sortie.stderr));
     assert_eq!(fs::metadata(&cible)?.len(), 1 << 20);
 
-    // Format non pris en charge : code 6 et dit quoi faire.
+    // Unsupported format: code 6, and what to do.
     let bz = dir.file("src.bz2");
     fs::write(&bz, b"BZh91AY&SYxxxxxxxxxxxxxxxx")?;
     let sortie = bonk(&[
@@ -223,12 +223,12 @@ fn garde_fous_de_la_ligne_de_commande() -> Resultat {
         "{err}"
     );
 
-    // Image illisible.
+    // Unreadable image.
     let sortie = bonk(&["write", "--simulate", &c, "/n/existe/pas.img", "--yes"])?;
     assert_eq!(sortie.status.code(), Some(6));
     assert!(texte(&sortie.stderr).trim_end().ends_with("[E3001]"));
 
-    // Un disque ne se désigne jamais par son chemin : aucun disque ne répond à « /dev/sda ».
+    // A disk is never named by its path: no disk answers to /dev/sda.
     let sortie = bonk(&["write", "/dev/sda", &s, "--yes"])?;
     assert_ne!(sortie.status.code(), Some(0));
     Ok(())
@@ -301,7 +301,7 @@ fn trace_io_journalise_les_acces_sans_les_donnees() -> Resultat {
             .iter()
             .all(|e| e["fields"]["crc32"].is_string() && e["fields"]["micros"].is_number())
     );
-    // Par défaut, aucun octet de l'image dans le journal ; avec =data, le début seulement.
+    // By default no image byte in the log; with =data, only the head.
     assert!(acces.iter().all(|e| e["fields"]["head"] == ""));
     let avec = bonk(&[
         "-vv",
@@ -335,7 +335,7 @@ fn reparation_du_gpt_apres_ecriture_sur_un_support_plus_grand() -> Resultat {
         ),
     )?;
     let (s, c) = (chemin(&source), chemin(&cible));
-    // Cible deux fois plus grande que l'image : le GPT de secours n'est plus à la fin.
+    // Target twice the image size: the backup GPT is no longer at the end.
     let sortie = bonk(&[
         "write",
         "--simulate",
@@ -366,7 +366,7 @@ fn reparation_du_gpt_apres_ecriture_sur_un_support_plus_grand() -> Resultat {
     assert!(graves.is_empty(), "{graves:?}");
     assert_eq!(layout["gpt"]["backup"]["read_at_lba"], 8191);
 
-    // Sans réparation demandée, l'anomalie reste visible, et `repair-gpt` la corrige ensuite.
+    // Without the repair the anomaly stays visible, and `repair-gpt` fixes it afterwards.
     let brute = dir.file("brute.img");
     let sortie = bonk(&[
         "write",
@@ -407,7 +407,7 @@ fn reparation_du_gpt_apres_ecriture_sur_un_support_plus_grand() -> Resultat {
         a.iter()
             .all(|c| c != "gpt_backup_not_at_end" && c != "gpt_backup_missing")
     }));
-    // Une seconde fois : rien à faire.
+    // A second time: nothing to do.
     let encore = bonk(&[
         "repair-gpt",
         "--simulate",
@@ -460,7 +460,7 @@ fn une_empreinte_juste_est_acceptee_et_annoncee() -> Resultat {
     let dossier = Dossier::new("empreinte-juste")?;
     let source = dossier.file("image.img");
     std::fs::write(&source, image(1 << 20))?;
-    // Empreinte donnée par une première écriture sans contrôle : le chemin testé est celui du contrôle.
+    // Hash from a first unchecked write: the path under test is the checked one.
     let premiere = bonk(&[
         "write",
         "--simulate",
@@ -511,7 +511,7 @@ fn une_empreinte_mal_formee_est_une_erreur_d_usage() -> Resultat {
     Ok(())
 }
 
-/// Des données sans structure : ce que produit un mauvais téléchargement.
+/// Structureless data, as a bad download gives.
 fn donnees() -> Vec<u8> {
     vec![0x5A; 1 << 16]
 }
@@ -547,7 +547,7 @@ fn des_donnees_sans_amorcage_sont_refusees_sauf_en_mode_brut() -> Resultat {
 #[test]
 fn une_image_tronquee_est_refusee_meme_avec_un_support_plus_grand() -> Resultat {
     let dossier = Dossier::new("tronquee")?;
-    // Une ISO hybride de 16 Mio annoncés, dont il ne reste que 1 Mio.
+    // A 16 MiB hybrid ISO of which 1 MiB is left.
     let mut data = image(1 << 20);
     let primaire = 16 * 2048;
     data[primaire] = 1;

@@ -102,7 +102,7 @@ impl Platform for Windows {
     fn capabilities(&self) -> Vec<Capability> {
         let mut all = native_capabilities(Capability::yes("elevate"));
         for capability in &mut all {
-            // NTFS passe par `Format-Volume`, présent sur tout Windows pris en charge.
+            // NTFS goes through `Format-Volume`, present on every supported Windows.
             if capability.name == "format.ntfs" {
                 *capability = Capability::yes(&capability.name);
             }
@@ -141,16 +141,15 @@ impl Platform for Windows {
     }
 }
 
-/// Passer par le helper ? Sans droits et si l'élévation est permise. `BONK_WINDOWS_HELPER=always` l'impose à
-/// un processus déjà élevé : un runner de CI n'a aucun moyen de lancer Bonk sans droits, et le chemin complet
-/// doit y être essayé.
+/// Without rights and when elevation is allowed. `BONK_WINDOWS_HELPER=always` forces it on an elevated
+/// process: a CI runner cannot start Bonk without rights, and the full path must be tried there.
 fn through_helper(elevation: Elevation) -> bool {
     elevation == Elevation::Auto
         && (!is_elevated()
             || std::env::var_os("BONK_WINDOWS_HELPER").is_some_and(|v| v == "always"))
 }
 
-/// Le processus tourne-t-il élevé ? Illisible : non, la fenêtre s'ouvre et l'écriture sera refusée.
+/// Unreadable means no: the window opens and the write will be refused.
 fn is_elevated() -> bool {
     use windows_sys::Win32::Security::{
         GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation,
@@ -158,14 +157,14 @@ fn is_elevated() -> bool {
     use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
     let mut token = null_mut();
-    // SAFETY : pseudo-poignée du processus ; `token` reçoit une poignée fermée par `Handle`.
+    // SAFETY: process pseudo-handle; `token` receives a handle closed by `Handle`.
     if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &raw mut token) } == 0 {
         return false;
     }
     let token = Handle(token);
     let mut elevation = TOKEN_ELEVATION::default();
     let mut returned = 0u32;
-    // SAFETY : sortie valide pour la taille annoncée.
+    // SAFETY: output valid for the declared size.
     let done = unsafe {
         GetTokenInformation(
             token.0,

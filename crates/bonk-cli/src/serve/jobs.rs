@@ -61,7 +61,7 @@ pub(super) enum Task {
     Format(FormatJob),
 }
 
-/// Convertit la requête en tâche typée ; une erreur de paramètre répond sans rien démarrer.
+/// A parameter error answers without starting anything.
 pub(super) fn prepare(kind: Kind, params: &Value, cfg: &Config) -> Result<Task, Failure> {
     let p: TransferParams = parse(params)?;
     let options = match kind {
@@ -154,7 +154,7 @@ pub(super) fn start_job(
             "a write operation is already running (see 'cancel')",
         ));
     };
-    // Les paramètres sont validés tout de suite : une erreur de requête répond sans démarrer.
+    // Parameters are validated at once: a request error answers without starting.
     let task = prepare(kind, params, cfg)?;
     let cancel = Arc::new(AtomicBool::new(false));
     let (enumerate_fn, make_io) = (Arc::clone(&cfg.enumerate), Arc::clone(&cfg.make_io));
@@ -216,7 +216,7 @@ pub(super) fn start_watch(
                 out.send(&json!({"event": "disks_changed", "initial": last.is_none(), "report": current}));
                 last = Some(current);
             }
-            // Attente par petits pas : l'arrêt est pris en compte sans attendre tout l'intervalle.
+            // Small steps: a stop is seen without waiting the whole interval.
             let mut waited = Duration::ZERO;
             while waited < interval && !flag.load(Ordering::SeqCst) {
                 std::thread::sleep(Duration::from_millis(20));

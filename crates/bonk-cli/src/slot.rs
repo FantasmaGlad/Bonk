@@ -9,7 +9,7 @@ impl JobSlot {
         self.0.load(Ordering::SeqCst)
     }
 
-    /// Prend l'emplacement s'il est libre, en une seule opération atomique.
+    /// In one atomic operation.
     pub(crate) fn try_acquire(&self) -> Option<SlotGuard> {
         self.0
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
@@ -18,11 +18,11 @@ impl JobSlot {
     }
 }
 
-/// Possession de l'emplacement ; rendu à la destruction, y compris si l'opération panique.
+/// Released on drop, even if the operation panics.
 pub(crate) struct SlotGuard(Arc<AtomicBool>);
 
 impl SlotGuard {
-    /// Rend l'emplacement, puis exécute `respond` : c'est l'ordre qui garantit l'invariant.
+    /// Releases, then runs `respond`: this order is what guarantees the invariant.
     pub(crate) fn release_then<R>(self, respond: impl FnOnce() -> R) -> R {
         drop(self);
         respond()
@@ -62,7 +62,7 @@ mod tests {
     fn la_reponse_part_apres_la_liberation() -> Resultat {
         let slot = JobSlot::default();
         let guard = slot.try_acquire().ok_or("emplacement libre attendu")?;
-        // Le client réagit à la réponse en redemandant l'emplacement : il doit l'obtenir.
+        // The client reacts to the response by asking for the slot again: it must get it.
         let obtenu = guard.release_then(|| slot.try_acquire().is_some());
         assert!(obtenu);
         Ok(())
@@ -94,8 +94,7 @@ mod tests {
                 })
             })
             .collect();
-        // Les possessions restent vivantes jusqu'à la fin du comptage : un perdant en retard ne doit pas
-        // trouver l'emplacement rendu par le gagnant.
+        // Guards stay alive until counting ends: a late loser must not find the slot the winner released.
         let mut resultats = Vec::new();
         for fil in fils {
             resultats.push(fil.join().map_err(|_| "fil en panique")?);

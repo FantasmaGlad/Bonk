@@ -10,26 +10,25 @@ use ureq::http::{StatusCode, header};
 use ureq::tls::{RootCerts, TlsConfig};
 use ureq::{Agent, Proxy};
 
-/// Essais sans un octet de plus avant d'abandonner.
+/// Attempts without a single new byte before giving up.
 const ATTEMPTS_WITHOUT_PROGRESS: u32 = 5;
 const CHUNK: usize = 256 * 1024;
-/// Blocs en attente entre les deux fils : borne la mémoire si le disque est plus lent que le réseau.
+/// Chunks queued between the two threads: bounds memory when the disk is slower than the network.
 const QUEUED_CHUNKS: usize = 8;
-/// Fréquence à laquelle l'attente regarde si l'annulation a été demandée.
 const POLL: Duration = Duration::from_millis(100);
 pub const SILENCE_LIMIT: Duration = Duration::from_secs(60);
-/// Un fichier d'empreintes tient largement là-dedans ; le plafond protège d'une URL qui se trompe.
+/// A checksum file fits well within this; the cap guards against a wrong URL.
 const TEXT_LIMIT: u64 = 1 << 20;
 
 #[derive(Debug)]
 pub enum DownloadError {
-    /// Ni `https://`, ni `http://` vers cette machine.
+    /// Neither `https://` nor `http://` to this machine.
     Scheme(String),
     Refused {
         url: String,
         status: u16,
     },
-    /// Réseau ou serveur, après tous les essais.
+    /// After every attempt.
     Network(String),
     Inconsistent(String),
     Io(io::Error),
@@ -56,24 +55,23 @@ impl From<io::Error> for DownloadError {
     }
 }
 
-/// Avancement : octets présents dans le fichier, taille totale si le serveur la donne.
+/// Bytes in the file, and the total when the server gives it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Advance {
     pub done: u64,
     pub total: Option<u64>,
 }
 
-/// Ce que l'appelant règle ; les délais sont courts dans les tests.
+/// Delays are short in tests.
 pub struct Hooks<'a> {
-    /// Rappelé à chaque bloc écrit.
     pub progress: &'a mut dyn FnMut(Advance),
     pub cancelled: &'a dyn Fn() -> bool,
-    /// Attente avant de réessayer, selon le numéro de l'essai.
+    /// Wait before retrying, by attempt number.
     pub pause: &'a dyn Fn(u32),
     pub silence_limit: Duration,
 }
 
-/// `https://`, ou `http://` vers cette machine : les redirections sont soumises à la même règle.
+/// Redirections follow the same rule.
 fn https_required(url: &str) -> Result<bool, DownloadError> {
     if url.starts_with("https://") {
         return Ok(true);
@@ -95,8 +93,8 @@ pub fn is_url(text: &str) -> bool {
     text.starts_with("https://") || text.starts_with("http://")
 }
 
-/// Nom du fichier désigné par une URL : le dernier segment du chemin, sans requête ni fragment. `None` s'il
-/// est vide ou encodé : un nom venu du réseau ne doit pas pouvoir sortir du dossier de cache.
+/// Last path segment, without query or fragment. `None` if empty or encoded: a name from the network must not
+/// escape the cache directory.
 #[must_use]
 pub fn file_name(url: &str) -> Option<&str> {
     let path = url.split(['?', '#']).next()?;
@@ -107,15 +105,14 @@ pub fn file_name(url: &str) -> Option<&str> {
     safe.then_some(name)
 }
 
-/// Proxy de tout le processus. Un réglage unique : un téléchargement ne doit pas pouvoir l'oublier.
+/// One setting for the whole process: no download can forget it.
 static PROXY: RwLock<Option<Proxy>> = RwLock::new(None);
 
-/// Fait passer tout le réseau de Bonk par ce proxy. `socks5h://` seul : avec un autre schéma, les noms seraient
-/// résolus hors du proxy, et l'anonymat promis par Tor serait faux. Un proxy injoignable donne une erreur,
-/// jamais une connexion directe.
+/// `socks5h://` only: any other scheme resolves names outside the proxy, and the anonymity Tor promises would
+/// be false. An unreachable proxy is an error, never a direct connection.
 ///
 /// # Errors
-/// Adresse mal formée, ou autre schéma que `socks5h://`.
+/// Malformed address, or a scheme other than `socks5h://`.
 pub fn set_proxy(url: &str) -> Result<(), String> {
     if !url.starts_with("socks5h://") {
         return Err(format!("{url}: only socks5h:// is accepted"));
@@ -136,25 +133,23 @@ fn agent(https_only: bool) -> Result<Agent, DownloadError> {
         .tls_config(tls)
         .timeout_connect(Some(Duration::from_secs(30)))
         .timeout_recv_response(Some(Duration::from_secs(60)))
-        // 4xx et 5xx se lisent comme des réponses : leur traitement diffère.
+        // 4xx and 5xx are read as responses: they are handled differently.
         .http_status_as_error(false)
         .user_agent(concat!("bonk/", env!("CARGO_PKG_VERSION")))
         .build()
         .new_agent())
 }
 
-/// Lit un petit texte (fichier d'empreintes).
-///
 /// # Errors
-/// Adresse refusée, réponse autre que 200, réseau, texte trop long.
+/// Refused address, status other than 200, network, or text too long.
 pub fn fetch_text(url: &str) -> Result<String, DownloadError> {
     String::from_utf8(fetch_bytes(url)?).map_err(|e| DownloadError::Network(format!("{url}: {e}")))
 }
 
-/// Lit un petit fichier tel quel (manifeste, signature, logo).
+/// Manifest, signature, logo.
 ///
 /// # Errors
-/// Adresse refusée, réponse autre que 200, réseau, fichier trop long.
+/// Refused address, status other than 200, network, or file too long.
 pub fn fetch_bytes(url: &str) -> Result<Vec<u8>, DownloadError> {
     let agent = agent(https_required(url)?)?;
     let mut response = agent
@@ -194,7 +189,8 @@ fn header_text(headers: &ureq::http::HeaderMap, name: header::HeaderName) -> Opt
     headers.get(name)?.to_str().ok().map(str::to_owned)
 }
 
-/// Une réponse lue sur son fil : tête, blocs, puis `End` ou `Failed`. S'arrête dès que l'appelant lâche.
+/// A response read on its own thread: head, chunks, then `End` or `Failed`. Stops as soon as the caller lets
+/// go.
 fn connect(agent: Agent, url: String, from: u64, validator: Option<String>) -> Receiver<Event> {
     let (sender, receiver) = mpsc::sync_channel(QUEUED_CHUNKS);
     std::thread::spawn(move || {
@@ -221,7 +217,7 @@ fn read_response(
     }
     let response = request.call().map_err(|e| format!("{url}: {e}"))?;
     let headers = response.headers();
-    // Une ETag faible ne garantit pas les mêmes octets : `If-Range` ne l'admet pas.
+    // A weak ETag does not guarantee the same bytes: `If-Range` does not accept it.
     let validator = header_text(headers, header::ETAG)
         .filter(|tag| !tag.starts_with("W/"))
         .or_else(|| header_text(headers, header::LAST_MODIFIED));
@@ -250,14 +246,14 @@ fn read_response(
     }
 }
 
-/// Début et taille totale d'une réponse partielle : `bytes 100-199/200`, le total pouvant être `*`.
+/// `bytes 100-199/200`; the total may be `*`.
 fn parse_content_range(value: &str) -> Option<(u64, Option<u64>)> {
     let (range, total) = value.strip_prefix("bytes ")?.split_once('/')?;
     let (start, _) = range.split_once('-')?;
     Some((start.parse().ok()?, total.parse().ok()))
 }
 
-/// Total annoncé par une réponse 416 : `bytes */200`.
+/// `bytes */200` in a 416 response.
 fn unsatisfied_total(value: &str) -> Option<u64> {
     value.strip_prefix("bytes */")?.parse().ok()
 }
@@ -277,7 +273,7 @@ struct Partial {
 
 impl Partial {
     fn open(part: &Path) -> io::Result<Self> {
-        // Pas d'ouverture en ajout : Windows n'y permettrait pas de tronquer le fichier.
+        // Not in append mode: Windows would not allow truncating the file.
         let mut file = OpenOptions::new()
             .create(true)
             .truncate(false)
@@ -316,7 +312,7 @@ impl Partial {
 
     fn finish(self, part: &Path, dest: &Path) -> io::Result<()> {
         self.file.sync_all()?;
-        // Fermé avant de renommer : Windows refuse de renommer un fichier ouvert.
+        // Closed before renaming: Windows refuses to rename an open file.
         drop(self.file);
         fs::rename(part, dest)?;
         match fs::remove_file(&self.validator_path) {
@@ -328,15 +324,14 @@ impl Partial {
 
 enum Attempt {
     Complete,
-    /// À réessayer : le message dit pourquoi.
     Retry(String),
 }
 
-/// Télécharge `url` vers `dest`, en reprenant `<dest>.part` s'il existe. Réessaie seul tant que le réseau
-/// donne de nouveaux octets ; après une coupure définitive, le fichier partiel reste pour la fois suivante.
+/// Resumes `<dest>.part` if present. Retries alone while the network gives new bytes; after a final cut the
+/// partial file stays for next time.
 ///
 /// # Errors
-/// Adresse refusée, réponse refusée, réseau après tous les essais, écriture locale, annulation.
+/// Refused address or response, network after every attempt, local write, or cancel.
 pub fn download(url: &str, dest: &Path, hooks: &mut Hooks<'_>) -> Result<u64, DownloadError> {
     let agent = agent(https_required(url)?)?;
     if let Some(parent) = dest.parent() {
@@ -396,7 +391,7 @@ fn attempt(
     };
     let total = match head.status {
         200 => {
-            // Reprise refusée ou fichier changé : tout recommence.
+            // Resume refused or file changed: start over.
             partial.restart()?;
             partial.remember(head.validator)?;
             head.content_length

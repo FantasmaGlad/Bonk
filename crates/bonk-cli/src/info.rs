@@ -8,12 +8,12 @@ use serde::Serialize;
 use crate::config::ViewDefaults;
 use crate::list::Entry;
 
-/// Version du format de la sortie `--json`, incrémentée à chaque changement incompatible.
+/// Bumped at each incompatible change.
 const JSON_SCHEMA_VERSION: u32 = 1;
 
 /// Detail of a disk (read-only)
 #[derive(Debug, Args)]
-// `long_about = None` : sans lui, clap reprendrait le commentaire ci-dessus comme texte long.
+// Without it clap would reuse the doc comment above as long help.
 #[command(long_about = None)]
 pub(crate) struct InfoArgs {
     /// Stable identifier of the disk (see `bonk list --all`) or its path (`/dev/sdb`)
@@ -44,8 +44,7 @@ struct Report<'a> {
     disk: Entry<'a>,
 }
 
-/// Le disque désigné : l'identifiant stable d'abord, le chemin en repli, admis en lecture seule ; les
-/// commandes d'écriture n'acceptent que l'identifiant.
+/// Stable id first, path as a fallback, allowed for reads; write commands only accept the id.
 pub(crate) fn find<'a>(disks: &'a [Disk], target: &str) -> Option<&'a Disk> {
     disks
         .iter()
@@ -57,7 +56,7 @@ pub(crate) fn schema() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(Report)).unwrap_or_default()
 }
 
-/// Le rapport `info`, en JSON, pour le service ; `None` si aucun disque ne répond à `target`.
+/// For the service; `None` when no disk matches `target`.
 pub(crate) fn report_value(
     target: &str,
     options: FilterOptions,

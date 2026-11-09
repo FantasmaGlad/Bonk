@@ -71,9 +71,8 @@ impl fmt::Display for OpenTargetError {
 
 impl std::error::Error for OpenTargetError {}
 
-/// Retrouve la cible par son identifiant stable dans une énumération fraîche, la fait juger par le
-/// filtre et vérifie son identité, sans rien toucher : appelée au choix puis de nouveau juste avant
-/// l'ouverture. Seul le verdict « proposé » autorise la cible.
+/// Finds the target by stable id in a fresh enumeration, runs the filter and checks its identity, touching
+/// nothing: called at choice time and again right before opening. Only an offered verdict allows the target.
 pub fn reverify<'a>(
     expected: &TargetIdentity,
     disks: &'a [Disk],
@@ -104,7 +103,7 @@ pub fn mount_points(disk: &Disk) -> Vec<String> {
         .iter()
         .flat_map(|partition| partition.mount_points.iter().cloned())
         .collect();
-    // La valeur départage les longueurs égales : `dedup` ne retire que des voisins.
+    // The value breaks ties of equal length: `dedup` only removes neighbours.
     mounts.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
     mounts.dedup();
     mounts
@@ -156,8 +155,8 @@ mod tests {
         )
     }
 
-    /// Sans numéro de série, une clé identique branchée sur un autre port n'est pas la même cible ; avec un
-    /// numéro de série, le port ne compte pas.
+    /// Without a serial, the same model on another port is another target; with a serial, the port does not
+    /// count.
     #[test]
     fn sans_serie_l_emplacement_departage_deux_cles_identiques() {
         let mut first = usb();
@@ -216,7 +215,7 @@ mod tests {
     #[test]
     fn un_disque_devenu_interdit_est_refuse_meme_si_l_identite_est_la_meme() {
         let expected = TargetIdentity::from(&usb());
-        // La clé est maintenant montée comme système (ou hors des chemins utilisateur).
+        // The key is now mounted as a system disk.
         let mut now = usb();
         now.partitions = vec![part("/dev/sdb1", &["/mnt/cle"], false)];
         let disks = vec![now];
@@ -224,7 +223,7 @@ mod tests {
             reverify(&expected, &disks, FilterOptions::default()),
             Err(OpenTargetError::Refused(Eligibility::Excluded { .. }))
         ));
-        // Un disque interne n'est écrivable que si l'option l'autorise.
+        // An internal disk is writable only when the option allows it.
         let internal = disk("sata-x", "S9", 1 << 33, Bus::Sata, vec![]);
         let expected = TargetIdentity::from(&internal);
         let disks = vec![internal];

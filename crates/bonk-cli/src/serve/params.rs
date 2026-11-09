@@ -76,9 +76,9 @@ pub(super) struct TransferParams {
     pub(super) target: String,
     pub(super) source: Option<PathBuf>,
     pub(super) image: Option<String>,
-    /// Adresse du catalogue ; sa signature est contrôlée d'où qu'il vienne.
+    /// Its signature is checked wherever it comes from.
     pub(super) catalog_url: Option<String>,
-    /// La cible est un fichier image (créé avec `size` s'il n'existe pas).
+    /// The target is an image file, created with `size` if missing.
     pub(super) simulate: bool,
     pub(super) size: Option<u64>,
     pub(super) yes: bool,
@@ -91,14 +91,14 @@ pub(super) struct TransferParams {
     pub(super) sha256: Option<String>,
     pub(super) sha256_file: Option<String>,
     pub(super) cache_dir: Option<PathBuf>,
-    /// `auto` (par défaut), `raw` ou `extract`.
+    /// `auto` (default), `raw` or `extract`.
     pub(super) mode: Option<String>,
-    /// `never` (par défaut : personne devant l'écran) ou `auto`.
+    /// `never` (default: nobody at the screen) or `auto`.
     pub(super) elevate: Option<String>,
     pub(super) force: bool,
-    /// Système de fichiers de `disk.format` : `fat32`, `exfat`, `ntfs`, `ext4`.
+    /// `disk.format` filesystem: `fat32`, `exfat`, `ntfs`, `ext4`.
     pub(super) fs: Option<String>,
-    /// Table de `disk.format` : `gpt` (par défaut) ou `mbr`.
+    /// `disk.format` table: `gpt` (default) or `mbr`.
     pub(super) table: Option<String>,
     pub(super) label: Option<String>,
 }
@@ -111,7 +111,7 @@ impl TransferParams {
         }
     }
 
-    /// Pour écrire, seule la requête compte : un réglage n'autorise jamais à effacer un disque de plus.
+    /// To write, only the request counts: a setting never allows erasing one more disk.
     pub(super) fn write_options(&self) -> FilterOptions {
         FilterOptions {
             show_internal: self.show_internal,
@@ -184,7 +184,7 @@ impl TransferParams {
         }
     }
 
-    /// `default` quand la requête n'en donne pas : MBR pour une clé Windows, GPT pour un formatage.
+    /// `default` when the request gives none: MBR for a Windows drive, GPT for a format.
     pub(super) fn table(&self, default: TableKind) -> Result<TableKind, Failure> {
         match self.table.as_deref() {
             None => Ok(default),

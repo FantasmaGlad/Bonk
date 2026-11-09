@@ -14,15 +14,14 @@ const MANAGER: &str = "org.freedesktop.UDisks2.Manager";
 const BLOCK: &str = "org.freedesktop.UDisks2.Block";
 const FILESYSTEM: &str = "org.freedesktop.UDisks2.Filesystem";
 const SUDO_HINT: &str = "run again with sudo";
-/// Au-delà, une demande d'autorisation restée sans réponse est abandonnée : personne n'est peut-être
-/// devant l'écran, et l'opération ne doit pas attendre sans fin.
+/// An unanswered authorization request is abandoned after this: nobody may be at the screen, and the
+/// operation must not wait forever.
 const AUTHORIZATION_LIMIT: Duration = Duration::from_secs(5 * 60);
-/// Fréquence à laquelle l'attente regarde si l'annulation a été demandée.
 const AUTHORIZATION_POLL: Duration = Duration::from_millis(100);
 
 type Options<'a> = HashMap<&'a str, Variant<'a>>;
 
-/// Traduit un nom d'erreur D-Bus en phrase ; `None` : erreur sans remède connu.
+/// `None`: no known remedy.
 fn advice(error_name: &str) -> Option<String> {
     match error_name {
         "org.freedesktop.UDisks2.Error.NotAuthorizedDismissed" => {
@@ -61,7 +60,6 @@ fn connect() -> Result<Connection, BlockError> {
     block_on(Connection::system()).map_err(from_zbus)
 }
 
-/// L'objet UDisks2 d'un périphérique, d'après son chemin.
 fn resolve(connection: &Connection, device: &Path) -> Result<OwnedObjectPath, BlockError> {
     let path = device
         .to_str()
@@ -83,8 +81,8 @@ fn resolve(connection: &Connection, device: &Path) -> Result<OwnedObjectPath, Bl
         .ok_or_else(|| denied(format!("{} unknown to UDisks2", device.display())))
 }
 
-/// Comme [`resolve`], pour une partition que le noyau vient de créer : le service la découvre après lui.
-/// Constaté sur la clé de test : sans attente, `ResolveDevice` ne la connaît pas encore.
+/// For a partition the kernel just created: the service finds it after the kernel. Seen on the test key:
+/// without waiting, `ResolveDevice` does not know it yet.
 fn resolve_new(connection: &Connection, device: &Path) -> Result<OwnedObjectPath, BlockError> {
     const LOOKS: u32 = 40;
     const PAUSE: Duration = Duration::from_millis(250);
@@ -99,9 +97,9 @@ fn resolve_new(connection: &Connection, device: &Path) -> Result<OwnedObjectPath
     result
 }
 
-/// Demande au service d'ouvrir `device`. `mode` : `r` ou `rw` ; `flags` : ceux d'`open(2)`, hors mode.
-/// L'appel attend la réponse de l'utilisateur à polkit : il tourne sur un fil à part, que l'on cesse
-/// d'attendre sur annulation (`ErrorKind::Interrupted`) ou après [`AUTHORIZATION_LIMIT`].
+/// `mode`: `r` or `rw`; `flags`: `open(2)` flags without the mode. The call waits for the user's polkit
+/// answer on a separate thread, abandoned on cancel (`ErrorKind::Interrupted`) or after
+/// [`AUTHORIZATION_LIMIT`].
 pub(super) fn open(
     device: &Path,
     mode: &str,
@@ -111,7 +109,7 @@ pub(super) fn open(
     let (sender, answer) = mpsc::channel();
     let (device, mode) = (device.to_path_buf(), mode.to_owned());
     std::thread::spawn(move || {
-        // Une réponse arrivée après l'abandon est jetée : le descripteur reçu se ferme.
+        // An answer after giving up is dropped: the received descriptor closes.
         let _ = sender.send(open_now(&device, &mode, flags));
     });
     let polls = u32::try_from(AUTHORIZATION_LIMIT.as_millis() / AUTHORIZATION_POLL.as_millis())
@@ -172,7 +170,7 @@ fn open_now(device: &Path, mode: &str, flags: i32) -> Result<OwnedFd, BlockError
     Ok(fd.into())
 }
 
-/// Le service répond-il ? Sinon, le message dit ce qui manque.
+/// Otherwise the message says what is missing.
 pub(super) fn reachable() -> Result<(), String> {
     connect()
         .and_then(|connection| {
@@ -210,8 +208,8 @@ pub(super) fn can_format(kind: &str) -> Result<(), String> {
     }
 }
 
-/// Formate une partition par le service, qui appelle `mkfs.*`. `take_ownership` : le système de fichiers
-/// appartiendra à l'appelant, sans quoi une partition ext4 ne serait écrivable que par root.
+/// Through the service, which runs `mkfs.*`. `take_ownership`: the filesystem belongs to the caller,
+/// otherwise an ext4 partition would be writable by root only.
 pub(super) fn format(
     partition: &Path,
     kind: &str,
@@ -242,8 +240,8 @@ pub(super) fn format(
     Ok(())
 }
 
-/// Fait relire la table de partitions par le service : l'appel système exige des droits que l'appelant n'a
-/// pas, et le noyau ne le fait de lui-même qu'en tâche de fond, après un délai sans borne connue.
+/// Through the service: the system call needs rights the caller lacks, and the kernel only does it in the
+/// background after an unbounded delay.
 pub(super) fn rescan(disk: &Path, interactive: bool) -> Result<(), BlockError> {
     let connection = connect()?;
     let object = resolve(&connection, disk)?;
@@ -262,7 +260,7 @@ pub(super) fn rescan(disk: &Path, interactive: bool) -> Result<(), BlockError> {
     Ok(())
 }
 
-/// Démonte une partition par le service, quand `umount` n'en a pas le droit.
+/// Through the service, when `umount` is not allowed.
 pub(super) fn unmount(partition: &Path) -> Result<(), BlockError> {
     let connection = connect()?;
     let object = resolve(&connection, partition)?;

@@ -135,11 +135,11 @@ fn un_seul_disque_propose_se_selectionne_une_fois() {
     let _ = app.update(Message::Loaded(Ok(sample())));
     assert_eq!(app.selected.as_deref(), Some("usb-cle"));
     assert!(matches!(app.write, WriteState::Draft { .. }));
-    // Écrire reste un geste : rien n'est lancé, et une désélection tient malgré l'actualisation.
+    // Writing stays a deliberate act: nothing starts, and a deselection holds despite the refresh.
     let _ = app.update(Message::Select("usb-cle".to_owned()));
     let _ = app.update(Message::Loaded(Ok(sample())));
     assert_eq!(app.selected, None);
-    // Deux disques : aucun choix à la place de l'utilisateur.
+    // Two disks: no choice made for the user.
     let mut deux = App {
         model: Model {
             auto_select: true,

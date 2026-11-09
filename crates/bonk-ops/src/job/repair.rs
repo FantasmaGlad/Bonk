@@ -16,8 +16,8 @@ pub struct RepairJob {
     pub dry_run: bool,
     pub yes: bool,
     pub elevation: Elevation,
-    /// Tient lieu de `yes` et autorise un disque interne déjà admis par les options du filtre. Sans
-    /// aucune question : une commande doit pouvoir tourner sans personne devant l'écran.
+    /// Stands for `yes` and allows an internal disk the filter options already admit. No question: a command
+    /// must run with nobody at the screen.
     pub force: bool,
 }
 
@@ -74,7 +74,7 @@ pub fn repair(job: &RepairJob, deps: &Deps<'_>) -> Result<RepairDone, JobError> 
         None
     };
     if needed {
-        // Relue après vidage : une clé qui n'a pas gardé les tables ne doit pas passer pour réparée.
+        // Read back after flushing: a key that did not keep the tables must not look repaired.
         device.flush().map_err(|e| fail(Code::WriteFailed, e))?;
         let _ = device.drop_cache();
     }
@@ -86,7 +86,7 @@ pub fn repair(job: &RepairJob, deps: &Deps<'_>) -> Result<RepairDone, JobError> 
         ));
     }
     drop(device);
-    // Le système relit la table qu'on vient de changer, sinon il garde l'ancienne jusqu'au rebranchement.
+    // The system rereads the changed table, otherwise it keeps the old one until replug.
     if needed && matches!(job.target, Target::Disk(_)) {
         reread_table(Path::new(&info.path), job.elevation, deps);
     }

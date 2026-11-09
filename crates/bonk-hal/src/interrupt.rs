@@ -18,8 +18,8 @@ fn event_name(pid: u32) -> Vec<u16> {
     format!("Local\\bonk-stop-{pid}\0").encode_utf16().collect()
 }
 
-/// Événement d'arrêt de ce processus, créé une fois et gardé jusqu'à sa fin. Stocké en entier : une
-/// poignée, pointeur brut, ne se partage pas entre fils sans cela.
+/// Created once and kept until exit. Stored as an integer: a raw handle pointer cannot be shared between
+/// threads otherwise.
 #[cfg(windows)]
 static STOP_EVENT: std::sync::OnceLock<isize> = std::sync::OnceLock::new();
 
@@ -27,27 +27,27 @@ static STOP_EVENT: std::sync::OnceLock<isize> = std::sync::OnceLock::new();
 fn install_windows() {
     use windows_sys::Win32::System::Console::SetConsoleCtrlHandler;
     use windows_sys::Win32::System::Threading::{CreateEventW, ResetEvent};
-    // SAFETY : le gestionnaire ne fait qu'une écriture atomique.
+    // SAFETY: the handler only does an atomic store.
     let installed = unsafe { SetConsoleCtrlHandler(Some(on_console_event), 1) };
     if installed == 0 {
         log::warn!(target: "bonk::cli", "Ctrl+C handler not installed: {}", std::io::Error::last_os_error());
     }
     let handle = *STOP_EVENT.get_or_init(|| {
         let name = event_name(std::process::id());
-        // SAFETY : nom terminé par un zéro ; attributs de sécurité par défaut.
+        // SAFETY: zero-terminated name; default security attributes.
         unsafe { CreateEventW(std::ptr::null(), 1, 0, name.as_ptr()) as isize }
     });
     if handle == 0 {
         log::warn!(target: "bonk::cli", "stop event not created: {}", std::io::Error::last_os_error());
     } else {
-        // SAFETY : poignée valide, gardée jusqu'à la fin du processus.
+        // SAFETY: valid handle, kept until exit.
         unsafe {
             ResetEvent(handle as windows_sys::Win32::Foundation::HANDLE);
         }
     }
 }
 
-/// Installe le gestionnaire d'interruption. À appeler au début d'une opération d'écriture.
+/// Call at the start of a write operation.
 pub fn install() {
     REQUESTED.store(false, Ordering::SeqCst);
     #[cfg(windows)]
@@ -55,8 +55,7 @@ pub fn install() {
     #[cfg(unix)]
     {
         let handler = on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t;
-        // SAFETY : `signal` est appelée avec un gestionnaire qui ne fait qu'une écriture atomique,
-        // opération sûre dans un gestionnaire de signal.
+        // SAFETY: the handler only does an atomic store, which is signal-safe.
         unsafe {
             libc::signal(libc::SIGINT, handler);
             libc::signal(libc::SIGTERM, handler);
@@ -64,16 +63,16 @@ pub fn install() {
     }
 }
 
-/// Demande à un autre processus de s'arrêter proprement : il traite la demande entre deux blocs.
+/// Asks another process to stop cleanly; it acts between two blocks.
 ///
 /// # Errors
-/// Sur un système sans moyen d'arrêt : `Unsupported`, pour que l'interface le dise au lieu de sembler
-/// annuler. Ailleurs : le processus n'existe plus ou n'appartient pas à l'utilisateur.
+/// `Unsupported` on a system without a way to stop it, so the interface says so instead of seeming to cancel.
+/// Elsewhere: the process is gone or belongs to another user.
 pub fn stop_process(pid: u32) -> std::io::Result<()> {
     #[cfg(unix)]
     {
         let pid = i32::try_from(pid).map_err(|_| std::io::ErrorKind::InvalidInput)?;
-        // SAFETY : on n'envoie que SIGTERM, sans toucher à la mémoire.
+        // SAFETY: only sends SIGTERM, no memory involved.
         if unsafe { libc::kill(pid, libc::SIGTERM) } == 0 {
             Ok(())
         } else {
@@ -85,12 +84,12 @@ pub fn stop_process(pid: u32) -> std::io::Result<()> {
         use windows_sys::Win32::Foundation::CloseHandle;
         use windows_sys::Win32::System::Threading::{EVENT_MODIFY_STATE, OpenEventW, SetEvent};
         let name = event_name(pid);
-        // SAFETY : nom terminé par un zéro.
+        // SAFETY: zero-terminated name.
         let event = unsafe { OpenEventW(EVENT_MODIFY_STATE, 0, name.as_ptr()) };
         if event.is_null() {
             return Err(std::io::Error::last_os_error());
         }
-        // SAFETY : poignée valide juste ouverte, fermée une seule fois.
+        // SAFETY: valid handle just opened, closed once.
         let done = unsafe {
             let done = SetEvent(event);
             CloseHandle(event);
@@ -117,7 +116,7 @@ pub fn requested() -> bool {
     {
         use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
         use windows_sys::Win32::System::Threading::WaitForSingleObject;
-        // SAFETY : poignée valide jusqu'à la fin du processus ; attente nulle.
+        // SAFETY: handle valid until exit; zero wait.
         let state =
             unsafe { WaitForSingleObject(handle as windows_sys::Win32::Foundation::HANDLE, 0) };
         if state == WAIT_OBJECT_0 {
@@ -143,7 +142,6 @@ mod tests_windows {
     }
 }
 
-// Le test envoie un signal Unix : hors Unix, le module serait vide.
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
@@ -152,12 +150,12 @@ mod tests {
     fn un_signal_leve_le_drapeau() {
         install();
         assert!(!requested());
-        // SAFETY : on s'envoie à soi-même SIGTERM, dont le gestionnaire vient d'être installé.
+        // SAFETY: sends SIGTERM to itself, whose handler was just installed.
         unsafe {
             libc::raise(libc::SIGTERM);
         }
         assert!(requested());
-        // Une nouvelle installation remet le drapeau à zéro pour l'opération suivante.
+        // Installing again resets the flag for the next operation.
         install();
         assert!(!requested());
     }

@@ -1,4 +1,4 @@
-// `fsck.exfat`, seul juge indépendant ici, n'existe en CI que sous Linux.
+// `fsck.exfat`, the only independent judge here, exists in CI on Linux only.
 #![cfg(target_os = "linux")]
 #![allow(clippy::expect_used)]
 
@@ -20,8 +20,8 @@ fn file(path: &str, size: u64) -> NewFile {
     }
 }
 
-/// Une arborescence écrite par Bonk, relue par l'outil officiel : noms longs et accentués, dossiers
-/// imbriqués, fichier vide, fichier sur plusieurs clusters.
+/// A tree written by Bonk, read back by the official tool: long and accented names, nested directories, an
+/// empty file, a file over several clusters.
 #[test]
 fn une_arborescence_exfat_est_acceptee_par_fsck_exfat() {
     if !common::outil_disponible("fsck.exfat") {

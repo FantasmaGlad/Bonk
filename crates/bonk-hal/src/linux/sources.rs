@@ -12,8 +12,7 @@ use super::{LinuxRoots, enumerate};
 pub(super) const CONTENT_LIMIT: usize = 8 * 1024;
 
 thread_local! {
-    // Enregistrement propre au fil d'exécution qui énumère : la fenêtre énumère sur un autre fil et
-    // n'est donc jamais gênée par un `debug sources` en cours.
+    // Per thread: the window enumerates on another thread and is never affected by a running `debug sources`.
     static RECORDER: RefCell<Option<Vec<SourceRead>>> = const { RefCell::new(None) };
 }
 
@@ -66,8 +65,8 @@ pub(super) fn note_read(
     });
 }
 
-/// Enregistre qu'un chemin de `/sys/block` est un lien vers `relative` (chemin canonique du
-/// périphérique, d'où se déduit le bus) : sans lui, une capture rejouée perdrait le bus.
+/// Records that a `/sys/block` path links to `relative`, from which the bus is deduced: without it a replayed
+/// capture would lose the bus.
 pub(super) fn note_link(path: &Path, relative: &Path) {
     let target = relative.display().to_string();
     log::trace!(target: "bonk_hal::linux", path = path.display().to_string().as_str(), target = target.as_str(); "resolved link");
@@ -120,7 +119,6 @@ pub(super) fn traced_list(path: &Path) -> io::Result<Vec<String>> {
     result
 }
 
-/// Énumère comme [`enumerate`] et rend aussi toutes les lectures de sources, pour `bonk debug sources`.
 pub(crate) fn enumerate_recorded(
     roots: &LinuxRoots,
 ) -> (Result<Vec<Disk>, EnumerateError>, Vec<SourceRead>) {
@@ -141,7 +139,7 @@ pub(super) fn read_required(path: &Path) -> Result<String, EnumerateError> {
     traced_read(path).map_err(|e| io_error(path, e))
 }
 
-/// Attribut descriptif : absent ou illisible vaut « inconnu ».
+/// Descriptive attribute: missing or unreadable means unknown.
 pub(super) fn read_optional(path: &Path) -> Option<String> {
     let text = traced_read(path).ok()?;
     let trimmed = text.trim();
@@ -156,8 +154,7 @@ pub(super) fn list_dir(path: &Path) -> Result<Vec<String>, EnumerateError> {
     traced_list(path).map_err(|e| io_error(path, e))
 }
 
-/// Comme [`list_dir`], mais un répertoire absent est vide (`holders` n'existe que pour les disques
-/// que le noyau a rendus visibles).
+/// A missing directory is empty: `holders` only exists for disks the kernel made visible.
 pub(super) fn list_dir_optional(path: &Path) -> Result<Vec<String>, EnumerateError> {
     match traced_list(path) {
         Ok(mut names) => {
@@ -180,7 +177,7 @@ pub(super) fn read_size(dir: &Path) -> Result<u64, EnumerateError> {
         what: path.display().to_string(),
         detail: format!("unreadable size: {:?}", text.trim()),
     })?;
-    // Le noyau exprime toujours `size` en secteurs de 512 octets, quelle que soit la taille logique.
+    // The kernel always gives `size` in 512-byte sectors, whatever the logical size.
     sectors
         .checked_mul(512)
         .ok_or_else(|| EnumerateError::Malformed {

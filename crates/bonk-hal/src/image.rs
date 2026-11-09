@@ -10,8 +10,8 @@ pub enum Access {
     ReadWrite,
 }
 
-/// Le même fichier, quel que soit le chemin qui le désigne : chemins canoniques égaux, ou, sous Unix, même
-/// périphérique et même inode (un lien physique). Un fichier absent n'est jamais le même qu'un autre.
+/// Same file whatever the path: equal canonical paths or, on Unix, same device and inode (hard link). A
+/// missing file is never the same as another.
 #[must_use]
 pub fn same_file(a: &Path, b: &Path) -> bool {
     #[cfg(unix)]
@@ -26,7 +26,6 @@ pub fn same_file(a: &Path, b: &Path) -> bool {
     matches!((a.canonicalize(), b.canonicalize()), (Ok(a), Ok(b)) if a == b)
 }
 
-/// Fichier image ordinaire utilisé comme [`BlockDevice`].
 #[derive(Debug)]
 pub struct FileDevice {
     file: File,
@@ -36,8 +35,8 @@ pub struct FileDevice {
 }
 
 impl FileDevice {
-    /// Crée un fichier image creux de `size` octets, ouvert en lecture-écriture. Refuse d'écraser un
-    /// fichier existant : supprimer l'ancien est un geste explicite de l'appelant.
+    /// Sparse, read-write. Refuses to overwrite an existing file: removing it is the caller's explicit
+    /// choice.
     pub fn create(path: &Path, size: u64, block_size: u32) -> Result<Self, BlockError> {
         check_geometry(size, block_size)?;
         let file = OpenOptions::new()
@@ -54,15 +53,15 @@ impl FileDevice {
         })
     }
 
-    /// Ouvre un fichier image existant, dont la taille doit être un multiple de `block_size`. Un chemin
-    /// qui n'est pas un fichier ordinaire est refusé (`InvalidInput`).
+    /// The size must be a multiple of `block_size`. A path that is not a regular file is refused
+    /// (`InvalidInput`).
     pub fn open(path: &Path, access: Access, block_size: u32) -> Result<Self, BlockError> {
-        // Contrôle avant ouverture : ouvrir un tube bloquerait, ouvrir un périphérique est exactement
-        // ce que ce type doit empêcher.
+        // Checked before opening: opening a pipe would block, and opening a device is what this type must
+        // prevent.
         ensure_regular_file(&fs::metadata(path)?)?;
         let read_only = access == Access::ReadOnly;
         let file = OpenOptions::new().read(true).write(!read_only).open(path)?;
-        // Second contrôle sur le descripteur ouvert : le chemin a pu changer entre-temps.
+        // Checked again on the open descriptor: the path may have changed meanwhile.
         let metadata = file.metadata()?;
         ensure_regular_file(&metadata)?;
         let size = metadata.len();
@@ -119,23 +118,19 @@ impl BlockDevice for FileDevice {
     }
 }
 
-// Accès positionnel : pas de curseur partagé, donc pas d'état à resynchroniser entre deux appels.
+// Positional access: no shared cursor, so no state to resync between calls.
 
-/// Lit au plus `buf.len()` octets à la position `offset`, sans curseur partagé entre les lecteurs d'un même
-/// fichier.
 #[cfg(unix)]
 pub fn read_at(file: &File, buf: &mut [u8], offset: u64) -> io::Result<usize> {
     std::os::unix::fs::FileExt::read_at(file, buf, offset)
 }
 
-/// Lit au plus `buf.len()` octets à la position `offset`. `seek_read` déplace aussi le curseur du fichier,
-/// qu'aucun lecteur n'utilise.
+/// `seek_read` also moves the file cursor, which no reader uses.
 #[cfg(windows)]
 pub fn read_at(file: &File, buf: &mut [u8], offset: u64) -> io::Result<usize> {
     std::os::windows::fs::FileExt::seek_read(file, buf, offset)
 }
 
-/// Lit exactement `buf.len()` octets à la position `offset`.
 #[cfg(unix)]
 pub fn read_exact_at(file: &File, buf: &mut [u8], offset: u64) -> io::Result<()> {
     std::os::unix::fs::FileExt::read_exact_at(file, buf, offset)
@@ -146,10 +141,8 @@ fn write_all_at(file: &File, data: &[u8], offset: u64) -> io::Result<()> {
     std::os::unix::fs::FileExt::write_all_at(file, data, offset)
 }
 
-// Sous Windows, `seek_read` et `seek_write` peuvent transférer moins d'octets que demandé et
-// déplacent le curseur du fichier (sans conséquence ici, il n'est jamais utilisé) : boucle explicite.
+// On Windows `seek_read` and `seek_write` may transfer less than asked: explicit loop.
 
-/// Lit exactement `buf.len()` octets à la position `offset`.
 #[cfg(windows)]
 pub fn read_exact_at(file: &File, buf: &mut [u8], offset: u64) -> io::Result<()> {
     use std::os::windows::fs::FileExt;
@@ -283,8 +276,8 @@ mod tests {
         }
     }
 
-    /// `/dev/null` n'est ni un fichier ordinaire ni ouvert en lecture-écriture : preuve que la garde
-    /// refuse un fichier spécial avant de l'ouvrir.
+    /// `/dev/null` is neither a regular file nor opened read-write: the guard refuses a special file before
+    /// opening it.
     #[cfg(unix)]
     #[test]
     fn ouverture_refuse_un_fichier_special() {
@@ -318,7 +311,7 @@ mod tests {
             dev.write_at(4 * 512, &[1; 512]),
             Err(BlockError::OutOfRange { .. })
         ));
-        // Aucune écriture partielle après un refus.
+        // No partial write after a refusal.
         let mut all = vec![0xFF; 4 * 512];
         dev.read_at(0, &mut all)?;
         assert!(all.iter().all(|&b| b == 0));

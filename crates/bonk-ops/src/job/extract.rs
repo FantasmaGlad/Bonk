@@ -24,18 +24,18 @@ use super::types::{Deps, JobError, TargetInfo, fail};
 use super::write::WriteJob;
 use crate::errors::Code;
 
-/// Nom imposé par l'UEFI au chargeur par défaut de chaque puce, dans l'ordre où le plan les cite.
+/// Default loader name UEFI imposes for each machine, in the order the plan lists them.
 const LOADERS: [(&str, Machine); 3] = [
     ("bootx64.efi", Machine::X86_64),
     ("bootaa64.efi", Machine::Arm64),
     ("bootia32.efi", Machine::X86),
 ];
 const LABEL: &str = "BONK-WIN";
-/// Le chargeur tient largement là-dedans ; le plafond protège d'une image construite pour tromper.
+/// The loader fits well within this; the cap guards against an image built to deceive.
 const LOADER_LIMIT: u64 = 64 << 20;
 const WIM_HEADER: usize = 208;
 const MIN_SIMULATED: u64 = 128 << 20;
-/// Marge sous la limite de FAT32 : un morceau reste un fichier valide, arrondi compris.
+/// Margin under the FAT32 limit: a part stays a valid file, rounding included.
 const PART_LIMIT: u64 = MAX_FILE_BYTES - (1 << 20);
 
 /// Firmware the drive boots from.
@@ -112,7 +112,7 @@ impl ReadAt for ImageFile {
     }
 }
 
-/// Un fichier de la clé : tel quel depuis l'ISO, ou un morceau de WIM.
+/// As is from the ISO, or a WIM part.
 struct Item {
     path: Vec<String>,
     size: u64,
@@ -124,7 +124,6 @@ enum From {
     Part(Vec<Segment>, Content),
 }
 
-/// Lit un élément d'un bout à l'autre.
 struct ItemReader<'a> {
     image: &'a ImageFile,
     item: &'a Item,
@@ -175,14 +174,14 @@ impl Read for ItemReader<'_> {
     }
 }
 
-/// L'ISO préparée : où va chaque octet.
+/// Where every byte of the prepared ISO goes.
 pub(super) struct WindowsImage {
     items: Vec<Item>,
     directories: Vec<Vec<String>>,
     signer: Signer,
     architectures: Vec<Machine>,
     wim_parts: usize,
-    /// `bootmgr` à la racine, pour x86 : le chargeur que lance le code BIOS.
+    /// `bootmgr` at the root, for x86: the loader the BIOS code starts.
     bios_loader: bool,
 }
 
@@ -196,7 +195,7 @@ fn wim_error(error: impl std::fmt::Display) -> JobError {
     fail(Code::SourceFormatUnsupported, error)
 }
 
-/// `Ok(None)` : ce n'est pas une ISO d'installation de Windows que Bonk sait écrire.
+/// `Ok(None)`: not a Windows installation ISO Bonk can write.
 pub(super) fn detect(image: &ImageFile) -> Result<Option<WindowsImage>, JobError> {
     let unreadable = |e: &dyn std::fmt::Display| fail(Code::SourceUnreadable, e);
     let Ok(udf) = Udf::open(image) else {
@@ -221,7 +220,7 @@ pub(super) fn detect(image: &ImageFile) -> Result<Option<WindowsImage>, JobError
             continue;
         }
         let bytes = read_whole(image, &loader.content, loader.size).map_err(|e| unreadable(&e))?;
-        // Le micrologiciel choisit le fichier par son nom : un chargeur d'une autre puce n'y démarrerait pas.
+        // The firmware picks the file by name: a loader for another machine would not boot there.
         if pe::machine(&bytes) != Some(expected) {
             continue;
         }
@@ -246,7 +245,7 @@ pub(super) fn detect(image: &ImageFile) -> Result<Option<WindowsImage>, JobError
     }))
 }
 
-/// Tous les fichiers de l'ISO ; un WIM de 4 Gio ou plus devient des morceaux à côté de lui.
+/// A WIM of 4 GiB or more becomes parts next to it.
 fn plan_items(
     image: &ImageFile,
     tree: &Tree,
@@ -321,8 +320,7 @@ fn format_failure(code: Code, error: FormatError) -> JobError {
     }
 }
 
-/// Place de la partition ; un MBR ne va pas au-delà de 2 Tio, ce que dit le code du formatage et non
-/// celui d'une image trop grande.
+/// An MBR beyond 2 TiB is a format error, not an image too large.
 fn partition_plan(size: u64, block: u32, kind: TableKind) -> Result<PartitionPlan, JobError> {
     table::plan(size, block, kind).map_err(|error| match error {
         FormatError::TooLarge(what) => fail(Code::FormatFailed, what),
@@ -350,7 +348,6 @@ impl WindowsImage {
         firmware
     }
 
-    /// Ce que le plan et le résultat disent de la clé, pour des secteurs de `block` octets.
     pub(super) fn describe(&self, table: TableKind, block: u32) -> Extraction {
         Extraction {
             table,
@@ -364,7 +361,7 @@ impl WindowsImage {
         }
     }
 
-    /// Contrôle que tout tient sur la cible, sans la toucher.
+    /// Without touching the target.
     pub(super) fn check_fits(
         &self,
         size: Option<u64>,
@@ -386,7 +383,7 @@ impl WindowsImage {
     }
 }
 
-/// Avancement commun à la copie et à la relecture.
+/// Shared by the copy and the read-back.
 struct Advance<'a, 'b> {
     phase: Phase,
     done: u64,
@@ -410,7 +407,7 @@ impl Advance<'_, '_> {
     }
 }
 
-/// Écrit la clé : table, volume, fichiers, puis relecture de chaque fichier, cache vidé.
+/// Table, volume, files, then each file read back with the cache dropped.
 pub(super) fn run(
     prepared: &WindowsImage,
     file: &ImageFile,
@@ -428,8 +425,7 @@ pub(super) fn run(
             options: job.options,
             access: bonk_hal::Access::ReadWrite,
             elevation: job.elevation,
-            // Fichier de simulation à créer : assez grand pour le volume, creux, jamais moins de ce que
-            // FAT32 exige.
+            // Simulation file to create: large enough for the volume, sparse, never less than FAT32 needs.
             size_hint: Some(
                 prepared
                     .describe(job.table, DEFAULT_BLOCK_SIZE)
@@ -454,7 +450,7 @@ pub(super) fn run(
         volume_id: ids.volume_id,
         bios_boot,
     };
-    // Tout est calculé avant le premier octet écrit : un refus ne coûte rien à la clé.
+    // Everything is computed before the first write: a refusal costs the key nothing.
     let layout = fat32_tree::layout(&volume, block, &files, &prepared.directories)
         .map_err(|e| format_failure(Code::WriteFailed, e))?;
     let write_failure = |e| format_failure(Code::WriteFailed, e);
@@ -569,8 +565,7 @@ mod tests {
 
     use super::*;
 
-    /// Le code BIOS suppose des secteurs de 512 octets : sur un disque à secteurs de 4 Kio, le plan ne
-    /// l'annonce pas.
+    /// The BIOS code assumes 512-byte sectors: on a 4 KiB-sector disk the plan does not announce it.
     #[test]
     fn le_bios_n_est_annonce_qu_avec_des_secteurs_de_512_octets() {
         let image = WindowsImage {
@@ -602,7 +597,7 @@ mod tests {
         assert!(partition_plan(4 << 40, 512, TableKind::Gpt).is_ok());
     }
 
-    /// Même message que l'écriture d'une image : le noyau répond « plus de place » sur un disque unplugged.
+    /// Same message as an image write: the kernel answers "no space" on an unplugged disk.
     #[test]
     fn un_support_disparu_pendant_la_copie_est_dit() {
         let full = io::Error::from(io::ErrorKind::StorageFull);

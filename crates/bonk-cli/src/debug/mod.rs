@@ -18,10 +18,8 @@ pub(crate) use sources::{schema_sources, sources};
 
 const JSON_SCHEMA_VERSION: u32 = 1;
 
-/// Taille d'un dump par défaut.
 const HEXDUMP_DEFAULT: u64 = 4096;
 
-/// Plafond d'un dump.
 const HEXDUMP_MAX: u64 = 1 << 20;
 
 #[derive(Debug, Subcommand)]
@@ -86,7 +84,7 @@ pub(crate) struct HexdumpArgs {
     len: u64,
 }
 
-/// Nombre décimal ou hexadécimal (`0x1BE`).
+/// Decimal or hexadecimal (`0x1BE`).
 pub(crate) fn parse_number(text: &str) -> Result<u64, String> {
     let parsed = match text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
         Some(hex) => u64::from_str_radix(hex, 16),
@@ -95,22 +93,18 @@ pub(crate) fn parse_number(text: &str) -> Result<u64, String> {
     parsed.map_err(|_| format!("invalid number: '{text}' (decimal or 0x...)"))
 }
 
-/// Ce que `debug` a à dire à l'appelant en plus de la sortie.
 pub(crate) enum Outcome {
     Done,
-    /// Échec expliqué par un message pour la sortie d'erreur.
     Failed(Code, String),
 }
 
 impl LayoutArgs {
-    /// La cible est-elle un fichier image, et non un disque ?
     pub(crate) fn reads_image_file(&self) -> bool {
         self.image.is_file()
     }
 }
 
 impl HexdumpArgs {
-    /// La cible est-elle un fichier image, et non un disque ?
     pub(crate) fn reads_image_file(&self) -> bool {
         self.image.is_file()
     }

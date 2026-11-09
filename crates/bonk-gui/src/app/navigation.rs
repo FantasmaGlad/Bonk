@@ -2,11 +2,11 @@ use iced::keyboard::{self, Key, key::Named};
 
 use super::{Message, Nav};
 
-/// Identifiant de la liste défilante, pour la suivre quand le focus descend dans les disques.
+/// Id of the scrolling list, to follow it when focus moves into the disks.
 pub(super) const LIST: &str = "disques";
 
-/// Touche pressée vers action : Tab et Maj+Tab, Espace et Entrée, flèches haut et bas, Échap.
-/// Les combinaisons avec Ctrl, Alt ou Logo sont laissées au système (raccourcis).
+/// Tab and Shift+Tab, Space and Enter, arrows, Escape. Combinations with Ctrl, Alt or Logo are left to the
+/// system (shortcuts).
 pub(crate) fn map_key(key: &Key, modifiers: keyboard::Modifiers, repeat: bool) -> Option<Message> {
     if modifiers.control() || modifiers.alt() || modifiers.logo() {
         return None;
@@ -14,7 +14,7 @@ pub(crate) fn map_key(key: &Key, modifiers: keyboard::Modifiers, repeat: bool) -
     let nav = match key {
         Key::Named(Named::Tab) if modifiers.shift() => Nav::Previous,
         Key::Named(Named::Tab) => Nav::Next,
-        // Une touche maintenue enfoncée ne doit pas cocher et décocher en boucle.
+        // A held key must not check and uncheck in a loop.
         Key::Named(Named::Space | Named::Enter) if !repeat => Nav::Activate,
         Key::Named(Named::ArrowUp) => Nav::Up,
         Key::Named(Named::ArrowDown) => Nav::Down,

@@ -4,26 +4,24 @@ use serde::{Deserialize, Serialize};
 use crate::disk::{Bus, Disk, DiskKind, Partition};
 use crate::enumerate::{EnumerateError, SourceRead};
 
-/// Nom de la source qui porte ces faits dans une capture.
 pub const SOURCE: &str = "windows:facts";
 
-/// Type GPT de la partition système EFI.
 const GPT_ESP: &str = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b";
-/// Types GPT des disques dynamiques (métadonnées et données).
+/// Dynamic disk GPT types (metadata and data).
 const GPT_LDM: [&str; 2] = [
     "5808c8aa-7e8f-42e0-85d2-e1e90434cfb3",
     "af9b60a0-1431-4f62-bc68-3311714a69ad",
 ];
-/// Type GPT d'un membre d'espace de stockage.
+/// Storage Spaces member GPT type.
 const GPT_SPACES: &str = "e75caf8f-f680-4cee-afa3-b001e56efc2d";
-/// Types MBR de la partition système EFI et d'un disque dynamique.
+/// MBR types of the EFI system partition and of a dynamic disk.
 const MBR_ESP: u8 = 0xEF;
 const MBR_LDM: u8 = 0x42;
 
-/// Ce que Windows dit de ses disques et de ses volumes, sans interprétation.
+/// What Windows says of its disks and volumes, uninterpreted.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct WindowsFacts {
-    /// `%SystemDrive%`, par exemple `C:`.
+    /// `%SystemDrive%`, such as `C:`.
     pub system_drive: Option<String>,
     pub disks: Vec<RawDisk>,
     pub volumes: Vec<RawVolume>,
@@ -31,20 +29,20 @@ pub struct WindowsFacts {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct RawDisk {
-    /// `N` de `\\.\PhysicalDriveN`.
+    /// `N` of `\\.\PhysicalDriveN`.
     pub number: u32,
-    /// Valeur de `STORAGE_BUS_TYPE`.
+    /// `STORAGE_BUS_TYPE` value.
     pub bus_type: i32,
     pub removable: bool,
     pub vendor: Option<String>,
     pub product: Option<String>,
     pub serial: Option<String>,
     pub size_bytes: u64,
-    /// Octets par secteur logique, lus dans la géométrie du disque.
+    /// Bytes per logical sector, from the disk geometry.
     #[serde(default)]
     pub block_size: Option<u32>,
-    /// Chemin d'instance du périphérique. Survit à une réécriture, contrairement à tout ce que porte la
-    /// table, et à un rebranchement, contrairement au numéro.
+    /// Device instance path. Survives a rewrite, unlike anything in the table, and a replug, unlike the
+    /// number.
     pub instance: Option<String>,
     pub partitions: Vec<RawPartition>,
 }
@@ -63,7 +61,7 @@ pub struct RawVolume {
     /// `\\?\Volume{...}\`.
     pub name: String,
     pub mount_points: Vec<String>,
-    /// Nom du système de fichiers selon Windows (`NTFS`, `FAT32`...).
+    /// Filesystem name as Windows gives it (`NTFS`, `FAT32`...).
     pub file_system: Option<String>,
     pub label: Option<String>,
     pub extents: Vec<RawExtent>,
@@ -75,7 +73,7 @@ pub struct RawExtent {
     pub offset: u64,
 }
 
-/// Valeurs de `STORAGE_BUS_TYPE`. Un bus inconnu, ou un espace de stockage, reste interne par prudence.
+/// `STORAGE_BUS_TYPE` values. An unknown bus, or a storage space, stays internal.
 fn bus_of(bus_type: i32) -> (Bus, DiskKind) {
     let bus = match bus_type {
         7 => Bus::Usb,
@@ -101,7 +99,7 @@ fn is_esp(partition: &RawPartition) -> bool {
     partition.gpt_type.as_deref() == Some(GPT_ESP) || partition.mbr_type == Some(MBR_ESP)
 }
 
-/// Le nom de Windows ramené à celui du filtre, commun aux systèmes.
+/// Windows name mapped to the filter's, shared by all systems.
 fn file_system_name(name: &str) -> String {
     match name.to_ascii_lowercase().as_str() {
         "fat" | "fat32" => "vfat".to_owned(),
@@ -116,8 +114,8 @@ fn is_on_drive(mount: &str, drive: &str) -> bool {
         && matches!(&mount[drive.len()..], "" | "\\" | "/")
 }
 
-/// `\\\\?\\usbstor#disk&ven_x#7&1&0#{guid}` devient `usbstor-disk-ven_x-7-1-0` : lisible, sans rien que
-/// le shell interprète. Le GUID final est celui de la classe, commun à tous.
+/// `\\?\usbstor#disk&ven_x#7&1&0#{guid}` gives `usbstor-disk-ven_x-7-1-0`: readable, nothing for a shell to
+/// interpret. The final GUID is the class one, common to all.
 fn instance_id(instance: &str) -> String {
     let path = instance.strip_prefix(r"\\?\").unwrap_or(instance);
     let path = path.rsplit_once("#{").map_or(path, |(head, _)| head);
@@ -145,10 +143,8 @@ fn stable_id(disk: &RawDisk, bus: Bus) -> String {
     base.split_whitespace().collect::<Vec<_>>().join("_")
 }
 
-/// Traduit les faits en disques.
-///
 /// # Errors
-/// `%SystemDrive%` inconnu, ou porté par aucun volume d'un disque énuméré.
+/// Unknown `%SystemDrive%`, or on no volume of an enumerated disk.
 pub fn normalize(facts: &WindowsFacts) -> Result<Vec<Disk>, EnumerateError> {
     let malformed = |detail: &str| EnumerateError::Malformed {
         what: SOURCE.to_owned(),
@@ -178,8 +174,8 @@ pub fn normalize(facts: &WindowsFacts) -> Result<Vec<Disk>, EnumerateError> {
                 .iter()
                 .any(|v| is_system(v) && v.extents.iter().any(|e| e.disk == raw.number));
             let path = format!(r"\\.\PhysicalDrive{}", raw.number);
-            // Un volume réparti sur plusieurs morceaux, ou qui ne commence sur aucune partition connue,
-            // est empilé sur le disque : ni la partition ni le disque ne sont libres.
+            // A volume in several extents, or starting on no known partition, is stacked on the disk: neither
+            // the partition nor the disk is free.
             let holders = facts
                 .volumes
                 .iter()
@@ -240,8 +236,7 @@ pub fn normalize(facts: &WindowsFacts) -> Result<Vec<Disk>, EnumerateError> {
     Ok(disks)
 }
 
-/// Certains ponts USB donnent le même numéro de série à tous leurs exemplaires : un identifiant ambigu
-/// pourrait désigner le mauvais disque.
+/// Some USB bridges give all their units the same serial: an ambiguous id could name the wrong disk.
 fn disambiguate(disks: &mut [Disk]) {
     let ids: Vec<String> = disks.iter().map(|d| d.id.clone()).collect();
     for disk in disks.iter_mut() {
@@ -252,7 +247,7 @@ fn disambiguate(disks: &mut [Disk]) {
     }
 }
 
-/// Numéro `N` d'un chemin `\\\\.\\PhysicalDriveN` exact : ni partition, ni autre périphérique.
+/// `N` of an exact `\\.\PhysicalDriveN`: never a partition or another device.
 #[must_use]
 pub fn disk_number(path: &str) -> Option<u32> {
     let digits = path.strip_prefix(r"\\.\PhysicalDrive")?;
@@ -262,7 +257,7 @@ pub fn disk_number(path: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
-/// Numéros du disque et de la partition de `\\\\.\\PhysicalDriveN\\PartitionM`.
+/// Disk and partition numbers of `\\.\PhysicalDriveN\PartitionM`.
 #[must_use]
 pub fn partition_numbers(path: &str) -> Option<(u32, u32)> {
     let (disk, part) = path.rsplit_once(r"\Partition")?;
@@ -272,7 +267,6 @@ pub fn partition_numbers(path: &str) -> Option<(u32, u32)> {
     Some((disk_number(disk)?, part.parse().ok()?))
 }
 
-/// La lecture de la capture qui porte ces faits, s'il y en a une.
 pub(crate) fn from_capture(reads: &[SourceRead]) -> Option<Result<Vec<Disk>, EnumerateError>> {
     let read = reads.iter().find(|read| read.path == SOURCE)?;
     let parsed: Result<WindowsFacts, String> = read
@@ -289,8 +283,8 @@ pub(crate) fn from_capture(reads: &[SourceRead]) -> Option<Result<Vec<Disk>, Enu
     })
 }
 
-/// Le contenu d'une capture, sans ce qui identifie un exemplaire de matériel ou son propriétaire. Un
-/// contenu illisible disparaît : on ne sait pas ce qu'il contient.
+/// Capture content without what identifies a hardware unit or its owner. Unreadable content is dropped: its
+/// content is unknown.
 #[must_use]
 pub fn sanitize(content: &str) -> String {
     let Ok(mut facts) = serde_json::from_str::<WindowsFacts>(content) else {
@@ -334,7 +328,7 @@ mod tests {
         }
     }
 
-    /// Disque système SATA avec ESP, clé USB montée en `E:`.
+    /// SATA system disk with ESP, USB key mounted as `E:`.
     fn poste() -> WindowsFacts {
         WindowsFacts {
             system_drive: Some("C:".to_owned()),
@@ -427,7 +421,7 @@ mod tests {
         let mut absent = poste();
         absent.system_drive = Some("Z:".to_owned());
         assert!(normalize(&absent).is_err());
-        // Un dossier monté sous `C:` n'est pas le volume système.
+        // A folder mounted under `C:` is not the system volume.
         let mut sous_dossier = poste();
         sous_dossier.volumes[0].mount_points = vec!["C:\\mnt\\x\\".to_owned()];
         assert!(normalize(&sous_dossier).is_err());
@@ -493,7 +487,7 @@ mod tests {
         );
         facts.disks[1].instance = None;
         assert_eq!(normalize(&facts)?[1].id, "physicaldrive1");
-        // Deux ponts USB au même numéro de série.
+        // Two USB bridges with the same serial.
         let mut clone = facts.disks[1].clone();
         facts.disks[1].serial = Some("X".to_owned());
         clone.serial = Some("X".to_owned());

@@ -13,8 +13,7 @@ fn source_error(format: Format) -> Code {
     }
 }
 
-/// Les bornes sont contrôlées avant chaque écriture : le noyau ne répond « plus de place » que si le disque a
-/// disparu sous l'opération.
+/// Bounds are checked before each write: the kernel only answers "no space" if the disk vanished.
 pub(super) fn support_lost(err: &BlockError) -> Option<JobError> {
     match err {
         BlockError::Io(io) if io.kind() == std::io::ErrorKind::StorageFull => Some(fail(
@@ -55,7 +54,7 @@ pub(super) fn map_verify_error(err: VerifyError, format: Format) -> JobError {
     fail(code, err)
 }
 
-/// Enveloppe le rappel de progression : l'annulation demandée par le système (Ctrl+C) l'emporte.
+/// A cancel requested by the system (Ctrl+C) wins.
 pub(super) fn guarded<'a>(
     deps: &'a Deps<'a>,
     progress: &'a mut dyn FnMut(&Progress) -> Control,
@@ -73,7 +72,6 @@ pub(super) fn guarded<'a>(
 mod tests {
     use super::*;
 
-    /// Le noyau répond « plus de place » sur un disque unplugged : dire ce qui s'est passé.
     #[test]
     fn un_support_disparu_n_est_pas_un_disque_plein() {
         let full = std::io::Error::from(std::io::ErrorKind::StorageFull);

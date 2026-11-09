@@ -13,12 +13,12 @@ use bonk_catalog::{Advance, DownloadError, Hooks, download, fetch_text, file_nam
 
 const ETAG: &str = "\"v1\"";
 
-/// Ce que le serveur fait d'une connexion, selon son numéro (à partir de 0).
+/// What the server does with a connection, by its number (from 0).
 #[derive(Clone, Copy, PartialEq)]
 enum Reply {
-    /// Répond normalement, en honorant `Range` et `If-Range`.
+    /// Honours `Range` and `If-Range`.
     Serve,
-    /// Répond normalement, mais coupe après ce nombre d'octets du corps.
+    /// Cuts after this many body bytes.
     CutAfter(usize),
     IgnoreRange,
     WrongStart,

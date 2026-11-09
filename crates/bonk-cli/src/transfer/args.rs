@@ -8,7 +8,6 @@ use crate::config::ViewDefaults;
 use crate::format::TableArg;
 use bonk_ops::job::{Target, TraceIo, WriteMode};
 
-/// Niveau de `--trace-io` (voir [`TraceIo`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum TraceIoArg {
     /// Offset, length, duration and checksum of each access
@@ -26,7 +25,6 @@ impl From<TraceIoArg> for TraceIo {
     }
 }
 
-/// Valeur de `--elevate` (voir [`Elevation`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum ElevateArg {
     /// Ask for system authorization when opening the disk
@@ -44,7 +42,6 @@ impl From<ElevateArg> for Elevation {
     }
 }
 
-/// Mode de `--mode` (voir [`WriteMode`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum ModeArg {
     /// Extract a Windows ISO; refuse a truncated image or one that would not boot as written
@@ -75,7 +72,6 @@ pub(crate) enum ProgressMode {
     None,
 }
 
-/// Options communes aux opérations sur un disque.
 #[derive(Debug, Args)]
 pub(crate) struct CommonArgs {
     /// Stable identifier of the disk (see `bonk list`); with --simulate, path of the target image file
@@ -136,8 +132,8 @@ impl CommonArgs {
         }
     }
 
-    /// Pour écrire, seules les options de la commande comptent : un réglage ou une variable oubliés règlent
-    /// l'affichage, ils n'autorisent jamais à effacer un disque de plus.
+    /// To write, only the command options count: a forgotten setting or variable sets the display, never
+    /// allows erasing one more disk.
     pub(crate) fn write_options(&self) -> FilterOptions {
         FilterOptions {
             show_internal: self.show_internal,
@@ -212,7 +208,7 @@ pub(crate) struct WriteArgs {
 }
 
 impl WriteArgs {
-    /// Cette commande ouvrirait-elle un vrai disque ? (`--dry-run` et `--simulate` : non)
+    /// `--dry-run` and `--simulate` do not.
     pub(crate) fn touches_real_disk(&self) -> bool {
         !self.common.simulate && !self.dry_run
     }

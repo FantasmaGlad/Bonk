@@ -85,13 +85,13 @@ fn rien_n_est_active_sans_focus() {
 fn les_fleches_se_deplacent_entre_les_disques() {
     let mut app = avec_tout_affiche();
     app.focus = Some(Focus::Refresh);
-    // Bas depuis une commande entre dans la liste.
+    // Down from a control enters the list.
     nav(&mut app, Nav::Down);
     assert_eq!(app.focus, Some(Focus::Disk("nvme-systeme".to_owned())));
     nav(&mut app, Nav::Down);
     nav(&mut app, Nav::Down);
     assert_eq!(app.focus, Some(Focus::Disk("sata-libre".to_owned())));
-    // Pas de bouclage en bas ni en haut.
+    // No wrap at the bottom or top.
     nav(&mut app, Nav::Down);
     assert_eq!(app.focus, Some(Focus::Disk("sata-libre".to_owned())));
     nav(&mut app, Nav::Up);
@@ -115,13 +115,13 @@ fn echap_referme_le_detail_puis_retire_le_focus() {
 fn le_focus_quitte_un_disque_qui_disparait() {
     let mut app = avec_tout_affiche();
     app.focus = Some(Focus::Disk("sata-libre".to_owned()));
-    // La case « écartés » masque le disque interne : le focus ne reste pas sur un composant absent.
+    // Unticking the box hides the internal disk: focus does not stay on a missing control.
     let _ = app.update(Message::ToggleInternal(false));
     assert_eq!(app.focus, Some(Focus::Internal));
     app.focus = Some(Focus::Disk("sata-libre".to_owned()));
     let _ = app.update(Message::Loaded(Ok(vec![])));
     assert_eq!(app.focus, None);
-    // Un échec de détection retire aussi les disques de l'ordre de Tab.
+    // A detection failure also removes the disks from the Tab order.
     let mut app = avec_tout_affiche();
     app.focus = Some(Focus::Disk("usb-cle".to_owned()));
     let _ = app.update(Message::Loaded(Err("panne".to_owned())));
@@ -138,7 +138,7 @@ fn un_clic_donne_le_focus_au_composant() {
     assert_eq!(app.focus, Some(Focus::Disk("usb-cle".to_owned())));
     let _ = app.update(Message::ToggleAll(true));
     assert_eq!(app.focus, Some(Focus::All));
-    // Le minuteur ne touche pas au focus.
+    // The timer does not touch the focus.
     let _ = app.update(Message::Tick);
     assert_eq!(app.focus, Some(Focus::All));
 }
@@ -173,7 +173,7 @@ fn touches_vers_actions() {
         nav_de(&Key::Named(Named::Escape), M::empty(), false),
         Some(Nav::Escape)
     );
-    // Raccourcis du système laissés tranquilles, répétition de touche ignorée pour activer.
+    // System shortcuts left alone, key repeat ignored for activation.
     assert_eq!(nav_de(&tab, M::CTRL, false), None);
     assert_eq!(nav_de(&tab, M::ALT, false), None);
     assert_eq!(nav_de(&Key::Named(Named::Space), M::empty(), true), None);
@@ -187,10 +187,10 @@ fn haut_depuis_le_bouton_de_copie_revient_au_dernier_disque() {
     app.focus = Some(Focus::Copy);
     nav(&mut app, Nav::Up);
     assert_eq!(app.focus, Some(Focus::Disk("sata-libre".to_owned())));
-    // Bas depuis le dernier disque n'entre pas dans le bouton : c'est le rôle de Tab.
+    // Down from the last disk does not enter the button: that is Tab's job.
     nav(&mut app, Nav::Down);
     assert_eq!(app.focus, Some(Focus::Disk("sata-libre".to_owned())));
-    // Sans disque affiché, Haut depuis la copie ne fait rien.
+    // Without a disk shown, Up from the copy button does nothing.
     let mut vide = loaded(vec![]);
     vide.focus = Some(Focus::Copy);
     nav(&mut vide, Nav::Up);

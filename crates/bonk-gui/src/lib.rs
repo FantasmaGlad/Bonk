@@ -10,12 +10,11 @@ use iced::Size;
 
 use crate::app::App;
 
-/// Ouvre la fenêtre, avec les réglages d'affichage de départ (`bonk config`), et rend la main à la
-/// fermeture.
+/// With the starting display settings (`bonk config`); returns when the window closes.
 pub fn run(initial: ViewOptions, lang: Option<bonk_hal::Lang>) -> Result<(), String> {
     let lang = lang.unwrap_or_else(locale::detect);
-    // Iced ne renvoie pas d'erreur sans affichage : il panique. Détection de la fonctionnalité en
-    // amont, pour que Bonk redirige proprement vers la ligne de commande (SSH, serveur).
+    // Iced panics without a display instead of returning an error: detect it first so Bonk falls back cleanly
+    // to the command line (SSH, server).
     if !display_available(|name| std::env::var_os(name)) {
         return Err("no graphical display (neither WAYLAND_DISPLAY nor DISPLAY)".to_owned());
     }
@@ -26,10 +25,9 @@ pub fn run(initial: ViewOptions, lang: Option<bonk_hal::Lang>) -> Result<(), Str
     )
 }
 
-/// Ouvre la fenêtre (`open`) ; si elle panique et que le repli est permis, relance en rendu logiciel
-/// (`relaunch`). Les deux étapes sont injectées pour éprouver ce chemin sans GPU ni affichage : le test
-/// d'intégration sous Xvfb ne le parcourt que là où wgpu panique. Une erreur ordinaire de la fenêtre
-/// (sans panique) n'est jamais rejouée.
+/// If `open` panics and the fallback is allowed, relaunches with software rendering (`relaunch`). Both steps
+/// are injected to test this path without GPU or display: the Xvfb integration test only goes through it
+/// where wgpu panics. An ordinary window error (no panic) is never retried.
 fn run_with_fallback(
     open: impl FnOnce() -> Result<(), String> + std::panic::UnwindSafe,
     can_fall_back: bool,
@@ -48,25 +46,24 @@ fn run_with_fallback(
     }
 }
 
-/// Variable posée sur le processus relancé en rendu logiciel : il ne se relance pas lui-même.
+/// Set on the process relaunched with software rendering: it does not relaunch itself.
 const FALLBACK_MARKER: &str = "BONK_RENDER_FALLBACK";
 
-/// Le repli ne s'applique que si l'utilisateur n'a pas choisi lui-même le moteur de rendu
-/// (`ICED_BACKEND`) et si on n'est pas déjà dans le processus de repli.
+/// Only when the user did not pick the renderer (`ICED_BACKEND`) and this is not already the fallback
+/// process.
 fn fallback_allowed(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> bool {
     var("ICED_BACKEND").is_none() && var(FALLBACK_MARKER).is_none()
 }
 
-/// Ouvre la fenêtre en transformant une panique du rendu en erreur. wgpu traite certaines erreurs de
-/// pilote comme fatales (panique sur le fil principal) au lieu de laisser Iced basculer sur le rendu
-/// logiciel : sous un affichage virtuel, sur certaines machines virtuelles ou avec un pilote incomplet,
-/// la surface ne peut pas être configurée.
+/// wgpu treats some driver errors as fatal (panic on the main thread) instead of letting Iced switch to
+/// software rendering: under a virtual display, some VMs or an incomplete driver, the surface cannot be
+/// configured.
 fn catching_panics(
     open: impl FnOnce() -> Result<(), String> + std::panic::UnwindSafe,
 ) -> Result<Result<(), String>, String> {
     let previous = std::panic::take_hook();
-    // Le message est journalisé, pas imprimé : il serait redondant avec le repli, ou repris dans
-    // l'erreur finale si le repli est impossible.
+    // Logged, not printed: it would duplicate the fallback, or be repeated in the final error if no fallback
+    // is possible.
     std::panic::set_hook(Box::new(|info| {
         log::debug!(target: "bonk::gui", "panic in the window: {info}");
     }));
@@ -75,7 +72,7 @@ fn catching_panics(
     outcome.map_err(|payload| panic_message(payload.as_ref()))
 }
 
-/// Icône de la fenêtre, en RGBA brut : Iced ne décode pas de PNG sans une dépendance de plus.
+/// Raw RGBA: Iced does not decode PNG without one more dependency.
 fn window_icon() -> Option<iced::window::Icon> {
     const SIDE: u32 = 64;
     let pixels = include_bytes!("../assets/bonk-64.rgba").to_vec();
@@ -105,10 +102,9 @@ fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
         .unwrap_or_else(|| "panic without a message".to_owned())
 }
 
-/// Relance Bonk avec les mêmes arguments et le moteur de rendu logiciel (`tiny-skia`), et attend sa
-/// fin. Un nouveau processus plutôt qu'une variable posée ici : modifier l'environnement d'un
-/// processus qui a déjà des fils n'est pas sûr, et l'état du rendu qui vient de paniquer n'est pas
-/// réutilisable.
+/// Same arguments, software renderer (`tiny-skia`), waits for it. A new process rather than a variable set
+/// here: changing the environment of a process that already has threads is unsafe, and the renderer state
+/// that just panicked is not reusable.
 fn relaunch_with_software_renderer() -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| format!("fallback impossible: {e}"))?;
     let status = std::process::Command::new(exe)
@@ -124,8 +120,8 @@ fn relaunch_with_software_renderer() -> Result<(), String> {
     }
 }
 
-/// Sous Linux et les autres Unix hors macOS, une session graphique se reconnaît à ses variables
-/// d'environnement ; ailleurs, le système fournit toujours un affichage.
+/// On Unix other than macOS a graphical session is known by its environment variables; elsewhere the system
+/// always provides a display.
 #[cfg(all(unix, not(target_os = "macos")))]
 fn display_available(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> bool {
     ["WAYLAND_DISPLAY", "WAYLAND_SOCKET", "DISPLAY"]
@@ -160,9 +156,9 @@ mod tests {
             move |nom: &str| definies.contains(&nom).then(|| OsString::from("x"))
         };
         assert!(super::fallback_allowed(env(&[])));
-        // L'utilisateur a choisi son moteur : on ne le contredit pas.
+        // The user chose the renderer: do not override it.
         assert!(!super::fallback_allowed(env(&["ICED_BACKEND"])));
-        // Déjà dans le processus de repli : pas de boucle de relance.
+        // Already the fallback process: no relaunch loop.
         assert!(!super::fallback_allowed(env(&[super::FALLBACK_MARKER])));
     }
 
@@ -282,7 +278,7 @@ mod repli_tests {
 
 #[cfg(test)]
 mod icon_tests {
-    /// Une icône de la mauvaise taille serait perdue en silence : `window_icon` rend alors `None`.
+    /// An icon of the wrong size would be lost silently: `window_icon` returns `None` then.
     #[test]
     fn l_icone_de_la_fenetre_est_valide() {
         assert!(super::window_icon().is_some());

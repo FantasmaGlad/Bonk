@@ -9,7 +9,7 @@ use crate::theme;
 use super::super::{App, Focus, Message};
 use super::ring;
 
-/// Demande de confirmation avant d'effacer un disque interne.
+/// Before erasing an internal disk.
 pub(in super::super) fn internal_dialog(disk: &Disk, lang: Lang) -> Element<'_, Message> {
     container(
         column![
@@ -45,7 +45,7 @@ pub(in super::super) fn internal_dialog(disk: &Disk, lang: Lang) -> Element<'_, 
     .into()
 }
 
-/// Récapitulatif d'un disque : série, nature, partitions, étiquettes, montages.
+/// Serial, kind, partitions, labels, mounts.
 pub(in super::super) fn detail(disk: &Disk, lang: Lang) -> Element<'_, Message> {
     let mut lines = column![
         text(format!(

@@ -15,8 +15,7 @@ use super::super::{App, Focus, Message, WRITE_DELAY, WriteState};
 use super::{boxed, ring};
 
 impl App {
-    /// Panneau d'écriture du disque sélectionné : récapitulatif, saisie de l'image, bouton
-    /// désactivé pendant 3 secondes, progression, annulation, résultat.
+    /// Summary, image input, a button disabled for 3 seconds, progress, cancel, result.
     pub(super) fn write_panel<'a>(&'a self, disk: &'a Disk) -> Option<Element<'a, Message>> {
         let WriteState::Draft {
             disk_id,
@@ -33,8 +32,8 @@ impl App {
             .then(|| boxed(self.draft_panel(disk, image, hash, (*raw, *mbr), *opened)))
     }
 
-    /// Écriture en cours ou résultat, au-dessus de la liste : ils ne dépendent pas d'elle. Le disque a pu
-    /// être débranché, le sous-processus tourne encore, et l'on doit pouvoir l'annuler.
+    /// Above the list, independent of it: the disk may be unplugged while the child still runs, and it must
+    /// stay cancellable.
     pub(super) fn active_panel(&self) -> Option<Element<'_, Message>> {
         match &self.write {
             WriteState::Running {
@@ -49,8 +48,7 @@ impl App {
         }
     }
 
-    /// Actualisation et réglages d'affichage.
-    /// Récapitulatif, saisie de l'image et bouton qui ne s'active qu'après le délai de réflexion.
+    /// The button only enables after the delay to think.
     fn draft_panel<'a>(
         &'a self,
         disk: &'a Disk,
@@ -60,8 +58,7 @@ impl App {
         opened: Instant,
     ) -> Element<'a, Message> {
         let lang = self.lang;
-        // Une seule lecture de l'horloge par affichage : le décompte, l'état du bouton et son libellé
-        // ne peuvent pas se contredire.
+        // One clock read per render: the countdown, the button state and its label cannot disagree.
         let elapsed = opened.elapsed();
         let ready = elapsed >= WRITE_DELAY && !image.trim().is_empty();
         let label = phrases::write_button(lang, elapsed, image.trim().is_empty());

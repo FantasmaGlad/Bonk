@@ -8,7 +8,7 @@ use bonk_core::codec::{self, CodecError, Source};
 use super::types::{JobError, SourceInfo, fail};
 use crate::errors::Code;
 
-/// L'image ouverte : un seul descripteur, autant de lectures indépendantes que d'étapes.
+/// One descriptor, as many independent reads as steps.
 pub struct ImageFile {
     file: Arc<File>,
     path: String,
@@ -20,7 +20,7 @@ impl ImageFile {
         let unreadable =
             |e: io::Error| fail(Code::SourceUnreadable, format!("{}: {e}", path.display()));
         let file = File::open(path).map_err(unreadable)?;
-        // Contrôlé sur le descripteur ouvert, pas sur le chemin, qui a pu changer entre-temps.
+        // Checked on the open descriptor, not the path, which may have changed.
         let metadata = file.metadata().map_err(unreadable)?;
         if !metadata.is_file() {
             return Err(fail(
@@ -35,7 +35,7 @@ impl ImageFile {
         })
     }
 
-    /// Lit `buf.len()` octets à cette position, sans déplacer aucun lecteur.
+    /// Without moving any reader.
     pub(super) fn read_exact_positioned(&self, offset: u64, buf: &mut [u8]) -> io::Result<()> {
         bonk_hal::image::read_exact_at(&self.file, buf, offset)
     }
@@ -65,8 +65,7 @@ impl ImageFile {
     }
 }
 
-/// Lecture séquentielle par accès positionnels : les lecteurs d'un même fichier ne partagent pas de
-/// curseur.
+/// Sequential reads through positional access: readers of the same file share no cursor.
 pub struct FileReader {
     file: Arc<File>,
     position: u64,

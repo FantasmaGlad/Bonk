@@ -10,7 +10,7 @@ use crate::event::{Event, write_args};
 use crate::model::{Effect, Effects, Focus, Message, Model, WRITE_DELAY, WriteState};
 
 impl Model {
-    // Un aiguillage plat, un bras par message : le découper le rendrait plus difficile à parcourir.
+    // A flat dispatch, one arm per message: splitting it would make it harder to follow.
     #[allow(clippy::too_many_lines)]
     pub fn apply(&mut self, message: Message) -> Effects {
         match message {
@@ -86,7 +86,7 @@ impl Model {
             Message::ImagePicked(Some(path)) => {
                 if let WriteState::Draft { image, .. } = &mut self.write {
                     *image = path.display().to_string();
-                    // Une image déposée doit se voir : le menu ne la nomme pas.
+                    // A dropped image must be visible: the menu does not name it.
                     self.advanced = true;
                 }
                 Vec::new()
@@ -159,7 +159,7 @@ impl Model {
         }
     }
 
-    /// Lance une énumération, une seule à la fois : le minuteur ne les empile pas si l'une est lente.
+    /// One at a time: the timer does not stack them if one is slow.
     pub fn reload(&mut self) -> Effects {
         if self.loading {
             Vec::new()
@@ -169,8 +169,8 @@ impl Model {
         }
     }
 
-    /// Un seul disque proposé, et aucun choix encore : le sélectionner épargne un clic. Une fois par disque, pour
-    /// qu'une désélection tienne malgré l'actualisation.
+    /// A single offered disk and no choice yet: selecting it saves a click. Once per disk, so a deselection
+    /// holds despite the refresh.
     fn select_only_disk(&mut self) {
         if !self.auto_select || self.selected.is_some() {
             return;
@@ -211,7 +211,7 @@ impl Model {
     fn on_detection_failed(&mut self, erreur: String) -> Effects {
         log::warn!(target: "bonk::gui", reason = erreur.as_str(); "enumeration failed");
         self.loading = false;
-        // Jamais de liste périmée présentée comme valable après un échec.
+        // Never a stale list shown as valid after a failure.
         self.disks.clear();
         self.selected = None;
         self.error = Some(erreur);
@@ -220,7 +220,7 @@ impl Model {
         Vec::new()
     }
 
-    /// Une case d'affichage a changé : la liste aussi, donc le panneau et le focus.
+    /// A display box changed: the list too, hence the panel and the focus.
     fn after_view_option(&mut self, focus: Focus) -> Effects {
         self.focus = Some(focus);
         self.sync_write();
@@ -242,7 +242,7 @@ impl Model {
             Ok(systems) => CatalogState::Ready(systems),
             Err(error) => {
                 log::warn!(target: "bonk::gui", reason = error.as_str(); "catalog unavailable");
-                // Sans liste, la voie manuelle est la seule : elle se montre d'elle-même.
+                // Without a list the manual way is the only one: it shows itself.
                 self.advanced = true;
                 CatalogState::Failed(error)
             }
@@ -262,7 +262,7 @@ impl Model {
             ChoiceSource::Download { url, sha256 },
         ) = (&mut self.write, choice.source)
         {
-            // Tout est fixé par le catalogue : Bonk analyse l'image et choisit le mode seul.
+            // The catalog fixes everything: Bonk analyses the image and picks the mode itself.
             *image = url;
             *hash = sha256;
             *raw = false;
@@ -273,8 +273,8 @@ impl Model {
         Vec::new()
     }
 
-    /// Le panneau d'écriture vient de s'ouvrir : le menu doit être prêt. Le catalogue n'est lu que là, et relu
-    /// après un échec à la prochaine sélection.
+    /// The write panel just opened: the menu must be ready. The catalog is only read here, and reread after a
+    /// failure at the next selection.
     fn load_menu(&mut self) -> Effects {
         let needed = matches!(
             self.catalog,
@@ -287,9 +287,8 @@ impl Model {
         vec![Effect::LoadCatalog, Effect::DetectTor]
     }
 
-    /// Fait suivre le panneau d'écriture à la sélection : il s'ouvre sur un disque proposé, se referme
-    /// sinon. Une écriture en cours ou son résultat ne bougent pas : le disque a pu partir, et l'on doit
-    /// encore pouvoir annuler ou lire le code d'erreur.
+    /// Opens the write panel on an offered disk, closes it otherwise. A running write or its result does not
+    /// move: the disk may be gone, and it must still be possible to cancel or read the error code.
     pub fn sync_write(&mut self) {
         if matches!(
             self.write,

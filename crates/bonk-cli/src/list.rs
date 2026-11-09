@@ -7,12 +7,12 @@ use serde::Serialize;
 
 use crate::config::ViewDefaults;
 
-/// Version du format de la sortie `--json`, incrémentée à chaque changement incompatible.
+/// Bumped at each incompatible change.
 const JSON_SCHEMA_VERSION: u32 = 1;
 
 /// List the disks Bonk can write (read-only)
 #[derive(Debug, Args)]
-// `long_about = None` : sans lui, clap reprendrait le commentaire ci-dessus comme texte long.
+// Without it clap would reuse the doc comment above as long help.
 #[command(long_about = None)]
 pub(crate) struct ListArgs {
     /// JSON output, for scripts
@@ -59,8 +59,7 @@ pub(crate) fn schema() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(Report)).unwrap_or_default()
 }
 
-/// Le rapport `list`, en JSON : même contenu que la sortie `--json`, pour le service.
-/// Les disques à montrer et leur verdict : ceux qu'on peut écrire, ou tous.
+/// Writable disks, or all of them, with their verdicts.
 fn selected(disks: &[Disk], options: FilterOptions, all: bool) -> Vec<Entry<'_>> {
     disks
         .iter()
@@ -90,7 +89,7 @@ pub(crate) fn run(
     disks: &[Disk],
     out: &mut dyn Write,
 ) -> io::Result<()> {
-    // Les réglages enregistrés (`bonk config`) valent quand l'option n'est pas donnée.
+    // Saved settings (`bonk config`) apply when the option is not given.
     let options = FilterOptions {
         show_internal: args.show_internal || defaults.show_internal,
         allow_virtual: args.allow_virtual || defaults.allow_virtual,
@@ -134,7 +133,7 @@ fn write_table(entries: &[Entry<'_>], all: bool, out: &mut dyn Write) -> io::Res
         })
         .collect();
 
-    // La dernière colonne (l'état) est libre : pas de remplissage inutile en fin de ligne.
+    // The last column (state) is free: no useless padding at the end of the line.
     let mut widths = header.map(|h| h.chars().count());
     for row in &rows {
         for (width, cell) in widths.iter_mut().zip(row) {

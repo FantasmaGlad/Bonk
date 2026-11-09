@@ -7,14 +7,13 @@ use crate::errors::failure_text;
 use crate::event::Outcome;
 use crate::model::WRITE_DELAY;
 
-/// Secondes affichées dans le décompte du délai de réflexion, selon le temps écoulé depuis l'ouverture.
+/// Seconds shown in the countdown, from the time since opening.
 #[must_use]
 pub fn secondes_restantes(elapsed: Duration) -> u64 {
     let reste = WRITE_DELAY.saturating_sub(elapsed);
     reste.as_secs() + u64::from(reste.subsec_nanos() > 0)
 }
 
-/// Le libellé du bouton d'écriture, selon le délai et l'image.
 #[must_use]
 pub fn write_button(lang: Lang, elapsed: Duration, image_empty: bool) -> String {
     if elapsed < WRITE_DELAY {
@@ -155,7 +154,6 @@ fn secure_boot_text(lang: Lang, signer: &bonk_core::pe::Signer) -> String {
     }
 }
 
-/// Le récapitulatif d'un disque avant de l'effacer.
 #[must_use]
 pub fn disk_summary(lang: Lang, disk: &bonk_hal::Disk) -> String {
     let labels: Vec<&str> = disk
@@ -200,8 +198,8 @@ mod tests {
         }
     }
 
-    /// La phrase Secure Boot suit la langue de la fenêtre, avec sa typographie : en anglais, pas d'espace
-    /// avant les deux-points.
+    /// The Secure Boot sentence follows the window language with its typography: no space before the colon in
+    /// English.
     #[test]
     fn la_phrase_secure_boot_suit_la_langue() {
         let fr = outcome(Lang::Fr, &windows(Signer::WindowsProductionPca2011));
@@ -243,8 +241,8 @@ mod tests {
         assert!(!outcome(Lang::En, &windows(Signer::Unsigned)).contains("BIOS"));
     }
 
-    /// Un processus d'écriture arrêté sans ligne d'erreur : le titre suit la langue de la fenêtre, jamais une
-    /// phrase française dans une fenêtre anglaise.
+    /// A write process stopped without an error line: the title follows the window language, never French in
+    /// an English window.
     #[test]
     fn un_arret_sans_message_suit_la_langue() {
         let failure = crate::event::parse_failure("", "signal 9");

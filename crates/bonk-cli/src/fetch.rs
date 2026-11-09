@@ -7,8 +7,8 @@ use bonk_core::write::{Control, Phase, Progress};
 use bonk_ops::errors::Code;
 use bonk_ops::job::{self, Deps, JobError, WriteJob, WriteOutcome};
 
-/// Attente avant de réessayer un téléchargement, en pauses courtes par essai : environ 2 s de plus à chaque
-/// fois, le temps que le réseau revienne.
+/// Short pauses per attempt before retrying a download: about 2 s more each time, for the network to come
+/// back.
 const RETRY_PAUSES: u32 = 8;
 
 pub(crate) struct Request<'a> {
@@ -17,7 +17,7 @@ pub(crate) struct Request<'a> {
     pub(crate) cache_dir: Option<&'a Path>,
 }
 
-/// Un fichier du cache, à oublier s'il se révèle faux : le retélécharger est le seul remède.
+/// A cache file to forget if it proves wrong: downloading it again is the only remedy.
 #[derive(Debug)]
 struct Downloaded(PathBuf);
 
@@ -61,7 +61,7 @@ fn sha256_from_file(location: &str, name: &str) -> Result<String, JobError> {
     })
 }
 
-/// Écrit ce que désigne `request` : même chemin pour la ligne de commande et le service.
+/// Same path for the command line and the service.
 pub(crate) fn write(
     request: &Request<'_>,
     job: &mut WriteJob,
@@ -76,8 +76,8 @@ pub(crate) fn write(
     result
 }
 
-/// Prépare `job` : l'empreinte d'un fichier d'empreintes, et pour une adresse le téléchargement. Rend le
-/// fichier téléchargé, s'il y en a un. Tout ce qui refuserait l'écriture est vérifié avant de télécharger.
+/// Reads the hash of a checksum file and downloads an address. Everything that would refuse the write is
+/// checked before downloading.
 fn resolve(
     request: &Request<'_>,
     job: &mut WriteJob,

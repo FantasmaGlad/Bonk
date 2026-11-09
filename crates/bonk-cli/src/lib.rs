@@ -39,18 +39,16 @@ use crate::logging::{LogArgs, LogFormat, Settings};
 use crate::schema::SchemaArgs;
 use crate::transfer::{RepairArgs, VerifyArgs, WriteArgs};
 
-/// Arguments de la ligne de commande de Bonk.
-///
-/// Sans commande, la fenêtre s'ouvre.
+/// Without a command, the window opens.
 #[derive(Debug, Parser)]
-// `long_about = None` : sans lui, clap reprend ce commentaire de documentation comme texte long
-// et `--help` afficherait une note de développeur au lieu de la description de l'outil.
+// Without it clap reuses the doc comment as long help, and `--help` would show a developer note instead of
+// the tool description.
 #[command(
     name = "bonk",
     version,
     about = "Create bootable media (USB drives and external disks)",
     long_about = None,
-    // Lue par `parse` avant l'analyse : aucun champ ne la porte.
+    // Read by `parse` before parsing: no field holds it.
     arg(
         clap::Arg::new("no_color")
             .long("no-color")
@@ -154,9 +152,10 @@ enum DiskAction {
     RepairGpt(RepairArgs),
 }
 
-/// Ce qu'une commande a d'incompatible avec `--fixture`, le cas échéant : tout ce qui lirait le système
-/// réel ou ouvrirait un vrai disque (le bas niveau reste permis sur un fichier image). Aucun cas par défaut : une nouvelle commande ne compile pas tant que
-/// sa réponse n'est pas écrite ici, car l'oubli laisserait écrire sur un vrai disque sous `--fixture`.
+/// What a command has that is incompatible with `--fixture`: anything that would read the real system or open
+/// a real disk (low level stays allowed on an image file). No default arm: a new command does not compile
+/// until its answer is written here, since forgetting it would allow writing to a real disk under
+/// `--fixture`.
 fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
     const DISK: &str = "--fixture only simulates the enumeration: writing to and raw reading of a disk are refused (use --simulate or --dry-run)";
     match command.as_ref()? {
@@ -186,8 +185,8 @@ fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
         Command::Diagnose(a) if a.capture() => {
             Some("--capture reads the real system: incompatible with --fixture")
         }
-        // Le service écrit, formate et répare les disques qu'il énumère : il jugerait ceux de la capture et
-        // ouvrirait les vrais disques du même nom.
+        // The service writes, formats and repairs the disks it enumerates: it would judge the captured ones
+        // and open real disks of the same name.
         Command::Serve => {
             Some("bonk serve writes to the disks it lists: incompatible with --fixture")
         }
@@ -220,16 +219,16 @@ fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
     }
 }
 
-/// Vérifie qu'une ligne de commande est acceptée par la CLI, sans l'exécuter, et rend ses mots : chaque
-/// commande équivalente que la fenêtre affiche doit être valide.
+/// Checks a command line is accepted by the CLI without running it, and returns its words: every equivalent
+/// command the window shows must be valid.
 pub fn check_command_line(command: &str) -> Result<Vec<String>, String> {
     let words = split_words(command)?;
     Cli::try_parse_from(&words).map_err(|erreur| erreur.to_string())?;
     Ok(words)
 }
 
-/// Découpe une ligne en mots à la façon d'un shell POSIX : espaces, apostrophes simples, guillemets
-/// doubles, sans échappement par antislash. Les variables et substitutions ne sont pas interprétées (la fenêtre n'en produit pas).
+/// POSIX-shell-like splitting: spaces, single quotes, double quotes. Variables and substitutions are not
+/// interpreted (the window produces none).
 fn split_words(line: &str) -> Result<Vec<String>, String> {
     let mut words = Vec::new();
     let mut current = String::new();
@@ -240,8 +239,8 @@ fn split_words(line: &str) -> Result<Vec<String>, String> {
         match (quote, c) {
             (Some(q), c) if c == q => quote = None,
             (Some(_), c) => current.push(c),
-            // Hors guillemets, l'antislash rend le caractère suivant littéral (`'\''` dans le texte
-            // d'un identifiant contenant une apostrophe).
+            // Outside quotes a backslash makes the next character literal (`'\''` in the text of an id
+            // containing an apostrophe).
             (None, '\\') => {
                 current.push(chars.next().ok_or("trailing backslash")?);
                 in_word = true;
@@ -271,17 +270,16 @@ fn split_words(line: &str) -> Result<Vec<String>, String> {
     Ok(words)
 }
 
-/// Exécute la ligne de commande et renvoie le code de sortie du processus (codes stables, 0 à 6 :
-/// `bonk_ops::errors`). `gui` ouvre la fenêtre et rend la main à sa fermeture.
+/// Returns the process exit code (stable, 0 to 6: `bonk_ops::errors`). `gui` opens the window and returns
+/// when it closes.
 pub fn run<I, T, G>(args: I, gui: G) -> ExitCode
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
     G: FnOnce(ViewDefaults) -> Result<(), String>,
 {
-    // Flux non verrouillés : `execute` ouvre la fenêtre, pendant laquelle d'autres fils journalisent sur
-    // la sortie d'erreur. Un verrou tenu pendant toute l'exécution les bloquerait pour toujours
-    // (l'énumération des disques de la fenêtre incluse).
+    // Unlocked streams: `execute` opens the window, while other threads log to stderr. A lock held for the
+    // whole run would block them forever, the window's disk enumeration included.
     ExitCode::from(execute(
         args,
         &Env::from_process(),
@@ -293,18 +291,16 @@ where
     ))
 }
 
-/// Ce que Bonk lit de l'environnement du processus et demande au système : injectable pour les tests.
+/// What Bonk reads from the process environment and asks of the system: injectable for tests.
 #[derive(Default)]
 struct Env {
-    /// Valeur de `BONK_LOG`.
     bonk_log: Option<String>,
-    /// Fichier de configuration (`BONK_CONFIG`, sinon le dossier de configuration du système).
+    /// `BONK_CONFIG`, else the system configuration directory.
     config_path: Option<PathBuf>,
-    /// Variables `BONK_*` : celles qui portent le nom d'un réglage le surchargent.
+    /// `BONK_*` variables: those named after a setting override it.
     vars: Vec<(String, String)>,
-    /// Accès aux disques et au signal d'annulation.
     io: job::Io,
-    /// Le processus tourne en administrateur : la fenêtre refuse de s'ouvrir.
+    /// Running as administrator: the window refuses to open.
     privileged: bool,
 }
 
@@ -323,8 +319,8 @@ impl Env {
     }
 }
 
-/// Réglages enregistrés : un fichier illisible n'empêche pas une commande de lecture (valeurs par
-/// défaut, avertissement au journal) ; `bonk config` le signalera lui-même.
+/// An unreadable file does not stop a read command (defaults, warning in the log); `bonk config` reports it
+/// itself.
 fn stored_settings(env: &Env) -> (ViewDefaults, LogFormat, Option<String>) {
     let (stored, config_error) = match env.config_path.as_deref().map(config::load) {
         Some(Ok(stored)) => (stored, None),
@@ -343,9 +339,8 @@ fn stored_settings(env: &Env) -> (ViewDefaults, LogFormat, Option<String>) {
     )
 }
 
-/// Cœur de [`run`], avec les flux, l'environnement et les dépendances injectés pour les tests.
-/// `--no-color` règle l'affichage de l'analyse elle-même (aide, erreurs d'usage) : il faut le connaître avant
-/// d'analyser. `NO_COLOR` et un flux qui n'est pas un terminal sont déjà traités par clap.
+/// `--no-color` sets the parser's own output (help, usage errors), so it must be known before parsing.
+/// `NO_COLOR` and a non-terminal stream are already handled by clap.
 fn parse<I, T>(args: I) -> Result<Cli, clap::Error>
 where
     I: IntoIterator<Item = T>,
@@ -360,7 +355,7 @@ where
     Cli::from_arg_matches(&matches)
 }
 
-/// Ce qu'il reste à faire une fois les arguments lus, le journal installé et la capture éventuelle chargée.
+/// What remains once the arguments are read, the log installed and any capture loaded.
 struct Prepared {
     command: Option<Command>,
     no_gui: bool,
@@ -369,7 +364,7 @@ struct Prepared {
     fixture_reads: Option<Vec<bonk_hal::SourceRead>>,
 }
 
-/// Arguments, mandataire, réglages et journal, capture rejouée. `Err` porte le code de sortie.
+/// `Err` carries the exit code.
 fn prepare<I, T, E, L>(args: I, env: &Env, err: &mut E, install_log: L) -> Result<Prepared, u8>
 where
     I: IntoIterator<Item = T>,
@@ -380,8 +375,8 @@ where
     let cli = match parse(args) {
         Ok(cli) => cli,
         Err(erreur) => {
-            // `print` choisit la sortie adaptée : aide et version sur stdout, erreurs sur stderr.
-            // Un échec d'écriture sur ces flux ne doit pas masquer le code de sortie.
+            // `print` picks the right stream: help and version on stdout, errors on stderr. A write failure
+            // there must not hide the exit code.
             let _ = erreur.print();
             return Err(u8::try_from(erreur.exit_code()).unwrap_or(EXIT_USAGE));
         }
@@ -405,7 +400,7 @@ where
         arch = std::env::consts::ARCH;
         "start"
     );
-    // Capture rejouée : l'énumération vient du fichier, et rien ne peut écrire sur un vrai disque.
+    // Replayed capture: the enumeration comes from the file, and nothing can write to a real disk.
     let fixture_reads = cli
         .global
         .path()
@@ -465,7 +460,6 @@ where
     dispatch(prepared, env, &deps, out, err, gui)
 }
 
-/// Lance la commande demandée.
 fn dispatch<O, E, G>(
     prepared: Prepared,
     env: &Env,

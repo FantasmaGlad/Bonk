@@ -13,8 +13,8 @@ fn ecriture_complete_dans_l_ordre_des_garde_fous() {
         "none",
     ]);
     assert_eq!((code, err.as_str()), (0, ""), "{out}");
-    // Démontage d'abord, ouverture en écriture ensuite, jamais l'inverse ; la table n'est relue qu'une
-    // fois le disque refermé, sinon le noyau garde l'ancienne taille des partitions.
+    // Unmount first, then open for writing, never the reverse; the table is reread only once the disk is
+    // closed, otherwise the kernel keeps the old partition sizes.
     assert_eq!(
         scenario.log(),
         [
@@ -70,8 +70,8 @@ fn une_ecriture_simulee_ne_fait_relire_aucune_table() {
     );
 }
 
-/// Simuler vers l'image elle-même l'écraserait pendant sa lecture : une image compressée serait détruite.
-/// Refusé avant toute ouverture, plan compris, et quel que soit le chemin qui désigne le fichier.
+/// Simulating onto the image itself would overwrite it while reading: a compressed image would be destroyed.
+/// Refused before any open, plan included, whatever path names the file.
 #[test]
 fn une_simulation_vers_sa_propre_source_est_refusee() {
     let source = TempSource::new("meme-fichier", 4096);
@@ -144,7 +144,7 @@ fn dry_run_decrit_sans_rien_faire() {
 fn un_disque_interdit_est_refuse_avant_toute_action() {
     let source = TempSource::new("forbidden", 4096);
     let scenario = Scenario::new();
-    // Même avec --yes et toutes les options ouvertes.
+    // Even with --yes and every option open.
     let (code, out, err) = scenario.run(&[
         "write",
         "nvme-sys",
@@ -176,7 +176,7 @@ fn seul_l_identifiant_stable_designe_une_cible() {
 fn un_disque_remplace_entre_les_deux_enumerations_n_est_pas_ecrit() {
     let source = TempSource::new("remplace", 4096);
     let mut scenario = Scenario::new();
-    // Première énumération : la clé choisie. Seconde (juste avant l'ouverture) : un autre numéro de série.
+    // First enumeration: the chosen key. Second, right before opening: another serial.
     scenario.enumerations = vec![vec![usb("S1")], vec![usb("S2")]];
     let (code, out, err) = scenario.run(&[
         "write",
@@ -191,7 +191,7 @@ fn un_disque_remplace_entre_les_deux_enumerations_n_est_pas_ecrit() {
         out.is_empty() && err.trim_end().ends_with("[E2002]"),
         "{err}"
     );
-    // Le démontage a eu lieu, l'ouverture jamais.
+    // Unmounted, never opened.
     assert_eq!(scenario.log(), ["prepare:/dev/sdb", "unmount:usb-a"]);
     assert!(scenario.written(4096).iter().all(|b| *b == 0));
 }
@@ -307,7 +307,7 @@ fn une_relecture_fausse_fait_echouer_la_verification() {
     ]);
     assert_eq!(code, EXIT_VERIFY_FAILED);
     assert!(err.trim_end().ends_with("[E4002]"), "{err}");
-    // Sans vérification, la même écriture « réussit » : c'est bien la relecture qui détecte.
+    // Without verification the same write "succeeds": the read-back is what detects it.
     let (code, _, _) = scenario.run(&[
         "write",
         "usb-a",
@@ -336,12 +336,12 @@ fn la_commande_verify_compare_sans_ecrire() {
     let (code, out, err) = scenario.run(&["verify", "usb-a", &source.arg(), "--progress", "none"]);
     assert_eq!((code, err.as_str()), (0, ""));
     assert!(out.contains("Verification passed"), "{out}");
-    // Relecture seule : pas de démontage, ouverture en lecture.
+    // Read-back only: no unmount, opened for reading.
     assert_eq!(
         scenario.log(),
         ["prepare:/dev/sdb", "open:/dev/sdb:ReadOnly", "drop_cache"]
     );
-    // Un octet qui change : la comparaison échoue avec le code dédié.
+    // One changed byte: the comparison fails with its own code.
     scenario
         .device
         .0
@@ -389,8 +389,8 @@ fn verify_json_et_progression_json() {
     assert!(done.windows(2).all(|w| w[0] <= w[1]), "{done:?}");
 }
 
-/// La réparation du GPT modifie le MBR de protection et l'en-tête principal : `verify` de la même image
-/// doit pourtant réussir, et non rendre `E4002`, quand le contenu est intact.
+/// The GPT repair changes the protective MBR and the primary header: `verify` of the same image must still
+/// pass, not return `E4002`, when the content is intact.
 #[test]
 fn verify_d_une_image_gpt_reussit_apres_la_reparation_du_gpt() {
     use bonk_core::partition::testing::{LINUX, gpt_image};
@@ -410,7 +410,7 @@ fn verify_d_une_image_gpt_reussit_apres_la_reparation_du_gpt() {
     assert!(out.contains("GPT: repaired"), "{out}");
     let (code, out, err) = scenario.run(&["verify", "usb-a", &source.arg(), "--progress", "none"]);
     assert_eq!((code, err.as_str()), (0, ""), "{out}");
-    // Un octet modifié hors des champs que la réparation réécrit reste détecté.
+    // A byte changed outside the repaired fields is still detected.
     scenario
         .device
         .0
@@ -422,8 +422,8 @@ fn verify_d_une_image_gpt_reussit_apres_la_reparation_du_gpt() {
     assert!(err.trim_end().ends_with("[E4002]"), "{err}");
 }
 
-/// Sans vidage du cache avant la relecture, le contrôle lit le noyau et non le support (2 193 Mo/s
-/// mesurés sur une clé USB 2.0) : une écriture perdue par la clé passerait inaperçue.
+/// Without dropping the cache before the read-back, the check reads the kernel, not the drive (2,193 MB/s
+/// measured on a USB 2.0 key): a write the key lost would go unseen.
 #[test]
 fn la_relecture_de_controle_ne_lit_jamais_le_cache() {
     let source = TempSource::new("cache", 1 << 20);
@@ -467,7 +467,7 @@ fn un_refus_d_autorisation_ne_demonte_rien() {
     assert_eq!(*log, ["prepare:/dev/sdb"], "ni démontage ni ouverture");
 }
 
-/// Gzip fait à la main, blocs non compressés : le contenu est connu sans outil externe.
+/// Hand-made gzip with stored blocks: the content is known without an external tool.
 fn gzip_stored(data: &[u8]) -> Vec<u8> {
     let mut out = vec![0x1F, 0x8B, 8, 0, 0, 0, 0, 0, 0, 0xFF];
     let mut chunks = data.chunks(0xFFFF).peekable();
@@ -498,13 +498,13 @@ fn cut_iso(sectors: u32) -> Vec<u8> {
 
 #[test]
 fn image_compressee_coupee_a_l_interieur_n_aboutit_pas_a_un_succes() {
-    // Annonce 4 Mio pour 1 Mio réel : tient sur la cible, flux gzip complet.
+    // Declares 4 MiB for 1 MiB real: fits on the target, complete gzip stream.
     let source = TempSource::from_bytes("coupee-gz", &gzip_stored(&cut_iso(2048)));
     let scenario = Scenario::new();
     let (code, _, err) = scenario.run(&["write", "usb-a", &source.arg(), "--yes"]);
     assert_eq!(code, EXIT_SOURCE, "{err}");
     assert!(err.contains("E3007"), "{err}");
-    // Le mode brut écrit ce qu'on lui donne, en le journalisant.
+    // Raw mode writes what it is given, and logs it.
     let scenario = Scenario::new();
     let (code, _, err) = scenario.run(&["write", "usb-a", &source.arg(), "--yes", "--mode", "raw"]);
     assert_eq!(code, 0, "{err}");
@@ -572,8 +572,8 @@ fn sans_reparation_demandee_le_gpt_n_est_pas_dit_sain() {
     assert!(!out.contains("nothing to repair"), "{out}");
 }
 
-/// Le fichier est remplacé après son ouverture : l'empreinte porte sur les octets qui seront écrits,
-/// pas sur ce que le chemin désigne au moment du contrôle.
+/// The file is replaced after opening: the hash covers the bytes that will be written, not what the path
+/// names at check time.
 #[test]
 fn l_empreinte_porte_sur_le_fichier_ecrit_meme_remplace_entre_temps() {
     let ecrit = TempSource::from_bytes("piege-empreinte", &[0xAB; 1 << 20]);
@@ -606,11 +606,11 @@ fn l_empreinte_porte_sur_le_fichier_ecrit_meme_remplace_entre_temps() {
     assert!(scenario.written(1 << 20).iter().all(|b| *b == 0));
 }
 
-/// Taille d'une image plus longue que le début lu par l'analyse : seul un passage complet voit sa fin.
+/// Longer than the head the analysis reads: only a full pass sees its end.
 const LONG_IMAGE: usize = 6 << 20;
 
-/// Sans empreinte, une image compressée est décompressée une fois à blanc : des données après le flux sont
-/// refusées avant d'avoir effacé la clé.
+/// Without a hash a compressed image is decompressed once without writing: data after the stream is refused
+/// before erasing the key.
 #[test]
 fn des_donnees_apres_le_flux_sont_refusees_avant_toute_ecriture() {
     let mut image = gzip_stored(&vec![0xAB; LONG_IMAGE]);
@@ -633,7 +633,7 @@ fn des_donnees_apres_le_flux_sont_refusees_avant_toute_ecriture() {
     assert!(scenario.written(4096).iter().all(|b| *b == 0));
 }
 
-/// Une image compressée saine passe : le passage à blanc ne consomme pas le flux de l'écriture.
+/// A healthy compressed image passes: the dry pass does not consume the write stream.
 #[test]
 fn une_image_compressee_saine_s_ecrit_apres_le_passage_a_blanc() {
     let source = TempSource::from_bytes("flux-sain", &gzip_stored(&vec![0xAB; LONG_IMAGE]));
@@ -652,7 +652,7 @@ fn une_image_compressee_saine_s_ecrit_apres_le_passage_a_blanc() {
     assert!(scenario.written(LONG_IMAGE).iter().all(|b| *b == 0xAB));
 }
 
-/// Serveur local d'un seul fichier, servi autant de fois que demandé.
+/// Local server of one file, served as often as asked.
 fn serve_file(body: Vec<u8>) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
     use std::io::{BufRead, BufReader, Write};
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -890,7 +890,7 @@ fn le_flux_json_finit_par_un_evenement_d_erreur_avec_son_code() {
     assert!(err.contains("E3005"), "{err}");
 }
 
-/// Le cache se liste et se vide, et seulement ce qu'il a lui-même rangé : un fichier étranger reste.
+/// Only what the cache stored itself is listed and removed: a foreign file stays.
 #[test]
 fn le_cache_se_liste_et_se_vide_sans_toucher_au_reste() {
     let body = vec![0xCD; 1 << 20];
@@ -938,8 +938,8 @@ fn le_cache_se_liste_et_se_vide_sans_toucher_au_reste() {
     assert!(images.join("autre").exists());
 }
 
-/// Un vidage refusé laisse les données dans un cache qui peut ne jamais atteindre le support : l'écriture
-/// échoue, même si la relecture, servie par ce même cache, semblerait juste.
+/// A refused flush leaves the data in a cache that may never reach the drive: the write fails, even if the
+/// read-back, served by that cache, looks right.
 #[test]
 fn un_vidage_refuse_fait_echouer_l_ecriture() {
     let source = TempSource::new("vidage", 1 << 20);
@@ -961,8 +961,8 @@ fn un_vidage_refuse_fait_echouer_l_ecriture() {
     );
 }
 
-/// La clé arrachée en pleine écriture : échec immédiat, jamais de relecture ni de réparation de la table
-/// sur un support absent, et un message qui dit ce qui s'est passé.
+/// Key pulled out mid-write: immediate failure, never a read-back or table repair on a missing drive, and a
+/// message that says what happened.
 #[test]
 fn une_cle_debranchee_en_ecriture_arrete_tout() {
     let source = TempSource::new("debranchee", 8 << 20);
@@ -989,8 +989,8 @@ fn une_cle_debranchee_en_ecriture_arrete_tout() {
     );
 }
 
-/// Après une réparation de la GPT, l'empreinte affichée par `verify` n'est pas celle de l'éditeur : quelques
-/// octets réparés sont mis à zéro des deux côtés. Elle le dit, au lieu de laisser croire à une image fausse.
+/// After a GPT repair the hash `verify` shows is not the publisher's: a few repaired bytes are zeroed on both
+/// sides. It says so rather than suggest a wrong image.
 #[test]
 fn la_verification_apres_reparation_dit_ce_que_couvre_son_empreinte() {
     use bonk_core::format::table::{TableKind, write_table};

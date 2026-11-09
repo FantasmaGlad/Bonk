@@ -7,7 +7,7 @@ use serde::Serialize;
 
 pub(crate) use bonk_ops::errors::*;
 
-/// Écrit l'erreur sur `err` au format `bonk: error: <message> [Exxxx]` et rend le code de sortie.
+/// `bonk: error: <message> [Exxxx]`; returns the exit code.
 pub(crate) fn report(err: &mut dyn Write, code: Code, message: impl Display) -> u8 {
     let _ = writeln!(err, "bonk: error: {message} [{}]", code.id());
     code.exit()
@@ -15,7 +15,7 @@ pub(crate) fn report(err: &mut dyn Write, code: Code, message: impl Display) -> 
 
 /// Explain an error code
 #[derive(Debug, Args)]
-// `long_about = None` : sans lui, clap reprendrait le commentaire ci-dessus comme texte long.
+// Without it clap would reuse the doc comment above as long help.
 #[command(long_about = None)]
 pub(crate) struct ExplainArgs {
     /// Code to explain (`E1003`); without a code, list all codes
@@ -63,7 +63,7 @@ pub(crate) fn schema() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(ExplainReport)).unwrap_or_default()
 }
 
-/// Les fiches d'erreur en JSON, pour le service ; `None` si le code demandé n'existe pas.
+/// For the service; `None` for an unknown code.
 pub(crate) fn explain_value(code: Option<&str>) -> Option<serde_json::Value> {
     let entries: Vec<EntryJson> = match code {
         Some(code) => vec![EntryJson::from(lookup(code)?)],
@@ -76,7 +76,7 @@ pub(crate) fn explain_value(code: Option<&str>) -> Option<serde_json::Value> {
     .ok()
 }
 
-/// `bonk explain`. Renvoie `false` si le code demandé n'existe pas.
+/// Returns `false` for an unknown code.
 pub(crate) fn explain(args: &ExplainArgs, out: &mut dyn Write) -> io::Result<bool> {
     let entries: Vec<&Entry> = match &args.code {
         Some(code) => match lookup(code) {
@@ -111,7 +111,7 @@ pub(crate) fn explain(args: &ExplainArgs, out: &mut dyn Write) -> io::Result<boo
     Ok(true)
 }
 
-/// Texte d'un code inconnu, avec la liste des codes existants.
+/// With the list of existing codes.
 pub(crate) fn unknown_code_message(text: &str) -> String {
     let ids: Vec<&str> = CATALOG.iter().map(|e| e.id).collect();
     format!("unknown code: '{text}' (codes: {})", ids.join(", "))

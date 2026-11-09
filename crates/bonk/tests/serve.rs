@@ -44,7 +44,7 @@ impl Client {
         Ok(())
     }
 
-    /// Envoie une requête et rend tous les messages jusqu'à sa réponse (événements compris).
+    /// Every message up to its response, events included.
     fn call(
         &mut self,
         id: u64,
@@ -83,7 +83,7 @@ fn le_service_repond_et_s_arrete_a_la_fermeture_de_l_entree() -> Resultat {
             .as_array()
             .is_some_and(|m| m.len() >= 19)
     );
-    // Les erreurs portent leur code, le service continue.
+    // Errors carry their code; the service goes on.
     let inconnu = client.call(3, "inexistante", &json!({}))?;
     assert_eq!(inconnu.last().ok_or("réponse")?["error"]["code"], "E6001");
     let toujours = client.call(4, "ping", &json!({}))?;
@@ -120,7 +120,7 @@ fn ecriture_simulee_par_le_service() -> Resultat {
     );
     assert_eq!(&fs::read(&cible)?[..data.len()], data.as_slice());
 
-    // Vérification, puis détection d'un octet modifié, par le même service.
+    // Verification, then a changed byte detected, by the same service.
     let ok = client.call(11, "disk.verify", &json!({"target": cible.display().to_string(), "simulate": true, "source": source.display().to_string()}))?;
     assert_eq!(ok.last().ok_or("réponse")?["result"]["event"], "result");
     let mut abime = fs::read(&cible)?;
@@ -134,7 +134,7 @@ fn ecriture_simulee_par_le_service() -> Resultat {
         "{erreur}"
     );
 
-    // Un disque réel ne s'écrit pas sans confirmation, même par le service.
+    // A real disk is not written without confirmation, even by the service.
     let sans_yes = client.call(
         13,
         "disk.write",
@@ -146,8 +146,8 @@ fn ecriture_simulee_par_le_service() -> Resultat {
     Ok(())
 }
 
-/// Une requête envoyée dès la réponse reçue ne trouve jamais l'emplacement de l'opération encore pris
-/// (« already running ») : le service le libère avant de répondre.
+/// A request sent as soon as the response arrives never finds the operation slot still taken (already
+/// running): the service frees it before answering.
 #[test]
 fn des_operations_enchainees_sans_attente_ne_sont_jamais_refusees() -> Resultat {
     let dir = std::env::temp_dir().join(format!("bonk-serve-chain-{}", std::process::id()));

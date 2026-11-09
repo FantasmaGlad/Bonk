@@ -69,7 +69,7 @@ pub(crate) fn schema_progress() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(ProgressEvent)).unwrap_or_default()
 }
 
-/// `--quiet` retire la ligne de progression automatique ; `--progress json`, demandé explicitement, reste.
+/// `--quiet` removes the automatic progress line; an explicit `--progress json` stays.
 pub(super) fn progress_mode(mode: ProgressMode, quiet: bool) -> ProgressMode {
     match mode {
         ProgressMode::Auto if quiet => ProgressMode::None,
@@ -77,7 +77,6 @@ pub(super) fn progress_mode(mode: ProgressMode, quiet: bool) -> ProgressMode {
     }
 }
 
-/// Rappel de progression selon le mode choisi.
 pub(super) fn sink<'a>(
     mode: ProgressMode,
     out: &'a mut dyn Write,
@@ -90,7 +89,7 @@ pub(super) fn sink<'a>(
         match mode {
             ProgressMode::None => {}
             ProgressMode::Json => {
-                // Chaque événement part tel quel : un outil qui lit le flux veut tous les paliers.
+                // Every event goes out as is: a tool reading the stream wants every step.
                 let event = ProgressEvent {
                     schema_version: job::SCHEMA_VERSION,
                     event: "progress",

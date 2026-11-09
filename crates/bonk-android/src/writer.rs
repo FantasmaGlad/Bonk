@@ -20,8 +20,8 @@ fn unavailable(what: &str) -> BlockError {
     )))
 }
 
-/// `open` ouvre la clé confiée par l'application. Ni démontage ni relecture de table : Android a détaché son
-/// pilote en donnant la clé, et la reprendra quand l'application la rendra.
+/// `open` opens the key the app handed over. No unmount and no table reread: Android detached its driver when
+/// handing the key, and takes it back when the app returns it.
 fn android_io(open: impl Fn() -> Result<Box<dyn BlockDevice>, BlockError> + 'static) -> Io {
     Io {
         prepare: Box::new(|_, _, _| Ok(())),
@@ -35,7 +35,7 @@ fn android_io(open: impl Fn() -> Result<Box<dyn BlockDevice>, BlockError> + 'sta
     }
 }
 
-/// Le résultat dans le format de la ligne de commande : un seul lecteur, comme sur le bureau.
+/// In the command line format: one reader, as on the desktop.
 fn finished(result: Result<WriteOutcome, job::JobError>) -> Event {
     let failure =
         |message: String, code: Option<String>| Event::Finished(Outcome::Failed { code, message });
@@ -56,7 +56,7 @@ fn finished(result: Result<WriteOutcome, job::JobError>) -> Event {
 
 pub(crate) struct Request<'a> {
     pub(crate) disk_id: &'a str,
-    /// Ce que l'application a réellement ouvert : nom du périphérique USB et sa série (vide sans série).
+    /// What the app really opened: USB device name and its serial (empty without one).
     pub(crate) device: &'a str,
     pub(crate) serial: &'a str,
     pub(crate) source: &'a str,
@@ -65,8 +65,8 @@ pub(crate) struct Request<'a> {
     pub(crate) mbr: bool,
 }
 
-/// La revérification du moteur compare la liste à elle-même sur Android (l'énumération est celle de l'écran) :
-/// seule cette comparaison lie le disque choisi au périphérique que l'application vient d'ouvrir.
+/// The engine re-check compares the list with itself on Android (the enumeration is the screen's): only this
+/// comparison ties the chosen disk to the device the app just opened.
 fn same_drive(disks: &[Disk], disk_id: &str, device: &str, serial: &str) -> Result<(), String> {
     let chosen = disks
         .iter()
@@ -83,8 +83,7 @@ fn same_drive(disks: &[Disk], disk_id: &str, device: &str, serial: &str) -> Resu
     Ok(())
 }
 
-/// Écrit et vérifie, de bout en bout. Bloque : l'application l'appelle hors du fil de l'écran, et lit la
-/// progression par ailleurs.
+/// Writes and verifies end to end. Blocks: the app calls it off the UI thread and reads progress elsewhere.
 pub(crate) fn write(
     request: &Request<'_>,
     open: impl Fn() -> Result<Box<dyn BlockDevice>, BlockError> + 'static,
@@ -166,17 +165,17 @@ mod tests {
         }
     }
 
-    /// La clé ouverte par l'application doit être celle que l'écran a montrée : même branchement, même série.
+    /// The key the app opened must be the one the screen showed: same plug point, same serial.
     #[test]
     fn la_cle_ouverte_doit_etre_celle_choisie() {
         let disks = [disk("/dev/bus/usb/001/002", Some("S1"))];
         assert!(same_drive(&disks, "usb-S1", "/dev/bus/usb/001/002", "S1").is_ok());
-        // Une autre clé arrivée au même endroit, ou la clé choisie rebranchée ailleurs.
+        // Another key at the same place, or the chosen key replugged elsewhere.
         assert!(same_drive(&disks, "usb-S1", "/dev/bus/usb/001/002", "S2").is_err());
         assert!(same_drive(&disks, "usb-S1", "/dev/bus/usb/001/003", "S1").is_err());
-        // Le disque choisi n'est plus dans la liste.
+        // The chosen disk is no longer in the list.
         assert!(same_drive(&disks, "usb-S9", "/dev/bus/usb/001/002", "S1").is_err());
-        // Sans série, le branchement seul départage.
+        // Without a serial, the plug point alone tells them apart.
         let anonymous = [disk("/dev/bus/usb/001/004", None)];
         assert!(
             same_drive(

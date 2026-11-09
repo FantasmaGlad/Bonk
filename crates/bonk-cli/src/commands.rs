@@ -29,7 +29,7 @@ where
     match gui(view) {
         Ok(()) => 0,
         Err(erreur) => {
-            // Pas d'affichage (SSH, serveur) ou pas de rendu utilisable : la CLI reste là.
+            // No display (SSH, server) or no usable rendering: the CLI stays.
             log::debug!(target: "bonk::cli", reason = erreur.as_str(); "window failed to open");
             report(
                 err,
@@ -143,7 +143,7 @@ pub(crate) fn run_diagnose<O: Write, E: Write>(
     }
 }
 
-/// Énumère les disques ; en cas d'échec, écrit l'erreur et renvoie le code de sortie.
+/// On failure, writes the error and returns the exit code.
 pub(crate) fn disks_or_exit<E, F>(err: &mut E, enumerate: F) -> Result<Vec<Disk>, u8>
 where
     E: Write,

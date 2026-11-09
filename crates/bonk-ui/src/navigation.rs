@@ -1,13 +1,13 @@
 use crate::catalog::{CatalogState, writable};
 use crate::model::{Effect, Effects, Focus, Message, Model, Nav, WriteState};
 
-/// Vrai si l'élément `i` de l'ordre de Tab est un disque (faux hors bornes).
+/// False out of bounds.
 pub fn is_disk(order: &[Focus], i: usize) -> bool {
     matches!(order.get(i), Some(Focus::Disk(_)))
 }
 
 impl Model {
-    /// Composants focalisables dans l'ordre de Tab : les commandes, puis les disques affichés.
+    /// Tab order: the controls, then the disks shown.
     pub fn focus_order(&self) -> Vec<Focus> {
         let mut order = vec![Focus::Refresh, Focus::Internal, Focus::Virtual, Focus::All];
         if self.error.is_none() {
@@ -30,7 +30,7 @@ impl Model {
                 }
             }
         }
-        // Hors de la liste : le disque d'une écriture en cours ou finie a pu partir.
+        // Outside the list: the disk of a running or finished write may be gone.
         if matches!(
             self.write,
             WriteState::Running { .. } | WriteState::Finished { .. }
@@ -42,7 +42,7 @@ impl Model {
         order
     }
 
-    /// Le focus ne reste pas sur un disque qui a disparu de la liste (débranché ou masqué).
+    /// Focus does not stay on a disk gone from the list (unplugged or hidden).
     pub fn fix_focus(&mut self) {
         if self
             .focus
@@ -54,7 +54,7 @@ impl Model {
     }
 
     pub fn navigate(&mut self, nav: Nav) -> Effects {
-        // Devant la demande de confirmation, le clavier ne peut que renoncer : Entrée ne doit pas effacer.
+        // In front of the confirmation, the keyboard can only give up: Enter must not erase.
         if self.confirming_internal {
             return if nav == Nav::Escape {
                 self.apply(Message::CloseInternal)
@@ -62,7 +62,7 @@ impl Model {
                 Vec::new()
             };
         }
-        // Menu ouvert : les flèches y circulent, Échap le referme.
+        // Menu open: arrows move in it, Escape closes it.
         if self.menu_open {
             match nav {
                 Nav::Up | Nav::Down => return self.move_in_menu(nav),
@@ -82,7 +82,7 @@ impl Model {
         let target = match nav {
             Nav::Next => Some(current.map_or(0, |i| if i == last { 0 } else { i + 1 })),
             Nav::Previous => Some(current.map_or(last, |i| if i == 0 { last } else { i - 1 })),
-            // Les flèches se déplacent entre les disques ; depuis une commande, Bas entre dans la liste.
+            // Arrows move between disks; from a control, Down enters the list.
             Nav::Down => match current {
                 Some(i)
                     if !matches!(
@@ -94,14 +94,14 @@ impl Model {
                             | Focus::Copy
                     ) =>
                 {
-                    // Disque suivant, en sautant le panneau d'écriture du disque courant.
+                    // Next disk, skipping the current disk's write panel.
                     (i + 1..order.len())
                         .find(|j| is_disk(&order, *j))
                         .or(Some(i))
                 }
                 _ => order.iter().position(|item| matches!(item, Focus::Disk(_))),
             },
-            // Haut remonte d'un disque ; depuis le bouton de copie, il revient au dernier disque.
+            // Up goes back one disk; from the copy button, to the last disk.
             Nav::Up => match current {
                 Some(i)
                     if matches!(
@@ -120,7 +120,7 @@ impl Model {
                             | Focus::Copy
                     ) =>
                 {
-                    // Disque précédent ; depuis les panneaux et le bouton de copie, le disque le plus proche.
+                    // Previous disk; from the panels and the copy button, the nearest disk.
                     let from_disk = matches!(order[i], Focus::Disk(_));
                     (0..i)
                         .rev()
@@ -143,8 +143,8 @@ impl Model {
             return Vec::new();
         };
         self.focus = Some(order[index].clone());
-        // La liste suit le focus : position relative de la carte parmi les disques (approximative si
-        // des détails sont ouverts, suffisante pour garder la carte visible).
+        // The list follows the focus: the card's position among the disks (approximate with open details,
+        // enough to keep it visible).
         let disk_positions: Vec<usize> = (0..order.len()).filter(|i| is_disk(&order, *i)).collect();
         let rank = disk_positions.iter().position(|i| *i == index);
         if let Some(rank) = rank.filter(|_| disk_positions.len() > 1) {
@@ -171,7 +171,7 @@ impl Model {
         )]
     }
 
-    /// Espace ou Entrée : même effet qu'un clic sur le composant qui a le focus.
+    /// Space or Enter: same effect as a click on the focused widget.
     pub fn activate(&mut self) -> Effects {
         let message = match self.focus.clone() {
             Some(Focus::Refresh) => Message::Refresh,
@@ -203,7 +203,7 @@ impl Model {
                 WriteState::Draft { mbr, .. } => Message::ToggleMbr(!mbr),
                 _ => return Vec::new(),
             },
-            // Le champ de l'image reçoit les touches lui-même : Espace et Entrée n'y activent rien.
+            // The image field takes the keys itself: Space and Enter activate nothing there.
             Some(Focus::Image | Focus::Hash) | None => return Vec::new(),
             Some(Focus::Action) => match self.write {
                 WriteState::Draft { .. } => Message::StartWrite,

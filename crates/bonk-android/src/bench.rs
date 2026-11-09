@@ -3,7 +3,7 @@ use std::time::Instant;
 use bonk_core::{BlockDevice, BlockError};
 use sha2::{Digest, Sha256};
 
-/// Loin du début : une image déjà écrite sur la clé reste intacte.
+/// Far from the start: an image already on the key stays intact.
 const BENCH_OFFSET: u64 = 16 << 30;
 const BENCH_BYTES: usize = 64 << 20;
 
@@ -11,10 +11,10 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// Empreinte d'une zone lue sur la clé, et débit.
+/// Hash and throughput of an area read on the key.
 ///
 /// # Errors
-/// Lecture refusée ou clé débranchée.
+/// Read refused, or key unplugged.
 pub fn read_hash(
     disk: &dyn BlockDevice,
     offset: u64,
@@ -30,7 +30,7 @@ pub fn read_hash(
     }))
 }
 
-/// Suite pseudo-aléatoire : les données d'essai ne doivent pas être compressibles par la clé.
+/// Pseudo-random: test data must not be compressible by the key.
 fn pattern(length: usize) -> Vec<u8> {
     let mut state = 0x9E37_79B9_7F4A_7C15_u64;
     let mut data = Vec::with_capacity(length + 8);
@@ -52,11 +52,11 @@ fn write_and_check(disk: &mut dyn BlockDevice, data: &[u8]) -> Result<bool, Bloc
     Ok(back == data)
 }
 
-/// Écrit 64 Mio à 16 Gio, relit, puis rend à la zone son contenu et le vérifie. Même après un échec, la
-/// restauration est tentée : son résultat est toujours dans le rapport.
+/// Writes 64 MiB at 16 GiB, reads back, then restores the area and checks it. The restore is tried even after
+/// a failure, and its result is always in the report.
 ///
 /// # Errors
-/// Clé trop petite, ou zone illisible avant tout changement : rien n'a alors été écrit.
+/// Key too small, or area unreadable before any change: nothing was written then.
 pub fn write_bench(disk: &mut dyn BlockDevice) -> Result<serde_json::Value, BlockError> {
     if disk.size() < BENCH_OFFSET + BENCH_BYTES as u64 {
         return Err(BlockError::Io(std::io::Error::other(
@@ -91,7 +91,7 @@ mod tests {
         fail_writes: bool,
     }
 
-    /// Une clé de 17 Gio dont seule la zone d'essai existe en mémoire.
+    /// A 17 GiB key whose test area alone exists in memory.
     fn memory(fail_writes: bool) -> Memory {
         Memory {
             data: RefCell::new(vec![7; BENCH_BYTES]),

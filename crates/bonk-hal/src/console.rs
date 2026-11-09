@@ -1,14 +1,14 @@
 use std::process::Command;
 
-/// Quitte la console si ce processus en est le seul occupant : personne ne la lit. Rend vrai si c'est fait. Dans
-/// un terminal, la console a aussi le shell comme occupant et reste.
+/// Leaves the console when this process is its only occupant: nobody reads it. In a terminal the shell also
+/// occupies it, and it stays.
 #[must_use]
 pub fn detach_if_alone() -> bool {
     #[cfg(windows)]
     {
         use windows_sys::Win32::System::Console::{FreeConsole, GetConsoleProcessList};
         let mut occupants = [0u32; 2];
-        // SAFETY : le tampon et sa longueur viennent du même tableau ; les deux appels n'ont pas d'autre entrée.
+        // SAFETY: buffer and length come from the same array; neither call takes anything else.
         unsafe { GetConsoleProcessList(occupants.as_mut_ptr(), 2) == 1 && FreeConsole() != 0 }
     }
     #[cfg(not(windows))]
@@ -17,7 +17,7 @@ pub fn detach_if_alone() -> bool {
     }
 }
 
-/// Empêche un sous-processus d'ouvrir sa propre console quand la fenêtre le lance.
+/// Keeps a child from opening its own console when the window starts it.
 pub fn hide_child_console(command: &mut Command) -> &mut Command {
     #[cfg(windows)]
     {
@@ -34,7 +34,7 @@ mod tests {
 
     use super::*;
 
-    /// Les tests tournent dans une console partagée ou sans console : jamais seuls, ils la gardent.
+    /// Tests run in a shared console or none: never alone, they keep it.
     #[test]
     fn une_console_partagee_reste_en_place() {
         assert!(!detach_if_alone());

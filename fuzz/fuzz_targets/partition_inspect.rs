@@ -10,8 +10,8 @@ fn le_u32(buf: &[u8], at: usize) -> u32 {
     u32::from_le_bytes([buf[at], buf[at + 1], buf[at + 2], buf[at + 3]])
 }
 
-/// Recalcule les CRC du GPT primaire : sans cela, le fuzzeur s'arrête presque toujours à leur contrôle
-/// et n'atteint pas l'analyse des entrées.
+/// Recomputes the primary GPT CRCs: otherwise the fuzzer almost always stops at their check and never
+/// reaches the entry analysis.
 fn fix_primary_gpt_crcs(disk: &mut [u8]) {
     let header = SECTOR;
     if disk.len() < 2 * SECTOR {
@@ -50,7 +50,7 @@ fuzz_target!(|data: &[u8]| {
         fix_primary_gpt_crcs(&mut disk);
     }
     if let Ok(dev) = MemoryDevice::from_bytes(disk, SECTOR as u32) {
-        // Un contenu incohérent devient un constat ou une erreur : seule une panique est un défaut.
+        // Inconsistent content becomes a finding or an error: only a panic is a bug.
         let _ = inspect(&dev);
     }
 });

@@ -29,9 +29,9 @@ fn help_reussit_et_commence_par_la_description_de_l_outil() -> Resultat {
     Ok(())
 }
 
-/// Sans argument, Bonk ouvre la fenêtre. Sans affichage graphique (SSH, serveur), il échoue
-/// proprement et renvoie vers la ligne de commande, sans panique. Le test retire les variables
-/// d'affichage : aucune fenêtre ne s'ouvre, même sur un poste de bureau.
+/// Without arguments Bonk opens the window. Without a display (SSH, server) it fails cleanly and points to
+/// the command line, without a panic. The test removes the display variables: no window opens, even on a
+/// desktop.
 #[cfg(all(unix, not(target_os = "macos")))]
 #[test]
 fn sans_argument_et_sans_affichage_renvoie_vers_la_ligne_de_commande() -> Resultat {
@@ -72,10 +72,9 @@ fn list_aide_decrit_les_options() -> Resultat {
     Ok(())
 }
 
-/// Sur la machine qui exécute le test, `bonk list --json` doit soit réussir avec un JSON versionné,
-/// soit échouer proprement (code 1, message sur stderr, rien sur stdout) : jamais un autre état.
-/// Le contenu dépend de la machine et n'est pas vérifié ici ; les règles le sont par les tests des
-/// crates `bonk-hal` et `bonk-cli`.
+/// On the machine running the test, `bonk list --json` either succeeds with versioned JSON or fails cleanly
+/// (code 1, message on stderr, nothing on stdout): never another state. The content depends on the machine;
+/// the rules are tested in `bonk-hal` and `bonk-cli`.
 #[test]
 fn list_json_reussit_ou_echoue_proprement() -> Resultat {
     let sortie = bonk().args(["list", "--json", "--all"]).output()?;
@@ -96,7 +95,7 @@ fn list_json_reussit_ou_echoue_proprement() -> Resultat {
     Ok(())
 }
 
-/// Le disque du runner porte le système : il doit être listé et interdit, jamais proposé.
+/// The runner's disk carries the system: it must be listed and forbidden, never offered.
 #[cfg(any(windows, target_os = "macos"))]
 #[test]
 fn le_disque_systeme_du_runner_est_interdit() -> Resultat {
@@ -123,7 +122,7 @@ fn le_disque_systeme_du_runner_est_interdit() -> Resultat {
     Ok(())
 }
 
-/// Sans énumération sur ce système : échec propre et message explicite.
+/// No enumeration on this system: clean failure and explicit message.
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 #[test]
 fn list_hors_linux_echoue_avec_un_message_clair() -> Resultat {
@@ -152,7 +151,7 @@ fn debug_sources_json_reussit_ou_echoue_proprement() -> Resultat {
     Ok(())
 }
 
-/// Le journal verbeux va sur la sortie d'erreur et ne pollue jamais la sortie des commandes.
+/// The verbose log goes to stderr and never pollutes command output.
 #[test]
 fn le_journal_va_sur_stderr_et_la_sortie_reste_du_json() -> Resultat {
     let sortie = bonk()
@@ -167,7 +166,7 @@ fn le_journal_va_sur_stderr_et_la_sortie_reste_du_json() -> Resultat {
     let journal = String::from_utf8(sortie.stderr)?;
     let lignes: Vec<&str> = journal.lines().collect();
     assert!(!lignes.is_empty());
-    // Une ligne par événement, chacune un objet JSON complet.
+    // One line per event, each a complete JSON object.
     for ligne in &lignes {
         assert!(
             ligne.starts_with("{\"component\"") && ligne.ends_with('}'),
@@ -181,17 +180,16 @@ fn le_journal_va_sur_stderr_et_la_sortie_reste_du_json() -> Resultat {
     Ok(())
 }
 
-/// Sous un affichage virtuel (Xvfb), wgpu peut paniquer (« incompatible window kind ») au lieu de
-/// basculer sur le rendu logiciel : Bonk se relance alors en `tiny-skia`, et la fenêtre reste ouverte
-/// jusqu'à l'arrêt par `timeout` (code 124), sans panique. Quand wgpu réussit (pilote logiciel
-/// présent), seule l'ouverture sans panique est vérifiée. Ignoré hors CI si `xvfb-run` ou `timeout`
-/// manque ; en CI, leur absence fait échouer le test.
+/// Under a virtual display (Xvfb) wgpu may panic ("incompatible window kind") instead of switching to
+/// software rendering: Bonk then relaunches with `tiny-skia`, and the window stays open until `timeout` stops
+/// it (code 124), without a panic. When wgpu succeeds (software driver present), only opening without a panic
+/// is checked. Skipped outside CI if `xvfb-run` or `timeout` is missing; in CI their absence fails the test.
 #[cfg(all(unix, not(target_os = "macos")))]
 #[cfg(feature = "gui")]
 #[test]
 fn sous_affichage_virtuel_le_rendu_bascule_en_logiciel() -> Resultat {
-    // Sans serveur X, `bonk` ne se lance même pas et le test ne dirait rien du repli : saut hors CI,
-    // échec en CI (`common::decider`).
+    // Without an X server `bonk` does not even start and the test would say nothing of the fallback: skipped
+    // outside CI, failed in CI (`common::decider`).
     if !common::affichage_virtuel_disponible() {
         return Ok(());
     }
@@ -205,8 +203,8 @@ fn sous_affichage_virtuel_le_rendu_bascule_en_logiciel() -> Resultat {
         .env_remove("ICED_BACKEND")
         .env_remove("BONK_RENDER_FALLBACK")
         .output()?;
-    // Selon la distribution, `xvfb-run` renvoie la sortie d'erreur de la commande sur sa sortie standard
-    // (`2>&1` du script Debian) : le journal se lit donc dans les deux flux.
+    // Depending on the distribution `xvfb-run` sends the command's stderr to its stdout (`2>&1` in the Debian
+    // script): the log is read from both streams.
     let journal = format!(
         "{}{}",
         String::from_utf8_lossy(&sortie.stdout),
@@ -218,12 +216,11 @@ fn sous_affichage_virtuel_le_rendu_bascule_en_logiciel() -> Resultat {
         "statut : {:?}\n{journal}",
         sortie.status,
     );
-    // Le message par défaut d'une panique (« thread 'main' panicked ») ne doit pas atteindre l'utilisateur ;
-    // le journal verbeux, lui, raconte le repli.
+    // The default panic message must not reach the user; the verbose log tells the fallback.
     assert!(!journal.contains("thread 'main' panicked"), "{journal}");
-    // Le repli n'a lieu que si wgpu panique : sur la machine du mainteneur c'est le cas sous Xvfb, pas sur
-    // l'exécuteur de CI, où un pilote logiciel (llvmpipe) permet à wgpu de réussir. Quand la fenêtre
-    // panique, le repli est donc exigé ; sinon le test garantit seulement qu'elle s'ouvre sans panique.
+    // The fallback only happens if wgpu panics: on the maintainer's machine under Xvfb it does, not on the CI
+    // runner, where a software driver (llvmpipe) lets wgpu succeed. When the window panics the fallback is
+    // required; otherwise the test only ensures it opens without a panic.
     if journal.contains("window panicked") {
         assert!(
             journal.contains("restarting with the software renderer"),
@@ -233,9 +230,9 @@ fn sous_affichage_virtuel_le_rendu_bascule_en_logiciel() -> Resultat {
     Ok(())
 }
 
-/// Capture puis rejeu : ce que `list` voit sur cette machine, `--fixture` le redonne depuis la capture,
-/// sans que les numéros de série ni le nom d'utilisateur y figurent. Linux seulement (seul système où
-/// l'énumération existe) ; ignoré si l'énumération échoue ici (conteneur sans udev).
+/// Capture then replay: what `list` sees here, `--fixture` gives back from the capture, without the serials
+/// or the user name. Linux only (the only system with enumeration here); skipped if the enumeration fails
+/// (container without udev).
 #[cfg(target_os = "linux")]
 #[test]
 fn une_capture_rejouee_donne_les_memes_verdicts() -> Resultat {
@@ -290,7 +287,7 @@ fn une_capture_rejouee_donne_les_memes_verdicts() -> Resultat {
     assert!(!a.is_empty());
     assert_eq!(a, b, "la capture rejouée diffère de la lecture directe");
 
-    // Aucun secret ne sort dans la capture : on cherche les numéros de série lus ici.
+    // No secret leaves in the capture: look for the serials read here.
     let texte = std::fs::read_to_string(&capture)?;
     let direct_json: serde_json::Value = serde_json::from_slice(&direct.stdout)?;
     for disk in direct_json["disks"].as_array().into_iter().flatten() {
@@ -304,7 +301,7 @@ fn une_capture_rejouee_donne_les_memes_verdicts() -> Resultat {
         assert!(!texte.contains(&user), "nom d'utilisateur dans la capture");
     }
 
-    // Rejouer ne doit jamais pouvoir écrire sur un vrai disque.
+    // Replaying must never be able to write to a real disk.
     let id = direct_json["disks"][0]["id"]
         .as_str()
         .unwrap_or("x")
@@ -326,7 +323,7 @@ fn une_capture_rejouee_donne_les_memes_verdicts() -> Resultat {
         .args(["debug", "sources"])
         .output()?;
     common::assert_code(&sources, 2);
-    // Un fichier qui n'est pas une capture est refusé clairement.
+    // A file that is not a capture is refused clearly.
     let faux = dossier.join("faux.json");
     std::fs::write(&faux, "{}")?;
     let invalide = bonk().arg("--fixture").arg(&faux).arg("list").output()?;
@@ -335,7 +332,7 @@ fn une_capture_rejouee_donne_les_memes_verdicts() -> Resultat {
     Ok(())
 }
 
-/// Sous `--fixture`, le bas niveau lit un fichier image, jamais un disque réel, même désigné par son chemin.
+/// Under `--fixture` the low level reads an image file, never a real disk, even named by its path.
 #[test]
 fn fixture_refuse_la_lecture_brute_d_un_disque() -> Result<(), Box<dyn std::error::Error>> {
     let dossier = std::env::temp_dir().join(format!("bonk-fixture-brut-{}", std::process::id()));
@@ -373,8 +370,8 @@ fn fixture_refuse_la_lecture_brute_d_un_disque() -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
-/// Le service écrit sur les disques qu'il énumère : sous `--fixture`, il prendrait les disques de la capture
-/// pour vrais et ouvrirait le vrai `/dev/<nom>` du même nom, sans que le filtre ait jugé ce disque-là.
+/// The service writes to the disks it enumerates: under `--fixture` it would take the captured disks as real
+/// and open the real `/dev/<name>` of the same name, which the filter never judged.
 #[test]
 fn fixture_refuse_le_service() -> Result<(), Box<dyn std::error::Error>> {
     let dossier = std::env::temp_dir().join(format!("bonk-fixture-serve-{}", std::process::id()));
@@ -397,7 +394,7 @@ fn fixture_refuse_le_service() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// `--no-gui` : un script n'ouvre jamais de fenêtre par accident, même sous un affichage.
+/// `--no-gui`: a script never opens a window by accident, even with a display.
 #[test]
 fn no_gui_affiche_l_aide_et_n_ouvre_jamais_la_fenetre() -> Result<(), Box<dyn std::error::Error>> {
     let seul = bonk().env("DISPLAY", ":0").arg("--no-gui").output()?;
@@ -410,7 +407,7 @@ fn no_gui_affiche_l_aide_et_n_ouvre_jamais_la_fenetre() -> Result<(), Box<dyn st
     Ok(())
 }
 
-/// Couleurs forcées par l'environnement : seule l'option peut alors les retirer.
+/// Colours forced by the environment: only the option can remove them then.
 fn aide_coloree(options: &[&str]) -> Result<String, std::io::Error> {
     let sortie = Command::new(env!("CARGO_BIN_EXE_bonk"))
         .args(options)
@@ -436,7 +433,7 @@ fn quiet_refuse_verbose_et_tait_les_avertissements() -> Result<(), std::io::Erro
         .output()?;
     assert_eq!(refus.status.code(), Some(2));
 
-    // Une configuration illisible n'est qu'un avertissement : le journal le dit, sauf avec --quiet.
+    // An unreadable configuration is only a warning: the log says so, except with --quiet.
     let dossier = std::env::temp_dir().join(format!("bonk-quiet-{}", std::process::id()));
     std::fs::create_dir_all(&dossier)?;
     let config = dossier.join("config.json");

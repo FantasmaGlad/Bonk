@@ -46,8 +46,8 @@ impl Platform for Linux {
         if elevation == Elevation::Never {
             return Err(denied(path));
         }
-        // Lecture seule, quel que soit le besoin : c'est la même action polkit, mémorisée quelques
-        // minutes, et fermer un descripteur en écriture ferait relire le disque par le noyau.
+        // Read-only whatever the need: same polkit action, remembered for a few minutes, and closing a write
+        // descriptor would make the kernel reread the disk.
         udisks::open(path, "r", libc::O_CLOEXEC, cancelled).map(drop)
     }
 
@@ -108,7 +108,7 @@ impl Platform for Linux {
     }
 
     fn is_privileged(&self) -> bool {
-        // SAFETY : aucun argument, aucune erreur possible.
+        // SAFETY: no argument, cannot fail.
         unsafe { libc::geteuid() == 0 }
     }
 
@@ -134,8 +134,7 @@ struct System<'a> {
     udisks: &'a dyn Fn(&Path) -> Result<(), BlockError>,
 }
 
-/// Démonte tout ce que porte le disque et rend les points démontés ; les suivants ne sont pas tentés
-/// après un échec.
+/// Returns the unmounted points; stops at the first failure.
 fn unmount_all(disk: &Disk, elevation: Elevation) -> Result<Vec<String>, OpenTargetError> {
     unmount_all_with(
         disk,
@@ -158,11 +157,11 @@ fn unmount_all_with(
         Ok(done) => return Ok(done),
         Err(error) => error,
     };
-    // Le service du système peut ouvrir une demande d'autorisation : jamais sans personne devant l'écran.
+    // The service may open an authorization prompt: never with nobody in front of the screen.
     if elevation == Elevation::Never {
         return Err(error);
     }
-    // `umount` n'a pas le droit de tout démonter pour un utilisateur ordinaire : le service, si.
+    // `umount` may not unmount everything for a normal user; the service may.
     for partition in disk
         .partitions
         .iter()
@@ -180,8 +179,8 @@ fn unmount_all_with(
     Ok(mounts)
 }
 
-/// Un point de la partition est-il encore monté ? `umount` a pu en démonter une partie avant d'échouer.
-/// Une table illisible ne prouve rien : la partition est tenue pour montée, et le service essaie.
+/// `umount` may have unmounted part of it before failing. An unreadable table proves nothing: the partition
+/// counts as mounted, and the service tries.
 fn still_mounted(partition: &Partition, table: io::Result<String>) -> bool {
     match table {
         Ok(table) => table
@@ -204,7 +203,7 @@ fn denied(path: &Path) -> BlockError {
     ))
 }
 
-/// Les droits de l'appelant suffisent-ils ? `access(2)` ne touche pas au disque.
+/// `access(2)` does not touch the disk.
 fn has_access(path: &Path, access: Access) -> bool {
     use std::os::unix::ffi::OsStrExt;
 
@@ -215,7 +214,7 @@ fn has_access(path: &Path, access: Access) -> bool {
         Access::ReadOnly => libc::R_OK,
         Access::ReadWrite => libc::R_OK | libc::W_OK,
     };
-    // SAFETY : `name` est une chaîne C valide pendant tout l'appel.
+    // SAFETY: `name` is a valid C string for the whole call.
     unsafe { libc::access(name.as_ptr(), mode) == 0 }
 }
 
@@ -278,14 +277,12 @@ mod tests {
         assert!(
             matches!(error, Some(OpenTargetError::Unmount(ref m)) if m.contains("busy") && m.contains("/a/b"))
         );
-        // Le second point n'est pas tenté après l'échec du premier.
         assert_eq!(*called.borrow(), ["/a/b"]);
-        // Un disque sans montage n'a rien à démonter.
         assert_eq!(unmount_with(&[], &ok).ok(), Some(vec![]));
     }
 
-    /// Sans élévation, l'échec d'`umount` est final : le service du système n'est pas sollicité. Le point
-    /// n'existe pas : `umount` échoue sans rien toucher.
+    /// Without elevation an `umount` failure is final: the service is not asked. The point does not exist, so
+    /// `umount` fails without touching anything.
     #[test]
     fn sans_elevation_le_repli_par_le_service_n_a_pas_lieu() {
         let disk = Disk {
@@ -345,8 +342,7 @@ mod tests {
         }
     }
 
-    /// `umount` refusé, puis UDisks2 refusé aussi : les deux causes restent lisibles, celle du service
-    /// surtout, qui dit pourquoi le repli n'a pas suffi.
+    /// `umount` and UDisks2 both refuse: both causes stay readable, the service's above all.
     #[test]
     fn l_echec_du_service_garde_sa_cause() {
         let system = System {
@@ -365,8 +361,8 @@ mod tests {
         );
     }
 
-    /// Une table des montages illisible ne prouve pas que la partition est démontée : le service est
-    /// sollicité, au lieu d'annoncer un démontage qui n'a pas eu lieu.
+    /// An unreadable mount table does not prove the partition is unmounted: the service is asked instead of
+    /// claiming an unmount that did not happen.
     #[test]
     fn une_table_illisible_ne_vaut_pas_demontage() {
         use std::cell::Cell;

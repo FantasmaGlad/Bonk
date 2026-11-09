@@ -21,11 +21,10 @@ use crate::image::Access;
 use crate::target::OpenTargetError;
 use crate::windows_facts::{disk_number, partition_numbers};
 
-/// Alignement mémoire exigé par `FILE_FLAG_NO_BUFFERING` : le secteur, 4 Kio au plus sur ces supports.
+/// Alignment `FILE_FLAG_NO_BUFFERING` requires: the sector, at most 4 KiB on these drives.
 const MEMORY_ALIGN: usize = 4096;
 
-/// Pose NTFS par `Format-Volume`. L'étiquette passe par l'environnement : rien de ce qu'elle
-/// contient n'est interprété par PowerShell.
+/// The label goes through the environment: PowerShell interprets nothing in it.
 pub(super) fn format_partition(
     partition: &Path,
     fs: Filesystem,
@@ -106,7 +105,7 @@ pub(super) fn prepare(path: &Path, access: Access) -> Result<(), BlockError> {
     }
 }
 
-/// Disque entier ouvert sans tampon du système : la relecture lit bien le support.
+/// Opened without system buffering: the read-back reads the drive.
 pub(super) struct WindowsDisk {
     file: File,
     size: u64,
@@ -119,14 +118,14 @@ pub(super) fn open(path: &Path, access: Access) -> Result<WindowsDisk, BlockErro
     from_file(open_file(path, access)?, access)
 }
 
-/// Reprend un disque déjà ouvert, ici ou par le helper. Sa taille se lit sur la poignée : c'est bien celui-là.
+/// Opened here or by the helper. The size is read on the handle: it is that disk.
 pub(super) fn from_file(file: File, access: Access) -> Result<WindowsDisk, BlockError> {
     let geometry = ioctl_raw(
         file.as_raw_handle(),
         IOCTL_DISK_GET_DRIVE_GEOMETRY_EX,
         size_of::<DISK_GEOMETRY_EX>() + 512,
     )?;
-    // SAFETY : l'appel a réussi, le système a écrit la géométrie dans ce tampon aligné.
+    // SAFETY: the call succeeded and wrote the geometry into this aligned buffer.
     let (size, block_size) = unsafe {
         let info = &*geometry.as_ptr().cast::<DISK_GEOMETRY_EX>();
         (
@@ -143,7 +142,7 @@ pub(super) fn from_file(file: File, access: Access) -> Result<WindowsDisk, Block
     })
 }
 
-/// Tampon aligné en mémoire, pris dans un `Vec` plus grand : aucun `unsafe` pour une exigence de l'API.
+/// Aligned slice of a larger `Vec`: no `unsafe` for an API requirement.
 fn aligned(storage: &mut Vec<u8>, len: usize) -> &mut [u8] {
     storage.resize(len + MEMORY_ALIGN, 0);
     let start = storage.as_ptr().align_offset(MEMORY_ALIGN);
@@ -206,7 +205,7 @@ impl BlockDevice for WindowsDisk {
     }
 }
 
-/// Verrouille et démonte chaque volume du disque ; rend les points démontés.
+/// Locks and dismounts each volume of the disk; returns the unmounted points.
 pub(super) fn unmount(path: &str) -> Result<Vec<String>, OpenTargetError> {
     let number = disk_number(path)
         .ok_or_else(|| OpenTargetError::Unmount(format!("{path}: not a whole disk")))?;

@@ -5,11 +5,11 @@ use std::path::Path;
 
 use bonk_core::msc::{BulkError, BulkTransport, Direction};
 
-/// Sans réponse dans ce délai, la clé est tenue pour perdue. Vider son cache peut prendre longtemps.
+/// No answer within this, the key is lost. Flushing its cache can take long.
 const TIMEOUT_MS: u32 = 60_000;
 
-/// Taille d'un transfert. Le noyau réserve son tampon d'un seul bloc : sur un téléphone dont la mémoire est
-/// fragmentée, 1 Mio finit par être refusé alors qu'il reste de la place, et l'écriture s'arrêtait là.
+/// The kernel allocates its buffer in one piece: on a phone with fragmented memory 1 MiB ends up refused
+/// while memory remains, and the write stopped there.
 const TRANSFER_START: usize = 256 << 10;
 const TRANSFER_MIN: usize = 16 << 10;
 
@@ -30,8 +30,8 @@ pub struct StorageInterface {
     pub endpoint_out: u8,
 }
 
-/// Première interface SCSI « bulk-only ». Une clé qui n'expose qu'UAS n'est pas prise en charge. Des
-/// descripteurs tronqués ne donnent rien plutôt qu'une lecture hors bornes.
+/// First bulk-only SCSI interface; a UAS-only key is not supported. Truncated descriptors give nothing rather
+/// than an out-of-bounds read.
 #[must_use]
 pub(crate) fn find_storage_interface(descriptors: &[u8]) -> Option<StorageInterface> {
     let mut current: Option<u8> = None;
@@ -114,8 +114,7 @@ const USBDEVFS_CLEAR_HALT: u64 = request(READ, 21, size_of::<u32>());
 const USBDEVFS_DISCONNECT: u64 = request(0, 22, 0);
 const USBDEVFS_CONNECT: u64 = request(0, 23, 0);
 
-/// Lance un transfert d'au plus `*limit` octets. Sans mémoire, le noyau refuse avant de toucher au bus : on
-/// recommence plus petit, et la taille réduite vaut pour la suite.
+/// Out of memory, the kernel refuses before touching the bus: retry smaller, and keep the smaller size.
 fn with_shrinking_limit(
     limit: &mut usize,
     wanted: usize,
@@ -140,29 +139,29 @@ fn bulk_error(error: io::Error) -> BulkError {
     }
 }
 
-/// Une interface de stockage réclamée. La lâcher rend la clé au pilote du noyau.
+/// Releasing it gives the key back to the kernel driver.
 #[derive(Debug)]
 pub struct UsbfsTransport {
     device: File,
     interface: StorageInterface,
-    /// L'interface a été réclamée ici, et se rend ici. Sous Android, c'est l'application qui la tient.
+    /// Claimed here, released here. On Android the app holds it.
     claimed_here: bool,
     transfer_limit: usize,
 }
 
 impl UsbfsTransport {
-    /// Ouvre `/dev/bus/usb/BBB/DDD`, détache le pilote du noyau et réclame l'interface de stockage.
+    /// Opens `/dev/bus/usb/BBB/DDD`, detaches the kernel driver and claims the storage interface.
     ///
     /// # Errors
-    /// Droits insuffisants, périphérique absent, ou pas d'interface de stockage « bulk-only ».
+    /// Missing rights, missing device, or no bulk-only storage interface.
     pub fn open(path: &Path) -> io::Result<Self> {
         Self::from_device(OpenOptions::new().read(true).write(true).open(path)?)
     }
 
-    /// Même chose sur un descripteur déjà ouvert, comme celui que donne Android.
+    /// On a descriptor already open, as Android gives it.
     ///
     /// # Errors
-    /// Pas d'interface de stockage « bulk-only », ou réclamation refusée.
+    /// No bulk-only storage interface, or claim refused.
     pub(crate) fn from_device(mut device: File) -> io::Result<Self> {
         let mut descriptors = Vec::new();
         device.read_to_end(&mut descriptors)?;
@@ -180,7 +179,7 @@ impl UsbfsTransport {
             code: USBDEVFS_DISCONNECT as libc::c_int,
             data: std::ptr::null_mut(),
         };
-        // Sans pilote attaché, le système répond ENODATA : la voie est déjà libre.
+        // Without a driver attached the system answers ENODATA: the way is already free.
         if let Err(error) = transport.ioctl(USBDEVFS_IOCTL, (&raw mut detach).cast())
             && error.raw_os_error() != Some(libc::ENODATA)
         {
@@ -191,11 +190,11 @@ impl UsbfsTransport {
         Ok(transport)
     }
 
-    /// Sur un descripteur dont l'interface est déjà réclamée : Android le fait par
-    /// `claimInterface(interface, true)` et donne les descripteurs par `getRawDescriptors()`.
+    /// On a descriptor whose interface is already claimed: Android does it with `claimInterface(interface,
+    /// true)` and gives the descriptors with `getRawDescriptors()`.
     ///
     /// # Errors
-    /// Pas d'interface de stockage « bulk-only ».
+    /// No bulk-only storage interface.
     pub fn from_claimed(device: File, descriptors: &[u8]) -> io::Result<Self> {
         let interface = find_storage_interface(descriptors).ok_or_else(|| {
             io::Error::new(io::ErrorKind::Unsupported, "no bulk-only storage interface")
@@ -209,8 +208,8 @@ impl UsbfsTransport {
     }
 
     fn ioctl(&mut self, code: u64, argument: *mut libc::c_void) -> io::Result<usize> {
-        // SAFETY: `argument` pointe sur la structure qu'attend `code`, vivante pendant l'appel, et les
-        // tampons qu'elle désigne ont la longueur annoncée. Le cast suit le type de `ioctl` selon la libc.
+        // SAFETY: `argument` points to the struct `code` expects, alive during the call, and the buffers it
+        // names have the declared length. The cast follows the libc's `ioctl` type.
         let done = unsafe { libc::ioctl(self.device.as_raw_fd(), code as _, argument) };
         usize::try_from(done).map_err(|_| io::Error::last_os_error())
     }
@@ -220,7 +219,7 @@ impl UsbfsTransport {
         let result = with_shrinking_limit(&mut limit, length, |size| {
             let mut transfer = BulkTransfer {
                 endpoint: u32::from(endpoint),
-                // `size` ne dépasse jamais `TRANSFER_START`.
+                // `size` never exceeds `TRANSFER_START`.
                 length: size as u32,
                 timeout_ms: TIMEOUT_MS,
                 data: data.cast(),
@@ -237,7 +236,7 @@ impl BulkTransport for UsbfsTransport {
         let endpoint = self.interface.endpoint_out;
         let mut sent = 0;
         while sent < data.len() {
-            // Le système ne fait que lire ce tampon lors d'un envoi.
+            // The system only reads this buffer when sending.
             let rest = data[sent..].as_ptr().cast_mut();
             match self.bulk(endpoint, rest, data.len() - sent)? {
                 0 => {
@@ -252,8 +251,8 @@ impl BulkTransport for UsbfsTransport {
     }
 
     fn receive(&mut self, buf: &mut [u8]) -> Result<usize, BulkError> {
-        // Un transfert est plafonné à `transfer_limit` : enchaîner jusqu'au tampon plein ou au paquet court,
-        // seul signe que la clé a fini (contrat de `BulkTransport::receive`).
+        // A transfer is capped at `transfer_limit`: chain until the buffer is full or a short packet arrives,
+        // the only sign the key is done (`BulkTransport::receive` contract).
         let mut done = 0;
         while done < buf.len() {
             let asked = (buf.len() - done).min(self.transfer_limit);
@@ -316,7 +315,7 @@ impl Drop for UsbfsTransport {
 mod tests {
     use super::*;
 
-    /// Clé réelle type : périphérique, configuration, interface de stockage, deux points de terminaison.
+    /// Typical real key: device, configuration, storage interface, two endpoints.
     fn stockage() -> Vec<u8> {
         let mut bytes = vec![18, 1];
         bytes.extend([0; 16]);

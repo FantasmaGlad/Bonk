@@ -183,7 +183,7 @@ pub(crate) fn schema_capabilities() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(CapabilitiesReport)).unwrap_or_default()
 }
 
-/// Ajoute ce que ne dit pas la plateforme : un Tor local, proposé par `--proxy`, jamais activé seul.
+/// A local Tor, offered for `--proxy`, never enabled alone.
 fn with_tor(mut capabilities: Vec<Capability>) -> Vec<Capability> {
     capabilities.push(Capability {
         name: "proxy.tor".to_owned(),

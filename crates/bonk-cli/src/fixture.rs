@@ -5,7 +5,6 @@ use bonk_hal::SourceRead;
 use clap::Args;
 use serde::Deserialize;
 
-/// Options globales liées aux captures.
 #[derive(Debug, Args)]
 pub(crate) struct GlobalArgs {
     /// Replay a captured enumeration (`bonk diagnose --capture`) instead of reading this system:
@@ -20,7 +19,7 @@ pub(crate) struct GlobalArgs {
 }
 
 impl GlobalArgs {
-    /// L'option, sinon la variable : un réglage oublié ne doit pas pouvoir faire sortir en direct.
+    /// The option, else the variable: a forgotten setting must not let traffic out directly.
     pub(crate) fn proxy(&self, vars: &[(String, String)]) -> Option<String> {
         self.proxy.clone().or_else(|| {
             vars.iter()
@@ -45,7 +44,7 @@ struct Document {
     reads: Option<Vec<SourceRead>>,
 }
 
-/// Lit les lectures d'un rapport `diagnose --capture` (ou d'une capture seule).
+/// Reads of a `diagnose --capture` report, or of a capture alone.
 pub(crate) fn load(path: &Path) -> Result<Vec<SourceRead>, String> {
     let text =
         fs::read_to_string(path).map_err(|e| format!("{}: could not read: {e}", path.display()))?;

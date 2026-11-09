@@ -16,15 +16,14 @@ use super::verify::drop_cache_before_verify;
 use super::write::confirm_internal;
 use crate::errors::Code;
 
-/// Au-delà, `exfat` plutôt que `fat32` : la limite usuelle des outils et le seuil attendu des appareils.
+/// Above this, `exfat` rather than `fat32`: the usual tool limit and what devices expect.
 const FAT32_DEFAULT_LIMIT: u64 = 32 << 30;
-/// Regards sur le système en attendant la partition ou le système de fichiers : une demi-minute avec la
-/// pause de 250 ms.
+/// Looks at the system while waiting for the partition or filesystem: half a minute with the 250 ms pause.
 const PARTITION_LOOKS: u32 = 120;
 
 pub struct FormatJob {
     pub target: Target,
-    /// `None` : [`default_filesystem`].
+    /// `None`: [`default_filesystem`].
     pub filesystem: Option<Filesystem>,
     pub table: TableKind,
     pub label: Option<String>,
@@ -36,7 +35,6 @@ pub struct FormatJob {
     pub elevation: Elevation,
 }
 
-/// Système de fichiers choisi quand rien n'est demandé.
 #[must_use]
 pub fn default_filesystem(size: u64) -> Filesystem {
     if size <= FAT32_DEFAULT_LIMIT {
@@ -50,7 +48,7 @@ fn format_error(err: FormatError) -> JobError {
     fail(Code::FormatFailed, err)
 }
 
-/// Taille de cluster d'un système de fichiers que Bonk écrit lui-même ; `None` pour l'outil de l'hôte.
+/// `None` for host tools.
 fn native_cluster_bytes(
     filesystem: Filesystem,
     sectors: u64,
@@ -63,7 +61,6 @@ fn native_cluster_bytes(
     })
 }
 
-/// Écrit puis relit le volume vide d'un système de fichiers natif.
 fn write_native(
     device: &mut dyn BlockDevice,
     filesystem: Filesystem,
@@ -128,7 +125,7 @@ fn verify_native(
     }
 }
 
-/// Refuse avant tout geste un système de fichiers que cet hôte ne sait pas écrire sur cette cible.
+/// Before any action.
 fn check_available(fs: Filesystem, chosen: &Chosen, deps: &Deps<'_>) -> Result<(), JobError> {
     if fs.is_native() {
         return Ok(());
@@ -161,8 +158,8 @@ fn check_available(fs: Filesystem, chosen: &Chosen, deps: &Deps<'_>) -> Result<(
     }
 }
 
-/// Graine des identifiants du support : deux formatages ne doivent pas donner les mêmes GUID. Seule source
-/// d'horloge et de hasard du formatage : `bonk-core` n'en a pas, ses tests restent déterministes.
+/// Two formats must not give the same GUIDs. The only clock and randomness of formatting: `bonk-core` has
+/// none, so its tests stay deterministic.
 pub(super) fn fresh_seed(target: &str) -> Vec<u8> {
     use std::hash::{BuildHasher, RandomState};
 
@@ -173,7 +170,7 @@ pub(super) fn fresh_seed(target: &str) -> Vec<u8> {
     format!("{target}:{nanos}:{}:{random}", std::process::id()).into_bytes()
 }
 
-/// La table vient d'être relue : pas d'erreur, et la partition voulue.
+/// No error, and the wanted partition.
 fn check_table(dev: &dyn BlockDevice, part: PartitionPlan) -> Result<(), JobError> {
     let layout = inspect(dev).map_err(|e| fail(Code::FormatFailed, e))?;
     if let Some(finding) = layout
@@ -206,8 +203,8 @@ fn check_table(dev: &dyn BlockDevice, part: PartitionPlan) -> Result<(), JobErro
     }
 }
 
-/// Attend que le système montre la nouvelle partition, reconnue à sa taille : il peut garder un moment
-/// l'ancienne table, et formater une ancienne partition de la même place détruirait la mauvaise zone.
+/// Recognized by its size: the system may keep the old table for a while, and formatting an old partition at
+/// the same place would destroy the wrong area.
 fn wait_for_partition(
     id: &str,
     expected_bytes: u64,
@@ -235,8 +232,7 @@ fn wait_for_partition(
     Ok(None)
 }
 
-/// L'outil de l'hôte ne se relit pas ici octet par octet : sa sortie n'est pas interprétée. Le système
-/// doit au moins reconnaître le résultat.
+/// The host tool's output is not parsed: the system must at least recognize the result.
 fn wait_for_filesystem(id: &str, fs: Filesystem, deps: &Deps<'_>) -> Result<(), JobError> {
     for _ in 0..PARTITION_LOOKS {
         let disks = enumerate(deps)?;
@@ -264,8 +260,8 @@ fn write_volume(
     ids: &Ids,
     cancelled: &dyn Fn() -> bool,
 ) -> Result<(PartitionPlan, Option<u32>), JobError> {
-    // Sur le vrai support, avant la table : le plan comptait en secteurs de 512 octets, et une table écrite
-    // pour rien aurait déjà effacé la clé.
+    // On the real drive, before the table: the plan counted 512-byte sectors, and a table written for nothing
+    // would already have erased the key.
     let block = device.block_size();
     let planned = table::plan(device.size(), block, kind).map_err(format_error)?;
     let cluster_bytes =
@@ -292,8 +288,7 @@ struct HostDisk<'a> {
     elevation: Elevation,
 }
 
-/// Le disque est rendu au système : il relit la table, montre la partition, et y pose exFAT, NTFS ou
-/// ext4 avec ses propres outils.
+/// The system rereads the table, shows the partition and formats it with its own tools.
 fn hand_over_to_host(
     disk: &HostDisk<'_>,
     partition_bytes: u64,
@@ -310,9 +305,9 @@ fn hand_over_to_host(
                 "the system does not show the new partition: nothing was formatted on it",
             )
         })?;
-        // L'outil de l'hôte écrit sur un chemin : le disque qui le porte doit être celui qu'on a choisi, même
-        // identifiant, même série, même taille. Le filtre complet n'est pas repassé : le système vient de
-        // monter la nouvelle partition (Windows lui donne une lettre aussitôt), et ce montage est le nôtre.
+        // The host tool writes to a path: its disk must be the chosen one (same id, serial, size). The full
+        // filter is not run again: the system just mounted the new partition (Windows gives it a letter at
+        // once), and that mount is ours.
         let disks = enumerate(deps)?;
         let found = disks
             .iter()
@@ -329,7 +324,7 @@ fn hand_over_to_host(
             .map_err(|e| fail(Code::FormatFailed, e))?;
         wait_for_filesystem(&disk.identity.id, filesystem, deps)?;
     } else if path.is_none() {
-        // FAT32 est écrit et relu : le système le verra au prochain branchement.
+        // FAT32 is written and read back: the system will see it at the next plug.
         log::warn!(target: "bonk::write", "new partition not visible yet: unplug and replug the disk");
     }
     Ok(())
@@ -352,8 +347,8 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
         .map_err(|message| fail(Code::InvalidArgument, message))?;
     check_available(filesystem, &chosen, deps)?;
 
-    // Refus par la géométrie avant tout geste, avec le secteur annoncé par le système ; il est relu à
-    // l'ouverture, avant d'écrire la table.
+    // Geometry refusal before any action, with the sector size the system reports; it is read again at open,
+    // before writing the table.
     let block = chosen.block_size();
     let planned = table::plan(size, block, job.table).map_err(format_error)?;
     let cluster_bytes =
@@ -469,8 +464,8 @@ mod volume_tests {
         Ids::from_seed(b"essai")
     }
 
-    /// Le plan se calcule en secteurs de 512 octets : sur des secteurs de 4 Kio, seul le vrai support dit que
-    /// FAT32 ne tient pas. Le refus doit venir avant la table, pas après.
+    /// The plan uses 512-byte sectors: on 4 KiB sectors only the real drive shows FAT32 does not fit. The
+    /// refusal must come before the table.
     #[test]
     fn fat32_refuse_sur_secteurs_de_4_kio_ne_laisse_aucune_table() {
         let mut device = MemoryDevice::new(100 << 20, 4096).unwrap();
@@ -486,7 +481,7 @@ mod volume_tests {
         assert!(device.as_bytes().iter().all(|b| *b == 0));
     }
 
-    /// L'annulation est vue entre deux étapes : pas de système de fichiers après une table annulée.
+    /// Cancel is seen between steps: no filesystem after a cancelled table.
     #[test]
     fn l_annulation_arrete_le_formatage_entre_ses_etapes() {
         let mut device = MemoryDevice::new(100 << 20, 512).unwrap();

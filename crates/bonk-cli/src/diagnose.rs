@@ -12,16 +12,15 @@ use serde_json::Value;
 use crate::list::Entry;
 use crate::logging::iso8601;
 
-/// Version du format du rapport, incrémentée à chaque changement incompatible.
+/// Bumped at each incompatible change.
 const SCHEMA_VERSION: u32 = 1;
 
-/// Remplaçant des valeurs masquées.
 const SERIAL_MASK: &str = "<serial>";
 const USER_MASK: &str = "<user>";
 
 /// Support report (read-only, JSON)
 #[derive(Debug, Args)]
-// `long_about = None` : sans lui, clap reprendrait le commentaire ci-dessus comme texte long.
+// Without it clap would reuse the doc comment above as long help.
 #[command(long_about = None)]
 pub(crate) struct DiagnoseArgs {
     /// Write the report to this file (refuses to overwrite an existing file) instead of the output
@@ -107,7 +106,7 @@ pub(crate) fn schema() -> Value {
     serde_json::to_value(schemars::schema_for!(Report)).unwrap_or_default()
 }
 
-/// Informations de l'environnement lues par le rapport, injectables pour les tests.
+/// Injectable for tests.
 pub(crate) struct Environment {
     pub(crate) now: SystemTime,
     pub(crate) kernel: Option<String>,
@@ -129,7 +128,7 @@ impl Environment {
     }
 }
 
-/// Construit le rapport. Un échec d'énumération n'est pas un échec du diagnostic : il y figure.
+/// An enumeration failure is not a diagnosis failure: it is in the report.
 #[cfg(test)]
 pub(crate) fn build(
     args: &DiagnoseArgs,
@@ -139,7 +138,6 @@ pub(crate) fn build(
     build_with_capture(args, env, enumeration, None)
 }
 
-/// Comme [`build`], avec les lectures de sources à joindre en capture.
 pub(crate) fn build_with_capture(
     args: &DiagnoseArgs,
     env: &Environment,
@@ -189,8 +187,8 @@ pub(crate) fn build_with_capture(
     };
     let mut value = serde_json::to_value(&report)?;
     if !args.include_serials {
-        // Les lectures aussi : une énumération en échec ne rend aucun disque, mais ses lectures restent
-        // dans le rapport, avec les numéros dans les liens `by-id`.
+        // The reads too: a failed enumeration returns no disk, but its reads stay in the report, with the
+        // serials in the `by-id` links.
         let serials: Vec<&str> = disks
             .iter()
             .filter_map(|disk| disk.serial.as_deref())
@@ -202,7 +200,7 @@ pub(crate) fn build_with_capture(
     Ok(value)
 }
 
-/// Clés udev qui identifient un exemplaire de matériel ou un utilisateur : jamais dans une capture.
+/// udev keys that identify a hardware unit or a user: never in a capture.
 const UDEV_SENSITIVE_KEYS: [&str; 11] = [
     "ID_SERIAL",
     "ID_SERIAL_SHORT",
@@ -217,9 +215,9 @@ const UDEV_SENSITIVE_KEYS: [&str; 11] = [
     "ID_FS_LABEL_ENC",
 ];
 
-/// Masque, dans un enregistrement udev, ce qui identifie le disque ou son propriétaire : numéros de
-/// série, WWN, UUID, étiquettes et les liens `by-uuid`, `by-partuuid`, `by-label` et `wwn-`. Le reste
-/// (bus, signatures, types de partition) est ce qui sert à rejouer l'énumération.
+/// Masks what identifies the disk or its owner: serials, WWN, UUID, labels and the `by-uuid`, `by-partuuid`,
+/// `by-label` and `wwn-` links. The rest (bus, signatures, partition types) is what replaying the enumeration
+/// needs.
 fn sanitize_udev(text: &str) -> String {
     text.lines()
         .map(|line| {
@@ -249,7 +247,6 @@ fn sanitize_udev(text: &str) -> String {
         .join("\n")
 }
 
-/// Numéros de série qu'une lecture contient en clair.
 fn serials_read(read: &SourceRead) -> Vec<&str> {
     let content = read.content.as_deref().unwrap_or_default();
     if read.path.ends_with("/serial") {
@@ -281,7 +278,7 @@ fn sanitize_reads(reads: &[SourceRead]) -> Vec<SourceRead> {
             if read.kind == "file" && read.path.contains(bonk_hal::UDEV_DATA) {
                 read.content = read.content.as_deref().map(sanitize_udev);
             }
-            // Sans disque énuméré, `redact` ne connaît aucun numéro : celui-ci se masque d'après sa source.
+            // Without an enumerated disk `redact` knows no serial: this one is masked from its source.
             if read.kind == "file" && read.path.ends_with("/serial") && read.content.is_some() {
                 read.content = Some(SERIAL_MASK.to_owned());
             }
@@ -290,9 +287,8 @@ fn sanitize_reads(reads: &[SourceRead]) -> Vec<SourceRead> {
         .collect()
 }
 
-/// Masque les numéros de série (partout où ils apparaissent, dans les identifiants `by-id` compris) et
-/// le nom d'utilisateur (comme composant de chemin : `/run/media/alice/CLE`). Le nom n'est masqué que
-/// comme composant entier, pour ne pas abîmer d'autres mots.
+/// Masks serials everywhere, `by-id` ids included, and the user name as a whole path component
+/// (`/run/media/alice/CLE`), so other words stay intact.
 fn redact(value: &mut Value, serials: &[&str], user: Option<&str>) {
     match value {
         Value::String(text) => {
@@ -318,7 +314,7 @@ fn redact(value: &mut Value, serials: &[&str], user: Option<&str>) {
     }
 }
 
-/// Le rapport de diagnostic en JSON, pour le service.
+/// For the service.
 pub(crate) fn report_value(
     include_serials: bool,
     env: &Environment,
@@ -332,7 +328,7 @@ pub(crate) fn report_value(
     build_with_capture(&args, env, enumeration, None)
 }
 
-/// Écrit le rapport sur `out`, ou dans le fichier demandé. Renvoie le message à afficher le cas échéant.
+/// To `out` or to the requested file. Returns the message to print, if any.
 pub(crate) fn run(
     args: &DiagnoseArgs,
     env: &Environment,
@@ -440,7 +436,7 @@ mod tests {
             report["enumeration"]["disks"][0]["partitions"][0]["mount_points"][0],
             "/run/media/<user>/CLE"
         );
-        // Le reste reste lisible : le modèle, les tailles, les étiquettes.
+        // The rest stays readable: model, sizes, labels.
         assert_eq!(report["enumeration"]["disks"][0]["model"], "SanDisk Cruzer");
         assert_eq!(
             report["enumeration"]["disks"][0]["partitions"][0]["label"],
@@ -511,7 +507,7 @@ mod tests {
     fn le_rapport_ne_contient_aucune_valeur_de_variable_d_environnement()
     -> Result<(), serde_json::Error> {
         let report = build(&args(false), &env(), &Ok(vec![]))?;
-        // Seules des présences (booléens) figurent : jamais la valeur de DISPLAY ou autre.
+        // Only presence flags: never the value of DISPLAY or the like.
         assert!(
             report["graphics"]
                 .as_object()
@@ -532,7 +528,7 @@ mod tests {
         }
     }
 
-    /// Le rapport part chez le support : le masquage ne peut pas dépendre de la réussite de l'énumération.
+    /// The report goes to support: masking cannot depend on the enumeration succeeding.
     #[test]
     fn une_enumeration_en_echec_ne_laisse_pas_passer_de_numero_de_serie()
     -> Result<(), serde_json::Error> {
@@ -564,7 +560,7 @@ mod tests {
         ];
         let report = build_with_capture(&args(false), &env(), &Ok(vec![disk()]), Some(&reads))?;
         let text = report.to_string();
-        // Rien d'identifiant n'a survécu.
+        // Nothing identifying survived.
         for (champ, valeur) in [
             ("numéro de série", "4C530001"),
             ("WWN", "0x5000cca"),
@@ -577,7 +573,7 @@ mod tests {
         let udev_out = report["capture"]["reads"][0]["content"]
             .as_str()
             .ok_or_else(|| serde_json::Error::io(std::io::Error::other("contenu")))?;
-        // Ce qui sert à rejouer l'énumération reste.
+        // What replaying the enumeration needs stays.
         for kept in [
             "E:ID_FS_TYPE=vfat",
             "E:ID_BUS=usb",
@@ -591,7 +587,6 @@ mod tests {
             report["capture"]["reads"][1]["content"],
             "90 44 8:17 / /run/media/<user>/CLE rw - vfat /dev/sdb1 rw\n"
         );
-        // Sans --capture, pas de section capture.
         assert!(build(&args(false), &env(), &Ok(vec![]))?["capture"].is_null());
         Ok(())
     }
@@ -610,7 +605,7 @@ mod tests {
         assert!(String::from_utf8(out)?.starts_with("Report written to "));
         let written: Value = serde_json::from_str(&std::fs::read_to_string(&path)?)?;
         assert_eq!(written["schema_version"], 1);
-        // Un second appel ne remplace pas le fichier.
+        // A second call does not replace the file.
         let second = run(&with_file, &env(), &Ok(vec![]), None, &mut Vec::new());
         assert!(second.is_err_and(|e| e.kind() == io::ErrorKind::AlreadyExists));
         std::fs::remove_file(&path)?;

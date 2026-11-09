@@ -13,8 +13,7 @@ pub(super) struct MountEntry {
     pub(super) source: String,
 }
 
-/// Lit `/proc/self/mountinfo`. Une ligne illisible fait échouer l'énumération : mieux vaut ne rien
-/// proposer qu'ignorer un montage.
+/// An unreadable line fails the enumeration: better to offer nothing than to miss a mount.
 pub(super) fn parse_mountinfo(text: &str) -> Result<Vec<MountEntry>, EnumerateError> {
     let malformed = |line: &str| EnumerateError::Malformed {
         what: "mountinfo".to_owned(),
@@ -22,8 +21,7 @@ pub(super) fn parse_mountinfo(text: &str) -> Result<Vec<MountEntry>, EnumerateEr
     };
     let mut entries = Vec::new();
     for line in text.lines().filter(|l| !l.trim().is_empty()) {
-        // Un point de montage contenant « - » est échappé, donc le premier « - » isolé est bien le
-        // séparateur entre les champs fixes et les champs de type de système de fichiers.
+        // A mount point containing " - " is escaped, so the first lone "-" is the separator.
         let (before, after) = line.split_once(" - ").ok_or_else(|| malformed(line))?;
         let fields: Vec<&str> = before.split_whitespace().collect();
         let tail: Vec<&str> = after.split_whitespace().collect();
@@ -39,7 +37,7 @@ pub(super) fn parse_mountinfo(text: &str) -> Result<Vec<MountEntry>, EnumerateEr
     Ok(entries)
 }
 
-/// Défait l'échappement du noyau : `\040` pour l'espace, `\011` la tabulation, `\134` l'antislash...
+/// Undoes kernel escaping: `\040` space, `\011` tab, `\134` backslash...
 pub(super) fn unescape_octal(raw: &str) -> String {
     let bytes = raw.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
@@ -61,16 +59,14 @@ pub(super) fn unescape_octal(raw: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// Montages indexés par numéro de périphérique et par nom.
-///
-/// Le numéro seul ne suffit pas : btrfs rapporte un numéro anonyme (`0:50`) et seule la source
-/// (`/dev/sdc1`) désigne le vrai périphérique.
+/// By device number and by name: btrfs reports an anonymous number (`0:50`) and only the source (`/dev/sdc1`)
+/// names the real device.
 pub(super) struct MountIndex {
     pub(super) by_devnum: BTreeMap<String, Vec<String>>,
     pub(super) by_name: BTreeMap<String, Vec<String>>,
 }
 
-/// Nom du périphérique (`sda1`) derrière une source de montage (`/dev/sda1`, `/dev/disk/by-uuid/...`).
+/// `sda1` behind a mount source (`/dev/sda1`, `/dev/disk/by-uuid/...`).
 pub(super) fn device_name(roots: &LinuxRoots, source: &str) -> Option<String> {
     let relative = source.strip_prefix("/dev/")?;
     let path = roots.dev.join(relative);

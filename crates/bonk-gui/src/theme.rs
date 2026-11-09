@@ -3,13 +3,13 @@ use iced::widget::{button, checkbox, container, text_input};
 use iced::{Border, Color, Theme};
 
 pub(crate) const BACKGROUND: Color = Color::WHITE;
-/// Texte et éléments actifs `#000000` (21:1 sur le fond).
+/// `#000000` (21:1 on the background).
 pub(crate) const TEXT: Color = Color::BLACK;
-/// Texte secondaire `#333333` (12,6:1 sur le fond).
+/// `#333333` (12.6:1 on the background).
 pub(crate) const SECONDARY: Color = Color::from_rgb(0.2, 0.2, 0.2);
-/// Contour de composant interactif `#000000` (21:1 ; WCAG 1.4.11 exige 3:1).
+/// `#000000` (21:1; WCAG 1.4.11 asks for 3:1).
 pub(crate) const CONTROL_BORDER: Color = Color::BLACK;
-/// Fond d'un composant survolé `#E5E5E5` (texte noir dessus : 16,7:1).
+/// `#E5E5E5` (black text on it: 16.7:1).
 pub(crate) const HOVER: Color = Color::from_rgb(0.898, 0.898, 0.898);
 
 const RADIUS: f32 = 2.0;
@@ -28,7 +28,7 @@ pub(crate) fn bonk() -> Theme {
     )
 }
 
-/// Bouton primaire : fond noir, texte blanc (21:1) ; gris foncé au survol.
+/// Black background, white text (21:1); dark grey on hover.
 pub(crate) fn primary_button(_theme: &Theme, status: button::Status) -> button::Style {
     let background = match status {
         button::Status::Hovered | button::Status::Pressed => SECONDARY,
@@ -46,8 +46,8 @@ pub(crate) fn primary_button(_theme: &Theme, status: button::Status) -> button::
     }
 }
 
-/// Carte de disque cliquable : contour noir de 1 px ; la sélection et le survol l'épaississent à 3 px
-/// (le survol grise en plus le fond), sans reposer sur la couleur.
+/// 1 px black border; selection and hover thicken it to 3 px (hover also greys the background), never relying
+/// on colour.
 pub(crate) fn card_button(selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |_theme, status| {
         let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
@@ -64,7 +64,7 @@ pub(crate) fn card_button(selected: bool) -> impl Fn(&Theme, button::Status) -> 
     }
 }
 
-/// Panneau d'information (erreur) : contour noir de 2 px, pour se distinguer sans couleur.
+/// 2 px black border, to stand out without colour.
 pub(crate) fn panel(_theme: &Theme) -> container::Style {
     container::Style {
         background: Some(BACKGROUND.into()),
@@ -77,8 +77,8 @@ pub(crate) fn panel(_theme: &Theme) -> container::Style {
     }
 }
 
-/// Case à cocher : contour noir même décochée (une case est un composant, WCAG 1.4.11), fond noir et
-/// coche blanche une fois cochée.
+/// Black border even unchecked (a checkbox is a component, WCAG 1.4.11), black fill and white tick when
+/// checked.
 pub(crate) fn checkbox_style(_theme: &Theme, status: checkbox::Status) -> checkbox::Style {
     let checked = match status {
         checkbox::Status::Active { is_checked }
@@ -97,9 +97,8 @@ pub(crate) fn checkbox_style(_theme: &Theme, status: checkbox::Status) -> checkb
     }
 }
 
-/// Indicateur de focus clavier : contour de 3 px de la couleur du texte, séparé du composant par un
-/// espace (le composant lui-même peut déjà être noir). Hors focus, le contour est transparent : la mise
-/// en page ne bouge pas quand le focus se déplace.
+/// 3 px ring in the text colour, separated from the widget by a gap (the widget may already be black).
+/// Transparent without focus: the layout does not move when focus moves.
 pub(crate) fn focus_ring(focused: bool) -> impl Fn(&Theme) -> container::Style {
     move |_theme| container::Style {
         border: Border {
@@ -111,7 +110,7 @@ pub(crate) fn focus_ring(focused: bool) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
-/// Champ de saisie : fond blanc, contour noir de 2 px (un champ est un composant, WCAG 1.4.11).
+/// White background, 2 px black border (an input is a component, WCAG 1.4.11).
 pub(crate) fn input_style(_theme: &Theme, status: text_input::Status) -> text_input::Style {
     text_input::Style {
         background: BACKGROUND.into(),
