@@ -353,8 +353,8 @@ fn panel_state(model: &Model) -> Value {
                 ),
                 "mbr": mbr,
                 "mbr_label": lang.pick(
-                    "Windows drive (extraction, FAT32, UEFI boot): MBR table instead of GPT",
-                    "Clé Windows (extraction, FAT32, démarrage UEFI) : table MBR au lieu de GPT",
+                    "Windows drive: MBR table, boots in BIOS and UEFI (GPT: UEFI only)",
+                    "Clé Windows : table MBR, démarre en BIOS et en UEFI (GPT : UEFI seul)",
                 ),
                 "button": text::write_button(lang, elapsed, empty),
                 "enabled": elapsed >= WRITE_DELAY && !empty,
@@ -560,6 +560,7 @@ mod tests {
             Filesystem::Fat32,
             Some("DONNEES"),
             &Ids::from_seed(b"cle"),
+            false,
         )?;
         let partitions = partitions_of(&bonk_core::partition::inspect(&dev)?);
         assert_eq!(partitions.len(), 1);

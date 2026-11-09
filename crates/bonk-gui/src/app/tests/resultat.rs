@@ -51,6 +51,7 @@ fn fermer_le_resultat_ne_rouvre_pas_le_panneau() {
         verified: true,
         gpt_repaired: false,
         secure_boot: None,
+        bios_boot: false,
     })));
     let _ = app.update(Message::DismissWrite);
     assert!(matches!(app.write, WriteState::Idle), "{:?}", app.write);

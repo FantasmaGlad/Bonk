@@ -177,6 +177,7 @@ fn progression_puis_resultat() {
         verified: true,
         gpt_repaired: true,
         secure_boot: None,
+        bios_boot: false,
     })));
     assert!(matches!(&app.write, WriteState::Finished { .. }));
     assert!(contient(

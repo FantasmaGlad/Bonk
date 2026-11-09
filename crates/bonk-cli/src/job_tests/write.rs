@@ -1002,6 +1002,7 @@ fn la_verification_apres_reparation_dit_ce_que_couvre_son_empreinte() {
         Filesystem::Fat32,
         None,
         &Ids::from_seed(b"img"),
+        false,
     )
     .expect("table");
     let source = TempSource::from_bytes("gpt-a-reparer", image.as_bytes());

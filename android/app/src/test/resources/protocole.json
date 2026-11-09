@@ -171,7 +171,7 @@
         "image_hint": "Adresse https:// de l'image",
         "kind": "draft",
         "mbr": false,
-        "mbr_label": "Clé Windows (extraction, FAT32, démarrage UEFI) : table MBR au lieu de GPT",
+        "mbr_label": "Clé Windows : table MBR, démarre en BIOS et en UEFI (GPT : UEFI seul)",
         "menu": {
           "all_categories": "Toutes les catégories",
           "all_systems": "Tous les systèmes",

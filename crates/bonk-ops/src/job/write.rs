@@ -1,12 +1,12 @@
 use std::path::{Path, PathBuf};
 
-use bonk_core::BlockDevice;
 use bonk_core::analysis::{self, ImageKind, ImageReport};
 use bonk_core::codec::Format;
 use bonk_core::format::table::TableKind;
 use bonk_core::partition::inspect;
 use bonk_core::repair::{RepairReport, needs_repair, repair_gpt};
 use bonk_core::write::{self as engine, Control, DEFAULT_CHUNK, Phase, Progress, VerifyError};
+use bonk_core::{BlockDevice, DEFAULT_BLOCK_SIZE};
 use bonk_hal::{Access, Elevation, Eligibility, FilterOptions, Warning, evaluate};
 
 use super::extract::Extraction;
@@ -364,7 +364,7 @@ fn write_windows(
             image,
             sha256_checked,
             steps,
-            Some(windows.describe(job.table)),
+            Some(windows.describe(job.table, DEFAULT_BLOCK_SIZE)),
         ));
     }
     confirm(job, &chosen)?;
@@ -585,6 +585,7 @@ mod tests {
             Filesystem::Fat32,
             None,
             &Ids::from_seed(b"gpt"),
+            false,
         )?;
         let mut support = MemoryDevice::new(16 << 20, 512)?;
         support.write_at(0, image.as_bytes())?;

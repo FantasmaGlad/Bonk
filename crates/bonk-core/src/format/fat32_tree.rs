@@ -91,13 +91,16 @@ fn pack_short(base: &str, ext: &str) -> [u8; 11] {
     field
 }
 
-/// Nom court unique dans son dossier : tel quel s'il est valide, sinon `BASE~N.EXT`.
+/// Nom court unique dans son dossier : le nom en majuscules s'il est valide, sinon `BASE~N.EXT`. Le
+/// booléen dit qu'une entrée longue doit garder le nom exact.
 fn short_name(name: &str, taken: &mut BTreeSet<[u8; 11]>) -> Result<([u8; 11], bool), FormatError> {
     let (base, ext) = name.rsplit_once('.').unwrap_or((name, ""));
-    if is_plain_short(name) {
-        let field = pack_short(base, ext);
+    let upper = name.to_ascii_uppercase();
+    if is_plain_short(&upper) {
+        let (upper_base, upper_ext) = upper.rsplit_once('.').unwrap_or((&upper, ""));
+        let field = pack_short(upper_base, upper_ext);
         if taken.insert(field) {
-            return Ok((field, false));
+            return Ok((field, upper != name));
         }
     }
     let (clean_base, clean_ext) = (short_chars(base, 8), short_chars(ext, 3));
@@ -577,6 +580,7 @@ mod tests {
             sectors: (64 << 20) / 512,
             label: Some("CLE"),
             volume_id: 7,
+            bios_boot: false,
         }
     }
 
@@ -591,11 +595,26 @@ mod tests {
     fn un_nom_court_valide_reste_tel_quel_les_autres_recoivent_un_nom_unique() {
         let mut taken = BTreeSet::new();
         assert!(!short_name("BOOT.WIM", &mut taken).unwrap().1);
-        let (a, long) = short_name("bootmgr.efi", &mut taken).unwrap();
+        let (a, long) = short_name("bootmgr-x.efi", &mut taken).unwrap();
         assert!(long);
         assert_eq!(&a, b"BOOTMG~1EFI");
-        let (b, _) = short_name("bootmgr-x.efi", &mut taken).unwrap();
+        let (b, _) = short_name("bootmgr-y.efi", &mut taken).unwrap();
         assert_eq!(&b, b"BOOTMG~2EFI");
+    }
+
+    /// Le second étage du démarrage BIOS cherche `BOOTMGR` ; l'ISO de Windows le nomme en minuscules.
+    #[test]
+    fn un_nom_court_en_minuscules_garde_son_nom_en_majuscules() {
+        let mut taken = BTreeSet::new();
+        let (short, long) = short_name("bootmgr", &mut taken).unwrap();
+        assert_eq!(&short, b"BOOTMGR    ");
+        assert!(long);
+        assert_eq!(
+            &short_name("setup.exe", &mut taken).unwrap().0,
+            b"SETUP   EXE"
+        );
+        let (again, _) = short_name("BootMgr", &mut taken).unwrap();
+        assert_eq!(&again, b"BOOTMG~1   ");
     }
 
     /// Valeurs de la spécification : somme de contrôle du nom court, ordre et remplissage des entrées.

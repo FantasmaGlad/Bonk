@@ -84,8 +84,9 @@ pub fn outcome(lang: Lang, outcome: &Outcome) -> String {
             verified,
             gpt_repaired,
             secure_boot,
+            bios_boot,
         } => format!(
-            "{} {} {}{}{}.{}",
+            "{} {} {}{}{}{}.{}",
             lang.pick("WRITE FINISHED:", "ÉCRITURE TERMINÉE :"),
             format_size(*bytes, lang),
             lang.pick("written", "écrits"),
@@ -96,6 +97,11 @@ pub fn outcome(lang: Lang, outcome: &Outcome) -> String {
             },
             if *gpt_repaired {
                 lang.pick(", backup GPT repaired", ", GPT de secours réparé")
+            } else {
+                ""
+            },
+            if *bios_boot {
+                lang.pick(", boots in BIOS and UEFI", ", démarre en BIOS et en UEFI")
             } else {
                 ""
             },
@@ -190,6 +196,7 @@ mod tests {
             verified: true,
             gpt_repaired: false,
             secure_boot: Some(signer),
+            bios_boot: false,
         }
     }
 
@@ -210,6 +217,30 @@ mod tests {
         assert!(!en.contains(" :"), "{en}");
         let unsigned = outcome(Lang::Fr, &windows(Signer::Unsigned));
         assert!(unsigned.contains("chargeur non signé"), "{unsigned}");
+    }
+
+    #[test]
+    fn une_cle_qui_demarre_aussi_en_bios_le_dit() {
+        let line = serde_json::json!({
+            "event": "result",
+            "write": {"bytes": 1},
+            "verify": {"bytes": 1},
+            "gpt_repair": null,
+            "extraction": {"signer": "unsigned", "firmware": ["uefi", "bios"]},
+        })
+        .to_string();
+        let Some(crate::event::Event::Finished(done)) = crate::event::parse_line(&line) else {
+            panic!("résultat non lu");
+        };
+        assert!(matches!(
+            done,
+            Outcome::Done {
+                bios_boot: true,
+                ..
+            }
+        ));
+        assert!(outcome(Lang::Fr, &done).contains("démarre en BIOS et en UEFI"));
+        assert!(!outcome(Lang::En, &windows(Signer::Unsigned)).contains("BIOS"));
     }
 
     /// Un processus d'écriture arrêté sans ligne d'erreur : le titre suit la langue de la fenêtre, jamais une

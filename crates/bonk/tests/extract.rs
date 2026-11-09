@@ -208,3 +208,88 @@ fn une_cible_trop_petite_est_refusee_sans_rien_ecrire() {
     assert_eq!(out.status.code(), Some(6));
     assert!(String::from_utf8_lossy(&out.stderr).contains("E3003"));
 }
+
+fn windows_iso_bios(loader_path: &str, machine: u16) -> Vec<u8> {
+    let bootmgr: Vec<u8> = (0..50_000u32).map(|i| (i * 7) as u8).collect();
+    let content: Vec<u8> = (0..200_000u32).map(|i| i as u8).collect();
+    build(&[
+        (loader_path, &loader(machine)),
+        ("bootmgr", &bootmgr),
+        ("sources/install.wim", &content),
+    ])
+}
+
+#[test]
+fn une_table_mbr_porte_le_code_bios_et_bootmgr_garde_son_nom_court() {
+    let d = Dossier::new("bios");
+    let (iso, cle) = (d.file("win.iso"), d.file("cle.img"));
+    fs::write(&iso, windows_iso_bios("efi/boot/bootx64.efi", 0x8664)).expect("écriture de l'ISO");
+    let write = |table: &str, extra: &[&str]| {
+        let mut args = vec![
+            "write",
+            "--simulate",
+            &cle,
+            &iso,
+            "--size",
+            "134217728",
+            "--table",
+            table,
+        ];
+        args.extend_from_slice(extra);
+        bonk(&args)
+    };
+
+    let gpt = write("gpt", &["--dry-run"]);
+    let text = String::from_utf8_lossy(&gpt.stdout);
+    assert!(text.contains("BIOS boot: no, GPT table"), "{text}");
+
+    let done = write("mbr", &["--yes", "--progress", "none", "--json"]);
+    let text = String::from_utf8_lossy(&done.stdout);
+    assert!(
+        done.status.success(),
+        "{text}\n{}",
+        String::from_utf8_lossy(&done.stderr)
+    );
+    let value: serde_json::Value = serde_json::from_str(&text).expect("JSON");
+    assert_eq!(
+        value["extraction"]["firmware"],
+        serde_json::json!(["uefi", "bios"])
+    );
+
+    let bytes = fs::read(&cle).expect("lecture de la clé");
+    assert_eq!(&bytes[..440], &bonk_core::boot::MBR[..]);
+    assert_eq!(bytes[446], 0x80);
+    let volume = &bytes[1 << 20..];
+    assert_eq!(&volume[90..510], &bonk_core::boot::VBR[90..510]);
+    let stage2 = bonk_core::boot::STAGE2_SECTOR as usize * 512;
+    assert_eq!(&volume[stage2..stage2 + 4096], &bonk_core::boot::STAGE2[..]);
+    let short = volume
+        .as_chunks::<32>()
+        .0
+        .iter()
+        .any(|entry| &entry[..11] == b"BOOTMGR    " && entry[11] & 0x18 == 0);
+    assert!(short, "entrée courte BOOTMGR absente");
+}
+
+#[test]
+fn une_iso_sans_bootmgr_pour_x86_reste_en_uefi_seul() {
+    let d = Dossier::new("arm-bios");
+    let (iso, cle) = (d.file("win.iso"), d.file("cle.img"));
+    fs::write(&iso, windows_iso_bios("efi/boot/bootaa64.efi", 0xAA64)).expect("écriture");
+    let out = bonk(&[
+        "write",
+        "--simulate",
+        &cle,
+        &iso,
+        "--size",
+        "134217728",
+        "--table",
+        "mbr",
+        "--dry-run",
+        "--json",
+    ]);
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{text}");
+    let value: serde_json::Value = serde_json::from_str(&text).expect("JSON");
+    assert_eq!(value["extraction"]["firmware"], serde_json::json!(["uefi"]));
+}

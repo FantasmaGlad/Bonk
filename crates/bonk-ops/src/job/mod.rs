@@ -8,7 +8,7 @@ mod types;
 mod verify;
 mod write;
 
-pub use extract::{ExtractDone, ExtractReport, ExtractVerify, Extraction};
+pub use extract::{ExtractDone, ExtractReport, ExtractVerify, Extraction, Firmware};
 pub use format::{FormatJob, default_filesystem, format};
 pub use repair::{RepairJob, repair};
 pub use source::{FileReader, ImageFile};

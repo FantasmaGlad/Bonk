@@ -25,6 +25,8 @@ pub enum Outcome {
         gpt_repaired: bool,
         /// Clé Windows : le certificat du chargeur, dont l'écran dit ce qu'il implique dans sa langue.
         secure_boot: Option<bonk_core::pe::Signer>,
+        /// Clé Windows qui démarre aussi en BIOS hérité.
+        bios_boot: bool,
     },
     Failed {
         /// Code d'erreur stable (`bonk explain`), quand le processus en a donné un.
@@ -75,6 +77,9 @@ pub fn parse_line(line: &str) -> Option<Event> {
             verified: !value["verify"].is_null(),
             gpt_repaired: !value["gpt_repair"].is_null(),
             secure_boot: serde_json::from_value(value["extraction"]["signer"].clone()).ok(),
+            bios_boot: value["extraction"]["firmware"]
+                .as_array()
+                .is_some_and(|firmware| firmware.iter().any(|f| f == "bios")),
         })),
         "error" => Some(Event::Finished(Outcome::Failed {
             code: value["code"].as_str().map(str::to_owned),
