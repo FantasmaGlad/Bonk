@@ -10,6 +10,8 @@ const GZIP: [u8; 2] = [0x1F, 0x8B];
 const XZ: [u8; 6] = [0xFD, b'7', b'z', b'X', b'Z', 0x00];
 const ZSTD: [u8; 4] = [0x28, 0xB5, 0x2F, 0xFD];
 const BZIP2: [u8; 3] = *b"BZh";
+/// xz presets use at most a 64 MiB dictionary; the header alone must not make the decoder allocate gigabytes.
+const XZ_MEMORY_KIB: u32 = 256 * 1024;
 const ZIP: [u8; 4] = [b'P', b'K', 0x03, 0x04];
 
 /// Format of an image, from its first bytes.
@@ -194,7 +196,14 @@ pub fn open(
         Format::Gzip => (Box::new(flate2::read::MultiGzDecoder::new(buffered)), None),
         // Block by block with `lzma-rust2`: `lzma-rs` decodes a whole block in memory, the whole image for a
         // single-block `.img.xz`.
-        Format::Xz => (Box::new(lzma_rust2::XzReader::new(buffered, true)), None),
+        Format::Xz => (
+            Box::new(lzma_rust2::XzReader::new_mem_limit(
+                buffered,
+                true,
+                XZ_MEMORY_KIB,
+            )),
+            None,
+        ),
         Format::Zstd => (Box::new(ZstdFrames::new(buffered)?), None),
         Format::Bzip2 | Format::Zip => return Err(CodecError::Unsupported(format)),
     };
@@ -219,6 +228,11 @@ pub(crate) mod testing {
     /// Minimal valid xz: header, one stored LZMA2 block, index, footer. Hand-written from the xz
     /// specification.
     pub(crate) fn xz_stored(data: &[u8]) -> Vec<u8> {
+        xz_stored_with_dictionary(data, 0x16)
+    }
+
+    /// `dictionary` is the LZMA2 property byte: 0x16 is 8 MiB, 40 is 4 GiB.
+    pub(crate) fn xz_stored_with_dictionary(data: &[u8], dictionary: u8) -> Vec<u8> {
         fn crc32(bytes: &[u8]) -> u32 {
             crate::partition::crc32(bytes)
         }
@@ -246,7 +260,7 @@ pub(crate) mod testing {
         lzma2.push(0x00);
 
         // Block header: size, one LZMA2 filter (id 0x21, one property byte).
-        let mut header = vec![0x00, 0x00, 0x21, 0x01, 0x16];
+        let mut header = vec![0x00, 0x00, 0x21, 0x01, dictionary];
         while (header.len() + 4) % 4 != 0 {
             header.push(0x00);
         }
@@ -286,7 +300,7 @@ pub(crate) mod testing {
 mod tests {
     use std::io::Cursor;
 
-    use super::testing::{gzip, xz_stored};
+    use super::testing::{gzip, xz_stored, xz_stored_with_dictionary};
     use super::*;
 
     fn sample(len: usize) -> Vec<u8> {
@@ -354,6 +368,17 @@ mod tests {
         let mut source = open(Cursor::new(xz_stored(&data)), None)?;
         assert_eq!(source.format, Format::Xz);
         assert_eq!(read_all(&mut source)?, data);
+        Ok(())
+    }
+
+    #[test]
+    fn xz_au_dictionnaire_demesure_est_refuse_sans_allocation()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let data = sample(1000);
+        let mut source = open(Cursor::new(xz_stored_with_dictionary(&data, 30)), None)?;
+        assert_eq!(read_all(&mut source)?, data);
+        let mut source = open(Cursor::new(xz_stored_with_dictionary(&data, 40)), None)?;
+        assert!(read_all(&mut source).is_err());
         Ok(())
     }
 

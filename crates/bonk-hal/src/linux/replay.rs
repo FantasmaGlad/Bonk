@@ -1,6 +1,6 @@
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use crate::disk::Disk;
 use crate::enumerate::{EnumerateError, SourceRead};
@@ -35,6 +35,35 @@ pub(super) fn standard_path(path: &str) -> &str {
         .map_or(path, |start| &path[start..])
 }
 
+/// A capture is a file from someone else: none of its paths may lead out of the rebuilt tree.
+fn relative(path: &str) -> io::Result<&Path> {
+    let path = Path::new(path.trim_start_matches('/'));
+    if path
+        .components()
+        .all(|c| matches!(c, Component::Normal(_) | Component::CurDir))
+    {
+        Ok(path)
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("capture path leaves its tree: {}", path.display()),
+        ))
+    }
+}
+
+/// One file name, as listed in `holders` or under `/sys/block`.
+fn file_name(name: &str) -> io::Result<&str> {
+    let path = relative(name)?;
+    if path.components().count() == 1 {
+        Ok(name)
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("capture name is not a file name: {name}"),
+        ))
+    }
+}
+
 pub(super) fn build_tree(base: &Path, reads: &[SourceRead]) -> io::Result<()> {
     use std::collections::BTreeMap;
     let udev = crate::enumerate::UDEV_DATA.trim_start_matches('/');
@@ -51,42 +80,43 @@ pub(super) fn build_tree(base: &Path, reads: &[SourceRead]) -> io::Result<()> {
         let Some(name) = link.rsplit('/').next() else {
             continue;
         };
-        fs::create_dir_all(base.join("sys").join(relative))?;
+        let name = file_name(name)?;
+        fs::create_dir_all(base.join("sys").join(self::relative(relative)?))?;
         #[cfg(unix)]
         std::os::unix::fs::symlink(format!("../{relative}"), base.join("sys/block").join(name))?;
     }
     // A path read through a link is written at the canonical place.
-    let place = |path: &str| -> PathBuf {
+    let place = |path: &str| -> io::Result<PathBuf> {
         let path = standard_path(path);
         for (link, relative) in &links {
             if let Some(rest) = path
                 .strip_prefix(link)
                 .filter(|r| r.is_empty() || r.starts_with('/'))
             {
-                return base
+                return Ok(base
                     .join("sys")
-                    .join(relative)
-                    .join(rest.trim_start_matches('/'));
+                    .join(self::relative(relative)?)
+                    .join(self::relative(rest)?));
             }
         }
-        base.join(path.trim_start_matches('/'))
+        Ok(base.join(self::relative(path)?))
     };
     for read in reads.iter().filter(|r| r.ok) {
         match read.kind.as_str() {
             "file" => {
-                let target = place(&read.path);
+                let target = place(&read.path)?;
                 if let Some(parent) = target.parent() {
                     fs::create_dir_all(parent)?;
                 }
                 fs::write(target, read.content.as_deref().unwrap_or_default())?;
             }
             "dir" => {
-                let target = place(&read.path);
+                let target = place(&read.path)?;
                 fs::create_dir_all(&target)?;
                 // Stacked devices are only known by name.
                 if standard_path(&read.path).ends_with("/holders") {
                     for name in read.content.as_deref().unwrap_or_default().lines() {
-                        fs::write(target.join(name), "")?;
+                        fs::write(target.join(file_name(name)?), "")?;
                     }
                 }
             }
