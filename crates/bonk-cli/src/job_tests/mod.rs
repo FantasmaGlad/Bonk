@@ -281,6 +281,8 @@ struct Scenario {
     rescan_fails: bool,
     cancel: bool,
     cancel_on_prepare: bool,
+    /// Cancel requested while the host tool formats.
+    cancel_on_host_format: bool,
     seen_elevation: Rc<Cell<Option<Elevation>>>,
     on_first_enumeration: Option<Rc<dyn Fn()>>,
     vars: Vec<(String, String)>,
@@ -302,6 +304,7 @@ impl Scenario {
             rescan_fails: false,
             cancel: false,
             cancel_on_prepare: false,
+            cancel_on_host_format: false,
             seen_elevation: Rc::new(Cell::new(None)),
             on_first_enumeration: None,
             vars: Vec::new(),
@@ -340,6 +343,7 @@ impl Scenario {
         let (open, faults) = (self.open, self.faults);
         let cancel = self.cancel;
         let cancel_on_prepare = self.cancel_on_prepare;
+        let cancel_on_host_format = self.cancel_on_host_format;
         let capabilities = self.capabilities.clone();
         let log_format = Rc::clone(&self.log);
         let log_rescan = Rc::clone(&self.log);
@@ -348,6 +352,7 @@ impl Scenario {
         let open_devices_at_rescan = Rc::clone(&open_devices);
         let cancelled = Rc::new(Cell::new(false));
         let cancel_flag = Rc::clone(&cancelled);
+        let cancel_format = Rc::clone(&cancelled);
         let seen_elevation = Rc::clone(&self.seen_elevation);
         let log_prepare = self.log.clone();
         let prepare = self.prepare.clone();
@@ -392,6 +397,7 @@ impl Scenario {
             cancelled: Box::new(move || cancel || cancelled.get()),
             capabilities: Box::new(move || capabilities.clone()),
             format_partition: Box::new(move |path, fs, label, _| {
+                cancel_format.set(cancel_format.get() || cancel_on_host_format);
                 log_format.borrow_mut().push(format!(
                     "format:{}:{fs}:{}",
                     path.display(),

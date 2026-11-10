@@ -202,6 +202,22 @@ fn ntfs_que_le_systeme_ne_reconnait_pas_est_un_echec() {
     assert!(err.contains("does not recognize"), "{err}");
 }
 
+/// The system may never recognize the new file system: a cancel must not wait for the end of the look.
+#[test]
+fn ntfs_s_annule_pendant_l_attente_du_systeme() {
+    let mut scenario = Scenario::new();
+    scenario.capabilities = vec![ntfs_capability(true)];
+    scenario.cancel_on_host_format = true;
+    scenario.enumerations = vec![
+        vec![usb("S1")],
+        vec![usb("S1")],
+        vec![usb_with_new_partition("")],
+    ];
+    let (code, _, err) = scenario.run(&["format", "usb-a", "--fs", "ntfs", "--yes"]);
+    assert_eq!(code, crate::errors::EXIT_CANCELLED, "{err}");
+    assert!(err.contains("file system"), "{err}");
+}
+
 #[test]
 fn capabilities_dit_le_pourquoi() {
     let mut scenario = Scenario::new();

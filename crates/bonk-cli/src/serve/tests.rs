@@ -448,6 +448,7 @@ fn les_garde_fous_de_la_cli_s_appliquent_au_service() {
     );
     let sans_source =
         r#"{"id":5,"method":"disk.write","params":{"target":"usb-a","yes":true}}"#.to_owned();
+    let empreinte_remplacee = r#"{"id":6,"method":"disk.write","params":{"target":"usb-a","image":"debian","sha256_file":"https://example.org/SHA256SUMS","yes":true}}"#;
     let f = fake(false, fixed());
     // Operations follow one another: one at a time, each in its session.
     for (id, request, code) in [
@@ -455,6 +456,11 @@ fn les_garde_fous_de_la_cli_s_appliquent_au_service() {
         (2, interdit, "E2001"),
         (4, par_chemin, "E1003"),
         (5, sans_source, "E6001"),
+        (
+            6,
+            empreinte_remplacee.to_owned(),
+            Code::InvalidArgument.id(),
+        ),
     ] {
         let out = session(&[&request], &f.cfg, Duration::ZERO);
         assert_eq!(response(&out, id)["error"]["code"], code, "{id}");
