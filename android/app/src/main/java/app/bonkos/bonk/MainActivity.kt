@@ -104,6 +104,14 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         revision++
         actions.enumerate()
+        openLink(intent)
+    }
+
+    /** Once per link: a screen rebuilt later must not choose the image again over the user's own choice. */
+    private fun openLink(intent: Intent) {
+        if (intent.action != Intent.ACTION_VIEW) return
+        intent.dataString?.let { send(Open(it)) }
+        intent.data = null
     }
 
     private fun keepScreenOn(on: Boolean) {
@@ -156,6 +164,7 @@ class MainActivity : ComponentActivity() {
         ContextCompat.registerReceiver(this, usbEvents, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         val usb = getSystemService(UsbManager::class.java)
         actions.enumerate()
+        openLink(intent)
         // In the background the clock would wake Rust and USB for nothing.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {

@@ -52,6 +52,8 @@ jobs:
           cargo generate-rpm -p crates/bonk --target "$TARGET" --output dist/
           # The app must show up in the desktop launcher.
           dpkg-deb -c dist/*.deb | grep -q usr/share/applications/bonk.desktop
+          # A bonk:// link clicked on the website must reach the window.
+          dpkg-deb -c dist/*.deb | grep -q usr/share/applications/bonk-link.desktop
           dpkg-deb -c dist/*.deb | grep -q usr/share/icons/hicolor/256x256/apps/bonk.png
           cd dist
           sha256sum -- *.deb *.rpm > "paquets-$TARGET.sha256"
@@ -97,7 +99,7 @@ jobs:
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
           mkdir -p build dist
           tar -xzf archive/bonk-*.tar.gz -C archive
-          cp archive/bonk-*/bonk LICENSE crates/bonk/assets/bonk.desktop build/
+          cp archive/bonk-*/bonk LICENSE crates/bonk/assets/bonk.desktop crates/bonk/assets/bonk-link.desktop build/
           cp -r crates/bonk/assets/icons build/icons
           sed "s/@VERSION@/$version/" .github/arch/PKGBUILD > build/PKGBUILD
           docker run --rm --volume "$PWD/build:/build" --volume "$PWD/dist:/dist" archlinux:latest sh -ec '
@@ -109,6 +111,7 @@ jobs:
             pacman -U --noconfirm /dist/*.pkg.tar.zst
             bonk --version
             test -f /usr/share/applications/bonk.desktop
+            test -f /usr/share/applications/bonk-link.desktop
             test -f /usr/share/icons/hicolor/256x256/apps/bonk.png
           '
           sudo chown -R "$USER" dist

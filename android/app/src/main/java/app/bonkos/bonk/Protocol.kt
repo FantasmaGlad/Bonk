@@ -81,6 +81,10 @@ class BonkFailure(val code: String, message: String) : Exception(message)
 data class CatalogFailed(val message: String) : ToRust
 
 /** Nothing to report: only reread the state, after a write for instance. Rust ignores this type. */
+/** A `bonk://install/<image>` link the app was opened with; Rust checks it and reads nothing else from it. */
+@Serializable @SerialName("open")
+data class Open(val link: String) : ToRust
+
 @Serializable @SerialName("refresh")
 data object Refresh : ToRust
 
@@ -134,6 +138,8 @@ data class ScreenState(
     /** Language chosen in Bonk (`fr`, `en`): the app reads its own texts in it. */
     val lang: String = "en",
     val status: String = "",
+    /** What became of the image a link asked for. */
+    val notice: String? = null,
     @SerialName("show_all") val showAll: Boolean = false,
     @SerialName("show_all_label") val showAllLabel: String = "",
     val empty: String = "",

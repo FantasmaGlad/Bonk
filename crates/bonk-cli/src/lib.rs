@@ -19,7 +19,7 @@ mod slot;
 mod transfer;
 mod vault;
 
-pub use config::ViewDefaults;
+pub use config::{ViewDefaults, WindowRequest};
 
 use std::ffi::OsString;
 use std::io::{self, Write};
@@ -71,6 +71,29 @@ struct Cli {
 
     #[command(subcommand)]
     command: Option<Command>,
+}
+
+#[derive(Debug, clap::Args)]
+struct GuiArgs {
+    /// Open with this image of the signed catalog chosen (`bonk catalog list`); nothing is written
+    #[arg(long, value_name = "ID", conflicts_with = "link")]
+    image: Option<String>,
+    /// Same, from a `bonk://install/<ID>` link: what the system passes when such a link is opened
+    #[arg(long, value_name = "URL")]
+    link: Option<String>,
+}
+
+impl GuiArgs {
+    /// The identifier is checked here in both forms: the window only ever receives a catalog name.
+    fn image(&self) -> Result<Option<String>, bonk_catalog::link::LinkError> {
+        use bonk_catalog::link::{LinkError, image_id, is_image_id};
+        match (&self.image, &self.link) {
+            (Some(id), _) if is_image_id(id) => Ok(Some(id.clone())),
+            (Some(_), _) => Err(LinkError::InvalidImageId),
+            (None, Some(link)) => image_id(link).map(|id| Some(id.to_owned())),
+            (None, None) => Ok(None),
+        }
+    }
 }
 
 #[derive(Debug, Subcommand)]
@@ -133,7 +156,7 @@ enum Command {
     /// Headless service: drive Bonk with JSON on standard input and output, without a window
     Serve,
     /// Open the window (like `bonk` alone)
-    Gui,
+    Gui(GuiArgs),
     /// Windows: the elevated side of an authorization, started by Bonk itself
     #[command(hide = true)]
     ElevatedHelper {
@@ -223,7 +246,7 @@ fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
         | Command::Catalog { .. }
         | Command::Schema(_)
         | Command::Completions { .. }
-        | Command::Gui => None,
+        | Command::Gui(_) => None,
     }
 }
 
@@ -284,7 +307,7 @@ pub fn run<I, T, G>(args: I, gui: G) -> ExitCode
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
-    G: FnOnce(ViewDefaults) -> Result<(), String>,
+    G: FnOnce(WindowRequest) -> Result<(), String>,
 {
     // Unlocked streams: `execute` opens the window, while other threads log to stderr. A lock held for the
     // whole run would block them forever, the window's disk enumeration included.
@@ -447,7 +470,7 @@ where
     E: Write,
     L: FnOnce(Settings) -> Result<(), String>,
     F: Fn() -> Result<Vec<Disk>, EnumerateError>,
-    G: FnOnce(ViewDefaults) -> Result<(), String>,
+    G: FnOnce(WindowRequest) -> Result<(), String>,
 {
     let mut prepared = match prepare(args, env, err, install_log) {
         Ok(prepared) => prepared,
@@ -481,7 +504,7 @@ fn dispatch<O, E, G>(
 where
     O: Write,
     E: Write,
-    G: FnOnce(ViewDefaults) -> Result<(), String>,
+    G: FnOnce(WindowRequest) -> Result<(), String>,
 {
     let Prepared {
         command,
@@ -492,11 +515,20 @@ where
     } = prepared;
     let enumerate = deps.enumerate;
     match command {
-        None | Some(Command::Gui) if no_gui => {
+        None | Some(Command::Gui(_)) if no_gui => {
             let _ = writeln!(err, "{}", Cli::command().render_help());
             report(err, Code::InvalidArgument, "--no-gui requires a command")
         }
-        None | Some(Command::Gui) => run_gui(env.privileged, view, err, gui),
+        None => run_gui(
+            env.privileged,
+            WindowRequest { view, image: None },
+            err,
+            gui,
+        ),
+        Some(Command::Gui(args)) => match args.image() {
+            Ok(image) => run_gui(env.privileged, WindowRequest { view, image }, err, gui),
+            Err(erreur) => report(err, Code::InvalidArgument, erreur),
+        },
         Some(Command::Disk { action }) => match action {
             DiskAction::List(args) => run_list(&args, &view, out, err, enumerate),
             DiskAction::Info(args) => run_info(&args, &view, out, err, enumerate),

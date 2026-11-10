@@ -5,7 +5,7 @@ use bonk_hal::{Lang, format_size};
 
 use crate::errors::failure_text;
 use crate::event::Outcome;
-use crate::model::WRITE_DELAY;
+use crate::model::{Requested, WRITE_DELAY};
 
 /// Seconds shown in the countdown, from the time since opening.
 #[must_use]
@@ -32,6 +32,49 @@ pub fn write_button(lang: Lang, elapsed: Duration, image_empty: bool) -> String 
         lang.pick("Write and erase this disk", "Écrire et effacer ce disque")
             .to_owned()
     }
+}
+
+/// What became of the image the window was opened for; nothing once a draft carries it.
+#[must_use]
+pub fn requested_line(
+    lang: Lang,
+    id: &str,
+    state: Requested<'_>,
+    disk_chosen: bool,
+) -> Option<String> {
+    Some(match (state, lang) {
+        (Requested::Ready(_), _) if disk_chosen => return None,
+        (Requested::Ready(choice), Lang::En) => format!(
+            "{} {} is chosen: select the disk to write it to.",
+            choice.name,
+            choice.title(lang)
+        ),
+        (Requested::Ready(choice), Lang::Fr) => format!(
+            "{} {} est choisi : sélectionnez le disque où l'écrire.",
+            choice.name,
+            choice.title(lang)
+        ),
+        (Requested::Waiting, Lang::En) => format!("Reading the catalog to find {id}..."),
+        (Requested::Waiting, Lang::Fr) => format!("Lecture du catalogue pour trouver {id}..."),
+        (Requested::NotWritable(choice), Lang::En) => format!(
+            "{} {} cannot be fetched and written to a drive by Bonk.",
+            choice.name,
+            choice.title(lang)
+        ),
+        (Requested::NotWritable(choice), Lang::Fr) => format!(
+            "{} {} ne peut pas être récupéré et écrit sur une clé par Bonk.",
+            choice.name,
+            choice.title(lang)
+        ),
+        (Requested::Unknown, Lang::En) => format!("The catalog has no image named {id}."),
+        (Requested::Unknown, Lang::Fr) => format!("Le catalogue n'a pas d'image nommée {id}."),
+        (Requested::CatalogFailed, Lang::En) => {
+            format!("The catalog could not be read: {id} is not chosen.")
+        }
+        (Requested::CatalogFailed, Lang::Fr) => {
+            format!("Le catalogue n'a pas pu être lu : {id} n'est pas choisi.")
+        }
+    })
 }
 
 #[must_use]

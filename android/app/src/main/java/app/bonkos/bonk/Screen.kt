@@ -57,6 +57,7 @@ internal fun Screen(
         }
         Small(state.intro)
         Small(state.status)
+        state.notice?.let { Body(it) }
         val waiting = remember(revision, errors) { usb.drives().filterNot(usb::hasPermission) }
         waiting.forEach { device -> AskAccess(usb, device) }
         errors.forEach { (device, error) ->

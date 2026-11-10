@@ -55,6 +55,7 @@ impl Model {
                 if let WriteState::Draft { image, .. } = &mut self.write {
                     *image = text;
                     self.focus = Some(Focus::Image);
+                    self.requested = None;
                 }
                 Vec::new()
             }
@@ -88,6 +89,7 @@ impl Model {
                     *image = path.display().to_string();
                     // A dropped image must be visible: the menu does not name it.
                     self.advanced = true;
+                    self.requested = None;
                 }
                 Vec::new()
             }
@@ -149,6 +151,7 @@ impl Model {
             Message::DismissWrite => {
                 self.write = WriteState::Idle;
                 self.selected = None;
+                self.requested = None;
                 self.fix_focus();
                 Vec::new()
             }
@@ -247,26 +250,60 @@ impl Model {
                 CatalogState::Failed(error)
             }
         };
+        self.fill_requested();
         Vec::new()
     }
 
-    fn on_menu_chosen(&mut self, choice: catalog::Choice) -> Effects {
-        if let (
-            WriteState::Draft {
-                image,
-                hash,
-                raw,
-                mbr,
-                ..
-            },
-            ChoiceSource::Download { url, sha256 },
-        ) = (&mut self.write, choice.source)
+    /// Opens the window for one catalog image. The catalog is read at once, without waiting for a disk.
+    pub fn request_image(&mut self, id: String) -> Effects {
+        self.requested = Some(id);
+        if matches!(self.catalog, CatalogState::Ready(_)) {
+            self.fill_requested();
+            return Vec::new();
+        }
+        if matches!(self.catalog, CatalogState::Loading) {
+            return Vec::new();
+        }
+        self.catalog = CatalogState::Loading;
+        vec![Effect::LoadCatalog, Effect::DetectTor]
+    }
+
+    /// Only an empty draft: what the user typed or chose is never replaced.
+    fn fill_requested(&mut self) {
+        let Some((_, crate::model::Requested::Ready(choice))) = self.requested() else {
+            return;
+        };
+        let ChoiceSource::Download { url, sha256 } = choice.source.clone() else {
+            return;
+        };
+        if matches!(&self.write, WriteState::Draft { image, .. } if image.is_empty()) {
+            self.fill_draft(url, sha256);
+        }
+    }
+
+    /// The catalog fixes everything: Bonk analyses the image and picks the mode itself.
+    fn fill_draft(&mut self, url: String, sha256: String) {
+        if let WriteState::Draft {
+            image,
+            hash,
+            raw,
+            mbr,
+            ..
+        } = &mut self.write
         {
-            // The catalog fixes everything: Bonk analyses the image and picks the mode itself.
             *image = url;
             *hash = sha256;
             *raw = false;
             *mbr = TableKind::WINDOWS_DEFAULT == TableKind::Mbr;
+        }
+    }
+
+    fn on_menu_chosen(&mut self, choice: catalog::Choice) -> Effects {
+        if let (WriteState::Draft { .. }, ChoiceSource::Download { url, sha256 }) =
+            (&self.write, choice.source)
+        {
+            self.fill_draft(url, sha256);
+            self.requested = None;
             self.menu_open = false;
             self.focus = Some(Focus::Action);
         }
@@ -308,6 +345,7 @@ impl Model {
                     mbr: TableKind::WINDOWS_DEFAULT == TableKind::Mbr,
                     opened: Instant::now(),
                 };
+                self.fill_requested();
             }
             (_, None) => self.write = WriteState::Idle,
         }

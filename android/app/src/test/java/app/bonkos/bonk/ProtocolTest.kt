@@ -70,6 +70,7 @@ class ProtocolTest {
                 Failed("the drive is no longer connected", "E1003"),
                 Failed("unexpected"),
                 CatalogFailed("404"),
+                Open("bonk://install/debian-13-netinst-x86_64"),
             )
         val expected = samples.getValue("messages").jsonArray
         assertEquals(expected.size, sent.size, "un message de Rust n'a pas de type Kotlin, ou l'inverse")
@@ -87,6 +88,8 @@ class ProtocolTest {
         assertEquals(4, states.size)
         val (idle, draft, running, finished) = states
         assertEquals(null, idle.panel)
+        assertTrue("debian-13-netinst-x86_64" in checkNotNull(idle.notice))
+        assertEquals(null, draft.notice)
         assertTrue(states.all { it.lang in setOf("fr", "en") })
         assertEquals(emptyList(), idle.disks)
 

@@ -5,6 +5,8 @@ use bonk_hal::Lang;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Choice {
+    /// Catalog identifier: what `--image` and a `bonk://install/` link name.
+    pub id: String,
     /// May differ from the system: Kubuntu is filed under Ubuntu.
     pub name: String,
     pub label: String,
@@ -106,6 +108,7 @@ fn choice(image: &Image) -> Choice {
         }
     };
     Choice {
+        id: image.id.clone(),
         name: image.name.clone(),
         label: label_of(image),
         end_of_life: image.channel == Channel::EndOfLife,
@@ -157,6 +160,16 @@ pub fn find_url<'a>(systems: &'a [System], url: &str) -> Option<(&'a System, &'a
             .find(|choice| {
                 matches!(&choice.source, ChoiceSource::Download { url: u, .. } if u == url)
             })
+            .map(|choice| (system, choice))
+    })
+}
+
+pub fn find_id<'a>(systems: &'a [System], id: &str) -> Option<(&'a System, &'a Choice)> {
+    systems.iter().find_map(|system| {
+        system
+            .choices
+            .iter()
+            .find(|choice| choice.id == id)
             .map(|choice| (system, choice))
     })
 }

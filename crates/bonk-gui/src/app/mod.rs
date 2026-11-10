@@ -55,8 +55,15 @@ fn snap(id: &'static str, y: f32) -> Task<Message> {
 }
 
 impl App {
-    pub(crate) fn new(initial: ViewOptions, lang: Lang) -> (Self, Task<Message>) {
-        let (model, effects) = Model::new(initial, lang);
+    pub(crate) fn new(
+        initial: ViewOptions,
+        lang: Lang,
+        image: Option<String>,
+    ) -> (Self, Task<Message>) {
+        let (mut model, mut effects) = Model::new(initial, lang);
+        if let Some(id) = image {
+            effects.extend(model.request_image(id));
+        }
         let app = Self {
             model,
             program: None,
