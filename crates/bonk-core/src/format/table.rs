@@ -179,7 +179,7 @@ fn write_gpt(dev: &mut dyn BlockDevice, slots: &[Slot<'_>], ids: &Ids) -> Result
     let last = dev.size() / block - 1;
     let table_sectors = gpt_table_sectors(block);
 
-    let mut table = vec![0u8; usize::try_from(table_sectors * block).unwrap_or(0)];
+    let mut table = vec![0u8; table_sectors as usize * block_len];
     for (slot, entry) in slots
         .iter()
         .zip(table.as_chunks_mut::<{ GPT_ENTRY_SIZE as usize }>().0)
@@ -289,21 +289,23 @@ pub(crate) fn write_slots(
     match kind {
         TableKind::Gpt => write_gpt(dev, slots, ids)?,
         TableKind::Mbr => {
-            let entries: Vec<(u8, u32, u32)> = slots
+            // `plan` refuses an MBR beyond 2^32 sectors.
+            let sector32 = |value: u64| {
+                u32::try_from(value).map_err(|_| {
+                    FormatError::TooLarge(format!("sector {value}: beyond what MBR addresses"))
+                })
+            };
+            let entries = slots
                 .iter()
                 .map(|slot| {
-                    (
+                    Ok((
                         slot.mbr_type,
-                        u32::try_from(slot.part.first_lba).unwrap_or(u32::MAX),
-                        u32::try_from(slot.part.sectors()).unwrap_or(u32::MAX),
-                    )
+                        sector32(slot.part.first_lba)?,
+                        sector32(slot.part.sectors())?,
+                    ))
                 })
-                .collect();
-            let mut sector = mbr_sector(
-                usize::try_from(block).unwrap_or(512),
-                ids.disk_signature,
-                &entries,
-            );
+                .collect::<Result<Vec<(u8, u32, u32)>, FormatError>>()?;
+            let mut sector = mbr_sector(dev.block_size() as usize, ids.disk_signature, &entries);
             if bios_boot {
                 sector[..crate::boot::MBR.len()].copy_from_slice(crate::boot::MBR);
                 sector[446] = ACTIVE;
