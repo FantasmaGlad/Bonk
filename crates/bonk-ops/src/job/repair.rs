@@ -6,6 +6,7 @@ use bonk_hal::{Access, Elevation, FilterOptions};
 
 use super::target::{OpenRequest, choose, open_read_only, open_target, reread_table};
 use super::types::{Deps, JobError, RepairDone, SCHEMA_VERSION, Target, TraceIo, fail};
+use super::verify::drop_cache_before_verify;
 use super::write::confirm_internal;
 use crate::errors::Code;
 
@@ -76,7 +77,7 @@ pub fn repair(job: &RepairJob, deps: &Deps<'_>) -> Result<RepairDone, JobError> 
     if needed {
         // Read back after flushing: a key that did not keep the tables must not look repaired.
         device.flush().map_err(|e| fail(Code::WriteFailed, e))?;
-        let _ = device.drop_cache();
+        drop_cache_before_verify(device.as_mut());
     }
     let after = inspect(&*device).map_err(|e| fail(Code::GptRepairFailed, e))?;
     if needed && needs_repair(&after) {

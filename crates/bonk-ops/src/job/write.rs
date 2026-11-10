@@ -18,7 +18,7 @@ use super::types::{
     Deps, JobError, Plan, SCHEMA_VERSION, SourceInfo, Target, TraceIo, WriteDone, WriteMode,
     WriteOutcome, fail,
 };
-use super::verify::warn_if_cache_kept;
+use super::verify::{drop_cache_before_verify, warn_if_cache_kept};
 use crate::errors::Code;
 
 pub struct WriteJob {
@@ -284,7 +284,7 @@ fn repair_if_needed(device: &mut dyn BlockDevice) -> Result<Option<RepairReport>
     // Read back after flushing: a drive that did not keep the tables would let a key without a backup GPT go
     // out with a success.
     device.flush().map_err(|e| fail(Code::GptRepairFailed, e))?;
-    let _ = device.drop_cache();
+    drop_cache_before_verify(device);
     let after = inspect(device).map_err(|e| fail(Code::GptRepairFailed, e))?;
     if needs_repair(&after) {
         return Err(fail(
