@@ -1,3 +1,4 @@
+use crate::bytes::{get_u16, get_u32};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -65,28 +66,18 @@ impl Signer {
     }
 }
 
-fn u16_at(data: &[u8], at: usize) -> Option<u16> {
-    let bytes = data.get(at..at.checked_add(2)?)?;
-    Some(u16::from_le_bytes([bytes[0], bytes[1]]))
-}
-
-fn u32_at(data: &[u8], at: usize) -> Option<u32> {
-    let bytes = data.get(at..at.checked_add(4)?)?;
-    Some(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
-}
-
 fn coff_offset(file: &[u8]) -> Option<usize> {
     if file.get(..2)? != b"MZ" {
         return None;
     }
-    let pe = u32_at(file, 0x3C)? as usize;
+    let pe = get_u32(file, 0x3C)? as usize;
     (file.get(pe..pe.checked_add(4)?)? == b"PE\0\0").then_some(pe + 4)
 }
 
 /// `None`: not a PE, or a machine a PC does not boot.
 #[must_use]
 pub fn machine(file: &[u8]) -> Option<Machine> {
-    match u16_at(file, coff_offset(file)?)? {
+    match get_u16(file, coff_offset(file)?)? {
         MACHINE_X86_64 => Some(Machine::X86_64),
         MACHINE_X86 => Some(Machine::X86),
         MACHINE_ARM64 => Some(Machine::Arm64),
@@ -122,14 +113,14 @@ fn common_names(der: &[u8]) -> Vec<String> {
 pub fn signer(file: &[u8]) -> Option<Signer> {
     let coff = coff_offset(file)?;
     let optional = coff + 20;
-    let directories = match u16_at(file, optional)? {
+    let directories = match get_u16(file, optional)? {
         OPTIONAL_PE32_PLUS => optional + 112,
         OPTIONAL_PE32 => optional + 96,
         _ => return None,
     };
     let security = directories + 4 * 8;
-    let start = u32_at(file, security)? as usize;
-    let len = u32_at(file, security + 4)? as usize;
+    let start = get_u32(file, security)? as usize;
+    let len = get_u32(file, security + 4)? as usize;
     if start == 0 || len == 0 {
         return Some(Signer::Unsigned);
     }

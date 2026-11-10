@@ -1,3 +1,4 @@
+use crate::bytes::{get_u16, get_u32, get_u64};
 use std::fmt;
 use std::io;
 
@@ -109,24 +110,18 @@ impl Tree {
     }
 }
 
+const OUTSIDE: UdfError = UdfError::Malformed("field outside the descriptor");
+
 fn u16_at(data: &[u8], at: usize) -> Result<u16, UdfError> {
-    let bytes = data
-        .get(at..at + 2)
-        .ok_or(UdfError::Malformed("field outside the descriptor"))?;
-    Ok(u16::from_le_bytes([bytes[0], bytes[1]]))
+    get_u16(data, at).ok_or(OUTSIDE)
 }
 
 fn u32_at(data: &[u8], at: usize) -> Result<u32, UdfError> {
-    let bytes = data
-        .get(at..at + 4)
-        .ok_or(UdfError::Malformed("field outside the descriptor"))?;
-    Ok(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+    get_u32(data, at).ok_or(OUTSIDE)
 }
 
 fn u64_at(data: &[u8], at: usize) -> Result<u64, UdfError> {
-    let low = u64::from(u32_at(data, at)?);
-    let high = u64::from(u32_at(data, at + 4)?);
-    Ok(low | (high << 32))
+    get_u64(data, at).ok_or(OUTSIDE)
 }
 
 /// Id of a descriptor whose tag is valid: checksum and version.

@@ -1,4 +1,5 @@
 use super::*;
+use crate::bytes::{put_u32, put_u64};
 
 pub const ESP: [u8; 16] = [
     0x28, 0x73, 0x2A, 0xC1, 0x1F, 0xF8, 0xD2, 0x11, 0xBA, 0x4B, 0x00, 0xA0, 0xC9, 0x3E, 0xC9, 0x3B,
@@ -6,13 +7,6 @@ pub const ESP: [u8; 16] = [
 pub const LINUX: [u8; 16] = [
     0xAF, 0x3D, 0xC6, 0x0F, 0x83, 0x84, 0x72, 0x47, 0x8E, 0x79, 0x3D, 0x69, 0xD8, 0x47, 0x7D, 0xE4,
 ];
-
-pub(crate) fn put_u32(buf: &mut [u8], at: usize, v: u32) {
-    buf[at..at + 4].copy_from_slice(&v.to_le_bytes());
-}
-pub(crate) fn put_u64(buf: &mut [u8], at: usize, v: u64) {
-    buf[at..at + 8].copy_from_slice(&v.to_le_bytes());
-}
 
 /// Valid GPT image of `sectors` 512-byte sectors with `(start, end, type, name)` partitions.
 pub fn gpt_image(sectors: u64, parts: &[(u64, u64, [u8; 16], &str)]) -> Vec<u8> {
