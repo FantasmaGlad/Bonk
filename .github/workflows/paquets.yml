@@ -108,7 +108,8 @@ jobs:
         run: |
           essai() { docker run --rm --volume "$PWD/dist:/dist:ro" "$1" sh -ec "$2 && bonk --version && bonk explain E2001 > /dev/null"; }
           essai debian:13 'dpkg -i /dist/bonk-cli_*_amd64.deb'
-          essai fedora:latest 'rpm -i /dist/bonk-cli-*.x86_64.rpm'
+          # Release packages are unsigned: the package repository signs them.
+          essai fedora:latest 'rpm -i --nosignature /dist/bonk-cli-*.x86_64.rpm'
           essai archlinux:latest 'pacman -U --noconfirm /dist/bonk-cli-*.pkg.tar.zst'
       - name: Attestation de provenance
         if: github.event_name != 'pull_request' && !github.event.repository.private
