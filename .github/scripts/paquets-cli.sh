@@ -10,14 +10,14 @@ MAINTENEUR="FantasmaGlad <193235053+FantasmaGlad@users.noreply.github.com>"
 travail=$(mktemp -d)
 trap 'rm -rf "$travail"' EXIT
 
-for arch in x86_64 aarch64; do
+for arch in x86_64 aarch64 i686; do
   archive=$(find "$ARCHIVES" -maxdepth 1 -name "bonk-cli-*-linux-$arch.tar.gz" | head -n 1)
   [ -n "$archive" ] || { echo "archive sans fenêtre absente : $arch"; exit 1; }
   source="$travail/$arch"
   mkdir -p "$source"
   tar -xzf "$archive" -C "$source" --strip-components=1
 
-  case "$arch" in x86_64) deb=amd64 ;; aarch64) deb=arm64 ;; esac
+  case "$arch" in x86_64) deb=amd64 ;; aarch64) deb=arm64 ;; i686) deb=i386 ;; esac
   racine="$travail/deb-$arch"
   mkdir -p "$racine/DEBIAN" "$racine/usr/bin" "$racine/usr/share/doc/bonk-cli"
   install -m 755 "$source/bonk" "$racine/usr/bin/bonk"
@@ -37,6 +37,8 @@ Description: $RESUME
 CONTROLE
   dpkg-deb --root-owner-group --build "$racine" "$SORTIE/bonk-cli_$VERSION-1_$deb.deb" > /dev/null
 
+  # 32-bit x86 only gets the deb.
+  [ "$arch" != i686 ] || continue
   cat > "$travail/bonk-cli.spec" <<SPEC
 %global debug_package %{nil}
 %global __os_install_post %{nil}
