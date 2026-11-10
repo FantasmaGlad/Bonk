@@ -7,20 +7,13 @@ use crate::block::BlockDevice;
 use crate::bytes::{u32_le, u64_le};
 use crate::partition::read_range;
 
-const ENTRY: usize = 32;
+use super::exfat::{
+    ATTR_DIRECTORY, END_OF_CHAIN, ENTRY, ENTRY_FILE, ENTRY_LABEL, ENTRY_NAME, ENTRY_STREAM,
+    FIRST_CLUSTER, MAX_DIRECTORY_BYTES, NAME_UNITS, NO_FAT_CHAIN,
+};
+
 const ENTRY_END: u8 = 0x00;
-const ENTRY_LABEL: u8 = 0x83;
-const ENTRY_FILE: u8 = 0x85;
-const ENTRY_STREAM: u8 = 0xC0;
-const ENTRY_NAME: u8 = 0xC1;
-const ATTR_DIRECTORY: u16 = 0x10;
-const NO_FAT_CHAIN: u8 = 0x02;
-const NAME_UNITS: usize = 15;
 const LABEL_UNITS: usize = 11;
-const FIRST_CLUSTER: u32 = 2;
-const END_OF_CHAIN: u32 = 0xFFFF_FFFF;
-/// Bounds what a damaged or hostile volume can make Bonk read.
-const MAX_DIRECTORY_BYTES: u64 = 32 << 20;
 const MAX_DEPTH: usize = 16;
 const MAX_ENTRIES: usize = 100_000;
 
