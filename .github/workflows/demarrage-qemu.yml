@@ -10,6 +10,9 @@ on:
       - ".github/workflows/demarrage-qemu.yml"
       - ".github/scripts/demarrage-qemu.sh"
       - ".github/scripts/demarrage-qemu.py"
+      - ".github/scripts/demarrage-vault.sh"
+      - "crates/bonk-core/src/vault.rs"
+      - "crates/bonk-core/src/vault_menu.cfg"
   workflow_dispatch:
 
 permissions:
@@ -120,4 +123,48 @@ jobs:
           path: |
             ${{ runner.temp }}/qemu/serie.log
             ${{ runner.temp }}/qemu/*.png
+          retention-days: 7
+
+  # GRUB comes from the published catalog: the vault is checked as a user gets it.
+  vault:
+    name: Vault, Debian live (uefi)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Installer la chaîne Rust du dépôt
+        run: rustup toolchain install
+      - name: Installer QEMU et OVMF
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf
+      - name: Ouvrir KVM à l'exécuteur
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Construire Bonk
+        run: cargo build --release --locked -p bonk
+      - name: Trouver l'image officielle
+        env:
+          BASE: https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid
+        run: |
+          iso=$(curl --fail --silent --show-error --location "$BASE/SHA256SUMS" | grep -o 'debian-live-[0-9.]*-amd64-standard\.iso' | head -n 1)
+          test -n "$iso"
+          echo "URL=$BASE/$iso" >> "$GITHUB_ENV"
+          echo "SHA256_FILE=$BASE/SHA256SUMS" >> "$GITHUB_ENV"
+      # The kernel line is the fourth of the entry: GRUB shows its arguments first, as setparams.
+      - name: Préparer le Vault, y copier l'ISO, démarrer sous QEMU
+        run: .github/scripts/demarrage-vault.sh target/release/bonk "$URL" "$SHA256_FILE" "$RUNNER_TEMP/vault" 'login:' --ligne 3 --memoire 2048 --delai 300
+      - name: Conserver la trace et les écrans
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: demarrage-vault
+          path: |
+            ${{ runner.temp }}/vault/serie.log
+            ${{ runner.temp }}/vault/*.png
           retention-days: 7
