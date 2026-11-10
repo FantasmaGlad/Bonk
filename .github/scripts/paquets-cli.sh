@@ -37,7 +37,7 @@ Description: $RESUME
 CONTROLE
   dpkg-deb --root-owner-group --build "$racine" "$SORTIE/bonk-cli_$VERSION-1_$deb.deb" > /dev/null
 
-  # No maintained RPM distribution still installs on 32-bit x86.
+  # 32-bit x86 only gets the deb.
   [ "$arch" != i686 ] || continue
   cat > "$travail/bonk-cli.spec" <<SPEC
 %global debug_package %{nil}
