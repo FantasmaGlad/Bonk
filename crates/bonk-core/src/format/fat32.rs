@@ -315,7 +315,7 @@ mod tests {
     }
 
     #[test]
-    fn le_code_bios_refuse_un_debut_au_dela_de_32_bits() {
+    fn le_code_bios_refuse_un_debut_au_dela_de_32_bits() -> Result<(), FormatError> {
         let loin = Volume {
             first_lba: 1 << 32,
             bios_boot: true,
@@ -330,9 +330,10 @@ mod tests {
             ..loin
         };
         assert!(check_bios_boot(512, &sans_code).is_ok());
-        let geo = geometry(sans_code.sectors, 512).expect("géométrie");
-        let boot = boot_sector(512, &geo, &sans_code).expect("secteur");
+        let geo = geometry(sans_code.sectors, 512)?;
+        let boot = boot_sector(512, &geo, &sans_code)?;
         assert_eq!(u32_at(&boot, 28), 0);
+        Ok(())
     }
 
     fn u32_at(bytes: &[u8], at: usize) -> u32 {
