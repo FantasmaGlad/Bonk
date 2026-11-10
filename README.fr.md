@@ -57,7 +57,20 @@ curl -fsSL https://packages.bonk-os.app/install.sh | sh
 irm https://packages.bonk-os.app/install.ps1 | iex
 ```
 
-Chaque gestionnaire de paquets la propose aussi sous le nom `bonk-cli` : [commandes](https://bonk-os.app/install/).
+Chaque gestionnaire de paquets la propose aussi sous le nom `bonk-cli`, dans les [mêmes dépôts](https://bonk-os.app/install/) que `bonk`.
+
+| Gestionnaire | Installer | Retirer `bonk` d'abord |
+| :--- | :--- | :--- |
+| <img src="docs/icons/debian.svg" width="20" height="20" valign="middle" alt="debian">&nbsp;**APT** | `sudo apt install bonk-cli` | `sudo apt remove bonk` |
+| <img src="docs/icons/fedora.svg" width="20" height="20" valign="middle" alt="fedora">&nbsp;**DNF** | `sudo dnf install bonk-cli` | `sudo dnf remove bonk` |
+| <img src="docs/icons/opensuse.svg" width="20" height="20" valign="middle" alt="opensuse">&nbsp;**Zypper** | `sudo zypper install bonk-cli` | `sudo zypper remove bonk` |
+| <img src="docs/icons/arch.svg" width="20" height="20" valign="middle" alt="arch">&nbsp;**pacman** | `sudo pacman -S bonk-cli` | `sudo pacman -R bonk` |
+| <img src="docs/icons/homebrew.svg" width="20" height="20" valign="middle" alt="homebrew">&nbsp;**Homebrew** | `brew install fantasmaglad/bonk/bonk-cli` | `brew uninstall bonk` |
+| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Scoop** | `scoop install` et l'adresse ci-dessous | `scoop uninstall bonk` |
+
+Scoop : `scoop install https://packages.bonk-os.app/scoop/bonk-cli.json`.
+
+Les deux paquets installent la commande `bonk` et ne s'installent pas ensemble. Pour revenir, retirer `bonk-cli`, puis installer `bonk`.
 
 | Plateforme | Téléchargement | État |
 | :--- | :--- | :--- |
