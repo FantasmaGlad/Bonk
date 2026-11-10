@@ -14,7 +14,11 @@ on:
     tags: ["v*.*.*"]
   # A workflow change is validated by its own PR (build without attestation).
   pull_request:
-    paths: [".github/workflows/binaires.yml", ".github/pip/ziglang.txt"]
+    paths:
+      - ".github/workflows/binaires.yml"
+      - ".github/workflows/paquets.yml"
+      - ".github/scripts/paquets-cli.sh"
+      - ".github/pip/ziglang.txt"
   schedule:
     - cron: "17 5 * * 1"
   workflow_dispatch:
@@ -52,6 +56,7 @@ jobs:
           - { nom: linux-i686, os: ubuntu-24.04, target: i686-unknown-linux-gnu, outil: zigbuild, suffixe: ".2.17", fumee: false, glibc: true }
           - { nom: linux-x86_64-musl, os: ubuntu-24.04, target: x86_64-unknown-linux-musl, outil: zigbuild, suffixe: "", options: --no-default-features, fumee: true, glibc: false }
           - { nom: linux-aarch64-musl, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl, outil: zigbuild, suffixe: "", options: --no-default-features, fumee: true, glibc: false }
+          - { nom: linux-i686-musl, os: ubuntu-24.04, target: i686-unknown-linux-musl, outil: zigbuild, suffixe: "", options: --no-default-features, fumee: true, glibc: false }
           - { nom: windows-x86_64, cli: true, os: windows-2025, target: x86_64-pc-windows-msvc, outil: build, suffixe: "", fumee: true, glibc: false, exe: ".exe" }
           - { nom: windows-aarch64, cli: true, os: windows-11-arm, target: aarch64-pc-windows-msvc, outil: build, suffixe: "", fumee: true, glibc: false, exe: ".exe" }
           - { nom: windows-i686, cli: true, os: windows-2025, target: i686-pc-windows-msvc, outil: build, suffixe: "", fumee: true, glibc: false, exe: ".exe" }
