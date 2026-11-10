@@ -21,6 +21,8 @@ serde_json.workspace = true
 log.workspace = true
 
 [dev-dependencies]
+# Man pages for the packages, written by a test: nothing in the shipped binary.
+clap_mangen = "0.3"
 bonk-core = { workspace = true, features = ["testing"] }
 # Signs test catalogs; already a dependency of bonk-catalog.
 ring = "0.17"

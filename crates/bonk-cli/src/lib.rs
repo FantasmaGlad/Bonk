@@ -13,6 +13,8 @@ mod format;
 mod info;
 mod list;
 mod logging;
+#[cfg(test)]
+mod man_tests;
 mod schema;
 mod serve;
 mod slot;
