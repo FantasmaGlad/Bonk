@@ -81,6 +81,13 @@ pub(super) fn prepare(kind: Kind, params: &Value, cfg: &Config) -> Result<Task, 
     let source = match (kind, &p.image) {
         (Kind::Repair | Kind::Format, _) => PathBuf::new(),
         (Kind::Write, Some(id)) => {
+            // The catalog hash is signed: no client-supplied hash may replace it, as on the command line.
+            if p.sha256.is_some() || p.sha256_file.is_some() {
+                return Err(failure(
+                    Code::InvalidArgument,
+                    "image takes its hash from the signed catalog: sha256 and sha256_file are refused",
+                ));
+            }
             let (source, hash) =
                 crate::catalog::image_source(id, p.catalog_url.as_deref(), p.cache_dir.as_deref())
                     .map_err(|e| failure(e.code, e.message))?;
