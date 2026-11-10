@@ -59,18 +59,18 @@ irm https://packages.bonk-os.app/install.ps1 | iex
 
 Every package manager also offers it as `bonk-cli`, from the [same repositories](https://bonk-os.app/install/) as `bonk`.
 
-| Manager | Install | Remove `bonk` first |
-| :--- | :--- | :--- |
-| <img src="docs/icons/debian.svg" width="20" height="20" valign="middle" alt="debian">&nbsp;**APT** | `sudo apt install bonk-cli` | `sudo apt remove bonk` |
-| <img src="docs/icons/fedora.svg" width="20" height="20" valign="middle" alt="fedora">&nbsp;**DNF** | `sudo dnf install bonk-cli` | `sudo dnf remove bonk` |
-| <img src="docs/icons/opensuse.svg" width="20" height="20" valign="middle" alt="opensuse">&nbsp;**Zypper** | `sudo zypper install bonk-cli` | `sudo zypper remove bonk` |
-| <img src="docs/icons/arch.svg" width="20" height="20" valign="middle" alt="arch">&nbsp;**pacman** | `sudo pacman -S bonk-cli` | `sudo pacman -R bonk` |
-| <img src="docs/icons/homebrew.svg" width="20" height="20" valign="middle" alt="homebrew">&nbsp;**Homebrew** | `brew install fantasmaglad/bonk/bonk-cli` | `brew uninstall bonk` |
-| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Scoop** | `scoop install` with the address below | `scoop uninstall bonk` |
+| Manager | Install |
+| :--- | :--- |
+| <img src="docs/icons/debian.svg" width="20" height="20" valign="middle" alt="debian">&nbsp;**APT** | `sudo apt install bonk-cli` |
+| <img src="docs/icons/fedora.svg" width="20" height="20" valign="middle" alt="fedora">&nbsp;**DNF** | `sudo dnf install --allowerasing bonk-cli` |
+| <img src="docs/icons/opensuse.svg" width="20" height="20" valign="middle" alt="opensuse">&nbsp;**Zypper** | `sudo zypper install bonk-cli` |
+| <img src="docs/icons/arch.svg" width="20" height="20" valign="middle" alt="arch">&nbsp;**pacman** | `sudo pacman -S bonk-cli` |
+| <img src="docs/icons/homebrew.svg" width="20" height="20" valign="middle" alt="homebrew">&nbsp;**Homebrew** | `brew uninstall bonk && brew install fantasmaglad/bonk/bonk-cli` |
+| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Scoop** | `scoop uninstall bonk`, then `scoop install` with the address below |
 
 Scoop: `scoop install https://packages.bonk-os.app/scoop/bonk-cli.json`.
 
-Both packages install the `bonk` command and cannot be installed together. To go back, remove `bonk-cli`, then install `bonk`.
+Installing `bonk-cli` replaces `bonk`; Zypper and pacman ask first. To go back, remove `bonk-cli`, then install `bonk`.
 
 | Platform | Download | Status |
 | :--- | :--- | :--- |
