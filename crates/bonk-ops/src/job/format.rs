@@ -259,6 +259,12 @@ fn wait_for_filesystem(id: &str, fs: Filesystem, deps: &Deps<'_>) -> Result<(), 
         if found == Some(fs.name()) {
             return Ok(());
         }
+        if (deps.io.cancelled)() {
+            return Err(fail(
+                Code::Cancelled,
+                "cancelled while waiting for the file system",
+            ));
+        }
         (deps.io.pause)();
     }
     Err(fail(
