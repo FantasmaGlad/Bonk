@@ -126,10 +126,7 @@ impl CommonArgs {
     }
 
     pub(crate) fn options(&self, view: &ViewDefaults) -> FilterOptions {
-        FilterOptions {
-            show_internal: self.show_internal || view.show_internal,
-            allow_virtual: self.allow_virtual || view.allow_virtual,
-        }
+        view.widen(self.write_options())
     }
 
     /// To write, only the command options count: a forgotten setting or variable sets the display, never

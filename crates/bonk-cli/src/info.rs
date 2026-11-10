@@ -81,10 +81,10 @@ pub(crate) fn run(
     };
     let eligibility = evaluate(
         disk,
-        FilterOptions {
-            show_internal: args.show_internal || defaults.show_internal,
-            allow_virtual: args.allow_virtual || defaults.allow_virtual,
-        },
+        defaults.widen(FilterOptions {
+            show_internal: args.show_internal,
+            allow_virtual: args.allow_virtual,
+        }),
     );
     if args.json {
         let report = Report {
