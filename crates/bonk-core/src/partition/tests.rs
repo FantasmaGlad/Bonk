@@ -240,3 +240,25 @@ fn un_debut_de_partition_demesure_ne_fait_pas_paniquer() -> Result<(), Box<dyn s
     assert!(codes(&inspect_bytes(img)?).contains(&"gpt_entry_out_of_range"));
     Ok(())
 }
+
+#[test]
+fn une_plage_hors_du_support_est_refusee_sans_allocation() -> Result<(), BlockError> {
+    let dev = MemoryDevice::new(4096, 512)?;
+    assert_eq!(read_range(&dev, 100, 200)?.len(), 200);
+    assert_eq!(read_range(&dev, 4000, 96)?.len(), 96);
+    for (offset, len) in [
+        (4000, 97),
+        (0, u64::MAX),
+        (u64::MAX - 1, 2),
+        (1 << 62, 1 << 40),
+    ] {
+        assert!(
+            matches!(
+                read_range(&dev, offset, len),
+                Err(BlockError::OutOfRange { .. })
+            ),
+            "{offset} {len}"
+        );
+    }
+    Ok(())
+}

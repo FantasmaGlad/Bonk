@@ -234,13 +234,20 @@ pub fn inspect(dev: &dyn BlockDevice) -> Result<Layout, BlockError> {
 /// access.
 pub fn read_range(dev: &dyn BlockDevice, offset: u64, len: u64) -> Result<Vec<u8>, BlockError> {
     let block = u64::from(dev.block_size());
+    let size = dev.size();
+    let out_of_range = || BlockError::OutOfRange { offset, len, size };
+    // Offsets come from on-disk metadata: refuse before allocating, not after.
+    let end = offset
+        .checked_add(len)
+        .filter(|&end| end <= size)
+        .ok_or_else(out_of_range)?;
     let start = offset - offset % block;
-    let end = (offset + len).div_ceil(block) * block;
-    let mut buf = vec![0u8; usize::try_from(end - start).unwrap_or(usize::MAX)];
+    let aligned_end = end.div_ceil(block).saturating_mul(block).min(size);
+    let mut buf = vec![0u8; usize::try_from(aligned_end - start).map_err(|_| out_of_range())?];
     dev.read_at(start, &mut buf)?;
-    let skip = usize::try_from(offset - start).unwrap_or(0);
+    let skip = usize::try_from(offset - start).map_err(|_| out_of_range())?;
     buf.drain(..skip);
-    buf.truncate(usize::try_from(len).unwrap_or(usize::MAX));
+    buf.truncate(usize::try_from(len).map_err(|_| out_of_range())?);
     Ok(buf)
 }
 
