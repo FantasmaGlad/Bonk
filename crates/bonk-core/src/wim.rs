@@ -114,8 +114,9 @@ pub struct Header {
 }
 
 /// # Errors
-/// [`WimError::NotWim`] without a signature; a compressed table or an already split WIM is refused.
-pub fn read_header(header: &[u8]) -> Result<Header, WimError> {
+/// [`WimError::NotWim`] without a signature; a compressed table, an already split WIM or a table outside
+/// the file of `file_size` bytes is refused.
+pub fn read_header(header: &[u8], file_size: u64) -> Result<Header, WimError> {
     if header.len() < HEADER_LEN || &header[..8] != MAGIC {
         return Err(WimError::NotWim);
     }
@@ -126,6 +127,13 @@ pub fn read_header(header: &[u8]) -> Result<Header, WimError> {
     let lookup = Resource::read(&header[AT_LOOKUP..AT_LOOKUP + RESOURCE_LEN]);
     if lookup.flags & 0x04 != 0 {
         return Err(WimError::Malformed("compressed resource table"));
+    }
+    if lookup
+        .offset
+        .checked_add(lookup.stored)
+        .is_none_or(|end| end > file_size)
+    {
+        return Err(WimError::Malformed("resource table outside the file"));
     }
     Ok(Header {
         lookup_offset: lookup.offset,
@@ -169,7 +177,7 @@ pub fn split(
     file_size: u64,
     part_limit: u64,
 ) -> Result<Vec<Vec<Segment>>, WimError> {
-    read_header(header)?;
+    read_header(header, file_size)?;
     if has_solid_resources(lookup)? {
         return Err(WimError::Solid);
     }
@@ -435,12 +443,24 @@ mod tests {
             split(&header, &table, size, 2000),
             Err(WimError::ResourceTooLarge(10_000))
         );
-        assert_eq!(read_header(&[0; 208]), Err(WimError::NotWim));
-        assert_eq!(read_header(b"MSWIM"), Err(WimError::NotWim));
+        assert_eq!(read_header(&[0; 208], 208), Err(WimError::NotWim));
+        assert_eq!(read_header(b"MSWIM", 5), Err(WimError::NotWim));
         let (mut header, table, size) = wim(1, 10, false);
         header[AT_TOTAL_PARTS] = 2;
         assert!(split(&header, &table, size, 1 << 20).is_err());
         let (header, table, _) = wim(1, 10, false);
         assert!(split(&header, &table, 5, 1 << 20).is_err());
+    }
+
+    #[test]
+    fn une_table_annoncee_hors_du_fichier_est_refusee_avant_lecture() {
+        let (mut header, _, size) = wim(1, 10, false);
+        assert!(read_header(&header, size).is_ok());
+        let at = AT_LOOKUP;
+        header[at..at + 7].copy_from_slice(&[0xff; 7]);
+        assert_eq!(
+            read_header(&header, size),
+            Err(WimError::Malformed("resource table outside the file"))
+        );
     }
 }

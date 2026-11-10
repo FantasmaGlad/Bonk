@@ -276,7 +276,7 @@ fn plan_items(
         Ok(bytes)
     };
     let header = read(0, WIM_HEADER as u64)?;
-    let info = wim::read_header(&header).map_err(wim_error)?;
+    let info = wim::read_header(&header, wim_file.size).map_err(wim_error)?;
     let lookup = read(info.lookup_offset, info.lookup_len)?;
     let parts = wim::split(&header, &lookup, wim_file.size, PART_LIMIT).map_err(wim_error)?;
     let count = parts.len();
