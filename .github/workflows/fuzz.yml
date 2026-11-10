@@ -25,11 +25,24 @@ jobs:
         run: |
           rustup toolchain install nightly --profile minimal
           cargo +nightly install --locked cargo-fuzz
+      # Each run starts from the inputs earlier runs found: coverage grows instead of restarting from nothing.
+      - name: Reprendre le corpus
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: fuzz/corpus
+          key: corpus-fuzz-${{ github.run_id }}
+          restore-keys: corpus-fuzz-
       - name: Fuzzer chaque cible
         run: |
           for cible in $(cargo +nightly fuzz list); do
             cargo +nightly fuzz run "$cible" -- -max_total_time=300
           done
+      - name: Garder le corpus
+        if: always() && github.event_name != 'pull_request'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: fuzz/corpus
+          key: corpus-fuzz-${{ github.run_id }}
       - name: Conserver les plantages
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
