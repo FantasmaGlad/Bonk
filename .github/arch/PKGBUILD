@@ -16,6 +16,9 @@ package() {
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/bonk/LICENSE"
   install -Dm644 bonk.desktop "$pkgdir/usr/share/applications/bonk.desktop"
   install -Dm644 bonk-link.desktop "$pkgdir/usr/share/applications/bonk-link.desktop"
+  for page in "$startdir"/man/*.1.gz; do
+    install -Dm644 "$page" "$pkgdir/usr/share/man/man1/${page##*/}"
+  done
   for dossier in "$startdir"/icons/*; do
     install -Dm644 "$dossier/bonk.png" "$pkgdir/usr/share/icons/hicolor/${dossier##*/}/apps/bonk.png"
   done

@@ -4,6 +4,7 @@ set -euo pipefail
 ARCHIVES=$(realpath "$1")
 SORTIE=$(realpath "$2")
 VERSION=$3
+PAGES=$(realpath "$4")
 RESUME="Bonk without a window: bootable media writer, command line only"
 ADRESSE=https://github.com/FantasmaGlad/Bonk
 MAINTENEUR="FantasmaGlad <193235053+FantasmaGlad@users.noreply.github.com>"
@@ -22,6 +23,7 @@ for arch in x86_64 aarch64 i686; do
   mkdir -p "$racine/DEBIAN" "$racine/usr/bin" "$racine/usr/share/doc/bonk-cli"
   install -m 755 "$source/bonk" "$racine/usr/bin/bonk"
   install -m 644 "$source/LICENSE" "$racine/usr/share/doc/bonk-cli/copyright"
+  install -Dm644 -t "$racine/usr/share/man/man1" "$PAGES"/*.1.gz
   cat > "$racine/DEBIAN/control" <<CONTROLE
 Package: bonk-cli
 Version: $VERSION-1
@@ -58,10 +60,12 @@ $RESUME.
 %install
 install -Dm755 $source/bonk %{buildroot}/usr/bin/bonk
 install -Dm644 $source/LICENSE %{buildroot}/usr/share/licenses/bonk-cli/LICENSE
+install -Dm644 -t %{buildroot}/usr/share/man/man1 $PAGES/*.1.gz
 
 %files
 /usr/bin/bonk
 /usr/share/licenses/bonk-cli/LICENSE
+/usr/share/man/man1/*.1.gz
 SPEC
   rpmbuild --quiet -bb --target "$arch" --define "_topdir $travail/rpm" "$travail/bonk-cli.spec"
   find "$travail/rpm/RPMS" -name '*.rpm' -exec mv -t "$SORTIE" {} +
@@ -72,6 +76,7 @@ racine="$travail/pacman"
 mkdir -p "$racine"
 install -Dm755 "$travail/x86_64/bonk" "$racine/usr/bin/bonk"
 install -Dm644 "$travail/x86_64/LICENSE" "$racine/usr/share/licenses/bonk-cli/LICENSE"
+install -Dm644 -t "$racine/usr/share/man/man1" "$PAGES"/*.1.gz
 cat > "$racine/.PKGINFO" <<INFO
 pkgname = bonk-cli
 pkgbase = bonk-cli

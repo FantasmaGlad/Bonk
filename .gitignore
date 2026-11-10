@@ -2,3 +2,4 @@
 *.img
 *.iso
 .env
+/crates/bonk/assets/man

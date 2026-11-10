@@ -10,7 +10,32 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Written once from the command definitions, then installed by every package.
+  manuel:
+    name: pages de manuel
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Installer la chaîne Rust du dépôt
+        run: rustup toolchain install
+      - name: Générer
+        run: |
+          BONK_MAN_DIR="$PWD/man" cargo test -p bonk-cli --locked -- pages_de_manuel
+          gzip -9n man/*.1
+          ls man
+      - name: Conserver les pages
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pages-manuel
+          path: man/*.1.gz
+          if-no-files-found: error
+
   linux:
+    needs: manuel
     name: ${{ matrix.nom }} (deb, rpm)
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
@@ -39,6 +64,11 @@ jobs:
         with:
           name: binaire-${{ matrix.nom }}
           path: archive
+      - name: Récupérer les pages de manuel
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: pages-manuel
+          path: crates/bonk/assets/man
       - name: Installer cargo-deb et cargo-generate-rpm
         run: cargo install --locked --version 3.8.0 cargo-deb && cargo install --locked --version 0.21.1 cargo-generate-rpm
       - name: Placer le binaire où les outils l'attendent
@@ -55,6 +85,7 @@ jobs:
           # A bonk:// link clicked on the website must reach the window.
           dpkg-deb -c dist/*.deb | grep -q usr/share/applications/bonk-link.desktop
           dpkg-deb -c dist/*.deb | grep -q usr/share/icons/hicolor/256x256/apps/bonk.png
+          dpkg-deb -c dist/*.deb | grep -q usr/share/man/man1/bonk-write.1.gz
           cd dist
           sha256sum -- *.deb *.rpm > "paquets-$TARGET.sha256"
           cat "paquets-$TARGET.sha256"
@@ -74,6 +105,7 @@ jobs:
           retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
 
   cli:
+    needs: manuel
     name: bonk-cli (deb, rpm, pkg.tar.zst)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -93,6 +125,11 @@ jobs:
           pattern: binaire-linux-*-musl
           merge-multiple: true
           path: archives
+      - name: Récupérer les pages de manuel
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: pages-manuel
+          path: man
       - name: Installer rpm et zstd
         run: |
           sudo apt-get update
@@ -101,9 +138,13 @@ jobs:
         run: |
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
           mkdir dist
-          bash .github/scripts/paquets-cli.sh archives dist "$version"
+          bash .github/scripts/paquets-cli.sh archives dist "$version" man
           cd dist
           sha256sum -- *.deb *.rpm *.pkg.tar.zst | tee paquets-cli.sha256
+          # Container images skip man pages at install time: the package contents are checked instead.
+          for paquet in *.deb; do dpkg-deb -c "$paquet" | grep -q usr/share/man/man1/bonk-write.1.gz; done
+          for paquet in *.rpm; do rpm -qlp "$paquet" | grep -q /usr/share/man/man1/bonk-write.1.gz; done
+          tar --zstd -tf ./*.pkg.tar.zst | grep -q usr/share/man/man1/bonk-write.1.gz
       - name: Installer dans quatre distributions
         run: |
           essai() { docker run --rm --volume "$PWD/dist:/dist:ro" "$1" sh -ec "$2 && bonk --version && bonk explain E2001 > /dev/null"; }
@@ -130,6 +171,7 @@ jobs:
 
   # x86_64 only: Arch has no official ARM image.
   arch:
+    needs: manuel
     name: arch (pkg.tar.zst)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -148,6 +190,11 @@ jobs:
         with:
           name: binaire-linux-x86_64
           path: archive
+      - name: Récupérer les pages de manuel
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: pages-manuel
+          path: man
       - name: Construire et installer le paquet
         run: |
           set -e
@@ -156,6 +203,7 @@ jobs:
           tar -xzf archive/bonk-*.tar.gz -C archive
           cp archive/bonk-*/bonk LICENSE crates/bonk/assets/bonk.desktop crates/bonk/assets/bonk-link.desktop build/
           cp -r crates/bonk/assets/icons build/icons
+          cp -r man build/man
           sed "s/@VERSION@/$version/" .github/arch/PKGBUILD > build/PKGBUILD
           docker run --rm --volume "$PWD/build:/build" --volume "$PWD/dist:/dist" archlinux:latest sh -ec '
             pacman -Syu --noconfirm --needed base-devel > /dev/null
@@ -168,6 +216,8 @@ jobs:
             test -f /usr/share/applications/bonk.desktop
             test -f /usr/share/applications/bonk-link.desktop
             test -f /usr/share/icons/hicolor/256x256/apps/bonk.png
+            # The image never extracts man pages (NoExtract): the package list says what it carries.
+            pacman -Ql bonk | grep -q /usr/share/man/man1/bonk-write.1.gz
           '
           sudo chown -R "$USER" dist
           cd dist
