@@ -210,3 +210,17 @@ fn le_coffre_refuse_fixture_sur_un_vrai_disque() {
     assert!(conflict(&["bonk", "vault", "init", "usb-a", "--dry-run"]).is_none());
     assert!(conflict(&["bonk", "vault", "list", "a.img", "--simulate"]).is_none());
 }
+
+/// The window lists real disks and starts `bonk write` without the capture.
+#[test]
+fn la_fenetre_refuse_fixture() {
+    use clap::Parser;
+
+    let conflict = |args: &[&str]| {
+        let cli = crate::Cli::try_parse_from(args).expect("ligne valide");
+        crate::fixture_conflict(&cli.command)
+    };
+    assert!(conflict(&["bonk"]).is_some());
+    assert!(conflict(&["bonk", "gui"]).is_some());
+    assert!(conflict(&["bonk", "list"]).is_none());
+}

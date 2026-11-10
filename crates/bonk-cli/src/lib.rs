@@ -189,7 +189,12 @@ enum DiskAction {
 /// `--fixture`.
 fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
     const DISK: &str = "--fixture only simulates the enumeration: writing to and raw reading of a disk are refused (use --simulate or --dry-run)";
-    match command.as_ref()? {
+    const GUI: &str = "the window enumerates and writes to real disks: incompatible with --fixture";
+    let Some(command) = command else {
+        return Some(GUI);
+    };
+    match command {
+        Command::Gui(_) => Some(GUI),
         Command::Debug {
             action: debug::DebugAction::Layout(a),
         } => (!a.reads_image_file()).then_some(DISK),
@@ -247,8 +252,7 @@ fn fixture_conflict(command: &Option<Command>) -> Option<&'static str> {
         | Command::Cache { .. }
         | Command::Catalog { .. }
         | Command::Schema(_)
-        | Command::Completions { .. }
-        | Command::Gui(_) => None,
+        | Command::Completions { .. } => None,
     }
 }
 
