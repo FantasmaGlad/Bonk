@@ -249,7 +249,7 @@ impl App {
 
     fn finished_panel<'a>(&'a self, outcome: &Outcome) -> Element<'a, Message> {
         let lang = self.lang;
-        let message = phrases::outcome(lang, outcome);
+        let message = phrases::outcome_with_explain(lang, outcome);
         column![
             text(message).size(14),
             ring(

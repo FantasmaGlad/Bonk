@@ -11,8 +11,24 @@ use crate::errors::Code;
 
 use super::{JSON_SCHEMA_VERSION, LayoutArgs, Outcome};
 
+/// [`open_device`], traced on request: a real disk never has its bytes logged.
+pub(super) fn open_read_only(
+    target: &Path,
+    trace: Option<crate::transfer::TraceIoArg>,
+) -> Result<Box<dyn BlockDevice>, (Code, String)> {
+    let image = target.is_file();
+    let device = open_device(target)?;
+    Ok(match trace {
+        Some(mode) => Box::new(bonk_core::trace::TracedDevice::new(
+            device,
+            image && mode == crate::transfer::TraceIoArg::Data,
+        )),
+        None => device,
+    })
+}
+
 /// An image, or a real disk by path or stable id, read-only: nothing writes through the returned type.
-pub(super) fn open_read_only(target: &Path) -> Result<Box<dyn BlockDevice>, (Code, String)> {
+fn open_device(target: &Path) -> Result<Box<dyn BlockDevice>, (Code, String)> {
     let platform = bonk_hal::platform::current();
     let disk_path = if target.is_file() || target.is_dir() {
         None
@@ -74,7 +90,7 @@ pub(crate) fn schema_layout() -> serde_json::Value {
 }
 
 pub(crate) fn layout(args: &LayoutArgs, out: &mut dyn Write) -> io::Result<Outcome> {
-    let device = match open_read_only(&args.image) {
+    let device = match open_read_only(&args.image, args.trace_io) {
         Ok(device) => device,
         Err((code, message)) => return Ok(Outcome::Failed(code, message)),
     };

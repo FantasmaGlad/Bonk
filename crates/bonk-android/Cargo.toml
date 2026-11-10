@@ -24,5 +24,9 @@ bonk-ui.workspace = true
 jni = "0.22"
 libc.workspace = true
 
+[features]
+# Destructive write test on the key named at build time: never in a published build.
+banc = []
+
 [lints]
 workspace = true

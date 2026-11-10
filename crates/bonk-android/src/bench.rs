@@ -4,7 +4,9 @@ use bonk_core::{BlockDevice, BlockError};
 use sha2::{Digest, Sha256};
 
 /// Far from the start: an image already on the key stays intact.
+#[cfg(any(feature = "banc", test))]
 const BENCH_OFFSET: u64 = 16 << 30;
+#[cfg(any(feature = "banc", test))]
 const BENCH_BYTES: usize = 64 << 20;
 
 fn hex(bytes: &[u8]) -> String {
@@ -31,6 +33,7 @@ pub fn read_hash(
 }
 
 /// Pseudo-random: test data must not be compressible by the key.
+#[cfg(feature = "banc")]
 fn pattern(length: usize) -> Vec<u8> {
     let mut state = 0x9E37_79B9_7F4A_7C15_u64;
     let mut data = Vec::with_capacity(length + 8);
@@ -44,6 +47,7 @@ fn pattern(length: usize) -> Vec<u8> {
     data
 }
 
+#[cfg(feature = "banc")]
 fn write_and_check(disk: &mut dyn BlockDevice, data: &[u8]) -> Result<bool, BlockError> {
     disk.write_at(BENCH_OFFSET, data)?;
     disk.flush()?;
@@ -52,6 +56,7 @@ fn write_and_check(disk: &mut dyn BlockDevice, data: &[u8]) -> Result<bool, Bloc
     Ok(back == data)
 }
 
+#[cfg(feature = "banc")]
 /// Writes 64 MiB at 16 GiB, reads back, then restores the area and checks it. The restore is tried even after
 /// a failure, and its result is always in the report.
 ///
@@ -125,6 +130,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "banc")]
     #[test]
     fn la_zone_retrouve_son_contenu() -> Result<(), BlockError> {
         let mut disk = memory(false);
@@ -135,6 +141,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "banc")]
     #[test]
     fn une_ecriture_refusee_est_rapportee() -> Result<(), BlockError> {
         let report = write_bench(&mut memory(true))?;
@@ -144,6 +151,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "banc")]
     #[test]
     fn une_cle_trop_petite_n_est_pas_touchee() {
         let mut disk = memory(false);

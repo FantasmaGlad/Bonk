@@ -977,7 +977,10 @@ fn une_cle_debranchee_en_ecriture_arrete_tout() {
         "none",
     ]);
     assert_ne!(code, 0, "{out}");
-    assert!(err.contains("device disconnected"), "{err}");
+    assert!(
+        err.contains("disappeared during the write") && err.contains("[E4001]"),
+        "{err}"
+    );
     assert!(
         err.trim_end().ends_with(']'),
         "code d'erreur attendu : {err}"

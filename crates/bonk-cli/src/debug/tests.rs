@@ -48,6 +48,7 @@ fn layout_d_une_image_mbr() -> Result<(), Box<dyn std::error::Error>> {
     let args = LayoutArgs {
         image: image.0.clone(),
         json: false,
+        trace_io: None,
     };
     assert!(matches!(layout(&args, &mut out)?, Outcome::Done));
     let text = texte(out);
@@ -66,6 +67,7 @@ fn layout_d_une_image_mbr() -> Result<(), Box<dyn std::error::Error>> {
     let args = LayoutArgs {
         image: image.0.clone(),
         json: true,
+        trace_io: None,
     };
     layout(&args, &mut json)?;
     let value: serde_json::Value = serde_json::from_slice(&json)?;
@@ -85,6 +87,7 @@ fn les_commandes_debug_ne_modifient_jamais_l_image() -> Result<(), Box<dyn std::
         &LayoutArgs {
             image: image.0.clone(),
             json: false,
+            trace_io: None,
         },
         &mut sink,
     )?;
@@ -92,6 +95,7 @@ fn les_commandes_debug_ne_modifient_jamais_l_image() -> Result<(), Box<dyn std::
         &LayoutArgs {
             image: image.0.clone(),
             json: true,
+            trace_io: None,
         },
         &mut sink,
     )?;
@@ -100,6 +104,7 @@ fn les_commandes_debug_ne_modifient_jamais_l_image() -> Result<(), Box<dyn std::
             image: image.0.clone(),
             offset: 0,
             len: 4096,
+            trace_io: None,
         },
         &mut sink,
     )?;
@@ -118,7 +123,8 @@ fn hexdump_borne_et_signale_la_fin_de_l_image() -> Result<(), Box<dyn std::error
                 &HexdumpArgs {
                     image: image.0.clone(),
                     offset,
-                    len
+                    len,
+                    trace_io: None,
                 },
                 &mut out
             )?,
@@ -150,6 +156,7 @@ fn un_disque_reel_est_refuse_avec_une_explication() -> Result<(), io::Error> {
     let args = LayoutArgs {
         image: PathBuf::from("/dev/disque-qui-n-existe-pas"),
         json: false,
+        trace_io: None,
     };
     match layout(&args, &mut out)? {
         Outcome::Failed(code, message) => {
@@ -163,6 +170,7 @@ fn un_disque_reel_est_refuse_avec_une_explication() -> Result<(), io::Error> {
     let args = LayoutArgs {
         image: std::env::temp_dir(),
         json: false,
+        trace_io: None,
     };
     assert!(matches!(
         layout(&args, &mut Vec::new())?,

@@ -13,13 +13,21 @@ fn source_error(format: Format) -> Code {
     }
 }
 
-/// Bounds are checked before each write: the kernel only answers "no space" if the disk vanished.
+/// Bounds are checked before each write: the kernel only answers "no space" if the disk vanished. The USB
+/// transport without root says `NotConnected`.
 pub(super) fn support_lost(err: &BlockError) -> Option<JobError> {
     match err {
-        BlockError::Io(io) if io.kind() == std::io::ErrorKind::StorageFull => Some(fail(
-            Code::WriteFailed,
-            "the drive disappeared during the write (unplugged, or a faulty USB port)",
-        )),
+        BlockError::Io(io)
+            if matches!(
+                io.kind(),
+                std::io::ErrorKind::StorageFull | std::io::ErrorKind::NotConnected
+            ) =>
+        {
+            Some(fail(
+                Code::WriteFailed,
+                "the drive disappeared during the write (unplugged, or a faulty USB port)",
+            ))
+        }
         _ => None,
     }
 }
@@ -76,6 +84,15 @@ mod tests {
     fn un_support_disparu_n_est_pas_un_disque_plein() {
         let full = std::io::Error::from(std::io::ErrorKind::StorageFull);
         let error = map_write_error(WriteError::Device(BlockError::Io(full)), Format::Raw);
+        assert_eq!(error.code, Code::WriteFailed);
+        assert!(error.message.contains("unplugged"), "{}", error.message);
+    }
+
+    /// The USB transport without root reports a key pulled out as `NotConnected`.
+    #[test]
+    fn une_cle_debranchee_par_le_transport_usb_se_dit() {
+        let gone = std::io::Error::new(std::io::ErrorKind::NotConnected, "device disconnected");
+        let error = map_write_error(WriteError::Device(BlockError::Io(gone)), Format::Raw);
         assert_eq!(error.code, Code::WriteFailed);
         assert!(error.message.contains("unplugged"), "{}", error.message);
     }

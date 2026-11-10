@@ -323,6 +323,29 @@ fn trace_io_journalise_les_acces_sans_les_donnees() -> Resultat {
     Ok(())
 }
 
+/// The low-level reads trace like the rest: `--trace-io` is accepted by every command that reads a device.
+#[test]
+fn trace_io_suit_aussi_les_lectures_de_debug() -> Resultat {
+    let dir = Dossier::new("trace-debug")?;
+    let source = dir.file("src.img");
+    fs::write(&source, image(1 << 20))?;
+    for commande in [&["debug", "hexdump"][..], &["debug", "layout"][..]] {
+        let mut args = vec!["-vv", "--log-format", "json"];
+        args.extend_from_slice(commande);
+        let chemin_source = chemin(&source);
+        args.extend_from_slice(&[chemin_source.as_str(), "--trace-io=data"]);
+        let sortie = bonk(&args)?;
+        assert_eq!(sortie.status.code(), Some(0), "{}", texte(&sortie.stderr));
+        let journal = texte(&sortie.stderr);
+        assert!(
+            journal.contains("\"target\":\"bonk_core::trace\"")
+                && journal.contains("\"op\":\"read\""),
+            "{commande:?} : {journal}"
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn reparation_du_gpt_apres_ecriture_sur_un_support_plus_grand() -> Resultat {
     let dir = Dossier::new("gpt")?;

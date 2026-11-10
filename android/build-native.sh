@@ -5,6 +5,11 @@ NDK=${ANDROID_NDK_HOME:-$(find "$SDK/ndk" -mindepth 1 -maxdepth 1 | sort -V | ta
 BIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin
 export PATH="$BIN:$PATH"
 racine=$(cd "$(dirname "$0")/.." && pwd)
+options=()
+# The write test only exists in a build made for the test key.
+if [ -n "${BONK_BENCH_SERIAL:-}" ]; then
+  options=(--features banc)
+fi
 # Rust target, Android ABI directory, NDK compiler prefix (API level 26, the minSdk).
 for puce in "aarch64-linux-android arm64-v8a aarch64-linux-android26" "x86_64-linux-android x86_64 x86_64-linux-android26"; do
   read -r cible abi compilateur <<< "$puce"
@@ -12,7 +17,7 @@ for puce in "aarch64-linux-android arm64-v8a aarch64-linux-android26" "x86_64-li
   export "CARGO_TARGET_${variable}_LINKER=$compilateur-clang"
   export "CC_${cible//-/_}=$compilateur-clang"
   export "AR_${cible//-/_}=llvm-ar"
-  cargo build --manifest-path "$racine/Cargo.toml" -p bonk-android --release --target "$cible"
+  cargo build --manifest-path "$racine/Cargo.toml" -p bonk-android --release --target "$cible" "${options[@]}"
   mkdir -p "$1/$abi"
   cp "$racine/target/$cible/release/libbonk_android.so" "$1/$abi/"
 done

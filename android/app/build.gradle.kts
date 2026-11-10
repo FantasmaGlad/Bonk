@@ -146,6 +146,7 @@ fun scaled(image: BufferedImage, size: Int): BufferedImage {
 
 val buildNative by tasks.registering(Exec::class) {
     commandLine(rootProject.file("build-native.sh").path, jniOutput.get().asFile.path)
+    environment("BONK_BENCH_SERIAL", benchSerial)
 }
 
 tasks.named("preBuild") {

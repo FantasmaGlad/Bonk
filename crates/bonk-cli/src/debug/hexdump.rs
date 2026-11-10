@@ -14,7 +14,7 @@ pub(crate) fn hexdump(args: &HexdumpArgs, out: &mut dyn Write) -> io::Result<Out
             format!("invalid length: {} (1 to {HEXDUMP_MAX} bytes)", args.len),
         ));
     }
-    let device = match open_read_only(&args.image) {
+    let device = match open_read_only(&args.image, args.trace_io) {
         Ok(device) => device,
         Err((code, message)) => return Ok(Outcome::Failed(code, message)),
     };
