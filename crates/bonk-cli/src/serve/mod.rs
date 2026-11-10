@@ -5,7 +5,7 @@ mod protocol;
 #[cfg(test)]
 mod tests;
 
-use std::io::{BufRead, Write};
+use std::io::{BufRead, Read, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
@@ -147,8 +147,15 @@ pub(crate) fn serve(
             break;
         }
         match lines.recv_timeout(INTERRUPT_POLL) {
-            Ok(line) if line.trim().is_empty() => {}
-            Ok(line) => handle(&line, cfg, &out, &mut state),
+            Ok(Incoming::Line(line)) if line.trim().is_empty() => {}
+            Ok(Incoming::Line(line)) => handle(&line, cfg, &out, &mut state),
+            Ok(Incoming::TooLong) => out.respond(
+                &Value::Null,
+                Err(failure(
+                    Code::ProtocolError,
+                    format!("request longer than {REQUEST_LIMIT} bytes"),
+                )),
+            ),
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,
         }
@@ -165,14 +172,49 @@ pub(crate) fn serve(
 /// How often the loop checks for a stop while waiting for a request.
 const INTERRUPT_POLL: Duration = Duration::from_millis(100);
 
+/// Longest request line: the largest real request is a few hundred bytes.
+const REQUEST_LIMIT: u64 = 1 << 20;
+
+enum Incoming {
+    Line(String),
+    /// Skipped up to its end of line, never held in memory.
+    TooLong,
+}
+
+/// Next line of at most `limit` bytes; `None` at end of input or on a read error.
+fn next_line(input: &mut impl BufRead, limit: u64) -> Option<Incoming> {
+    let mut bytes = Vec::new();
+    let read = input
+        .by_ref()
+        .take(limit + 1)
+        .read_until(b'\n', &mut bytes)
+        .ok()?;
+    if read == 0 {
+        return None;
+    }
+    if bytes.last() != Some(&b'\n') && read as u64 > limit {
+        loop {
+            bytes.clear();
+            let read = input
+                .by_ref()
+                .take(limit)
+                .read_until(b'\n', &mut bytes)
+                .ok()?;
+            if read == 0 || bytes.last() == Some(&b'\n') {
+                return Some(Incoming::TooLong);
+            }
+        }
+    }
+    String::from_utf8(bytes).ok().map(Incoming::Line)
+}
+
 /// On a separate thread: the service loop never blocks on a read and sees a stop even when the client is
 /// silent.
-fn read_lines(input: impl BufRead + Send + 'static) -> Receiver<String> {
+fn read_lines(mut input: impl BufRead + Send + 'static) -> Receiver<Incoming> {
     let (sender, receiver) = mpsc::channel();
     std::thread::spawn(move || {
-        for line in input.lines() {
-            let Ok(line) = line else { break };
-            if sender.send(line).is_err() {
+        while let Some(incoming) = next_line(&mut input, REQUEST_LIMIT) {
+            if sender.send(incoming).is_err() {
                 break;
             }
         }

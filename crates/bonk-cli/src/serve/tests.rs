@@ -672,3 +672,16 @@ fn disk_write_exige_l_empreinte_d_une_adresse() {
     let text = String::from_utf8(buffer.0.lock().unwrap().clone()).unwrap();
     assert!(text.contains("--sha256"), "{text}");
 }
+
+#[test]
+fn une_requete_trop_longue_est_sautee_sans_etre_gardee() {
+    let mut input =
+        Cursor::new(b"{\"a\":1}\nxxxxxxxxxxxxxxxxxxxx\n{\"b\":2}\nyyyyyyyyyyyy".to_vec());
+    let lines: Vec<_> = std::iter::from_fn(|| next_line(&mut input, 10)).collect();
+    assert!(matches!(&lines[..], [
+        Incoming::Line(a),
+        Incoming::TooLong,
+        Incoming::Line(b),
+        Incoming::TooLong,
+    ] if a == "{\"a\":1}\n" && b == "{\"b\":2}\n"));
+}
