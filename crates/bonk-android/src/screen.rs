@@ -396,6 +396,10 @@ pub fn state(model: &Model) -> Value {
         // The app reads its own texts (Android resources, notification) in this language.
         "lang": lang.pick("en", "fr"),
         "status": model.status_line(model.entries().len()),
+        "notice": model.requested().and_then(|(id, requested)| {
+            let disk_chosen = matches!(model.write, WriteState::Draft { .. });
+            text::requested_line(lang, id, requested, disk_chosen)
+        }),
         "show_all": model.show_all,
         "show_all_label": lang.pick("Also show excluded disks", "Afficher aussi les disques écartés"),
         "empty": lang.pick(
@@ -406,6 +410,18 @@ pub fn state(model: &Model) -> Value {
         "panel": panel_state(model),
         "running": matches!(model.write, WriteState::Running { .. }),
     })
+}
+
+/// A link another app opened Bonk with. Only a catalog image name gets through: it chooses the image, and
+/// the user still picks the drive and starts the write.
+fn open_link(model: &mut Model, input: &Value) -> Vec<Effect> {
+    if input["type"] != "open" {
+        return Vec::new();
+    }
+    match input["link"].as_str().map(bonk_catalog::link::image_id) {
+        Some(Ok(id)) => model.request_image(id.to_owned()),
+        _ => Vec::new(),
+    }
 }
 
 /// A message, or just a look at the state with `{}`: the state and the effects to perform.
@@ -422,6 +438,7 @@ pub fn dispatch(input: &str) -> String {
     if let Some(message) = message_of(&input, &model) {
         effects.extend(model.update(message));
     }
+    effects.extend(open_link(&mut model, &input));
     let effects = effects_out(&mut model, effects, draft);
     json!({"state": state(&model), "effects": effects}).to_string()
 }
@@ -587,7 +604,12 @@ mod tests {
     fn state_samples() -> Vec<Value> {
         use bonk_ui::catalog::{Choice, System};
 
-        let mut samples = vec![state(&Model::default())];
+        let mut idle = Model::default();
+        let _ = open_link(
+            &mut idle,
+            &json!({"type": "open", "link": "bonk://install/debian-13-netinst-x86_64"}),
+        );
+        let mut samples = vec![state(&idle)];
         let mut model = loaded();
         model.catalog = CatalogState::Ready(vec![System {
             name: "Debian".to_owned(),
@@ -595,6 +617,7 @@ mod tests {
             icon: None,
             choices: vec![
                 Choice {
+                    id: "debian-13-netinst-x86_64".to_owned(),
                     name: "Debian".to_owned(),
                     label: "13.7.0 netinst".to_owned(),
                     end_of_life: false,
@@ -605,6 +628,7 @@ mod tests {
                     },
                 },
                 Choice {
+                    id: "debian-13-dvd-x86_64".to_owned(),
                     name: "Debian".to_owned(),
                     label: "DVD".to_owned(),
                     end_of_life: false,
@@ -687,9 +711,14 @@ mod tests {
             json!({"type": "failed", "message": "the drive is no longer connected", "code": "E1003"}),
             json!({"type": "failed", "message": "unexpected"}),
             json!({"type": "catalog_failed", "message": "404"}),
+            json!({"type": "open", "link": "bonk://install/debian-13-netinst-x86_64"}),
         ];
-        // `choose` only means something with a loaded catalog: its sample fixes the shape only.
-        for message in messages.iter().filter(|m| m["type"] != "choose") {
+        // `choose` only means something with a loaded catalog, and `open` is not a screen message: their
+        // samples fix the shape only.
+        for message in messages
+            .iter()
+            .filter(|m| m["type"] != "choose" && m["type"] != "open")
+        {
             assert!(
                 message_of(message, &model).is_some(),
                 "refusé par Rust : {message}"
@@ -712,6 +741,29 @@ mod tests {
             path.display()
         );
         Ok(())
+    }
+
+    #[test]
+    fn un_lien_choisit_une_image_du_catalogue_sans_rien_ecrire() {
+        let mut model = loaded();
+        let link = json!({"type": "open", "link": "bonk://install/debian-13-netinst-x86_64"});
+        // The open draft already asked for the catalog: the link starts no second read.
+        assert!(open_link(&mut model, &link).is_empty());
+        assert_eq!(
+            open_link(&mut Model::default(), &link),
+            vec![Effect::LoadCatalog, Effect::DetectTor]
+        );
+        assert_eq!(model.requested.as_deref(), Some("debian-13-netinst-x86_64"));
+        assert!(matches!(model.write, WriteState::Draft { .. }));
+        for refused in [
+            json!({"type": "open", "link": "bonk://install/x?disk=usb-S1"}),
+            json!({"type": "open", "link": "https://example.org/x.iso"}),
+            json!({"type": "open"}),
+            json!({"type": "tick", "link": "bonk://install/other"}),
+        ] {
+            assert!(open_link(&mut model, &refused).is_empty(), "{refused}");
+            assert_eq!(model.requested.as_deref(), Some("debian-13-netinst-x86_64"));
+        }
     }
 
     /// A failure born in the app (cancel, key gone) carries a Bonk code: the screen shows its translated

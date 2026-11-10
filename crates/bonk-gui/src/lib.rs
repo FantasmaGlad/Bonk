@@ -11,7 +11,11 @@ use iced::Size;
 use crate::app::App;
 
 /// With the starting display settings (`bonk config`); returns when the window closes.
-pub fn run(initial: ViewOptions, lang: Option<bonk_hal::Lang>) -> Result<(), String> {
+pub fn run(
+    initial: ViewOptions,
+    lang: Option<bonk_hal::Lang>,
+    image: Option<String>,
+) -> Result<(), String> {
     let lang = lang.unwrap_or_else(locale::detect);
     // Iced panics without a display instead of returning an error: detect it first so Bonk falls back cleanly
     // to the command line (SSH, server).
@@ -19,7 +23,7 @@ pub fn run(initial: ViewOptions, lang: Option<bonk_hal::Lang>) -> Result<(), Str
         return Err("no graphical display (neither WAYLAND_DISPLAY nor DISPLAY)".to_owned());
     }
     run_with_fallback(
-        move || launch(initial, lang),
+        move || launch(initial, lang, image),
         fallback_allowed(|name| std::env::var_os(name)),
         relaunch_with_software_renderer,
     )
@@ -79,19 +83,23 @@ fn window_icon() -> Option<iced::window::Icon> {
     iced::window::icon::from_rgba(pixels, SIDE, SIDE).ok()
 }
 
-fn launch(initial: ViewOptions, lang: bonk_hal::Lang) -> Result<(), String> {
-    iced::application(move || App::new(initial, lang), App::update, App::view)
-        .title("Bonk")
-        .theme(App::theme)
-        .subscription(App::subscription)
-        .window(iced::window::Settings {
-            icon: window_icon(),
-            ..iced::window::Settings::default()
-        })
-        .window_size(Size::new(960.0, 640.0))
-        .centered()
-        .run()
-        .map_err(|erreur| erreur.to_string())
+fn launch(initial: ViewOptions, lang: bonk_hal::Lang, image: Option<String>) -> Result<(), String> {
+    iced::application(
+        move || App::new(initial, lang, image.clone()),
+        App::update,
+        App::view,
+    )
+    .title("Bonk")
+    .theme(App::theme)
+    .subscription(App::subscription)
+    .window(iced::window::Settings {
+        icon: window_icon(),
+        ..iced::window::Settings::default()
+    })
+    .window_size(Size::new(960.0, 640.0))
+    .centered()
+    .run()
+    .map_err(|erreur| erreur.to_string())
 }
 
 fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {

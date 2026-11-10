@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Bonk
+Exec=bonk gui --link %u
+Icon=bonk
+Terminal=false
+NoDisplay=true
+MimeType=x-scheme-handler/bonk;

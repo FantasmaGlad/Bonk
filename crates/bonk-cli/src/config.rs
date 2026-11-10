@@ -88,6 +88,14 @@ pub struct ViewDefaults {
     pub lang: Option<bonk_hal::Lang>,
 }
 
+/// What the window opens on.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WindowRequest {
+    pub view: ViewDefaults,
+    /// Catalog image to choose at once (`gui --image`, `gui --link`).
+    pub image: Option<String>,
+}
+
 /// `view.show_all` gives `BONK_VIEW_SHOW_ALL`.
 pub(crate) fn variable_name(key: &str) -> String {
     format!("BONK_{}", key.replace('.', "_").to_uppercase())

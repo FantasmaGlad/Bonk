@@ -129,6 +129,10 @@
     {
       "message": "404",
       "type": "catalog_failed"
+    },
+    {
+      "link": "bonk://install/debian-13-netinst-x86_64",
+      "type": "open"
     }
   ],
   "states": [
@@ -138,6 +142,7 @@
       "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
       "lang": "fr",
       "language": "English",
+      "notice": "Lecture du catalogue pour trouver debian-13-netinst-x86_64...",
       "panel": null,
       "running": false,
       "show_all": false,
@@ -160,6 +165,7 @@
       "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
       "lang": "fr",
       "language": "English",
+      "notice": null,
       "panel": {
         "advanced": false,
         "advanced_button": "Autre image ou options...",
@@ -227,6 +233,7 @@
       "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
       "lang": "fr",
       "language": "English",
+      "notice": null,
       "panel": {
         "cancel": "Annuler",
         "fraction": 0.25,
@@ -254,6 +261,7 @@
       "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
       "lang": "fr",
       "language": "English",
+      "notice": null,
       "panel": {
         "close": "Fermer",
         "kind": "finished",

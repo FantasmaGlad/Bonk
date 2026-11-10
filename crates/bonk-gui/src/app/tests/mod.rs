@@ -13,6 +13,7 @@ use super::*;
 
 mod clavier;
 mod commandes;
+mod lien;
 mod menu;
 mod panneau;
 mod rendu;

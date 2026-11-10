@@ -160,6 +160,20 @@ pub struct Model {
     /// act, with the disk named on screen.
     pub auto_select: bool,
     pub auto_selected: Option<String>,
+    /// Catalog image the window was opened for (`--image`, a link): it fills each draft until the user
+    /// chooses something else. It only ever names a catalog entry, and never starts a write.
+    pub requested: Option<String>,
+}
+
+/// Where the image the window was opened for stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Requested<'a> {
+    Waiting,
+    Ready(&'a crate::catalog::Choice),
+    /// In the catalog, but not a file Bonk can fetch and write to a drive.
+    NotWritable(&'a crate::catalog::Choice),
+    Unknown,
+    CatalogFailed,
 }
 
 pub fn ui_event(message: &Message) -> Option<(&'static str, String)> {
@@ -252,6 +266,23 @@ impl Model {
             );
         }
         effects
+    }
+
+    pub fn requested(&self) -> Option<(&str, Requested<'_>)> {
+        use crate::catalog::{CatalogState, ChoiceSource, find_id};
+        let id = self.requested.as_deref()?;
+        let state = match &self.catalog {
+            CatalogState::NotLoaded | CatalogState::Loading => Requested::Waiting,
+            CatalogState::Failed(_) => Requested::CatalogFailed,
+            CatalogState::Ready(systems) => match find_id(systems, id) {
+                Some((_, choice)) if matches!(choice.source, ChoiceSource::Download { .. }) => {
+                    Requested::Ready(choice)
+                }
+                Some((_, choice)) => Requested::NotWritable(choice),
+                None => Requested::Unknown,
+            },
+        };
+        Some((id, state))
     }
 
     pub fn view_options(&self) -> ViewOptions {

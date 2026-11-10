@@ -7,6 +7,7 @@ pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
         icon: None,
         choices: vec![
             catalog::Choice {
+                id: "ubuntu-26.04-desktop-x86_64".to_owned(),
                 name: "Ubuntu".to_owned(),
                 label: "26.04.1 desktop LTS".to_owned(),
                 end_of_life: false,
@@ -17,6 +18,7 @@ pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
                 },
             },
             catalog::Choice {
+                id: "ubuntu-24.04-desktop-x86_64".to_owned(),
                 name: "Ubuntu".to_owned(),
                 label: "24.04.5 desktop LTS".to_owned(),
                 end_of_life: false,
@@ -27,6 +29,7 @@ pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
                 },
             },
             catalog::Choice {
+                id: "ubuntu-11".to_owned(),
                 name: "Ubuntu".to_owned(),
                 label: "11".to_owned(),
                 end_of_life: false,

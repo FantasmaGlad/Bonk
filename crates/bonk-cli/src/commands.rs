@@ -5,14 +5,19 @@ use bonk_hal::{Disk, EnumerateError, enumerate_disks};
 use bonk_ops::job;
 use clap::CommandFactory;
 
-use crate::config::{self, ConfigAction, ViewDefaults};
+use crate::config::{self, ConfigAction, ViewDefaults, WindowRequest};
 use crate::errors::{self, Code, ExplainArgs, report};
 use crate::schema::{self, SchemaArgs};
 use crate::{Cli, Env, debug, diagnose, info, list, serve};
 
-pub(crate) fn run_gui<E: Write, G>(privileged: bool, view: ViewDefaults, err: &mut E, gui: G) -> u8
+pub(crate) fn run_gui<E: Write, G>(
+    privileged: bool,
+    request: WindowRequest,
+    err: &mut E,
+    gui: G,
+) -> u8
 where
-    G: FnOnce(ViewDefaults) -> Result<(), String>,
+    G: FnOnce(WindowRequest) -> Result<(), String>,
 {
     if privileged {
         return report(
@@ -26,7 +31,7 @@ where
         log::debug!(target: "bonk::cli", "own console closed");
     }
     log::debug!(target: "bonk::cli", "opening the window");
-    match gui(view) {
+    match gui(request) {
         Ok(()) => 0,
         Err(erreur) => {
             // No display (SSH, server) or no usable rendering: the CLI stays.

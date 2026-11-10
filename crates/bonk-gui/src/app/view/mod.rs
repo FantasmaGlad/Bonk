@@ -92,25 +92,29 @@ impl App {
         ]
         .align_y(iced::Center);
 
-        let window = container(
-            column![
-                header,
-                controls,
-                text(self.status_line(shown))
-                    .size(13)
-                    .color(theme::SECONDARY),
-                body,
-                equivalent,
-            ]
-            .spacing(14),
-        )
-        .padding(20)
-        .width(Fill)
-        .height(Fill);
+        let status = text(self.status_line(shown))
+            .size(13)
+            .color(theme::SECONDARY);
+        let mut content = column![header, controls, status].spacing(14);
+        if let Some(notice) = self.requested_notice() {
+            content = content.push(notice);
+        }
+        let window = container(content.push(body).push(equivalent))
+            .padding(20)
+            .width(Fill)
+            .height(Fill);
         match self.internal_to_confirm() {
             Some(disk) => stack![window, opaque(center(internal_dialog(disk, lang)))].into(),
             None => window.into(),
         }
+    }
+
+    /// Nothing when the window was not opened for an image, or once a draft carries it.
+    fn requested_notice(&self) -> Option<Element<'_, Message>> {
+        let disk_chosen = matches!(self.write, super::WriteState::Draft { .. });
+        let (id, state) = self.requested()?;
+        bonk_ui::text::requested_line(self.lang, id, state, disk_chosen)
+            .map(|line| text(line).size(14).into())
     }
 
     fn controls(&self) -> Element<'_, Message> {

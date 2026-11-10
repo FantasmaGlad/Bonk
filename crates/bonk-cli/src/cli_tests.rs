@@ -544,7 +544,7 @@ fn config_set_puis_list_puis_effet_sur_list_et_la_fenetre() -> Result<(), Box<dy
         |_| Ok(()),
         || Ok(vec![]),
         |v| {
-            *vue.borrow_mut() = v;
+            *vue.borrow_mut() = v.view;
             Ok(())
         },
     );
@@ -706,4 +706,68 @@ fn un_journal_impossible_a_installer_est_une_erreur_d_execution() {
     );
     assert_eq!(code, EXIT_RUNTIME_ERROR);
     assert!(out.is_empty());
+}
+
+/// Exit code, the image handed to the window (`None` if it did not open), and the error text.
+fn fenetre_demandee(args: &[&str]) -> (u8, Option<Option<String>>, String) {
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let recue = RefCell::new(None);
+    let code = execute(
+        std::iter::once("bonk").chain(args.iter().copied()),
+        &Env::default(),
+        &mut out,
+        &mut err,
+        |_| Ok(()),
+        || Ok(vec![]),
+        |request| {
+            *recue.borrow_mut() = Some(request.image);
+            Ok(())
+        },
+    );
+    (
+        code,
+        recue.into_inner(),
+        String::from_utf8_lossy(&err).into_owned(),
+    )
+}
+
+#[test]
+fn la_fenetre_s_ouvre_sur_l_image_nommee_ou_sur_celle_d_un_lien() {
+    let image = Some(Some("ubuntu-26.04-desktop-x86_64".to_owned()));
+    assert_eq!(
+        fenetre_demandee(&["gui", "--image", "ubuntu-26.04-desktop-x86_64"]).1,
+        image
+    );
+    assert_eq!(
+        fenetre_demandee(&[
+            "gui",
+            "--link",
+            "bonk://install/ubuntu-26.04-desktop-x86_64"
+        ])
+        .1,
+        image
+    );
+    assert_eq!(fenetre_demandee(&["gui"]).1, Some(None));
+    assert_eq!(fenetre_demandee(&[]).1, Some(None));
+}
+
+#[test]
+fn un_lien_qui_n_est_pas_une_image_du_catalogue_n_ouvre_rien() {
+    for args in [
+        &["gui", "--link", "https://example.org/x.iso"][..],
+        &["gui", "--link", "bonk://install/ubuntu?disk=sda"],
+        &["gui", "--link", "bonk://write/ubuntu"],
+        &["gui", "--image", "https://example.org/x.iso"],
+        &["gui", "--image", "../x"],
+    ] {
+        let (code, recue, err) = fenetre_demandee(args);
+        assert_eq!(code, EXIT_USAGE, "{args:?} {err}");
+        assert_eq!(recue, None, "{args:?}");
+        assert!(err.contains("[E"), "{err}");
+    }
+    // A value that looks like an option is refused by the parser itself.
+    let (code, recue, _) = fenetre_demandee(&["gui", "--link", "--yes"]);
+    assert_eq!((code, recue), (EXIT_USAGE, None));
+    let (code, recue, _) = fenetre_demandee(&["gui", "--image", "a", "--link", "bonk://install/a"]);
+    assert_eq!((code, recue), (EXIT_USAGE, None));
 }
