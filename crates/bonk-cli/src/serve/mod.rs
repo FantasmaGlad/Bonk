@@ -16,7 +16,7 @@ use bonk_hal::{Disk, EnumerateError};
 use serde_json::{Value, json};
 
 use crate::config::ViewDefaults;
-use crate::errors::{Code, EXIT_CANCELLED};
+use crate::errors::{Code, EXIT_CANCELLED, EXIT_RUNTIME_ERROR};
 use crate::slot::JobSlot;
 use bonk_ops::job::Io;
 
@@ -161,12 +161,22 @@ pub(crate) fn serve(
         }
     }
     // Client gone or stop asked: the running operation stops between two blocks and answers.
+    let mut panicked = false;
     if let Some(job) = state.job.take() {
         job.cancel.store(true, Ordering::SeqCst);
-        let _ = job.thread.join();
+        if job.thread.join().is_err() {
+            log::error!(target: "bonk::cli", "the running operation panicked: its result was never sent");
+            panicked = true;
+        }
     }
     stop_watch(&mut state);
-    if interrupted { EXIT_CANCELLED } else { 0 }
+    if panicked {
+        EXIT_RUNTIME_ERROR
+    } else if interrupted {
+        EXIT_CANCELLED
+    } else {
+        0
+    }
 }
 
 /// How often the loop checks for a stop while waiting for a request.

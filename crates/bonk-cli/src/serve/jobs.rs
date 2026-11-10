@@ -241,7 +241,9 @@ pub(super) fn stop_watch(state: &mut State) -> bool {
     match state.watch.take() {
         Some(handle) => {
             handle.stop.store(true, Ordering::SeqCst);
-            let _ = handle.thread.join();
+            if handle.thread.join().is_err() {
+                log::error!(target: "bonk::cli", "the disk watch panicked");
+            }
             true
         }
         None => false,

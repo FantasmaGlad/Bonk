@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 
-use super::fat32::{self, FATS, Geometry, ROOT_CLUSTER, Volume, first_fat_sector, write_boot};
+use super::fat32::{self, FAT_HEAD, FATS, Geometry, ROOT_CLUSTER, Volume, narrow, write_boot};
 use super::tree::{
     ChildKind, Children, NewFile, collect_children, verify_contiguous, write_contiguous,
 };
@@ -300,10 +300,6 @@ pub fn layout(
     })
 }
 
-fn narrow(value: u64) -> Result<u32, FormatError> {
-    u32::try_from(value).map_err(|_| FormatError::TooLarge(format!("{value}: too large for FAT32")))
-}
-
 impl Layout {
     /// An empty file has no cluster: nothing is read or written there.
     fn file_offset(&self, placed: Placed) -> u64 {
@@ -345,9 +341,8 @@ impl Layout {
                 chain(file.first_cluster, file.clusters);
             }
         }
-        let head = first_fat_sector(narrow(self.block).unwrap_or(512));
+        table[..2].copy_from_slice(&FAT_HEAD[..2]);
         let mut bytes: Vec<u8> = table.iter().flat_map(|e| e.to_le_bytes()).collect();
-        bytes[..8].copy_from_slice(&head[..8]);
         let block = self.block as usize;
         bytes.resize(bytes.len().next_multiple_of(block), 0);
         bytes

@@ -516,7 +516,8 @@ pub fn asset_path(
     Ok(path)
 }
 
-/// In the cache, checked by its signed hash. Descriptive: `None` when missing.
+/// In the cache, checked by its signed hash, the cached copy included. Descriptive: `None` when missing,
+/// each failure logged.
 #[must_use]
 pub fn icon_path(
     base: &str,
@@ -524,20 +525,34 @@ pub fn icon_path(
     family: &Family,
     fetch: &dyn Fn(&str) -> Result<Vec<u8>, String>,
 ) -> Option<PathBuf> {
+    let matches = |bytes: &[u8]| {
+        hex(digest(&SHA256, bytes).as_ref()).eq_ignore_ascii_case(&family.icon_sha256)
+    };
     let extension = Path::new(&family.icon).extension()?.to_str()?;
     let path = dir
         .join("icons")
         .join(format!("{}.{extension}", family.icon_sha256));
-    if path.is_file() {
+    if fs::read(&path).is_ok_and(|bytes| matches(&bytes)) {
         return Some(path);
     }
-    let bytes = fetch(&format!("{base}{}", family.icon)).ok()?;
-    if !hex(digest(&SHA256, &bytes).as_ref()).eq_ignore_ascii_case(&family.icon_sha256) {
-        log::warn!(target: "bonk::catalog", family = family.id.as_str(); "icon does not match its hash");
+    let warn = |what: &str, error: &dyn std::fmt::Display| {
+        log::warn!(target: "bonk::catalog", family = family.id.as_str(), error:% = error; "{what}");
+    };
+    let bytes = fetch(&format!("{base}{}", family.icon))
+        .map_err(|e| warn("icon not downloaded", &e))
+        .ok()?;
+    if !matches(&bytes) {
+        warn("icon does not match its hash", &family.icon_sha256);
         return None;
     }
-    fs::create_dir_all(path.parent()?).ok()?;
-    replace(&path, &bytes).ok()?;
+    let saved = path
+        .parent()
+        .map_or(Ok(()), fs::create_dir_all)
+        .and_then(|()| replace(&path, &bytes));
+    if let Err(e) = saved {
+        warn("icon not cached", &e);
+        return None;
+    }
     Some(path)
 }
 
@@ -755,7 +770,7 @@ mod tests {
     }
 
     #[test]
-    fn un_logo_faux_est_ecarte() {
+    fn un_logo_faux_est_ecarte() -> Result<(), Box<dyn std::error::Error>> {
         let dossier = Dossier::new("logo");
         let contenu = b"<svg/>".to_vec();
         let empreinte = hex(digest(&SHA256, &contenu).as_ref());
@@ -775,7 +790,26 @@ mod tests {
         assert!(chemin.is_some_and(|p| p.is_file()));
         // Already saved: no network.
         let hors_ligne = |_: &str| Err("coupure".to_owned());
-        assert!(icon_path("https://c/", &dossier.0, &family(empreinte), &hors_ligne).is_some());
+        let chemin = icon_path(
+            "https://c/",
+            &dossier.0,
+            &family(empreinte.clone()),
+            &hors_ligne,
+        );
+        // A cached copy changed on disk is not served, even offline.
+        std::fs::write(chemin.ok_or("en cache")?, b"<svg>autre</svg>")?;
+        assert_eq!(
+            icon_path(
+                "https://c/",
+                &dossier.0,
+                &family(empreinte.clone()),
+                &hors_ligne
+            ),
+            None
+        );
+        let reprise = icon_path("https://c/", &dossier.0, &family(empreinte), &fetch);
+        assert_eq!(std::fs::read(reprise.ok_or("retéléchargé")?)?, b"<svg/>");
+        Ok(())
     }
 
     fn avec_grub(grub: &str) -> Vec<u8> {

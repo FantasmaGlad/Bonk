@@ -170,14 +170,11 @@ pub(crate) fn zero_range(
 ) -> Result<(), BlockError> {
     let block = u64::from(dev.block_size());
     let step = ALIGNMENT.div_ceil(block) * block;
-    let zeros = vec![0u8; usize::try_from(step).unwrap_or(1 << 20)];
+    let zeros = vec![0u8; step as usize];
     let mut done = 0;
     while done < len {
         let n = (len - done).min(step);
-        dev.write_at(
-            offset + done,
-            &zeros[..usize::try_from(n).unwrap_or(zeros.len())],
-        )?;
+        dev.write_at(offset + done, &zeros[..n as usize])?;
         done += n;
     }
     Ok(())

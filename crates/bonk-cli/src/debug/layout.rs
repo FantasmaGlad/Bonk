@@ -36,15 +36,14 @@ fn open_device(target: &Path) -> Result<Box<dyn BlockDevice>, (Code, String)> {
         Some(target.to_path_buf())
     } else {
         let wanted = target.to_string_lossy();
-        platform
+        // Neither a file nor a path: only the enumeration can name it, so its failure is the answer.
+        let disks = platform
             .enumerate()
-            .ok()
-            .and_then(|disks| {
-                disks
-                    .into_iter()
-                    // On Windows a disk named by its path does not exist as a file.
-                    .find(|d| d.id == wanted || d.path.eq_ignore_ascii_case(&wanted))
-            })
+            .map_err(|erreur| (Code::of_enumeration(&erreur), erreur.to_string()))?;
+        disks
+            .into_iter()
+            // On Windows a disk named by its path does not exist as a file.
+            .find(|d| d.id == wanted || d.path.eq_ignore_ascii_case(&wanted))
             .map(|d| PathBuf::from(d.path))
     };
     if let Some(path) = disk_path {

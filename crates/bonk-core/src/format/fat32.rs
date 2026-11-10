@@ -82,9 +82,9 @@ pub fn geometry(sectors: u64, block: u32) -> Result<Geometry, FormatError> {
     })
 }
 
-/// Bounded by [`geometry`] (sector size, sector count): the conversion cannot fail.
-fn narrow<T: TryFrom<u64> + Default>(value: u64) -> T {
-    T::try_from(value).unwrap_or_default()
+/// FAT32 fields are fixed-width: a value that does not fit is refused, never truncated.
+pub(super) fn narrow<T: TryFrom<u64>>(value: u64) -> Result<T, FormatError> {
+    T::try_from(value).map_err(|_| FormatError::TooLarge(format!("{value}: too large for FAT32")))
 }
 
 /// Space-padded; already checked by [`super::normalize_label`].
@@ -116,6 +116,11 @@ fn check_bios_boot(block: u32, volume: &Volume<'_>) -> Result<(), FormatError> {
             "BIOS boot code needs sectors of {SECTOR} bytes, not {block}"
         )));
     }
+    if volume.bios_boot && u32::try_from(volume.first_lba).is_err() {
+        return Err(FormatError::Unsupported(
+            "BIOS boot code finds its volume through a 32-bit start sector".to_owned(),
+        ));
+    }
     Ok(())
 }
 
@@ -125,26 +130,27 @@ const _: () = assert!(
         <= RESERVED
 );
 
-fn boot_sector(block: u32, geo: &Geometry, volume: &Volume<'_>) -> Vec<u8> {
+fn boot_sector(block: u32, geo: &Geometry, volume: &Volume<'_>) -> Result<Vec<u8>, FormatError> {
     let mut s = vec![0u8; block as usize];
     if volume.bios_boot {
         s.copy_from_slice(crate::boot::VBR);
     }
     s[..3].copy_from_slice(&[0xEB, 0x58, 0x90]);
     s[3..11].copy_from_slice(b"MSWIN4.1");
-    put_u16(&mut s, 11, narrow(u64::from(block)));
-    s[13] = narrow(u64::from(geo.cluster_bytes / block));
-    put_u16(&mut s, 14, narrow(geo.reserved_sectors));
-    s[16] = narrow(FATS);
+    put_u16(&mut s, 11, narrow(u64::from(block))?);
+    s[13] = narrow(u64::from(geo.cluster_bytes / block))?;
+    put_u16(&mut s, 14, narrow(geo.reserved_sectors)?);
+    s[16] = narrow(FATS)?;
     s[21] = MEDIA;
     put_u16(&mut s, 24, 63);
     put_u16(&mut s, 26, 255);
-    put_u32(&mut s, 28, narrow(volume.first_lba));
-    put_u32(&mut s, 32, narrow(volume.sectors));
-    put_u32(&mut s, 36, narrow(geo.fat_sectors));
+    // Hidden sectors only serve boot code, checked above: beyond 32 bits the field stays 0.
+    put_u32(&mut s, 28, u32::try_from(volume.first_lba).unwrap_or(0));
+    put_u32(&mut s, 32, narrow(volume.sectors)?);
+    put_u32(&mut s, 36, narrow(geo.fat_sectors)?);
     put_u32(&mut s, 44, ROOT_CLUSTER);
-    put_u16(&mut s, 48, narrow(FSINFO_SECTOR));
-    put_u16(&mut s, 50, narrow(BACKUP_BOOT_SECTOR));
+    put_u16(&mut s, 48, narrow(FSINFO_SECTOR)?);
+    put_u16(&mut s, 50, narrow(BACKUP_BOOT_SECTOR)?);
     s[64] = 0x80;
     s[66] = 0x29;
     put_u32(&mut s, 67, volume.volume_id);
@@ -152,25 +158,28 @@ fn boot_sector(block: u32, geo: &Geometry, volume: &Volume<'_>) -> Vec<u8> {
     s[82..90].copy_from_slice(b"FAT32   ");
     s[510] = 0x55;
     s[511] = 0xAA;
-    s
+    Ok(s)
 }
 
-fn fsinfo_sector(block: u32, free_clusters: u64, next_free: u32) -> Vec<u8> {
+fn fsinfo_sector(block: u32, free_clusters: u64, next_free: u32) -> Result<Vec<u8>, FormatError> {
     let mut s = vec![0u8; block as usize];
     put_u32(&mut s, 0, 0x4161_5252);
     put_u32(&mut s, 484, 0x6141_7272);
-    put_u32(&mut s, 488, narrow(free_clusters));
+    put_u32(&mut s, 488, narrow(free_clusters)?);
     put_u32(&mut s, 492, next_free);
     s[510] = 0x55;
     s[511] = 0xAA;
-    s
+    Ok(s)
 }
 
-pub(super) fn first_fat_sector(block: u32) -> Vec<u8> {
+/// The reserved entries 0 and 1, then the root directory's end of chain.
+pub(super) const FAT_HEAD: [u32; 3] = [0x0FFF_FF00 | MEDIA as u32, 0x0FFF_FFFF, 0x0FFF_FFFF];
+
+fn first_fat_sector(block: u32) -> Vec<u8> {
     let mut s = vec![0u8; block as usize];
-    put_u32(&mut s, 0, 0x0FFF_FF00 | u32::from(MEDIA));
-    put_u32(&mut s, 4, 0x0FFF_FFFF);
-    put_u32(&mut s, 8, 0x0FFF_FFFF);
+    for (index, entry) in FAT_HEAD.into_iter().enumerate() {
+        put_u32(&mut s, index * 4, entry);
+    }
     s
 }
 
@@ -221,8 +230,8 @@ pub(super) fn write_boot(
             crate::boot::STAGE2,
         )?;
     }
-    let boot = boot_sector(block, geo, volume);
-    let fsinfo = fsinfo_sector(block, free_clusters, next_free);
+    let boot = boot_sector(block, geo, volume)?;
+    let fsinfo = fsinfo_sector(block, free_clusters, next_free)?;
     let mut third = vec![0u8; block as usize];
     third[510] = 0x55;
     third[511] = 0xAA;
@@ -251,7 +260,7 @@ pub(super) fn verify_boot(
     let block = dev.block_size();
     let geo = geometry(volume.sectors, block)?;
     check_bios_boot(block, volume)?;
-    let boot = boot_sector(block, &geo, volume);
+    let boot = boot_sector(block, &geo, volume)?;
     for sector in [0, BACKUP_BOOT_SECTOR] {
         compare_sector(dev, volume, sector, &boot)?;
     }
@@ -303,6 +312,28 @@ mod tests {
             volume_id: 0x1234_5678,
             bios_boot: false,
         }
+    }
+
+    #[test]
+    fn le_code_bios_refuse_un_debut_au_dela_de_32_bits() -> Result<(), FormatError> {
+        let loin = Volume {
+            first_lba: 1 << 32,
+            bios_boot: true,
+            ..volume(GIB / 512)
+        };
+        assert!(matches!(
+            check_bios_boot(512, &loin),
+            Err(FormatError::Unsupported(_))
+        ));
+        let sans_code = Volume {
+            bios_boot: false,
+            ..loin
+        };
+        assert!(check_bios_boot(512, &sans_code).is_ok());
+        let geo = geometry(sans_code.sectors, 512)?;
+        let boot = boot_sector(512, &geo, &sans_code)?;
+        assert_eq!(u32_at(&boot, 28), 0);
+        Ok(())
     }
 
     fn u32_at(bytes: &[u8], at: usize) -> u32 {
