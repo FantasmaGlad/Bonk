@@ -582,7 +582,7 @@ mod tests {
         plan.write_structures(&mut dev).unwrap();
         assert!(matches!(
             plan.write_file(&mut dev, 0, &mut [0u8; 10].as_slice(), &mut |_| true),
-            Err(FormatError::Source(_))
+            Err(FormatError::Source(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof
         ));
     }
 }

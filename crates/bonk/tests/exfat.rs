@@ -24,9 +24,6 @@ fn file(path: &str, size: u64) -> NewFile {
 /// empty file, a file over several clusters.
 #[test]
 fn une_arborescence_exfat_est_acceptee_par_fsck_exfat() {
-    if !common::outil_disponible("fsck.exfat") {
-        return;
-    }
     let long = "Un nom de fichier assez long pour plusieurs entrées de nom, été 2026.iso";
     let content: Vec<u8> = (0..300_000u32).map(|i| (i * 31) as u8).collect();
     let files = [
@@ -58,6 +55,10 @@ fn une_arborescence_exfat_est_acceptee_par_fsck_exfat() {
             .expect("relecture du fichier");
     }
 
+    // Bonk's own read back needs no tool: only the official check depends on it.
+    if !common::outil_disponible("fsck.exfat") {
+        return;
+    }
     let path = std::env::temp_dir().join(format!("bonk-exfat-arbo-{}.img", std::process::id()));
     std::fs::write(&path, dev.as_bytes()).expect("image");
     let fsck = Command::new("fsck.exfat")

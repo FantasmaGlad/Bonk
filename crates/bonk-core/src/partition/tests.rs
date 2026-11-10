@@ -84,10 +84,8 @@ fn secours_absent_quand_le_disque_est_plus_grand() -> Result<(), Box<dyn std::er
     big.resize(8192 * 512, 0);
     let layout = inspect_bytes(big)?;
     let found = codes(&layout);
-    assert!(
-        found.contains(&"gpt_backup_not_at_end") || found.contains(&"gpt_backup_missing"),
-        "{found:?}"
-    );
+    // The backup is still where the smaller disk ended: present, misplaced.
+    assert_eq!(found, ["gpt_backup_not_at_end"]);
     Ok(())
 }
 
@@ -214,7 +212,9 @@ fn secteur_logique_de_4096_octets_detecte() -> Result<(), Box<dyn std::error::Er
     put_u32(h, 84, 128);
     let layout = inspect_bytes(img)?;
     assert_eq!(layout.logical_block_size, 4096);
-    assert!(layout.gpt.as_ref().is_some_and(|g| g.primary.is_some()));
+    // Found at byte 4096: read as 512-byte sectors it would sit at LBA 8, not 1.
+    let primary = layout.gpt.and_then(|g| g.primary).ok_or("en-tête absent")?;
+    assert_eq!((primary.read_at_lba, primary.my_lba), (1, 1));
     Ok(())
 }
 
@@ -228,7 +228,7 @@ fn table_aberrante_ne_fait_ni_lire_hors_bornes_ni_paniquer()
     assert!(codes(&layout).contains(&"gpt_primary_entries_crc"));
     let mut img = gpt_image(4096, &[(2048, 4000, LINUX, "x")]);
     put_u64(&mut img, 512 + 72, u64::MAX / 2);
-    assert!(inspect_bytes(img).is_ok());
+    assert!(codes(&inspect_bytes(img)?).contains(&"gpt_primary_entries_crc"));
     Ok(())
 }
 

@@ -34,7 +34,8 @@ mod tests {
 
     use super::*;
 
-    /// Tests run in a shared console or none: never alone, they keep it.
+    /// Tests run in a shared console or none: never alone, they keep it. Elsewhere the answer is a constant.
+    #[cfg(windows)]
     #[test]
     fn une_console_partagee_reste_en_place() {
         assert!(!detach_if_alone());

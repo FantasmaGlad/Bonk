@@ -159,6 +159,8 @@ fn formats_compresses_produits_par_les_outils_du_systeme() -> Resultat {
         testes += 1;
     }
     eprintln!("{testes} format(s) compressé(s) éprouvé(s)");
+    // gzip is part of every system the tests run on: none at all means the loop proved nothing.
+    assert!(testes > 0, "aucun outil de compression trouvé");
     Ok(())
 }
 
