@@ -597,3 +597,32 @@ fn ordre_naturel() {
         ["loop1", "loop2", "loop10", "nvme0n1", "sda", "sdaa", "sdb"]
     );
 }
+
+#[test]
+fn une_capture_ne_peut_pas_ecrire_hors_de_son_arbre() -> Result<(), Box<dyn Error>> {
+    let read = |path: &str, kind: &str, content: &str| crate::enumerate::SourceRead {
+        path: path.to_owned(),
+        kind: kind.to_owned(),
+        ok: true,
+        bytes: None,
+        error: None,
+        micros: 0,
+        content: Some(content.to_owned()),
+    };
+    let fake = Fake::new()?;
+    let base = fake.base.join("arbre");
+    let outside = fake.base.join("dehors");
+    for reads in [
+        vec![read("/sys/../../dehors", "file", "x")],
+        vec![read("/../dehors", "file", "x")],
+        vec![read("/sys/block/sdz/holders", "dir", "../../../dehors")],
+        vec![read("/sys/block/sdz", "link", "../../dehors")],
+    ] {
+        let refused = replay::build_tree(&base, &reads).err().map(|e| e.kind());
+        assert_eq!(refused, Some(std::io::ErrorKind::InvalidData), "{reads:?}");
+        assert!(!outside.exists(), "{reads:?}");
+    }
+    replay::build_tree(&base, &[read("/sys/block/sdz/size", "file", "8")])?;
+    assert_eq!(fs::read_to_string(base.join("sys/block/sdz/size"))?, "8");
+    Ok(())
+}
