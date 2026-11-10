@@ -385,12 +385,19 @@ jobs:
           version=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
           mkdir dist
           apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          aapt2=$(find "$ANDROID_HOME/build-tools" -name aapt2 | sort -V | tail -1)
           # Outside a tag the APK carries a throwaway debug key: its name says so.
           essai=$([ "$GITHUB_REF_TYPE" = tag ] || echo "-essai")
           for abi in arm64-v8a:arm64 x86_64:x86_64; do
             apk="dist/bonk-$version$essai-android-${abi#*:}.apk"
             cp "android/app/build/outputs/apk/release/app-${abi%%:*}-release.apk" "$apk"
             "$apksigner" verify --print-certs "$apk"
+            # Each APK must announce its own ABI only: a store would offer it to the wrong processors.
+            annonce=$("$aapt2" dump badging "$apk" | sed -n 's/^native-code: //p')
+            if [ "$annonce" != "'${abi%%:*}'" ]; then
+              echo "$apk annonce $annonce au lieu de '${abi%%:*}'"
+              exit 1
+            fi
             (cd dist && sha256sum -- "$(basename "$apk")" > "$(basename "$apk").sha256")
           done
       # Only the release, signed with the official key, is attested: a test APK must not get one.

@@ -26,6 +26,13 @@ val keystore = providers.environmentVariable("BONK_KEYSTORE_FILE").orNull
 val keystorePassword = providers.environmentVariable("BONK_KEYSTORE_PASSWORD").orNull
 
 android {
+    lint {
+        warningsAsErrors = true
+        abortOnError = true
+        // Shown, never failing: an AndroidX library's own lint rules, targetSdk held until an Android 17
+        // device exists, and a newer Gradle that Dependabot proposes.
+        informational += setOf("ObsoleteLintCustomCheck", "OldTargetApi", "AndroidGradlePluginVersion")
+    }
     namespace = "app.bonkos.bonk"
     compileSdk = 37
 
