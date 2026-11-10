@@ -771,3 +771,18 @@ fn un_lien_qui_n_est_pas_une_image_du_catalogue_n_ouvre_rien() {
     let (code, recue, _) = fenetre_demandee(&["gui", "--image", "a", "--link", "bonk://install/a"]);
     assert_eq!((code, recue), (EXIT_USAGE, None));
 }
+
+/// A file that cannot be written is not an invalid configuration: the setting was valid.
+#[test]
+fn config_non_enregistrable_est_une_erreur_d_ecriture() -> Result<(), Box<dyn std::error::Error>> {
+    let file = fichier_de_config("ecriture");
+    let dossier = file.parent().ok_or("parent")?;
+    std::fs::create_dir_all(dossier)?;
+    // A folder where the temporary file goes: the write fails whatever the user's rights.
+    std::fs::create_dir_all(file.with_extension("json.tmp"))?;
+    let r = lancer_config(&["config", "set", "lang", "fr"], &file, &[], vec![]);
+    assert_eq!(r.code, crate::errors::EXIT_RUNTIME_ERROR, "{}", r.err);
+    assert!(r.err.trim_end().ends_with("[E5004]"), "{}", r.err);
+    std::fs::remove_dir_all(dossier)?;
+    Ok(())
+}

@@ -325,7 +325,10 @@ pub const CATALOG: &[Entry] = &[
         id: "E5004",
         exit: EXIT_RUNTIME_ERROR,
         title: "Could not write the output",
-        causes: &["output closed (broken pipe), disk full, output file already exists"],
+        causes: &[
+            "output closed (broken pipe), disk full, output file already exists",
+            "configuration file or its folder not writable",
+        ],
         remedy: "Check the output destination; `--output` never overwrites an existing file.",
     },
     Entry {

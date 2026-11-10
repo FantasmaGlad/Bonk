@@ -151,8 +151,13 @@ pub(crate) fn load(path: &Path) -> Result<Stored, String> {
 }
 
 /// In one step (temporary file, then rename): a cut never leaves a half-written file.
-pub(crate) fn save(path: &Path, stored: &Stored) -> Result<(), String> {
-    let fail = |e: io::Error| format!("{}: could not write: {e}", path.display());
+pub(crate) fn save(path: &Path, stored: &Stored) -> io::Result<()> {
+    let fail = |e: io::Error| {
+        io::Error::new(
+            e.kind(),
+            format!("{}: could not write: {e}", path.display()),
+        )
+    };
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(fail)?;
     }
@@ -162,7 +167,7 @@ pub(crate) fn save(path: &Path, stored: &Stored) -> Result<(), String> {
         version: 1,
         values: stored.values.clone(),
     })
-    .map_err(|e| e.to_string())?;
+    .map_err(io::Error::other)?;
     writeln!(file, "{body}").map_err(fail)?;
     file.sync_all().map_err(fail)?;
     fs::rename(&tmp, path).map_err(fail)
@@ -311,7 +316,7 @@ pub(crate) fn run(
             let value = normalize(key, value).map_err(invalid)?;
             let mut stored = stored;
             stored.values.insert(key.name.to_owned(), value.clone());
-            save(need_path()?, &stored).map_err(invalid)?;
+            save(need_path()?, &stored)?;
             writeln!(out, "{} = {value}", key.name)?;
         }
         ConfigAction::Reset { key } => {
@@ -323,7 +328,7 @@ pub(crate) fn run(
                 }
                 None => stored.values.clear(),
             }
-            save(need_path()?, &stored).map_err(invalid)?;
+            save(need_path()?, &stored)?;
             writeln!(out, "Settings restored to their default values.")?;
         }
     }

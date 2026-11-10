@@ -321,7 +321,10 @@ mod tests {
             bios_boot: true,
             ..volume(GIB / 512)
         };
-        assert!(matches!(check_bios_boot(512, &loin), Err(FormatError::Unsupported(_))));
+        assert!(matches!(
+            check_bios_boot(512, &loin),
+            Err(FormatError::Unsupported(_))
+        ));
         let sans_code = Volume {
             bios_boot: false,
             ..loin
