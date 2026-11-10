@@ -5,7 +5,9 @@ use std::sync::{LazyLock, Mutex, MutexGuard, PoisonError};
 use bonk_core::partition::Layout;
 use bonk_core::write::Phase;
 use bonk_hal::{Bus, Disk, DiskKind, Lang, Partition, format_size, state_label, verdict_badge};
-use bonk_ui::catalog::{CatalogState, ChoiceSource, all_categories, all_systems, writable};
+use bonk_ui::catalog::{
+    CatalogState, ChoiceSource, all_categories, all_systems, official_page_note, writable,
+};
 use bonk_ui::command::ViewOptions;
 use bonk_ui::event::{Event, Outcome};
 use bonk_ui::model::{Effect, Message, Model, WRITE_DELAY, WriteState};
@@ -253,19 +255,8 @@ fn menu_state(model: &Model) -> Value {
         };
         return json!({"ready": false, "line": line});
     };
-    let mut categories: Vec<String> = systems.iter().map(|s| s.category.clone()).collect();
-    categories.sort();
-    categories.dedup();
+    let (categories, names) = model.menu_filter.lists(systems);
     let filtered = model.menu_filter.apply(systems);
-    let mut names: Vec<String> = bonk_ui::catalog::MenuFilter {
-        category: model.menu_filter.category.clone(),
-        system: None,
-    }
-    .apply(systems)
-    .iter()
-    .map(|s| s.name.clone())
-    .collect();
-    names.sort();
     let mut index = 0;
     let mut rows = Vec::new();
     // Long list: building and rereading it at every tick would slow the whole screen for nothing.
@@ -274,10 +265,7 @@ fn menu_state(model: &Model) -> Value {
         for choice in &system.choices {
             let usable = matches!(choice.source, ChoiceSource::Download { .. });
             let note = match &choice.source {
-                ChoiceSource::OfficialPage(page) => Some(match lang {
-                    Lang::En => format!("download from {page}, then Other image"),
-                    Lang::Fr => format!("à télécharger sur {page}, puis Autre image"),
-                }),
+                ChoiceSource::OfficialPage(page) => Some(official_page_note(page, lang)),
                 _ => choice.note.clone(),
             };
             rows.push(json!({

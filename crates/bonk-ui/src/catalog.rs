@@ -66,6 +66,39 @@ impl MenuFilter {
             .filter(|s| self.system.as_ref().is_none_or(|n| &s.name == n))
             .collect()
     }
+
+    /// The two menu lists, sorted and without doubles: every category, and the systems of the chosen one.
+    #[must_use]
+    pub fn lists(&self, systems: &[System]) -> (Vec<String>, Vec<String>) {
+        let sorted = |mut values: Vec<String>| {
+            values.sort();
+            values.dedup();
+            values
+        };
+        let in_category = MenuFilter {
+            category: self.category.clone(),
+            system: None,
+        };
+        (
+            sorted(systems.iter().map(|s| s.category.clone()).collect()),
+            sorted(
+                in_category
+                    .apply(systems)
+                    .iter()
+                    .map(|s| s.name.clone())
+                    .collect(),
+            ),
+        )
+    }
+}
+
+/// For an image published only on its editor's page: Bonk cannot download it itself.
+#[must_use]
+pub fn official_page_note(page: &str, lang: Lang) -> String {
+    match lang {
+        Lang::En => format!("download from {page}, then Other image"),
+        Lang::Fr => format!("à télécharger sur {page}, puis Autre image"),
+    }
 }
 
 /// Without a category in the catalog: a single group for everyone.
@@ -240,6 +273,29 @@ mod tests {
                  "note": "CD", "url": "https://u/cd.iso", "sha256": "cc"}
             ]
         }))
+    }
+
+    #[test]
+    fn listes_du_menu_triees_sans_doublons() {
+        let system = |name: &str, category: &str| System {
+            name: name.to_owned(),
+            category: category.to_owned(),
+            icon: None,
+            choices: Vec::new(),
+        };
+        let systems = [
+            system("Ubuntu", "Linux"),
+            system("Windows", "Windows"),
+            system("Debian", "Linux"),
+        ];
+        let tout = MenuFilter::default().lists(&systems);
+        assert_eq!(tout.0, ["Linux", "Windows"]);
+        assert_eq!(tout.1, ["Debian", "Ubuntu", "Windows"]);
+        let linux = MenuFilter {
+            category: Some("Linux".to_owned()),
+            system: Some("Debian".to_owned()),
+        };
+        assert_eq!(linux.lists(&systems).1, ["Debian", "Ubuntu"]);
     }
 
     #[test]
