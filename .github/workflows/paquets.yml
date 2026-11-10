@@ -141,9 +141,13 @@ jobs:
           bash .github/scripts/paquets-cli.sh archives dist "$version" man
           cd dist
           sha256sum -- *.deb *.rpm *.pkg.tar.zst | tee paquets-cli.sha256
+          # Container images skip man pages at install time: the package contents are checked instead.
+          for paquet in *.deb; do dpkg-deb -c "$paquet" | grep -q usr/share/man/man1/bonk-write.1.gz; done
+          for paquet in *.rpm; do rpm -qlp "$paquet" | grep -q /usr/share/man/man1/bonk-write.1.gz; done
+          tar --zstd -tf ./*.pkg.tar.zst | grep -q usr/share/man/man1/bonk-write.1.gz
       - name: Installer dans quatre distributions
         run: |
-          essai() { docker run --rm --volume "$PWD/dist:/dist:ro" "$1" sh -ec "$2 && bonk --version && bonk explain E2001 > /dev/null && test -f /usr/share/man/man1/bonk-write.1.gz"; }
+          essai() { docker run --rm --volume "$PWD/dist:/dist:ro" "$1" sh -ec "$2 && bonk --version && bonk explain E2001 > /dev/null"; }
           essai debian:13 'dpkg -i /dist/bonk-cli_*_amd64.deb'
           docker run --rm --platform linux/386 --volume "$PWD/dist:/dist:ro" debian:12 sh -ec 'dpkg -i /dist/bonk-cli_*_i386.deb && bonk --version'
           # Release packages are unsigned: the package repository signs them.
@@ -212,7 +216,8 @@ jobs:
             test -f /usr/share/applications/bonk.desktop
             test -f /usr/share/applications/bonk-link.desktop
             test -f /usr/share/icons/hicolor/256x256/apps/bonk.png
-            test -f /usr/share/man/man1/bonk-write.1.gz
+            # The image never extracts man pages (NoExtract): the package list says what it carries.
+            pacman -Ql bonk | grep -q /usr/share/man/man1/bonk-write.1.gz
           '
           sudo chown -R "$USER" dist
           cd dist
