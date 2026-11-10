@@ -104,10 +104,12 @@ jobs:
           bash .github/scripts/paquets-cli.sh archives dist "$version"
           cd dist
           sha256sum -- *.deb *.rpm *.pkg.tar.zst | tee paquets-cli.sha256
-      - name: Installer dans trois distributions
+      - name: Installer dans quatre distributions
         run: |
           essai() { docker run --rm --volume "$PWD/dist:/dist:ro" "$1" sh -ec "$2 && bonk --version && bonk explain E2001 > /dev/null"; }
           essai debian:13 'dpkg -i /dist/bonk-cli_*_amd64.deb'
+          # Debian 12 is the last release installable on 32-bit x86.
+          docker run --rm --platform linux/386 --volume "$PWD/dist:/dist:ro" debian:12 sh -ec 'dpkg -i /dist/bonk-cli_*_i386.deb && bonk --version'
           # Release packages are unsigned: the package repository signs them.
           essai fedora:latest 'rpm -i --nosignature /dist/bonk-cli-*.x86_64.rpm'
           essai archlinux:latest 'pacman -U --noconfirm /dist/bonk-cli-*.pkg.tar.zst'
