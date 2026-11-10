@@ -69,6 +69,10 @@ pub(crate) struct LayoutArgs {
     /// JSON output
     #[arg(long)]
     json: bool,
+    /// Log each block access (offset, duration, checksum); `=data` adds the
+    /// first bytes, for an image file only
+    #[arg(long, value_enum, num_args = 0..=1, default_missing_value = "metadata", require_equals = true)]
+    pub(super) trace_io: Option<crate::transfer::TraceIoArg>,
 }
 
 #[derive(Debug, Args)]
@@ -82,6 +86,10 @@ pub(crate) struct HexdumpArgs {
     /// Number of bytes (decimal or 0x...), 4096 by default, at most 1048576
     #[arg(long, default_value_t = HEXDUMP_DEFAULT, value_parser = parse_number)]
     len: u64,
+    /// Log each block access (offset, duration, checksum); `=data` adds the
+    /// first bytes, for an image file only
+    #[arg(long, value_enum, num_args = 0..=1, default_missing_value = "metadata", require_equals = true)]
+    pub(super) trace_io: Option<crate::transfer::TraceIoArg>,
 }
 
 /// Decimal or hexadecimal (`0x1BE`).

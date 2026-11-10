@@ -87,6 +87,7 @@ pub extern "system" fn Java_app_bonkos_bonk_Native_readHash<'caller>(
     .resolve::<jni::errors::ThrowRuntimeExAndDefault>()
 }
 
+#[cfg(feature = "banc")]
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_app_bonkos_bonk_Native_writeBench<'caller>(
     mut env: EnvUnowned<'caller>,

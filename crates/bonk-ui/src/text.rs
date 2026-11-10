@@ -155,11 +155,23 @@ pub fn outcome(lang: Lang, outcome: &Outcome) -> String {
             "{} {}{}",
             lang.pick("FAILED:", "ÉCHEC :"),
             failure_text(lang, code.as_deref(), message),
-            code.as_ref().map_or_else(String::new, |c| match lang {
-                Lang::En => format!(" [{c}]: see \"bonk explain {c}\""),
-                Lang::Fr => format!(" [{c}] : voir « bonk explain {c} »"),
-            }),
+            code.as_ref()
+                .map_or_else(String::new, |c| format!(" [{c}]")),
         ),
+    }
+}
+
+/// [`outcome`], plus the command that explains the error code: for hosts that have the `bonk` command.
+pub fn outcome_with_explain(lang: Lang, outcome: &Outcome) -> String {
+    let text = self::outcome(lang, outcome);
+    match outcome {
+        Outcome::Failed {
+            code: Some(code), ..
+        } => match lang {
+            Lang::En => format!("{text}: see \"bonk explain {code}\""),
+            Lang::Fr => format!("{text} : voir « bonk explain {code} »"),
+        },
+        _ => text,
     }
 }
 
@@ -286,6 +298,20 @@ mod tests {
 
     /// A write process stopped without an error line: the title follows the window language, never French in
     /// an English window.
+    /// Android has no `bonk` command: its message keeps the code, never a command to type.
+    #[test]
+    fn le_renvoi_a_bonk_explain_est_reserve_au_bureau() {
+        let failure = crate::event::parse_failure("", "signal 9");
+        for lang in [Lang::En, Lang::Fr] {
+            let phone = outcome(lang, &failure);
+            assert!(
+                phone.contains("[E4001]") && !phone.contains("bonk explain"),
+                "{phone}"
+            );
+            assert!(outcome_with_explain(lang, &failure).contains("bonk explain E4001"));
+        }
+    }
+
     #[test]
     fn un_arret_sans_message_suit_la_langue() {
         let failure = crate::event::parse_failure("", "signal 9");
