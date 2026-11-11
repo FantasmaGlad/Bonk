@@ -21,6 +21,11 @@ const DESCRIPTOR_ENDPOINT: u8 = 5;
 const ATTRIBUTES_BULK: u8 = 2;
 const ENDPOINT_IN: u8 = 0x80;
 const REQUEST_MASS_STORAGE_RESET: u8 = 0xFF;
+const REQUEST_GET_DESCRIPTOR: u8 = 6;
+const REQUEST_TYPE_STANDARD_DEVICE_IN: u8 = 0x80;
+const DESCRIPTOR_STRING: u16 = 3;
+/// `iSerialNumber` in the device descriptor, always first in what the node gives.
+const DEVICE_SERIAL_INDEX: usize = 16;
 const REQUEST_TYPE_CLASS_INTERFACE_OUT: u8 = 0x21;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -139,10 +144,29 @@ fn bulk_error(error: io::Error) -> BulkError {
     }
 }
 
+/// Text of a string descriptor (UTF-16LE after a two-byte header); `None` when malformed or empty.
+fn string_of(descriptor: &[u8]) -> Option<String> {
+    let length = usize::from(*descriptor.first()?).min(descriptor.len());
+    if length < 2 || descriptor.get(1) != Some(&(DESCRIPTOR_STRING as u8)) {
+        return None;
+    }
+    let units: Vec<u16> = descriptor[2..length]
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|pair| u16::from_le_bytes(*pair))
+        .collect();
+    let text = String::from_utf16(&units).ok()?;
+    let text = text.trim();
+    (!text.is_empty()).then(|| text.to_owned())
+}
+
 /// Releasing it gives the key back to the kernel driver.
 #[derive(Debug)]
 pub struct UsbfsTransport {
     device: File,
+    /// Device descriptor first, as read from the node; empty when Android handed them separately.
+    descriptors: Vec<u8>,
     interface: StorageInterface,
     /// Claimed here, released here. On Android the app holds it.
     claimed_here: bool,
@@ -170,6 +194,7 @@ impl UsbfsTransport {
         })?;
         let mut transport = Self {
             device,
+            descriptors,
             interface,
             // Set once claimed: before that, dropping must not release what was never taken.
             claimed_here: false,
@@ -209,6 +234,7 @@ impl UsbfsTransport {
         })?;
         Ok(Self {
             device,
+            descriptors: descriptors.to_vec(),
             interface,
             claimed_here: false,
             transfer_limit: TRANSFER_START,
@@ -301,6 +327,34 @@ impl BulkTransport for UsbfsTransport {
 }
 
 impl UsbfsTransport {
+    /// The serial the drive declares, read in the first language it offers; `None` without one.
+    pub fn serial(&mut self) -> Option<String> {
+        let index = *self
+            .descriptors
+            .get(DEVICE_SERIAL_INDEX)
+            .filter(|&&i| i != 0)?;
+        let languages = self.string_descriptor(0, 0)?;
+        let language = u16::from_le_bytes([*languages.get(2)?, *languages.get(3)?]);
+        string_of(&self.string_descriptor(index, language)?)
+    }
+
+    fn string_descriptor(&mut self, index: u8, language: u16) -> Option<Vec<u8>> {
+        let mut buffer = [0u8; 255];
+        let mut control = ControlTransfer {
+            request_type: REQUEST_TYPE_STANDARD_DEVICE_IN,
+            request: REQUEST_GET_DESCRIPTOR,
+            value: (DESCRIPTOR_STRING << 8) | u16::from(index),
+            index: language,
+            length: buffer.len() as u16,
+            timeout_ms: TIMEOUT_MS,
+            data: buffer.as_mut_ptr().cast(),
+        };
+        let read = self
+            .ioctl(USBDEVFS_CONTROL, (&raw mut control).cast())
+            .ok()?;
+        Some(buffer[..read.min(buffer.len())].to_vec())
+    }
+
     fn reattach_driver(&mut self) -> io::Result<usize> {
         let mut attach = InterfaceIoctl {
             interface: libc::c_int::from(self.interface.number),
@@ -328,6 +382,25 @@ impl Drop for UsbfsTransport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn serie_lue_dans_un_descripteur_de_chaine() {
+        let mut descriptor = vec![0, 3];
+        for unit in "AA01 ".encode_utf16() {
+            descriptor.extend(unit.to_le_bytes());
+        }
+        descriptor[0] = descriptor.len() as u8;
+        assert_eq!(string_of(&descriptor).as_deref(), Some("AA01"));
+        // The length byte counts, not the buffer: bytes beyond it are left out.
+        let mut padded = descriptor.clone();
+        padded.extend([b'Z', 0]);
+        assert_eq!(string_of(&padded).as_deref(), Some("AA01"));
+        assert_eq!(string_of(&[2, 3]), None);
+        assert_eq!(string_of(&[4, 2, b'A', 0]), None);
+        assert_eq!(string_of(&[]), None);
+        // An unpaired surrogate is not text.
+        assert_eq!(string_of(&[4, 3, 0x00, 0xD8]), None);
+    }
 
     /// Typical real key: device, configuration, storage interface, two endpoints.
     fn stockage() -> Vec<u8> {
