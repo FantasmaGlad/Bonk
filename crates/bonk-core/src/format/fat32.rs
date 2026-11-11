@@ -336,9 +336,7 @@ mod tests {
         Ok(())
     }
 
-    fn u32_at(bytes: &[u8], at: usize) -> u32 {
-        u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]])
-    }
+    use crate::bytes::u32_le as u32_at;
 
     #[test]
     fn taille_de_cluster_selon_le_volume() -> Result<(), FormatError> {

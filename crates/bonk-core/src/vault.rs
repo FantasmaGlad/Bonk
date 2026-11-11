@@ -210,7 +210,6 @@ pub fn write_volumes(
     layout.finish(dev, &volume)
 }
 
-/// Table and both volumes read back as written.
 /// Table, both volumes and every boot file read back as written.
 pub fn verify(
     dev: &dyn BlockDevice,

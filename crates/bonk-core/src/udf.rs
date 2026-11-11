@@ -124,7 +124,7 @@ fn u64_at(data: &[u8], at: usize) -> Result<u64, UdfError> {
     get_u64(data, at).ok_or(OUTSIDE)
 }
 
-/// Id of a descriptor whose tag is valid: checksum and version.
+/// Id of a descriptor whose tag checksum is valid; the version byte is not checked.
 fn tag_id(sector: &[u8]) -> Option<u16> {
     let head = sector.get(..16)?;
     let sum = head

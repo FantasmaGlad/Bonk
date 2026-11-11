@@ -149,7 +149,7 @@ fn through_helper(elevation: Elevation) -> bool {
             || std::env::var_os("BONK_WINDOWS_HELPER").is_some_and(|v| v == "always"))
 }
 
-/// Unreadable means no: the window opens and the write will be refused.
+/// Unreadable counts as not elevated: the helper then asks for the rights.
 fn is_elevated() -> bool {
     use windows_sys::Win32::Security::{
         GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation,

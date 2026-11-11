@@ -80,7 +80,7 @@ pub(crate) fn filter(
         if options.allow_virtual {
             "allowed"
         } else {
-            "interdits"
+            "refused"
         },
     )?;
     let subject_width = rules

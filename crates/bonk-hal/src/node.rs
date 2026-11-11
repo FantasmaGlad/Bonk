@@ -7,17 +7,9 @@ use crate::image::Access;
 #[derive(Debug)]
 pub struct BlockNode {
     file: std::fs::File,
-    path: PathBuf,
     size: u64,
     block_size: u32,
     read_only: bool,
-}
-
-impl BlockNode {
-    #[must_use]
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
 }
 
 mod imp {
@@ -130,7 +122,6 @@ mod imp {
             );
             Ok(Self {
                 file,
-                path: resolved,
                 size,
                 block_size,
                 read_only,
