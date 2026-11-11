@@ -307,3 +307,66 @@ fn une_iso_que_le_menu_ne_demarre_pas_est_refusee_avant_le_disque() {
         let _ = std::fs::remove_file(path);
     }
 }
+
+/// A newer GRUB in the catalog: the check says so, --yes replaces it, the ISO stays.
+#[test]
+fn mettre_a_jour_grub_garde_les_iso() {
+    let (mut scenario, cache) = vault_scenario(Some(GRUB), "cache-maj");
+    let cache = cache.arg();
+    let (code, _, err) = scenario.run(&init_args(&cache, &[]));
+    assert_eq!(code, 0, "{err}");
+    let arch = iso_file(
+        "arch-maj.iso",
+        &[
+            ("arch/boot/x86_64/vmlinuz-linux", 1),
+            ("arch/boot/x86_64/initramfs-linux.img", 1),
+        ],
+    );
+    let arch_arg = arch.display().to_string();
+    let (code, _, err) = scenario.run(&["vault", "add", "usb-a", &arch_arg, "--yes"]);
+    assert_eq!(code, 0, "{err}");
+    let update = |extra: &[&str]| {
+        let mut args = vec![
+            "vault",
+            "update",
+            "usb-a",
+            "--json",
+            "--catalog-url",
+            BASE,
+            "--cache-dir",
+            &cache,
+        ];
+        args.extend_from_slice(extra);
+        args.iter()
+            .map(|a| (*a).to_owned())
+            .collect::<Vec<String>>()
+    };
+    let run = |scenario: &Scenario, extra: &[&str]| {
+        let args = update(extra);
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let (code, out, err) = scenario.run(&args);
+        assert_eq!(code, 0, "{err}");
+        serde_json::from_str::<serde_json::Value>(&out).expect("JSON")
+    };
+    assert_eq!(run(&scenario, &[])["up_to_date"], true);
+
+    scenario.catalog = served_catalog(Some(b"MZ grub de test, version suivante"));
+    let check = run(&scenario, &[]);
+    assert_eq!(
+        (check["up_to_date"].clone(), check["updated"].clone()),
+        (false.into(), false.into())
+    );
+    let done = run(&scenario, &["--yes"]);
+    assert_eq!(
+        (done["updated"].clone(), done["verified"].clone()),
+        (true.into(), true.into())
+    );
+    assert_eq!(run(&scenario, &["--yes"])["up_to_date"], true);
+
+    let (code, out, _) = scenario.run(&["vault", "list", "usb-a", "--json"]);
+    assert_eq!(code, 0);
+    let value: serde_json::Value = serde_json::from_str(&out).expect("JSON");
+    let name = arch.file_name().and_then(|n| n.to_str()).expect("nom");
+    assert_eq!(value["images"][0]["path"], name);
+    let _ = std::fs::remove_file(&arch);
+}
