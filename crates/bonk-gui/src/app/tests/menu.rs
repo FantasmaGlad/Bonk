@@ -3,7 +3,7 @@ use super::*;
 pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
     vec![catalog::System {
         name: "Ubuntu".to_owned(),
-        category: "Debian derivatives".to_owned(),
+        uses: vec!["desktop".to_owned(), "server".to_owned()],
         icon: None,
         choices: vec![
             catalog::Choice {

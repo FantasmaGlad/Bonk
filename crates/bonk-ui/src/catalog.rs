@@ -46,12 +46,13 @@ pub enum ChoiceSource {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct System {
     pub name: String,
-    pub category: String,
+    /// Usage categories of the catalog: `desktop`, `server`.
+    pub uses: Vec<String>,
     pub icon: Option<PathBuf>,
     pub choices: Vec<Choice>,
 }
 
-/// A category, or a single system and its versions. Empty: everything.
+/// A usage category, or a single system and its versions. Empty: everything.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct MenuFilter {
     pub category: Option<String>,
@@ -62,12 +63,13 @@ impl MenuFilter {
     pub fn apply<'a>(&self, systems: &'a [System]) -> Vec<&'a System> {
         systems
             .iter()
-            .filter(|s| self.category.as_ref().is_none_or(|c| &s.category == c))
+            .filter(|s| self.category.as_ref().is_none_or(|c| s.uses.contains(c)))
             .filter(|s| self.system.as_ref().is_none_or(|n| &s.name == n))
             .collect()
     }
 
-    /// The two menu lists, sorted and without doubles: every category, and the systems of the chosen one.
+    /// The two menu lists, without doubles: the usage categories in their fixed order, and the systems of the
+    /// chosen one sorted by name.
     #[must_use]
     pub fn lists(&self, systems: &[System]) -> (Vec<String>, Vec<String>) {
         let sorted = |mut values: Vec<String>| {
@@ -80,7 +82,7 @@ impl MenuFilter {
             system: None,
         };
         (
-            sorted(systems.iter().map(|s| s.category.clone()).collect()),
+            crate::uses::ordered(systems.iter().flat_map(|s| &s.uses)),
             sorted(
                 in_category
                     .apply(systems)
@@ -100,9 +102,6 @@ pub fn official_page_note(page: &str, lang: Lang) -> String {
         Lang::Fr => format!("à télécharger sur {page}, puis Autre image"),
     }
 }
-
-/// Without a category in the catalog: a single group for everyone.
-const NO_CATEGORY: &str = "Other systems";
 
 #[derive(Debug, Default)]
 pub enum CatalogState {
@@ -158,18 +157,17 @@ pub fn systems(report: &CatalogReport) -> Vec<System> {
         .families
         .iter()
         .filter_map(|family| {
-            let choices: Vec<Choice> = report
+            let mut choices: Vec<Choice> = report
                 .images
                 .iter()
                 .filter(|image| image.family == family.id)
                 .map(choice)
                 .collect();
+            // What Bonk can write comes first: a CD-only file is listed, never offered ahead.
+            choices.sort_by_key(|c| matches!(c.source, ChoiceSource::NotForUsb));
             (!choices.is_empty()).then(|| System {
                 name: family.name.clone(),
-                category: family
-                    .category
-                    .clone()
-                    .unwrap_or_else(|| NO_CATEGORY.to_owned()),
+                uses: family.uses.clone(),
                 icon: family.icon_path.clone(),
                 choices,
             })
@@ -260,7 +258,7 @@ mod tests {
     fn report() -> Value {
         complete(json!({
             "families": [
-                {"id": "ubuntu", "name": "Ubuntu", "category": "Debian derivatives", "icon_path": "/c/u.png"},
+                {"id": "ubuntu", "name": "Ubuntu", "uses": ["desktop", "server"], "icon_path": "/c/u.png"},
                 {"id": "vide", "name": "Vide"},
                 {"id": "windows", "name": "Windows"}
             ],
@@ -278,25 +276,25 @@ mod tests {
 
     #[test]
     fn listes_du_menu_triees_sans_doublons() {
-        let system = |name: &str, category: &str| System {
+        let system = |name: &str, used: &str| System {
             name: name.to_owned(),
-            category: category.to_owned(),
+            uses: vec![used.to_owned()],
             icon: None,
             choices: Vec::new(),
         };
         let systems = [
-            system("Ubuntu", "Linux"),
-            system("Windows", "Windows"),
-            system("Debian", "Linux"),
+            system("Ubuntu", "server"),
+            system("Windows", "windows"),
+            system("Debian", "desktop"),
         ];
         let tout = MenuFilter::default().lists(&systems);
-        assert_eq!(tout.0, ["Linux", "Windows"]);
+        assert_eq!(tout.0, ["desktop", "server", "windows"]);
         assert_eq!(tout.1, ["Debian", "Ubuntu", "Windows"]);
-        let linux = MenuFilter {
-            category: Some("Linux".to_owned()),
+        let desktop = MenuFilter {
+            category: Some("desktop".to_owned()),
             system: Some("Debian".to_owned()),
         };
-        assert_eq!(linux.lists(&systems).1, ["Debian", "Ubuntu"]);
+        assert_eq!(desktop.lists(&systems).1, ["Debian"]);
     }
 
     #[test]
@@ -335,12 +333,12 @@ mod tests {
     #[test]
     fn une_categorie_ou_un_seul_systeme() {
         let systems = parse(&report());
-        assert_eq!(systems[1].category, NO_CATEGORY);
-        let debian = MenuFilter {
-            category: Some("Debian derivatives".to_owned()),
+        assert!(systems[1].uses.is_empty());
+        let server = MenuFilter {
+            category: Some("server".to_owned()),
             system: None,
         };
-        assert_eq!(debian.apply(&systems).len(), 1);
+        assert_eq!(server.apply(&systems).len(), 1);
         let windows = MenuFilter {
             category: None,
             system: Some("Windows".to_owned()),

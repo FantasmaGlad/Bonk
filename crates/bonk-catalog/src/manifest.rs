@@ -46,6 +46,14 @@ pub struct Family {
     /// Official address the logo comes from.
     #[serde(default)]
     pub icon_source: Option<String>,
+    /// Usage categories, the main one first: `desktop`, `server`.
+    #[serde(default)]
+    pub uses: Vec<String>,
+    /// Minimum memory the publisher states, in MiB, and the page it is read on.
+    #[serde(default)]
+    pub ram_mb: Option<u32>,
+    #[serde(default)]
+    pub ram_source: Option<String>,
 }
 
 /// Life cycle of a version: what marks an old version.
@@ -87,6 +95,20 @@ pub struct Image {
     /// Other addresses of the same file: same hash, same size. `.onion` ones may be plain http.
     #[serde(default)]
     pub mirrors: Vec<String>,
+    /// Desktop installed: `none` without one, `choice` picked during installation.
+    #[serde(default)]
+    pub desktop: Option<String>,
+    /// `live`, `installer`, `netinst`, `preinstalled` or `rescue`.
+    #[serde(default)]
+    pub kind: Option<String>,
+    /// `usb`, `sd` (ARM boards) or `optical` (CD or virtual machine only).
+    #[serde(default)]
+    pub media: Option<String>,
+    /// Memory the publisher states for this variant, in MiB, when it differs from the system's.
+    #[serde(default)]
+    pub ram_mb: Option<u32>,
+    #[serde(default)]
+    pub ram_source: Option<String>,
     #[serde(flatten)]
     pub source: ImageSource,
 }
@@ -125,6 +147,8 @@ pub struct FamilyEntry {
     pub name: String,
     #[serde(default)]
     pub category: Option<String>,
+    #[serde(default)]
+    pub uses: Vec<String>,
     /// Logo checked by its hash, in the local cache; absent if it could not be read.
     #[serde(default)]
     pub icon_path: Option<std::path::PathBuf>,
@@ -803,6 +827,9 @@ mod tests {
             parent: None,
             homepage: None,
             icon_source: None,
+            uses: Vec::new(),
+            ram_mb: None,
+            ram_source: None,
         };
         let fetch = move |_: &str| Ok(contenu.clone());
         assert_eq!(
@@ -951,6 +978,9 @@ mod tests {
             parent: None,
             homepage: None,
             icon_source: None,
+            uses: Vec::new(),
+            ram_mb: None,
+            ram_source: None,
         };
         assert_eq!(check_family(&family("icons/ubuntu.svg")), Ok(()));
         for refuse in [

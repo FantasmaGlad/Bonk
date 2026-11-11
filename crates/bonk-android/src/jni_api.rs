@@ -181,6 +181,7 @@ fn load_catalog(dir: &str, json: Vec<u8>, signature: Vec<u8>) -> Result<(), Stri
                 id: family.id,
                 name: family.name,
                 category: family.category,
+                uses: family.uses,
                 icon_path: None,
             })
             .collect(),
