@@ -132,7 +132,10 @@ private fun DiskCard(disk: DiskView, send: (ToRust) -> Unit) {
         }
         Small(disk.facts)
         Small(disk.state)
+        disk.details.forEach { Small(it) }
     }
+    // Outside the card: one control never sits inside another.
+    disk.detailsButton?.let { label -> Secondary(label) { send(ToggleDetails) } }
 }
 
 @Composable

@@ -32,7 +32,13 @@ impl Model {
                 self.show_all = on;
                 self.after_view_option(Focus::All, "view.show_all", on)
             }
+            Message::ToggleDetails => {
+                self.details = !self.details;
+                self.focus = Some(Focus::Details);
+                Vec::new()
+            }
             Message::Select(id) => {
+                self.details = false;
                 self.focus = Some(Focus::Disk(id.clone()));
                 self.selected = if self.selected.as_deref() == Some(id.as_str()) {
                     None

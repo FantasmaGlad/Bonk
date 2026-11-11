@@ -147,6 +147,7 @@ fn message_of(input: &Value, model: &Model) -> Option<Message> {
         "tick" => Message::Tick,
         "clock" => Message::Clock,
         "select" => Message::Select(text_of("id")?),
+        "details" => Message::ToggleDetails,
         "show_all" => Message::ToggleAll(flag()),
         "settings" => crate::settings::message_of(input)?,
         "menu" => Message::ToggleMenu,
@@ -301,19 +302,22 @@ fn disks_state(model: &Model) -> Vec<Value> {
         .entries()
         .iter()
         .map(|(disk, verdict)| {
+            let selected = model.selected.as_deref() == Some(disk.id.as_str());
             json!({
                 "id": disk.id,
                 "device": disk.path,
                 "model": disk.model,
-                "facts": format!(
-                    "{}  {}  {}",
-                    format_size(disk.size_bytes, lang),
-                    disk.serial.as_deref().unwrap_or(lang.pick("no serial", "sans série")),
-                    disk.path,
-                ),
+                "facts": bonk_ui::disk::facts(lang, disk),
                 "badge": verdict_badge(verdict, lang),
                 "state": state_label(verdict, lang),
-                "selected": model.selected.as_deref() == Some(disk.id.as_str()),
+                "selected": selected,
+                // Device node, serial and partitions: on demand, under the selected card.
+                "details": if selected && model.details {
+                    bonk_ui::disk::details(lang, disk)
+                } else {
+                    Vec::new()
+                },
+                "details_button": selected.then(|| bonk_ui::disk::details_button(lang, model.details)),
             })
         })
         .collect()
@@ -909,6 +913,7 @@ mod tests {
             json!({"type": "tick"}),
             json!({"type": "clock"}),
             json!({"type": "select", "id": "usb-S1-001-002"}),
+            json!({"type": "details"}),
             json!({"type": "show_all", "on": true}),
             json!({"type": "settings", "action": "open"}),
             json!({"type": "settings", "action": "close"}),

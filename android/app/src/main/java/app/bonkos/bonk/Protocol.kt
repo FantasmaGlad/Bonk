@@ -22,6 +22,10 @@ data object Clock : ToRust
 @Serializable @SerialName("select")
 data class Select(val id: String) : ToRust
 
+/** Shows or hides the technical details of the selected disk. */
+@Serializable @SerialName("details")
+data object ToggleDetails : ToRust
+
 /** Also show the disks the safety filter excludes, with the reason. */
 @Serializable @SerialName("show_all")
 data class ShowAll(val on: Boolean) : ToRust
@@ -229,6 +233,10 @@ data class DiskView(
     val badge: String,
     val state: String,
     val selected: Boolean,
+    /** Device node, serial and partitions, when opened. */
+    val details: List<String> = emptyList(),
+    /** Under the selected card only. */
+    @SerialName("details_button") val detailsButton: String? = null,
 )
 
 /** The write panel, named by `kind`. Absent when no disk is chosen. */

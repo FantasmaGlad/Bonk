@@ -311,6 +311,8 @@ fn le_clavier_parcourt_le_panneau_et_l_action_respecte_le_delai() {
     let _ = app.update(Message::ToggleAdvanced);
     app.focus = Some(Focus::Disk("usb-cle".to_owned()));
     nav(&mut app, Nav::Next);
+    assert_eq!(app.focus, Some(Focus::Details));
+    nav(&mut app, Nav::Next);
     assert_eq!(app.focus, Some(Focus::Menu));
     nav(&mut app, Nav::Next);
     assert_eq!(app.focus, Some(Focus::Advanced));

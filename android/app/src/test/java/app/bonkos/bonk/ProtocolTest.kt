@@ -54,6 +54,7 @@ class ProtocolTest {
                 Tick,
                 Clock,
                 Select("usb-S1-001-002"),
+                ToggleDetails,
                 ShowAll(true),
                 SettingsAction("open"),
                 SettingsAction("close"),

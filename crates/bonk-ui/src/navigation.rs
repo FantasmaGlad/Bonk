@@ -17,6 +17,9 @@ impl Model {
         if self.error.is_none() {
             for (disk, _) in self.entries() {
                 order.push(Focus::Disk(disk.id.clone()));
+                if self.selected.as_deref() == Some(disk.id.as_str()) {
+                    order.push(Focus::Details);
+                }
                 if self.write.disk_id() == Some(disk.id.as_str())
                     && matches!(self.write, WriteState::Draft { .. })
                 {
@@ -104,6 +107,7 @@ impl Model {
                     if matches!(
                         order[i],
                         Focus::Disk(_)
+                            | Focus::Details
                             | Focus::Menu
                             | Focus::Advanced
                             | Focus::Image
@@ -174,6 +178,7 @@ impl Model {
             Some(Focus::Virtual) => Message::ToggleVirtual(!self.allow_virtual),
             Some(Focus::All) => Message::ToggleAll(!self.show_all),
             Some(Focus::Disk(id)) => Message::Select(id),
+            Some(Focus::Details) => Message::ToggleDetails,
             Some(Focus::Copy) => Message::Copy,
             Some(Focus::Advanced) => Message::ToggleAdvanced,
             Some(Focus::Menu) => match (&self.catalog, self.menu_open) {

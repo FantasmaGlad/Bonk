@@ -71,10 +71,17 @@ fn un_clic_sur_la_carte_ouvre_le_detail() -> Result<(), Box<dyn std::error::Erro
     for message in messages {
         let _ = app.update(message);
     }
-    assert!(contient(
-        &app,
-        "Série : 4C530001   Nature : physique   Drapeau amovible du système : oui"
-    ));
+    // Selected: the card stays readable, the technical lines wait behind their button.
+    let serie = "Série : 4C530001   Nature : physique   Drapeau amovible du système : oui";
+    assert!(contient(&app, "16,0 Go   CLE   USB"));
+    assert!(!contient(&app, serie));
+    let mut simulateur = Simulator::new(app.view());
+    simulateur.click("Détails techniques")?;
+    for message in simulateur.into_messages() {
+        let _ = app.update(message);
+    }
+    assert!(contient(&app, serie));
+    assert!(contient(&app, "Masquer les détails techniques"));
     Ok(())
 }
 

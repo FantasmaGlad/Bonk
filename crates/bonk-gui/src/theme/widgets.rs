@@ -31,12 +31,22 @@ pub(crate) fn primary_button(_theme: &Theme, status: button::Status) -> button::
     }
 }
 
-/// A clickable card: its own outline marks selection and hover, never a second frame around it. The
-/// outline keeps 3:1 against the page (WCAG 1.4.11).
+/// A clickable card or choice: its own outline marks selection and hover, never a second frame around it.
+/// The outline keeps 3:1 against the page (WCAG 1.4.11).
 pub(crate) fn card_button(selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    card(selected, false)
+}
+
+/// As [`card_button`], with keyboard focus drawn by the outline itself: a card has no ring around it.
+pub(crate) fn card(
+    selected: bool,
+    focused: bool,
+) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |_theme, status| {
         let c = colors();
-        let (outline, width) = if selected {
+        let (outline, width) = if focused {
+            (c.accent, 3.0)
+        } else if selected {
             (c.accent, 2.0)
         } else if pressed(status) {
             (c.accent, 1.0)
@@ -111,5 +121,20 @@ pub(crate) fn input_style(_theme: &Theme, status: text_input::Status) -> text_in
         placeholder: c.muted,
         value: c.ink,
         selection: c.accent_soft,
+    }
+}
+
+/// A quiet action in running text: accent text, no outline.
+pub(crate) fn link_button(_theme: &Theme, status: button::Status) -> button::Style {
+    let c = colors();
+    button::Style {
+        background: None,
+        text_color: if pressed(status) {
+            c.accent_strong
+        } else {
+            c.accent
+        },
+        border: border(Color::TRANSPARENT, 0.0),
+        ..button::Style::default()
     }
 }

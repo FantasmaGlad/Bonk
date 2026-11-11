@@ -50,6 +50,8 @@ pub enum Message {
     ToggleAll(bool),
     /// Selects or deselects a disk, by id.
     Select(String),
+    /// Shows or hides the technical details of the selected disk.
+    ToggleDetails,
     Nav(Nav),
     Copy,
     ImageInput(String),
@@ -105,6 +107,8 @@ pub enum Focus {
     Virtual,
     All,
     Disk(String),
+    /// The technical details disclosure of the selected disk.
+    Details,
     Image,
     Browse,
     Hash,
@@ -159,6 +163,8 @@ pub struct Model {
     pub allow_virtual: bool,
     pub show_all: bool,
     pub selected: Option<String>,
+    /// Technical details of the selected disk shown; closed for each new selection.
+    pub details: bool,
     pub focus: Option<Focus>,
     pub write: WriteState,
     pub confirming_internal: bool,
@@ -203,6 +209,7 @@ pub fn ui_event(message: &Message) -> Option<(&'static str, String)> {
         Message::ToggleVirtual(on) => ("toggle_virtual", on.to_string()),
         Message::ToggleAll(on) => ("toggle_all", on.to_string()),
         Message::Select(id) => ("select_disk", id.clone()),
+        Message::ToggleDetails => ("toggle_details", String::new()),
         Message::Nav(nav) => ("key", format!("{nav:?}")),
         Message::Copy => ("click_copy", String::new()),
         // The event detail only carries the path length.

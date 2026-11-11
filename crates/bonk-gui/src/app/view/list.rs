@@ -23,10 +23,12 @@ impl App {
             let mut cards: Vec<Element<'_, Message>> = Vec::new();
             for (disk, verdict) in entries {
                 cards.push(self.card(disk, verdict));
+                let selected = self.selected.as_deref() == Some(disk.id.as_str());
+                if selected {
+                    cards.push(self.details_toggle());
+                }
                 // The write panel is outside the card: a click in it does not close the disk.
-                if self.selected.as_deref() == Some(disk.id.as_str())
-                    && let Some(panel) = self.write_panel(disk)
-                {
+                if selected && let Some(panel) = self.write_panel(disk) {
                     cards.push(panel);
                 }
                 if let Some(panel) = self.vault_panel(disk) {

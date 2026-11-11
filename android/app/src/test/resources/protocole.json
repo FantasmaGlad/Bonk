@@ -81,6 +81,9 @@
       "type": "select"
     },
     {
+      "type": "details"
+    },
+    {
       "on": true,
       "type": "show_all"
     },
@@ -228,8 +231,10 @@
       "disks": [
         {
           "badge": "PROPOSÉ",
+          "details": [],
+          "details_button": "Détails techniques",
           "device": "/dev/bus/usb/001/002",
-          "facts": "32,0 Go  S1  /dev/bus/usb/001/002",
+          "facts": "32,0 Go   USB",
           "id": "usb-S1-001-002",
           "model": "UDisk",
           "selected": true,
@@ -296,8 +301,10 @@
       "disks": [
         {
           "badge": "PROPOSÉ",
+          "details": [],
+          "details_button": "Détails techniques",
           "device": "/dev/bus/usb/001/002",
-          "facts": "32,0 Go  S1  /dev/bus/usb/001/002",
+          "facts": "32,0 Go   USB",
           "id": "usb-S1-001-002",
           "model": "UDisk",
           "selected": true,
@@ -323,8 +330,10 @@
       "disks": [
         {
           "badge": "PROPOSÉ",
+          "details": [],
+          "details_button": "Détails techniques",
           "device": "/dev/bus/usb/001/002",
-          "facts": "32,0 Go  S1  /dev/bus/usb/001/002",
+          "facts": "32,0 Go   USB",
           "id": "usb-S1-001-002",
           "model": "UDisk",
           "selected": true,
@@ -349,8 +358,10 @@
       "disks": [
         {
           "badge": "PROPOSÉ",
+          "details": [],
+          "details_button": "Détails techniques",
           "device": "/dev/bus/usb/001/002",
-          "facts": "32,0 Go  S1  /dev/bus/usb/001/002",
+          "facts": "32,0 Go   USB",
           "id": "usb-S1-001-002",
           "model": "UDisk",
           "selected": true,
@@ -445,8 +456,10 @@
       "disks": [
         {
           "badge": "PROPOSÉ",
+          "details": [],
+          "details_button": "Détails techniques",
           "device": "/dev/bus/usb/001/002",
-          "facts": "32,0 Go  S1  /dev/bus/usb/001/002",
+          "facts": "32,0 Go   USB",
           "id": "usb-S1-001-002",
           "model": "UDisk",
           "selected": true,
