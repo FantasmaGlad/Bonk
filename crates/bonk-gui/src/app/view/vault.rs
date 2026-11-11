@@ -45,11 +45,12 @@ impl App {
                 phase,
                 done,
                 total,
+                rate,
                 ..
             } => {
                 let mut panel = column![text(VaultWords::busy(lang, *action)).size(13)].spacing(8);
                 if let Some(phase) = phase {
-                    let (line, fraction) = phrases::progress(lang, *phase, *done, *total, 0.0);
+                    let (line, fraction) = phrases::progress(lang, *phase, *done, *total, *rate);
                     panel = panel.push(text(line).size(13)).push(progress_bar(0.0..=1.0, fraction).girth(14));
                 }
                 if *action != VaultAction::List {

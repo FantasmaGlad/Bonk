@@ -91,6 +91,8 @@ pub enum VaultState {
         phase: Option<Phase>,
         done: u64,
         total: Option<u64>,
+        /// Bytes per second.
+        rate: f64,
     },
     /// The disk holds no vault: preparing one erases it.
     NotVault {
@@ -189,6 +191,7 @@ impl Model {
             phase: None,
             done: 0,
             total: None,
+            rate: 0.0,
         };
         vec![Effect::RunVault(args)]
     }
@@ -259,6 +262,7 @@ impl Model {
             phase,
             done,
             total,
+            rate,
         } = &mut self.vault
         else {
             return Vec::new();
@@ -269,8 +273,8 @@ impl Model {
                 phase: p,
                 done: d,
                 total: t,
-                ..
-            } => (*phase, *done, *total) = (Some(p), d, t),
+                rate: r,
+            } => (*phase, *done, *total, *rate) = (Some(p), d, t, r),
             Event::Finished(outcome) => {
                 let disk_id = disk_id.clone();
                 log::info!(target: "bonk::gui", outcome = format!("{outcome:?}").as_str(); "vault command finished");
@@ -396,6 +400,16 @@ mod tests {
             matches!(&effects[..], [Effect::RunVault(args)] if args[1] == "add" && args[3] == "/isos/arch.iso")
         );
         let _ = model.apply_vault(VaultMessage::Event(Event::Started(42)));
+        let _ = model.apply_vault(VaultMessage::Event(Event::Progress {
+            phase: Phase::Write,
+            done: 1 << 20,
+            total: Some(4 << 20),
+            rate: 2_000_000.0,
+        }));
+        // The rate shown is the engine's, not a zero.
+        assert!(
+            matches!(model.vault, VaultState::Busy { rate, .. } if (rate - 2_000_000.0).abs() < f64::EPSILON)
+        );
         assert_eq!(
             model.apply_vault(VaultMessage::Cancel),
             [Effect::CancelWrite(42)]
