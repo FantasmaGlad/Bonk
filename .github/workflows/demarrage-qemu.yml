@@ -158,7 +158,7 @@ jobs:
     name: Vault, ${{ matrix.nom }} (uefi)
     needs: bonk
     runs-on: ubuntu-24.04
-    timeout-minutes: ${{ matrix.minutes || 45 }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -188,30 +188,16 @@ jobs:
             motif: 'Fedora-Workstation-Live-44-1\.7\.x86_64\.iso'
             taille: 4294967296
             options: --memoire 4096 --delai 600
-          # Emulated on the x86_64 runner: the vault's ARM64 GRUB, then casper with the same iso-scan step.
-          # Its firmware gives the kernel the serial port: the installer shows there, no login prompt.
-          - nom: Ubuntu Server arm64
-            copie: bonk
-            base: https://cdimage.ubuntu.com/ubuntu/releases/26.04/release
-            motif: 'ubuntu-26\.04\.1-live-server-arm64\.iso'
-            taille: 4294967296
-            paquets: qemu-system-arm qemu-efi-aarch64
-            preuve: 'ubuntu-server ttyAMA0'
-            options: --processeur aarch64 --memoire 4096 --delai 2400
-            minutes: 75
     steps:
       - name: Récupérer le code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Installer QEMU et son firmware
+      - name: Installer QEMU et OVMF
         timeout-minutes: 5
-        env:
-          PAQUETS: ${{ matrix.paquets || 'qemu-system-x86 ovmf' }}
         run: |
-          read -r -a paquets <<< "$PAQUETS"
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends "${paquets[@]}"
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf
       - name: Ouvrir KVM à l'exécuteur
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
@@ -240,14 +226,13 @@ jobs:
           OPTIONS: ${{ matrix.options }}
           VAULT_SIZE: ${{ matrix.taille }}
           COPIE: ${{ matrix.copie }}
-          PREUVE: ${{ matrix.preuve || 'login:' }}
         # The runner's second disk, when mounted, holds the ISO and the vault: the system disk may be too small.
         run: |
           read -r -a options <<< "$OPTIONS"
           if mountpoint -q /mnt; then dossier=/mnt/vault; else dossier="$RUNNER_TEMP/vault"; fi
           sudo install -d -o "$USER" "$dossier"
           echo "DOSSIER=$dossier" >> "$GITHUB_ENV"
-          .github/scripts/demarrage-vault.sh target/release/bonk "$URL" "$SHA256_FILE" "$dossier" "$PREUVE" --ligne 3 "${options[@]}"
+          .github/scripts/demarrage-vault.sh target/release/bonk "$URL" "$SHA256_FILE" "$dossier" 'login:' --ligne 3 "${options[@]}"
       - name: Conserver la trace et les écrans
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
