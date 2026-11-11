@@ -112,7 +112,12 @@ pub(super) fn quick(method: Method, params: &Value, cfg: &Config) -> Result<Valu
         | Method::DiskWrite
         | Method::DiskVerify
         | Method::DiskRepairGpt
-        | Method::DiskFormat => unreachable!("handled by `handle`"),
+        | Method::DiskFormat
+        | Method::VaultList
+        | Method::VaultInit
+        | Method::VaultAdd
+        | Method::VaultRemove
+        | Method::VaultUpdate => unreachable!("handled by `handle`"),
     }
 }
 

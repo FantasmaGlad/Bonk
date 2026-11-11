@@ -61,20 +61,20 @@ pub(crate) struct InitArgs {
 }
 
 /// Where GRUB comes from, for `init` and `update`.
-#[derive(Debug, Args)]
+#[derive(Debug, Args, Default)]
 pub(crate) struct GrubSource {
     /// Folder holding BOOTX64.EFI, for a machine without network: checked against the hash of the
     /// last catalog seen
     #[arg(long, value_name = "DIR")]
-    grub_dir: Option<PathBuf>,
+    pub(crate) grub_dir: Option<PathBuf>,
 
     /// Catalog address (`BONK_CATALOG_URL`); its signature is checked wherever it comes from
     #[arg(long, value_name = "URL")]
-    catalog_url: Option<String>,
+    pub(crate) catalog_url: Option<String>,
 
     /// Download directory; by default the user's cache directory
     #[arg(long, value_name = "DIR")]
-    cache_dir: Option<PathBuf>,
+    pub(crate) cache_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -189,7 +189,7 @@ const GRUB_ARCH: &str = "x86_64";
 
 /// GRUB named by the signed catalog: from its address through the cache, or from `--grub-dir`, always
 /// checked against the signed hash.
-fn grub(
+pub(crate) fn grub(
     args: &GrubSource,
     access: &catalog::Access,
 ) -> Result<(Vec<BootFile>, GrubInfo), JobError> {

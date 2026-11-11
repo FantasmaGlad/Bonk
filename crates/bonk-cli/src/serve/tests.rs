@@ -116,6 +116,7 @@ fn fake(slow: bool, enumerate: EnumerateFn) -> Fake {
             vars: vec![],
             view: ViewDefaults::default(),
             interrupted: Arc::new(|| false),
+            catalog: crate::catalog::Access::default(),
         },
     }
 }

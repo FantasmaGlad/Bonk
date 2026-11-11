@@ -13,7 +13,10 @@ use serde_json::{Value, json};
 use crate::errors::Code;
 use crate::fetch;
 use crate::list;
-use bonk_ops::job::{self, Deps, FormatJob, RepairJob, VerifyJob, WriteJob};
+use bonk_ops::job::{
+    self, Deps, FormatJob, RepairJob, VaultAddJob, VaultInitJob, VaultListJob, VaultRemoveJob,
+    VaultUpdateJob, VerifyJob, WriteJob,
+};
 
 use super::params::{TransferParams, WatchParams};
 use super::protocol::{Failure, Out, Request, failure, parse};
@@ -30,11 +33,26 @@ pub(super) struct WatchHandle {
 }
 
 #[derive(Clone, Copy)]
-pub(super) enum Kind {
+pub(super) enum DiskKind {
     Write,
     Verify,
     Repair,
     Format,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum VaultKind {
+    List,
+    Init,
+    Add,
+    Remove,
+    Update,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum Kind {
+    Disk(DiskKind),
+    Vault(VaultKind),
 }
 
 pub(super) fn to_json(report: impl Serialize) -> Result<Value, job::JobError> {
@@ -59,28 +77,40 @@ pub(super) enum Task {
     Verify(VerifyJob),
     Repair(RepairJob),
     Format(FormatJob),
+    VaultList(VaultListJob),
+    VaultInit(Box<VaultInitJob>),
+    VaultAdd(VaultAddJob),
+    VaultRemove(VaultRemoveJob),
+    VaultUpdate(Box<VaultUpdateJob>),
 }
 
 /// A parameter error answers without starting anything.
 pub(super) fn prepare(kind: Kind, params: &Value, cfg: &Config) -> Result<Task, Failure> {
     let p: TransferParams = parse(params)?;
+    match kind {
+        Kind::Disk(kind) => prepare_disk(kind, p, cfg),
+        Kind::Vault(kind) => prepare_vault(kind, &p, cfg),
+    }
+}
+
+fn prepare_disk(kind: DiskKind, p: TransferParams, cfg: &Config) -> Result<Task, Failure> {
     let options = match kind {
-        Kind::Verify => p.options(&cfg.view),
-        Kind::Write | Kind::Repair | Kind::Format => p.write_options(),
+        DiskKind::Verify => p.options(&cfg.view),
+        DiskKind::Write | DiskKind::Repair | DiskKind::Format => p.write_options(),
     };
     let (target, trace) = (p.target()?, p.trace()?);
     let mode = p.mode()?;
     let elevation = p.elevation()?;
     let filesystem = p.filesystem()?;
-    let table = p.table(if matches!(kind, Kind::Format) {
+    let table = p.table(if matches!(kind, DiskKind::Format) {
         TableKind::FORMAT_DEFAULT
     } else {
         TableKind::WINDOWS_DEFAULT
     })?;
     let mut sha256 = p.sha256.clone();
     let source = match (kind, &p.image) {
-        (Kind::Repair | Kind::Format, _) => PathBuf::new(),
-        (Kind::Write, Some(id)) => {
+        (DiskKind::Repair | DiskKind::Format, _) => PathBuf::new(),
+        (DiskKind::Write, Some(id)) => {
             // The catalog hash is signed: no client-supplied hash may replace it, as on the command line.
             if p.sha256.is_some() || p.sha256_file.is_some() {
                 return Err(failure(
@@ -97,7 +127,7 @@ pub(super) fn prepare(kind: Kind, params: &Value, cfg: &Config) -> Result<Task, 
         _ => p.source()?,
     };
     Ok(match kind {
-        Kind::Write => Task::Write(
+        DiskKind::Write => Task::Write(
             Box::new(WriteJob {
                 target,
                 source,
@@ -116,14 +146,14 @@ pub(super) fn prepare(kind: Kind, params: &Value, cfg: &Config) -> Result<Task, 
             p.sha256_file,
             p.cache_dir,
         ),
-        Kind::Verify => Task::Verify(VerifyJob {
+        DiskKind::Verify => Task::Verify(VerifyJob {
             target,
             source,
             options,
             trace_io: trace,
             elevation,
         }),
-        Kind::Repair => Task::Repair(RepairJob {
+        DiskKind::Repair => Task::Repair(RepairJob {
             target,
             options,
             trace_io: trace,
@@ -132,7 +162,7 @@ pub(super) fn prepare(kind: Kind, params: &Value, cfg: &Config) -> Result<Task, 
             elevation,
             force: p.force,
         }),
-        Kind::Format => Task::Format(FormatJob {
+        DiskKind::Format => Task::Format(FormatJob {
             target,
             filesystem,
             table,
@@ -281,6 +311,90 @@ impl Task {
             Self::Verify(j) => job::verify(&j, deps, progress).and_then(to_json),
             Self::Repair(j) => job::repair(&j, deps).and_then(to_json),
             Self::Format(j) => job::format(&j, deps).and_then(to_json),
+            Self::VaultList(j) => job::vault_list(&j, deps).and_then(to_json),
+            Self::VaultInit(j) => job::vault_init(&j, deps).and_then(to_json),
+            Self::VaultAdd(j) => job::vault_add(&j, deps, progress).and_then(to_json),
+            Self::VaultRemove(j) => job::vault_remove(&j, deps).and_then(to_json),
+            Self::VaultUpdate(j) => job::vault_update(&j, deps).and_then(to_json),
         }
     }
+}
+
+/// GRUB of the signed catalog, for `vault.init` and `vault.update`; a refusal answers before anything starts.
+fn vault_grub(
+    p: &TransferParams,
+    cfg: &Config,
+) -> Result<(Vec<bonk_core::vault::BootFile>, job::GrubInfo), Failure> {
+    let source = crate::vault::GrubSource {
+        grub_dir: p.grub_dir.clone(),
+        catalog_url: p.catalog_url.clone(),
+        cache_dir: p.cache_dir.clone(),
+    };
+    crate::vault::grub(&source, &cfg.catalog).map_err(|e| failure(e.code, e.message))
+}
+
+fn prepare_vault(kind: VaultKind, p: &TransferParams, cfg: &Config) -> Result<Task, Failure> {
+    let (target, trace_io, elevation) = (p.target()?, p.trace()?, p.elevation()?);
+    Ok(match kind {
+        VaultKind::List => Task::VaultList(VaultListJob {
+            target,
+            options: p.options(&cfg.view),
+            trace_io,
+            elevation,
+        }),
+        VaultKind::Init => {
+            // A plan or a refusal for want of confirmation writes nothing: no GRUB needed.
+            let (boot, grub) = if p.dry_run || !(p.yes || p.force) {
+                (Vec::new(), None)
+            } else {
+                let (boot, grub) = vault_grub(p, cfg)?;
+                (boot, Some(grub))
+            };
+            Task::VaultInit(Box::new(VaultInitJob {
+                target,
+                boot,
+                grub,
+                table: p.table(TableKind::VAULT_DEFAULT)?,
+                options: p.write_options(),
+                trace_io,
+                dry_run: p.dry_run,
+                yes: p.yes,
+                force: p.force,
+                elevation,
+            }))
+        }
+        VaultKind::Add => Task::VaultAdd(VaultAddJob {
+            target,
+            source: required(p.iso.clone(), "iso")?,
+            options: p.write_options(),
+            trace_io,
+            yes: p.yes,
+            elevation,
+        }),
+        VaultKind::Remove => Task::VaultRemove(VaultRemoveJob {
+            target,
+            name: required(p.name.clone(), "name")?,
+            options: p.write_options(),
+            trace_io,
+            yes: p.yes,
+            elevation,
+        }),
+        VaultKind::Update => {
+            let (boot, grub) = vault_grub(p, cfg)?;
+            Task::VaultUpdate(Box::new(VaultUpdateJob {
+                target,
+                boot,
+                grub: Some(grub),
+                options: p.write_options(),
+                trace_io,
+                dry_run: p.dry_run || !p.yes,
+                yes: p.yes,
+                elevation,
+            }))
+        }
+    })
+}
+
+fn required<T>(value: Option<T>, name: &str) -> Result<T, Failure> {
+    value.ok_or_else(|| failure(Code::ProtocolError, format!("parameter '{name}' required")))
 }
