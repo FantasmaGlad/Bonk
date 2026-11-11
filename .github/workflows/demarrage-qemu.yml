@@ -11,6 +11,7 @@ on:
       - ".github/scripts/demarrage-qemu.sh"
       - ".github/scripts/demarrage-qemu.py"
       - ".github/scripts/demarrage-vault.sh"
+      - ".github/scripts/demarrage-windows.py"
       - "crates/bonk-core/src/vault.rs"
       - "crates/bonk-core/src/vault_menu.cfg"
   workflow_dispatch:
@@ -167,4 +168,59 @@ jobs:
           path: |
             ${{ runner.temp }}/vault/serie.log
             ${{ runner.temp }}/vault/*.png
+          retention-days: 7
+
+  # Microsoft evaluation images named by the signed catalog: downloaded from Microsoft, never stored here.
+  windows:
+    name: ${{ matrix.nom }} (bios, uefi, secureboot)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { nom: Windows 11 LTSC 2024, image: windows-11-enterprise-ltsc-2024-x86_64 }
+          - { nom: Windows 10 LTSC 2021, image: windows-10-enterprise-ltsc-2021-x86_64 }
+          - { nom: Windows Server 2022, image: windows-server-2022-x86_64 }
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Installer la chaîne Rust du dépôt
+        run: rustup toolchain install
+      - name: Installer QEMU, SeaBIOS et OVMF
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf
+      - name: Ouvrir KVM à l'exécuteur
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Construire Bonk
+        run: cargo build --release --locked -p bonk
+      # The runner's second disk, when mounted, holds the image and the drive: the system disk may be too small.
+      - name: Écrire la clé
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          if mountpoint -q /mnt; then dossier=/mnt/windows; else dossier="$RUNNER_TEMP/windows-cle"; fi
+          sudo install -d -o "$USER" "$dossier"
+          df -h / "$dossier"
+          echo "DOSSIER=$dossier" >> "$GITHUB_ENV"
+          target/release/bonk write --simulate "$dossier/cle.img" --size $((16 << 30)) --image "$IMAGE" \
+            --cache-dir "$dossier/cache" --yes --progress none
+          rm -rf "$dossier/cache"
+      - name: Démarrer jusqu'à l'installateur
+        run: |
+          for mode in bios uefi secureboot; do
+            python3 .github/scripts/demarrage-windows.py "$DOSSIER/cle.img" "$mode" "$RUNNER_TEMP/windows"
+          done
+      - name: Conserver les écrans
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: demarrage-${{ matrix.image }}
+          path: ${{ runner.temp }}/windows/*.ppm
           retention-days: 7
