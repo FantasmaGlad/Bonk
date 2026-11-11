@@ -1,4 +1,5 @@
 pub mod exfat;
+pub mod exfat_edit;
 pub mod exfat_read;
 pub mod exfat_tree;
 pub mod fat32;

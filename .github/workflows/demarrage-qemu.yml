@@ -28,8 +28,30 @@ env:
   CARGO_INCREMENTAL: "0"
 
 jobs:
+  # Built once: every boot below starts the same binary, and none spends minutes compiling it again.
+  bonk:
+    name: construire bonk
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Installer la chaîne Rust du dépôt
+        run: rustup toolchain install
+      - name: Construire Bonk
+        run: cargo build --release --locked -p bonk
+      - name: Conserver Bonk
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bonk-demarrage
+          path: target/release/bonk
+          if-no-files-found: error
+          retention-days: 1
   demarrer:
     name: ${{ matrix.nom }} (${{ matrix.mode }})
+    needs: bonk
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -76,8 +98,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Installer la chaîne Rust du dépôt
-        run: rustup toolchain install
       - name: Installer QEMU, SeaBIOS et OVMF
         run: |
           sudo apt-get update
@@ -88,8 +108,13 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Construire Bonk
-        run: cargo build --release --locked -p bonk
+      - name: Récupérer Bonk
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: bonk-demarrage
+          path: target/release
+      - name: Rendre Bonk exécutable
+        run: chmod 755 target/release/bonk
       # Same site as the image: protects against a corrupt download, not a compromised site.
       - name: Trouver l'image officielle
         env:
@@ -128,16 +153,44 @@ jobs:
 
   # GRUB comes from the published catalog: the vault is checked as a user gets it.
   vault:
-    name: Vault, Debian live (uefi)
+    name: Vault, ${{ matrix.nom }} (uefi)
+    needs: bonk
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - nom: Debian live
+            base: https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid
+            motif: 'debian-live-[0-9.]*-amd64-standard\.iso'
+            options: --memoire 2048 --delai 300
+          - nom: Arch
+            copie: bonk
+            base: https://geo.mirror.pkgbuild.com/iso/latest
+            sommes: sha256sums.txt
+            motif: 'archlinux-x86_64\.iso'
+            options: --memoire 2048 --delai 300
+          # casper does not look into exFAT: the vault swaps in its own iso-scan step (newc: in the menu).
+          # Its entry sources the ISO's offset first: the kernel line comes one later.
+          - nom: Ubuntu
+            copie: bonk
+            base: https://releases.ubuntu.com/26.04.1
+            motif: 'ubuntu-26\.04\.1-desktop-amd64\.iso'
+            taille: 8589934592
+            options: --ligne 4 --memoire 4096 --delai 900
+          - nom: Fedora live
+            copie: bonk
+            base: https://download.fedoraproject.org/pub/fedora/linux/releases/44/Workstation/x86_64/iso
+            sommes: Fedora-Workstation-44-1.7-x86_64-CHECKSUM
+            motif: 'Fedora-Workstation-Live-44-1\.7\.x86_64\.iso'
+            taille: 4294967296
+            options: --memoire 4096 --delai 600
     steps:
       - name: Récupérer le code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Installer la chaîne Rust du dépôt
-        run: rustup toolchain install
       - name: Installer QEMU et OVMF
         run: |
           sudo apt-get update
@@ -147,32 +200,49 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Construire Bonk
-        run: cargo build --release --locked -p bonk
+      - name: Récupérer Bonk
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: bonk-demarrage
+          path: target/release
+      - name: Rendre Bonk exécutable
+        run: chmod 755 target/release/bonk
       - name: Trouver l'image officielle
         env:
-          BASE: https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid
+          BASE: ${{ matrix.base }}
+          MOTIF: ${{ matrix.motif }}
+          SOMMES: ${{ matrix.sommes || 'SHA256SUMS' }}
         run: |
-          iso=$(curl --fail --silent --show-error --location "$BASE/SHA256SUMS" | grep -o 'debian-live-[0-9.]*-amd64-standard\.iso' | head -n 1)
+          iso=$(curl --fail --silent --show-error --location "$BASE/$SOMMES" | grep -o "$MOTIF" | head -n 1)
           test -n "$iso"
           echo "URL=$BASE/$iso" >> "$GITHUB_ENV"
-          echo "SHA256_FILE=$BASE/SHA256SUMS" >> "$GITHUB_ENV"
+          echo "SHA256_FILE=$BASE/$SOMMES" >> "$GITHUB_ENV"
       # The kernel line is the fourth of the entry: GRUB shows its arguments first, as setparams.
       - name: Préparer le Vault, y copier l'ISO, démarrer sous QEMU
-        run: .github/scripts/demarrage-vault.sh target/release/bonk "$URL" "$SHA256_FILE" "$RUNNER_TEMP/vault" 'login:' --ligne 3 --memoire 2048 --delai 300
+        env:
+          OPTIONS: ${{ matrix.options }}
+          VAULT_SIZE: ${{ matrix.taille }}
+          COPIE: ${{ matrix.copie }}
+        # The runner's second disk, when mounted, holds the ISO and the vault: the system disk may be too small.
+        run: |
+          read -r -a options <<< "$OPTIONS"
+          if mountpoint -q /mnt; then dossier=/mnt/vault; else dossier="$RUNNER_TEMP/vault"; fi
+          sudo install -d -o "$USER" "$dossier"
+          echo "DOSSIER=$dossier" >> "$GITHUB_ENV"
+          .github/scripts/demarrage-vault.sh target/release/bonk "$URL" "$SHA256_FILE" "$dossier" 'login:' --ligne 3 "${options[@]}"
       - name: Conserver la trace et les écrans
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: demarrage-vault
+          name: demarrage-vault-${{ strategy.job-index }}
           path: |
-            ${{ runner.temp }}/vault/serie.log
-            ${{ runner.temp }}/vault/*.png
+            ${{ env.DOSSIER }}/serie.log
+            ${{ env.DOSSIER }}/*.png
           retention-days: 7
 
-  # Microsoft evaluation images named by the signed catalog: downloaded from Microsoft, never stored here.
   windows:
     name: ${{ matrix.nom }} (bios, uefi, secureboot)
+    needs: bonk
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -187,8 +257,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Installer la chaîne Rust du dépôt
-        run: rustup toolchain install
       - name: Installer QEMU, SeaBIOS et OVMF
         run: |
           sudo apt-get update
@@ -198,8 +266,13 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Construire Bonk
-        run: cargo build --release --locked -p bonk
+      - name: Récupérer Bonk
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: bonk-demarrage
+          path: target/release
+      - name: Rendre Bonk exécutable
+        run: chmod 755 target/release/bonk
       # The runner's second disk, when mounted, holds the image and the drive: the system disk may be too small.
       - name: Écrire la clé
         env:

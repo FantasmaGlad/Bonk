@@ -106,7 +106,7 @@ pub(crate) struct CommonArgs {
 
     /// Progress: auto, json (one event per line) or none
     #[arg(long, value_enum, default_value_t = ProgressMode::Auto)]
-    pub(super) progress: ProgressMode,
+    pub(crate) progress: ProgressMode,
 
     /// Result as JSON
     #[arg(long)]

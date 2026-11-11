@@ -48,11 +48,28 @@ def serial_text():
         return ""
 
 
+# Printed only when a boot has failed for good: waiting the whole delay would prove nothing more.
+DEAD_ENDS = re.compile(
+    r"Kernel panic - not syncing"
+    r"|\(initramfs\) "
+    r"|Could not find the ISO"
+    r"|Unable to find a medium containing a live file system"
+    r"|No BonkVault partition found"
+    r"|You are in emergency mode"
+    r"|ERROR: .* device did not show up"
+)
+
+
 def wait_for(pattern, limit, qemu):
     end = time.monotonic() + limit
     while time.monotonic() < end and qemu.poll() is None:
-        if re.search(pattern, serial_text()):
+        text = serial_text()
+        if re.search(pattern, text):
             return True
+        dead_end = DEAD_ENDS.search(text)
+        if dead_end:
+            print(f"impasse sur la console série : {dead_end.group(0)}", file=sys.stderr)
+            return False
         time.sleep(0.5)
     return bool(re.search(pattern, serial_text()))
 

@@ -7,7 +7,7 @@ use crate::format::exfat_read::{FileEntry, Reader};
 use crate::format::table::{
     self, GUID_ESP, MBR_ESP, PartitionPlan, Slot, TableKind, gpt_type, mbr_type, usable_end,
 };
-use crate::format::{ALIGNMENT, Filesystem, FormatError, Ids, exfat, fat32, guid};
+use crate::format::{ALIGNMENT, Filesystem, FormatError, Ids, exfat, exfat_edit, fat32, guid};
 use crate::format::{NewFile, fat32_tree};
 use crate::partition::{MbrEntry, Severity, inspect};
 
@@ -25,6 +25,139 @@ const ESP_GUID_TEXT: &str = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B";
 pub const MENU: &str = include_str!("vault_menu.cfg");
 /// The path the GRUB image searches for.
 pub const MENU_PATH: &str = "bonk/grub.cfg";
+/// Ubuntu's iso-scan step, put into its initrd by the menu: it maps the ISO from the partition, which casper
+/// cannot read. Kept apart, as it follows casper's own scripts.
+pub const CASPER_EXFAT: &str = include_str!("vault_casper_exfat.sh");
+/// Next to the menu, which keeps GRUB's `config_directory` to name it.
+pub const CASPER_EXFAT_PATH: &str = "bonk/casper/20iso_scan";
+
+/// The live systems the menu starts from an ISO file, recognised by the same files it looks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum IsoFamily {
+    DebianLive,
+    Ubuntu,
+    Arch,
+    FedoraLive,
+}
+
+impl IsoFamily {
+    /// Files the menu tests, in its order: the first family whose files are all there wins.
+    const RULES: [(Self, &'static [&'static str]); 4] = [
+        (Self::DebianLive, &["live/vmlinuz", "live/initrd.img"]),
+        (Self::Ubuntu, &["casper/vmlinuz", "casper/initrd"]),
+        (
+            Self::Arch,
+            &[
+                "arch/boot/x86_64/vmlinuz-linux",
+                "arch/boot/x86_64/initramfs-linux.img",
+            ],
+        ),
+        (
+            Self::FedoraLive,
+            &["boot/x86_64/loader/linux", "boot/x86_64/loader/initrd"],
+        ),
+    ];
+}
+
+/// The family the vault menu would start, `None` for an ISO it shows as not supported.
+///
+/// # Errors
+/// Not an ISO 9660 image, or unreadable.
+pub fn iso_family<R: std::io::Read + std::io::Seek>(
+    iso: &mut crate::iso9660::Iso<R>,
+) -> std::io::Result<Option<IsoFamily>> {
+    for (family, files) in IsoFamily::RULES {
+        let mut all = true;
+        for file in files {
+            all &= iso.file_size(file)?.is_some();
+        }
+        if all {
+            // The menu checks the label too: other Kiwi images share this layout.
+            let fedora = family != IsoFamily::FedoraLive || iso.label().starts_with("Fedora-");
+            return Ok(fedora.then_some(family));
+        }
+    }
+    Ok(None)
+}
+
+/// Adds an ISO at the root of the vault's data partition, contiguous; the caller flushes then calls
+/// [`verify_image`].
+///
+/// # Errors
+/// See [`exfat_edit::add_file`].
+pub fn add_image(
+    dev: &mut dyn BlockDevice,
+    plan: &VaultPlan,
+    name: &str,
+    size: u64,
+    family: IsoFamily,
+    reader: &mut dyn std::io::Read,
+    advance: &mut dyn FnMut(u64) -> bool,
+) -> Result<exfat_edit::Added, FormatError> {
+    let span = vault_span(plan);
+    let added = exfat_edit::add_file(dev, span, name, size, false, reader, advance)?;
+    if family == IsoFamily::Ubuntu {
+        let location = location_file(added.volume_offset);
+        let size = location.len() as u64;
+        exfat_edit::add_file(
+            dev,
+            span,
+            &format!("{name}{LOCATION_SUFFIX}"),
+            size,
+            true,
+            &mut location.as_slice(),
+            &mut |_| true,
+        )?;
+    }
+    Ok(added)
+}
+
+/// Next to an Ubuntu ISO, hidden: where it starts on the data partition. casper cannot read exFAT, so the
+/// menu passes this offset and Bonk's iso-scan step maps the ISO straight from the partition.
+pub const LOCATION_SUFFIX: &str = ".bonk";
+
+fn vault_span(plan: &VaultPlan) -> exfat_edit::Span {
+    exfat_edit::Span {
+        first_lba: plan.vault.first_lba,
+        sectors: plan.vault.sectors(),
+    }
+}
+
+/// A GRUB script the menu sources.
+fn location_file(volume_offset: u64) -> Vec<u8> {
+    format!("set bonk_offset={volume_offset}\n").into_bytes()
+}
+
+/// # Errors
+/// See [`exfat_edit::verify_file`].
+pub fn verify_image(
+    dev: &dyn BlockDevice,
+    plan: &VaultPlan,
+    name: &str,
+    sha256: &str,
+    advance: &mut dyn FnMut(u64) -> bool,
+) -> Result<(), FormatError> {
+    exfat_edit::verify_file(dev, vault_span(plan), name, sha256, advance)
+}
+
+/// Removes an ISO from the root of the data partition; returns its size.
+///
+/// # Errors
+/// See [`exfat_edit::remove_file`].
+pub fn remove_image(
+    dev: &mut dyn BlockDevice,
+    plan: &VaultPlan,
+    name: &str,
+) -> Result<u64, FormatError> {
+    let span = vault_span(plan);
+    let freed = exfat_edit::remove_file(dev, span, name)?;
+    // Only Ubuntu ISOs have one: its absence is the usual case.
+    match exfat_edit::remove_file(dev, span, &format!("{name}{LOCATION_SUFFIX}")) {
+        Ok(_) | Err(FormatError::Name(_)) => Ok(freed),
+        Err(other) => Err(other),
+    }
+}
 
 /// A file of the boot partition: path from its root, `/` separated.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,7 +177,7 @@ pub fn efi_file_name(arch: &str) -> Option<&'static str> {
     }
 }
 
-/// GRUB images by architecture, then the menu.
+/// GRUB images by architecture, then the menu and the files it uses.
 ///
 /// # Errors
 /// [`FormatError::Unsupported`] for an architecture without an EFI removable-media name.
@@ -63,6 +196,10 @@ pub fn boot_files(efi: &[(&str, Vec<u8>)]) -> Result<Vec<BootFile>, FormatError>
     files.push(BootFile {
         path: MENU_PATH.to_owned(),
         data: MENU.as_bytes().to_vec(),
+    });
+    files.push(BootFile {
+        path: CASPER_EXFAT_PATH.to_owned(),
+        data: CASPER_EXFAT.as_bytes().to_vec(),
     });
     Ok(files)
 }
@@ -322,6 +459,7 @@ mod tests {
     use crate::block::MemoryDevice;
     use crate::format::NewFile;
     use crate::format::exfat_tree;
+    use crate::partition::read_range;
 
     const MIB: u64 = 1 << 20;
     const GIB: u64 = 1 << 30;
@@ -341,6 +479,83 @@ mod tests {
         write_table(dev, &plan, &ids())?;
         write_volumes(dev, &plan, &ids(), &boot())?;
         Ok(plan)
+    }
+
+    /// casper maps the ISO at this offset: it must point at the ISO's first byte on the partition.
+    #[test]
+    fn une_iso_ubuntu_laisse_son_emplacement_et_le_retrait_l_efface() -> Result<(), FormatError> {
+        let mut dev = MemoryDevice::new(256 << 20, 512)?;
+        let plan = init(&mut dev, TableKind::Mbr)?;
+        let data: Vec<u8> = (0..1_000_000u32).map(|i| (i % 251) as u8).collect();
+        let added = add_image(
+            &mut dev,
+            &plan,
+            "ubuntu.iso",
+            data.len() as u64,
+            IsoFamily::Ubuntu,
+            &mut data.as_slice(),
+            &mut |_| true,
+        )?;
+        let names: Vec<String> = images(&dev, &plan)?.into_iter().map(|f| f.path).collect();
+        assert_eq!(names, ["ubuntu.iso"]);
+        let span = vault_span(&plan);
+        let reader = Reader::open(&dev, span.first_lba, span.sectors)?;
+        let all: Vec<String> = reader.files()?.into_iter().map(|f| f.path).collect();
+        assert_eq!(all, ["ubuntu.iso", "ubuntu.iso.bonk"]);
+        let start = plan.vault.first_lba * 512 + added.volume_offset;
+        assert_eq!(read_range(&dev, start, data.len() as u64)?, data);
+        assert_eq!(
+            location_file(added.volume_offset),
+            format!("set bonk_offset={}\n", added.volume_offset).into_bytes()
+        );
+        remove_image(&mut dev, &plan, "ubuntu.iso")?;
+        let reader = Reader::open(&dev, span.first_lba, span.sectors)?;
+        assert!(reader.files()?.is_empty());
+        // Other families need none.
+        add_image(
+            &mut dev,
+            &plan,
+            "arch.iso",
+            3,
+            IsoFamily::Arch,
+            &mut &b"iso"[..],
+            &mut |_| true,
+        )?;
+        let reader = Reader::open(&dev, span.first_lba, span.sectors)?;
+        assert_eq!(reader.files()?.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn familles_reconnues_comme_par_le_menu() -> std::io::Result<()> {
+        use crate::iso9660::{Iso, testing::image};
+        use std::io::Cursor;
+        let family = |label: &str, files: &[(&str, u32)]| {
+            iso_family(&mut Iso::open(Cursor::new(image(label, files)))?)
+        };
+        for (expected, files) in IsoFamily::RULES {
+            // Every file the rule needs is one the menu tests.
+            for file in files {
+                assert!(MENU.contains(&format!("(probe)/{file}")), "{file}");
+            }
+            let present: Vec<(&str, u32)> = files.iter().map(|f| (*f, 1)).collect();
+            assert_eq!(family("Fedora-WS-Live-44", &present)?, Some(expected));
+            assert_eq!(family("X", &present[..1])?, None, "{expected:?}");
+        }
+        let kiwi = [
+            ("boot/x86_64/loader/linux", 1),
+            ("boot/x86_64/loader/initrd", 1),
+        ];
+        assert_eq!(family("openSUSE-Live", &kiwi)?, None);
+        // Debian first, as in the menu, when an image carries both layouts.
+        let both = [
+            ("live/vmlinuz", 1),
+            ("live/initrd.img", 1),
+            ("casper/vmlinuz", 1),
+            ("casper/initrd", 1),
+        ];
+        assert_eq!(family("X", &both)?, Some(IsoFamily::DebianLive));
+        Ok(())
     }
 
     #[test]
@@ -488,7 +703,8 @@ mod tests {
                 "EFI/BOOT/BOOTX64.EFI",
                 "EFI/BOOT/BOOTAA64.EFI",
                 "EFI/BOOT/BOOTRISCV64.EFI",
-                "bonk/grub.cfg"
+                "bonk/grub.cfg",
+                "bonk/casper/20iso_scan"
             ]
         );
         assert!(files[3].data.starts_with(b"set timeout="));

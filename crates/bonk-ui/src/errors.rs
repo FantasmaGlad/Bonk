@@ -35,6 +35,9 @@ const FRENCH_TITLES: &[(&str, &str)] = &[
     ("E7001", "Échec du formatage"),
     ("E7002", "Système de fichiers indisponible sur cet hôte"),
     ("E7003", "Aucun Bonk Vault lisible sur ce disque"),
+    ("E7004", "Cette ISO ne peut pas démarrer depuis le coffre"),
+    ("E7005", "Pas assez de place sur le coffre"),
+    ("E7006", "Nom d'ISO déjà présent sur le coffre, ou absent"),
 ];
 
 /// French title of a code. Public so the binary test compares it with `bonk explain`.

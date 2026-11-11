@@ -11,10 +11,10 @@ use clap::{Args, Subcommand};
 use crate::catalog;
 use crate::config::ViewDefaults;
 use crate::format::TableArg;
-use crate::transfer::{CommonArgs, finish, target_line};
+use crate::transfer::{CommonArgs, finish, progress_mode, sink, target_line};
 use bonk_ops::job::{
-    self, Deps, GrubInfo, JobError, TraceIo, VaultInitDone, VaultInitJob, VaultListDone,
-    VaultListJob,
+    self, Deps, GrubInfo, JobError, TraceIo, VaultAddDone, VaultAddJob, VaultInitDone,
+    VaultInitJob, VaultListDone, VaultListJob, VaultRemoveDone, VaultRemoveJob,
 };
 
 #[derive(Debug, Subcommand)]
@@ -24,6 +24,10 @@ pub(crate) enum VaultAction {
     Init(InitArgs),
     /// ISO images on a vault (read-only)
     List(ListArgs),
+    /// Copy an ISO to the vault, in one piece, after checking the vault menu can start it; reads it back
+    Add(AddArgs),
+    /// Remove an ISO from the vault, by its name
+    Remove(RemoveArgs),
 }
 
 #[derive(Debug, Args)]
@@ -70,11 +74,41 @@ pub(crate) struct ListArgs {
     common: CommonArgs,
 }
 
+#[derive(Debug, Args)]
+#[command(long_about = None)]
+pub(crate) struct AddArgs {
+    #[command(flatten)]
+    common: CommonArgs,
+
+    /// ISO image to copy: Debian live, Ubuntu, Arch Linux or Fedora live, without spaces in its name
+    iso: PathBuf,
+
+    /// Confirm: without --yes, Bonk does nothing
+    #[arg(long)]
+    yes: bool,
+}
+
+#[derive(Debug, Args)]
+#[command(long_about = None)]
+pub(crate) struct RemoveArgs {
+    #[command(flatten)]
+    common: CommonArgs,
+
+    /// Name of the ISO at the root of the vault, as `bonk vault list` shows it
+    name: String,
+
+    /// Confirm: without --yes, Bonk does nothing
+    #[arg(long)]
+    yes: bool,
+}
+
 impl VaultAction {
     pub(crate) fn touches_real_disk(&self) -> bool {
         match self {
             Self::Init(args) => !args.common.simulate && !args.dry_run,
             Self::List(args) => !args.common.simulate,
+            Self::Add(args) => !args.common.simulate,
+            Self::Remove(args) => !args.common.simulate,
         }
     }
 }
@@ -85,6 +119,14 @@ pub(crate) fn schema_init() -> serde_json::Value {
 
 pub(crate) fn schema_list() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(VaultListDone)).unwrap_or_default()
+}
+
+pub(crate) fn schema_add() -> serde_json::Value {
+    serde_json::to_value(schemars::schema_for!(VaultAddDone)).unwrap_or_default()
+}
+
+pub(crate) fn schema_remove() -> serde_json::Value {
+    serde_json::to_value(schemars::schema_for!(VaultRemoveDone)).unwrap_or_default()
 }
 
 fn size(part: PartitionPlan, block_size: u32) -> String {
@@ -103,6 +145,8 @@ pub(crate) fn run(
     match action {
         VaultAction::Init(args) => run_init(args, access, deps, out, err),
         VaultAction::List(args) => run_list(args, view, deps, out, err),
+        VaultAction::Add(args) => run_add(args, deps, out, err),
+        VaultAction::Remove(args) => run_remove(args, deps, out, err),
     }
 }
 
@@ -272,4 +316,77 @@ fn run_list(
             Ok(())
         },
     )
+}
+
+fn run_add(args: &AddArgs, deps: &Deps<'_>, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let job = VaultAddJob {
+        target: args.common.target(),
+        source: args.iso.clone(),
+        options: args.common.write_options(),
+        trace_io: args.common.trace_io.map(TraceIo::from),
+        yes: args.yes,
+        elevation: args.common.elevate.into(),
+    };
+    let result = {
+        let mut progress = sink(
+            progress_mode(args.common.progress, false),
+            &mut *out,
+            &mut *err,
+        );
+        job::vault_add(&job, deps, &mut progress)
+    };
+    finish(result, &args.common, out, err, |done, out| {
+        writeln!(
+            out,
+            "Added to the vault on {}: {}",
+            target_line(&done.target),
+            done.name
+        )?;
+        writeln!(
+            out,
+            "  {}, {}",
+            format_size(done.size_bytes, bonk_hal::Lang::En),
+            family_name(done.family)
+        )?;
+        writeln!(out, "  sha256 {}", done.sha256)?;
+        if done.verified {
+            writeln!(out, "  Read-back: matches")?;
+        }
+        Ok(())
+    })
+}
+
+fn run_remove(args: &RemoveArgs, deps: &Deps<'_>, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let job = VaultRemoveJob {
+        target: args.common.target(),
+        name: args.name.clone(),
+        options: args.common.write_options(),
+        trace_io: args.common.trace_io.map(TraceIo::from),
+        yes: args.yes,
+        elevation: args.common.elevate.into(),
+    };
+    finish(
+        job::vault_remove(&job, deps),
+        &args.common,
+        out,
+        err,
+        |done, out| {
+            writeln!(
+                out,
+                "Removed from the vault on {}: {} ({} freed)",
+                target_line(&done.target),
+                done.name,
+                format_size(done.freed_bytes, bonk_hal::Lang::En)
+            )
+        },
+    )
+}
+
+fn family_name(family: core_vault::IsoFamily) -> &'static str {
+    match family {
+        core_vault::IsoFamily::DebianLive => "Debian live",
+        core_vault::IsoFamily::Ubuntu => "Ubuntu",
+        core_vault::IsoFamily::Arch => "Arch Linux",
+        core_vault::IsoFamily::FedoraLive => "Fedora live",
+    }
 }

@@ -34,12 +34,12 @@ pub struct Reader<'a> {
     root: u32,
 }
 
-struct Raw {
-    name: String,
-    directory: bool,
-    first_cluster: u32,
-    length: u64,
-    contiguous: bool,
+pub(super) struct Raw {
+    pub(super) name: String,
+    pub(super) directory: bool,
+    pub(super) first_cluster: u32,
+    pub(super) length: u64,
+    pub(super) contiguous: bool,
 }
 
 fn invalid(what: impl Into<String>) -> FormatError {
@@ -111,11 +111,39 @@ impl<'a> Reader<'a> {
         Ok(reader)
     }
 
-    fn valid(&self, cluster: u32) -> bool {
+    pub(super) fn cluster_bytes(&self) -> u64 {
+        self.cluster_bytes
+    }
+
+    pub(super) fn clusters(&self) -> u32 {
+        self.clusters
+    }
+
+    pub(super) fn root(&self) -> u32 {
+        self.root
+    }
+
+    /// Clusters of a FAT chain, in order; bounded by the volume so a looping chain stops.
+    pub(super) fn chain(&self, first: u32) -> Result<Vec<u32>, FormatError> {
+        let mut chain = Vec::new();
+        let mut cluster = first;
+        loop {
+            if !self.valid(cluster) || chain.len() as u64 > u64::from(self.clusters) {
+                return Err(invalid("exFAT cluster chain broken"));
+            }
+            chain.push(cluster);
+            match self.next(cluster)? {
+                END_OF_CHAIN => return Ok(chain),
+                next => cluster = next,
+            }
+        }
+    }
+
+    pub(super) fn valid(&self, cluster: u32) -> bool {
         cluster >= FIRST_CLUSTER && cluster - FIRST_CLUSTER < self.clusters
     }
 
-    fn offset(&self, cluster: u32) -> u64 {
+    pub(super) fn offset(&self, cluster: u32) -> u64 {
         self.heap + u64::from(cluster - FIRST_CLUSTER) * self.cluster_bytes
     }
 
@@ -125,7 +153,7 @@ impl<'a> Reader<'a> {
     }
 
     /// `length`: `None` for the root, whose size only the FAT chain gives.
-    fn read(
+    pub(super) fn read(
         &self,
         first: u32,
         length: Option<u64>,
@@ -175,7 +203,7 @@ impl<'a> Reader<'a> {
     }
 
     /// Entry sets whose checksum or shape is wrong are skipped, as systems do.
-    fn entries(directory: &[u8], label: &mut Option<String>) -> Vec<Raw> {
+    pub(super) fn entries(directory: &[u8], label: &mut Option<String>) -> Vec<Raw> {
         let slots = directory.as_chunks::<ENTRY>().0;
         let mut found = Vec::new();
         let mut index = 0;

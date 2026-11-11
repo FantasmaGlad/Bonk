@@ -28,9 +28,9 @@ const FIXED_TIMESTAMP: u32 = 0x0021_0000;
 const MEDIA: u32 = 0xFFFF_FFF8;
 
 #[derive(Debug, Clone, Copy)]
-struct Placed {
-    first_cluster: u32,
-    clusters: u32,
+pub(super) struct Placed {
+    pub(super) first_cluster: u32,
+    pub(super) clusters: u32,
 }
 
 /// Where every byte goes, computed before the first write. Each file and non-root directory is contiguous,
@@ -48,7 +48,7 @@ pub struct Layout {
     used_clusters: u32,
 }
 
-fn name_units(name: &str) -> Result<Vec<u16>, FormatError> {
+pub(super) fn name_units(name: &str) -> Result<Vec<u16>, FormatError> {
     let units: Vec<u16> = name.encode_utf16().collect();
     let forbidden = |c: char| c < ' ' || "\"*/:<>?\\|".contains(c);
     if units.is_empty() || units.len() > MAX_NAME_UNITS || name.chars().any(forbidden) {
@@ -57,11 +57,11 @@ fn name_units(name: &str) -> Result<Vec<u16>, FormatError> {
     Ok(units)
 }
 
-fn entries_for(units: &[u16]) -> usize {
+pub(super) fn entries_for(units: &[u16]) -> usize {
     2 + units.len().div_ceil(NAME_UNITS)
 }
 
-fn entry_set(
+pub(super) fn entry_set(
     units: &[u16],
     upcase: &[u16],
     directory: bool,

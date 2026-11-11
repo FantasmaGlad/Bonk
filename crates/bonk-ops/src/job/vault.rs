@@ -1,16 +1,21 @@
 use std::path::Path;
 
+use std::time::Instant;
+
 use bonk_core::BlockDevice;
 use bonk_core::format::exfat_read::FileEntry;
 use bonk_core::format::table::TableKind;
 use bonk_core::format::{FormatError, Ids};
 use bonk_core::vault::{self, BootFile, VaultPlan};
+use bonk_core::write::{Control, Phase, Progress};
 use bonk_hal::{Access, Elevation, FilterOptions, TargetIdentity};
 use schemars::JsonSchema;
 use serde::Serialize;
 
+use super::extract::Advance;
 use super::format::{fresh_seed, wait_for_partitions};
 use super::target::{OpenRequest, choose, open_read_only, open_target, reread_table};
+use super::translate::guarded;
 use super::translate::support_lost;
 use super::types::{Deps, JobError, SCHEMA_VERSION, Target, TargetInfo, TraceIo, fail};
 use super::verify::drop_cache_before_verify;
@@ -229,6 +234,231 @@ pub fn vault_list(job: &VaultListJob, deps: &Deps<'_>) -> Result<VaultListDone, 
         layout,
         block_size: device.block_size(),
         images,
+    })
+}
+
+/// Adds an ISO to a vault: refused before the drive is touched when the vault menu could not start it.
+pub struct VaultAddJob {
+    pub target: Target,
+    pub source: std::path::PathBuf,
+    pub options: FilterOptions,
+    pub trace_io: Option<TraceIo>,
+    pub yes: bool,
+    pub elevation: Elevation,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct VaultAddDone {
+    pub schema_version: u32,
+    pub event: &'static str,
+    pub target: TargetInfo,
+    /// Name at the root of the data partition.
+    pub name: String,
+    pub size_bytes: u64,
+    pub family: vault::IsoFamily,
+    pub sha256: String,
+    /// Read back from the drive after the cache was dropped.
+    pub verified: bool,
+}
+
+pub struct VaultRemoveJob {
+    pub target: Target,
+    pub name: String,
+    pub options: FilterOptions,
+    pub trace_io: Option<TraceIo>,
+    pub yes: bool,
+    pub elevation: Elevation,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct VaultRemoveDone {
+    pub schema_version: u32,
+    pub event: &'static str,
+    pub target: TargetInfo,
+    pub name: String,
+    pub freed_bytes: u64,
+}
+
+fn edit_error(error: FormatError) -> JobError {
+    match error {
+        FormatError::Device(device) => {
+            support_lost(&device).unwrap_or_else(|| fail(Code::WriteFailed, device))
+        }
+        FormatError::Name(what) => fail(Code::VaultEntry, what),
+        FormatError::TooLarge(what) => fail(Code::VaultNoRoom, what),
+        FormatError::Source(err) if err.kind() == std::io::ErrorKind::Interrupted => fail(
+            Code::Cancelled,
+            "cancelled during the copy: the vault keeps the space, `bonk vault remove` or a file system check frees it",
+        ),
+        FormatError::Source(err) => fail(Code::SourceUnreadable, err),
+        FormatError::Invalid(_) => fail(Code::NotAVault, error),
+        other => fail(Code::WriteFailed, other),
+    }
+}
+
+/// The ISO's name and family, checked as the vault menu will check them at boot.
+fn vault_source(path: &Path) -> Result<(String, u64, vault::IsoFamily), JobError> {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| {
+            fail(
+                Code::IsoNotForVault,
+                format!("{}: no file name", path.display()),
+            )
+        })?
+        .to_owned();
+    // The menu lists `*.iso` and `*.ISO` only.
+    if !name.to_ascii_lowercase().ends_with(".iso") {
+        return Err(fail(
+            Code::IsoNotForVault,
+            format!("{name}: the vault menu only lists files ending in .iso"),
+        ));
+    }
+    if name.contains(' ') {
+        return Err(fail(
+            Code::IsoNotForVault,
+            format!("{name}: a space in the name; rename it without spaces"),
+        ));
+    }
+    let file = std::fs::File::open(path)
+        .map_err(|e| fail(Code::SourceUnreadable, format!("{}: {e}", path.display())))?;
+    let size = file
+        .metadata()
+        .map_err(|e| fail(Code::SourceUnreadable, format!("{}: {e}", path.display())))?
+        .len();
+    let mut iso = bonk_core::iso9660::Iso::open(std::io::BufReader::new(file))
+        .map_err(|e| fail(Code::IsoNotForVault, format!("{name}: {e}")))?;
+    let family = vault::iso_family(&mut iso)
+        .map_err(|e| fail(Code::IsoNotForVault, format!("{name}: {e}")))?
+        .ok_or_else(|| {
+            fail(
+                Code::IsoNotForVault,
+                format!("{name}: not Debian live, Ubuntu, Arch Linux or Fedora live"),
+            )
+        })?;
+    Ok((name, size, family))
+}
+
+fn open_vault(
+    target: &Target,
+    options: FilterOptions,
+    elevation: Elevation,
+    trace_io: Option<TraceIo>,
+    deps: &Deps<'_>,
+) -> Result<(Box<dyn BlockDevice>, TargetInfo, VaultPlan), JobError> {
+    let chosen = choose(target, options, deps)?;
+    let (device, info, _) = open_target(
+        chosen,
+        target,
+        &OpenRequest {
+            options,
+            access: Access::ReadWrite,
+            elevation,
+            size_hint: None,
+            trace_io,
+        },
+        deps,
+    )?;
+    let plan = vault::detect(&*device)
+        .map_err(read_error)?
+        .ok_or_else(|| {
+            fail(
+                Code::NotAVault,
+                "no Bonk vault on this disk: prepare it with `bonk vault init`",
+            )
+        })?;
+    Ok((device, info, plan))
+}
+
+fn confirmed(yes: bool, what: &str) -> Result<(), JobError> {
+    if yes {
+        Ok(())
+    } else {
+        Err(fail(
+            Code::ConfirmationRequired,
+            format!("{what} without confirmation: add --yes"),
+        ))
+    }
+}
+
+/// # Errors
+/// Coded refusal before any write; then write, room or read-back failure.
+pub fn vault_add(
+    job: &VaultAddJob,
+    deps: &Deps<'_>,
+    progress: &mut dyn FnMut(&Progress) -> Control,
+) -> Result<VaultAddDone, JobError> {
+    let (name, size, family) = vault_source(&job.source)?;
+    confirmed(job.yes, "vault add")?;
+    let (mut device, info, plan) =
+        open_vault(&job.target, job.options, job.elevation, job.trace_io, deps)?;
+    let mut file = std::fs::File::open(&job.source).map_err(|e| {
+        fail(
+            Code::SourceUnreadable,
+            format!("{}: {e}", job.source.display()),
+        )
+    })?;
+    let mut report = guarded(deps, progress);
+    let mut advance = Advance {
+        phase: Phase::Write,
+        done: 0,
+        total: size,
+        started: Instant::now(),
+        report: &mut report,
+    };
+    log::info!(target: "bonk::write", name = name.as_str(), bytes = size; "vault add starting");
+    let added = vault::add_image(
+        &mut *device,
+        &plan,
+        &name,
+        size,
+        family,
+        &mut file,
+        &mut |n| advance.add(n),
+    )
+    .map_err(edit_error)?;
+    device.flush().map_err(|e| fail(Code::WriteFailed, e))?;
+    drop_cache_before_verify(&mut *device);
+    let mut advance = Advance {
+        phase: Phase::Verify,
+        done: 0,
+        total: size,
+        started: Instant::now(),
+        report: &mut report,
+    };
+    vault::verify_image(&*device, &plan, &name, &added.sha256, &mut |n| {
+        advance.add(n)
+    })
+    .map_err(|e| fail(Code::VerifyMismatch, e))?;
+    log::info!(target: "bonk::write", name = name.as_str(); "vault add finished");
+    Ok(VaultAddDone {
+        schema_version: SCHEMA_VERSION,
+        event: "result",
+        target: info,
+        name,
+        size_bytes: size,
+        family,
+        sha256: added.sha256,
+        verified: true,
+    })
+}
+
+/// # Errors
+/// Missing confirmation, no such ISO, or write failure.
+pub fn vault_remove(job: &VaultRemoveJob, deps: &Deps<'_>) -> Result<VaultRemoveDone, JobError> {
+    confirmed(job.yes, "vault remove")?;
+    let (mut device, info, plan) =
+        open_vault(&job.target, job.options, job.elevation, job.trace_io, deps)?;
+    let freed = vault::remove_image(&mut *device, &plan, &job.name).map_err(edit_error)?;
+    device.flush().map_err(|e| fail(Code::WriteFailed, e))?;
+    log::info!(target: "bonk::write", name = job.name.as_str(); "vault remove finished");
+    Ok(VaultRemoveDone {
+        schema_version: SCHEMA_VERSION,
+        event: "result",
+        target: info,
+        name: job.name.clone(),
+        freed_bytes: freed,
     })
 }
 
