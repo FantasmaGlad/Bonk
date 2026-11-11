@@ -23,8 +23,10 @@ attendu=$(curl --fail --silent --show-error --location "$sommes" | awk -v n="$no
 test -n "$attendu"
 echo "$attendu  $travail/$nom" | sha256sum --check --quiet
 
-# The ISO goes in as a user would put it there: copied by the system's exFAT driver.
-if sudo -n true 2> /dev/null; then
+# COPIE=bonk: added by `bonk vault add`; otherwise as a user would put it there, by the system's exFAT driver.
+if [ "${COPIE:-}" = bonk ]; then
+  "$bonk" vault add --simulate "$cle" "$travail/$nom" --yes --progress none
+elif sudo -n true 2> /dev/null; then
   boucle=$(sudo losetup --find --partscan --show "$cle")
   point=$(mktemp -d)
   sudo mount -t exfat "${boucle}p1" "$point"

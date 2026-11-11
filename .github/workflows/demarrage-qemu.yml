@@ -140,17 +140,20 @@ jobs:
             motif: 'debian-live-[0-9.]*-amd64-standard\.iso'
             options: --memoire 2048 --delai 300
           - nom: Arch
+            copie: bonk
             base: https://geo.mirror.pkgbuild.com/iso/latest
             sommes: sha256sums.txt
             motif: 'archlinux-x86_64\.iso'
             options: --memoire 2048 --delai 300
           # casper does not look into exFAT: the vault swaps in its own iso-scan step (newc: in the menu).
           - nom: Ubuntu
+            copie: bonk
             base: https://releases.ubuntu.com/26.04.1
             motif: 'ubuntu-26\.04\.1-desktop-amd64\.iso'
             taille: 8589934592
             options: --memoire 4096 --delai 900
           - nom: Fedora live
+            copie: bonk
             base: https://download.fedoraproject.org/pub/fedora/linux/releases/44/Workstation/x86_64/iso
             sommes: Fedora-Workstation-44-1.7-x86_64-CHECKSUM
             motif: 'Fedora-Workstation-Live-44-1\.7\.x86_64\.iso'
@@ -189,6 +192,7 @@ jobs:
         env:
           OPTIONS: ${{ matrix.options }}
           VAULT_SIZE: ${{ matrix.taille }}
+          COPIE: ${{ matrix.copie }}
         # The runner's second disk, when mounted, holds the ISO and the vault: the system disk may be too small.
         run: |
           read -r -a options <<< "$OPTIONS"
