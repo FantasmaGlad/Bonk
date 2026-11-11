@@ -28,7 +28,7 @@ pub const MENU_PATH: &str = "bonk/grub.cfg";
 /// Ubuntu's iso-scan step with exFAT accepted, put into its initrd by the menu: kept apart, as it follows
 /// casper's own script.
 pub const CASPER_EXFAT: &str = include_str!("vault_casper_exfat.sh");
-/// Next to the menu, which names it through GRUB's `config_directory`.
+/// Next to the menu, which keeps GRUB's `config_directory` to name it.
 pub const CASPER_EXFAT_PATH: &str = "bonk/casper/20iso_scan";
 
 /// A file of the boot partition: path from its root, `/` separated.
