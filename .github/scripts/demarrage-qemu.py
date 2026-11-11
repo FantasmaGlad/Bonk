@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import os
+import platform
 import re
 import shutil
 import socket
@@ -26,10 +27,9 @@ def firmware(mode, processor):
         if mode != "uefi":
             raise SystemExit("aarch64 : UEFI seulement")
         shutil.copy(os.path.join(AAVMF, "AAVMF_VARS.fd"), "vars.fd")
-        # Emulated: `max` adds features whose emulation is too slow to reach the menu in minutes.
         # No network: `virt` would add a virtio card whose boot ROM is not installed.
         return [
-            "-machine", "virt", "-cpu", "cortex-a72", "-nic", "none",
+            "-machine", "virt", "-nic", "none",
             "-drive", f"if=pflash,format=raw,readonly=on,file={AAVMF}/AAVMF_CODE.no-secboot.fd",
             "-drive", "if=pflash,format=raw,file=vars.fd",
         ]
@@ -148,9 +148,11 @@ def main():
     for old in (SERIAL, MONITOR):
         if os.path.exists(old):
             os.remove(old)
-    native = args.processeur == "x86_64"
-    accel = ["-enable-kvm", "-cpu", "host"] if native and os.access("/dev/kvm", os.W_OK) else []
-    print(f"{args.mode} {args.processeur} : accélération {'KVM' if accel else 'absente'}", flush=True)
+    x86 = args.processeur == "x86_64"
+    # KVM only runs the runner's own processor; emulated, `max` is too slow to reach the menu in minutes.
+    kvm = platform.machine() == args.processeur and os.access("/dev/kvm", os.W_OK)
+    accel = ["-enable-kvm", "-cpu", "host"] if kvm else ([] if x86 else ["-cpu", "cortex-a72"])
+    print(f"{args.mode} {args.processeur} : accélération {'KVM' if kvm else 'absente'}", flush=True)
     qemu = subprocess.Popen(
         [
             f"qemu-system-{args.processeur}", *firmware(args.mode, args.processeur), *accel,
@@ -170,7 +172,7 @@ def main():
             wait_for(r"BdsDxe: starting", UEFI_BOOT_LIMIT_SECONDS, qemu)
             time.sleep(args.attente if args.attente is not None else GRUB_MENU_SECONDS)
         # ARM64 firmware names its serial port to the kernel (SPCR): nothing to add, and no screen to dump.
-        if native:
+        if x86:
             monitor.screen("menu.png")
             add_console(monitor, args.chargeur, args.entree, args.ligne)
         if wait_for(args.preuve, args.delai, qemu):
