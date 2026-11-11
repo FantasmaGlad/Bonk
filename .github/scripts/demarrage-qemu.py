@@ -27,8 +27,9 @@ def firmware(mode, processor):
             raise SystemExit("aarch64 : UEFI seulement")
         shutil.copy(os.path.join(AAVMF, "AAVMF_VARS.fd"), "vars.fd")
         # Emulated: `max` adds features whose emulation is too slow to reach the menu in minutes.
+        # No network: `virt` would add a virtio card whose boot ROM is not installed.
         return [
-            "-machine", "virt", "-cpu", "cortex-a72",
+            "-machine", "virt", "-cpu", "cortex-a72", "-nic", "none",
             "-drive", f"if=pflash,format=raw,readonly=on,file={AAVMF}/AAVMF_CODE.no-secboot.fd",
             "-drive", "if=pflash,format=raw,file=vars.fd",
         ]
