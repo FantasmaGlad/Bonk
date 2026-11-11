@@ -9,6 +9,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::block::{BlockDevice, BlockError};
+use crate::bytes::{u16_le, u32_le, u64_le};
 
 use gpt::{check_gpt, read_header};
 use mbr::{check_mbr, parse_mbr};
@@ -249,20 +250,6 @@ pub fn read_range(dev: &dyn BlockDevice, offset: u64, len: u64) -> Result<Vec<u8
     buf.drain(..skip);
     buf.truncate(usize::try_from(len).map_err(|_| out_of_range())?);
     Ok(buf)
-}
-
-fn u16_le(b: &[u8], at: usize) -> u16 {
-    u16::from_le_bytes([b[at], b[at + 1]])
-}
-
-fn u32_le(b: &[u8], at: usize) -> u32 {
-    u32::from_le_bytes([b[at], b[at + 1], b[at + 2], b[at + 3]])
-}
-
-fn u64_le(b: &[u8], at: usize) -> u64 {
-    let mut raw = [0u8; 8];
-    raw.copy_from_slice(&b[at..at + 8]);
-    u64::from_le_bytes(raw)
 }
 
 /// Usual text form; the first three fields are little-endian.

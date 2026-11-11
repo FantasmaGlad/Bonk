@@ -90,10 +90,10 @@ pub(crate) fn run(
     out: &mut dyn Write,
 ) -> io::Result<()> {
     // Saved settings (`bonk config`) apply when the option is not given.
-    let options = FilterOptions {
-        show_internal: args.show_internal || defaults.show_internal,
-        allow_virtual: args.allow_virtual || defaults.allow_virtual,
-    };
+    let options = defaults.widen(FilterOptions {
+        show_internal: args.show_internal,
+        allow_virtual: args.allow_virtual,
+    });
     let all = args.all || defaults.show_all;
     let entries = selected(disks, options, all);
 

@@ -88,6 +88,17 @@ pub struct ViewDefaults {
     pub lang: Option<bonk_hal::Lang>,
 }
 
+impl ViewDefaults {
+    /// To list or verify, the settings widen what was asked; writing uses what was asked alone.
+    #[must_use]
+    pub fn widen(&self, asked: bonk_hal::FilterOptions) -> bonk_hal::FilterOptions {
+        bonk_hal::FilterOptions {
+            show_internal: asked.show_internal || self.show_internal,
+            allow_virtual: asked.allow_virtual || self.allow_virtual,
+        }
+    }
+}
+
 /// What the window opens on.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WindowRequest {

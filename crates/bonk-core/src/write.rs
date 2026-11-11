@@ -143,7 +143,9 @@ pub struct VerifyReport {
     pub bytes_per_second: f64,
 }
 
-pub(crate) fn hex(digest: &[u8]) -> String {
+/// Lowercase, as hashes are written in sums files and the catalog.
+#[must_use]
+pub fn hex(digest: &[u8]) -> String {
     digest.iter().map(|b| format!("{b:02x}")).collect()
 }
 

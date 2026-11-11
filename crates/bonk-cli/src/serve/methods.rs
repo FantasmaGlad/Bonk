@@ -47,19 +47,19 @@ pub(super) fn quick(method: Method, params: &Value, cfg: &Config) -> Result<Valu
         }
         Method::DiskList => {
             let p: ViewParams = parse(params)?;
-            let options = FilterOptions {
-                show_internal: p.show_internal || cfg.view.show_internal,
-                allow_virtual: p.allow_virtual || cfg.view.allow_virtual,
-            };
+            let options = cfg.view.widen(FilterOptions {
+                show_internal: p.show_internal,
+                allow_virtual: p.allow_virtual,
+            });
             list::report_value(options, p.all || cfg.view.show_all, &enumerate(cfg)?)
                 .map_err(json_error)
         }
         Method::DiskInfo => {
             let p: TargetParams = parse(params)?;
-            let options = FilterOptions {
-                show_internal: p.show_internal || cfg.view.show_internal,
-                allow_virtual: p.allow_virtual || cfg.view.allow_virtual,
-            };
+            let options = cfg.view.widen(FilterOptions {
+                show_internal: p.show_internal,
+                allow_virtual: p.allow_virtual,
+            });
             info::report_value(&p.target, options, &enumerate(cfg)?)
                 .ok_or_else(|| disk_not_found(&p.target))?
                 .map_err(json_error)

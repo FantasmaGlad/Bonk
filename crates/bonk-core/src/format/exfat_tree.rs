@@ -13,23 +13,18 @@ use crate::block::BlockDevice;
 use crate::bytes::{put_u16, put_u32, put_u64};
 use crate::partition::read_range;
 
-const ENTRY: usize = 32;
+use super::exfat::{
+    ATTR_DIRECTORY, END_OF_CHAIN, ENTRY, ENTRY_FILE, ENTRY_LABEL, ENTRY_NAME, ENTRY_STREAM,
+    MAX_DIRECTORY_BYTES, NAME_UNITS, NO_FAT_CHAIN,
+};
+
 const ENTRY_BITMAP: u8 = 0x81;
 const ENTRY_UPCASE: u8 = 0x82;
-const ENTRY_LABEL: u8 = 0x83;
-const ENTRY_FILE: u8 = 0x85;
-const ENTRY_STREAM: u8 = 0xC0;
-const ENTRY_NAME: u8 = 0xC1;
-const ATTR_DIRECTORY: u16 = 0x10;
 const ATTR_ARCHIVE: u16 = 0x20;
 const ALLOCATION_POSSIBLE: u8 = 0x01;
-const NO_FAT_CHAIN: u8 = 0x02;
-const NAME_UNITS: usize = 15;
 const MAX_NAME_UNITS: usize = 255;
 /// 1 January 1980: nothing depends on the clock, two writes give the same bytes.
 const FIXED_TIMESTAMP: u32 = 0x0021_0000;
-const MAX_DIRECTORY_BYTES: u64 = 256 << 20;
-const END_OF_CHAIN: u32 = 0xFFFF_FFFF;
 const MEDIA: u32 = 0xFFFF_FFF8;
 
 #[derive(Debug, Clone, Copy)]

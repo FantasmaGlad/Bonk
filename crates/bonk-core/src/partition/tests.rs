@@ -1,6 +1,7 @@
-use super::testing::{ESP, LINUX, gpt_image, put_u32, put_u64};
+use super::testing::{ESP, LINUX, gpt_image};
 use super::*;
 use crate::block::MemoryDevice;
+use crate::bytes::{put_u32, put_u64};
 
 fn inspect_bytes(bytes: Vec<u8>) -> Result<Layout, BlockError> {
     inspect(&MemoryDevice::from_bytes(bytes, 512)?)

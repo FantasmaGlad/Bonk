@@ -105,10 +105,7 @@ pub(super) struct TransferParams {
 
 impl TransferParams {
     pub(super) fn options(&self, view: &ViewDefaults) -> FilterOptions {
-        FilterOptions {
-            show_internal: self.show_internal || view.show_internal,
-            allow_virtual: self.allow_virtual || view.allow_virtual,
-        }
+        view.widen(self.write_options())
     }
 
     /// To write, only the request counts: a setting never allows erasing one more disk.

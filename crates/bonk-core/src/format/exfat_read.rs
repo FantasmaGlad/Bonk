@@ -4,22 +4,16 @@ use serde::Serialize;
 use super::FormatError;
 use super::exfat::checksum16;
 use crate::block::BlockDevice;
+use crate::bytes::{u32_le, u64_le};
 use crate::partition::read_range;
 
-const ENTRY: usize = 32;
+use super::exfat::{
+    ATTR_DIRECTORY, END_OF_CHAIN, ENTRY, ENTRY_FILE, ENTRY_LABEL, ENTRY_NAME, ENTRY_STREAM,
+    FIRST_CLUSTER, MAX_DIRECTORY_BYTES, NAME_UNITS, NO_FAT_CHAIN,
+};
+
 const ENTRY_END: u8 = 0x00;
-const ENTRY_LABEL: u8 = 0x83;
-const ENTRY_FILE: u8 = 0x85;
-const ENTRY_STREAM: u8 = 0xC0;
-const ENTRY_NAME: u8 = 0xC1;
-const ATTR_DIRECTORY: u16 = 0x10;
-const NO_FAT_CHAIN: u8 = 0x02;
-const NAME_UNITS: usize = 15;
 const LABEL_UNITS: usize = 11;
-const FIRST_CLUSTER: u32 = 2;
-const END_OF_CHAIN: u32 = 0xFFFF_FFFF;
-/// Bounds what a damaged or hostile volume can make Bonk read.
-const MAX_DIRECTORY_BYTES: u64 = 32 << 20;
 const MAX_DEPTH: usize = 16;
 const MAX_ENTRIES: usize = 100_000;
 
@@ -50,16 +44,6 @@ struct Raw {
 
 fn invalid(what: impl Into<String>) -> FormatError {
     FormatError::Invalid(what.into())
-}
-
-fn u32_at(b: &[u8], at: usize) -> u32 {
-    u32::from_le_bytes([b[at], b[at + 1], b[at + 2], b[at + 3]])
-}
-
-fn u64_at(b: &[u8], at: usize) -> u64 {
-    let mut raw = [0u8; 8];
-    raw.copy_from_slice(&b[at..at + 8]);
-    u64::from_le_bytes(raw)
 }
 
 fn units(bytes: &[u8]) -> impl Iterator<Item = u16> + '_ {
@@ -95,19 +79,19 @@ impl<'a> Reader<'a> {
             return Err(invalid("exFAT sector or cluster size out of range"));
         }
         let sector = 1u64 << sector_shift;
-        let volume = u64_at(&boot, 72).saturating_mul(sector);
+        let volume = u64_le(&boot, 72).saturating_mul(sector);
         if volume > span {
             return Err(invalid("exFAT volume larger than its partition"));
         }
         let fats = boot[110];
-        let fat_length = u64::from(u32_at(&boot, 84)) * sector;
+        let fat_length = u64::from(u32_le(&boot, 84)) * sector;
         // TexFAT: the second FAT is the active one when the flag says so.
         let active = u64::from(fats == 2 && boot[106] & 1 == 1);
-        let fat = u64::from(u32_at(&boot, 80)) * sector + active * fat_length;
-        let heap = u64::from(u32_at(&boot, 88)) * sector;
+        let fat = u64::from(u32_le(&boot, 80)) * sector + active * fat_length;
+        let heap = u64::from(u32_le(&boot, 88)) * sector;
         let cluster_bytes = sector << cluster_shift;
-        let clusters = u32_at(&boot, 92);
-        let root = u32_at(&boot, 96);
+        let clusters = u32_le(&boot, 92);
+        let root = u32_le(&boot, 96);
         let heap_end = heap.saturating_add(u64::from(clusters).saturating_mul(cluster_bytes));
         let fat_end = fat.saturating_add((u64::from(clusters) + 2) * 4);
         if !(1..=2).contains(&fats) || heap_end > volume || fat_end > volume {
@@ -137,7 +121,7 @@ impl<'a> Reader<'a> {
 
     fn next(&self, cluster: u32) -> Result<u32, FormatError> {
         let raw = read_range(self.dev, self.fat + u64::from(cluster) * 4, 4)?;
-        Ok(u32_at(&raw, 0))
+        Ok(u32_le(&raw, 0))
     }
 
     /// `length`: `None` for the root, whose size only the FAT chain gives.
@@ -246,8 +230,8 @@ impl<'a> Reader<'a> {
         Some(Raw {
             name,
             directory: u16::from_le_bytes([set[4], set[5]]) & ATTR_DIRECTORY != 0,
-            first_cluster: u32_at(stream, 20),
-            length: u64_at(stream, 24),
+            first_cluster: u32_le(stream, 20),
+            length: u64_le(stream, 24),
             contiguous: stream[1] & NO_FAT_CHAIN != 0,
         })
     }

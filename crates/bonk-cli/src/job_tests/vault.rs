@@ -9,12 +9,8 @@ const VAULT_DISK: u64 = 256 << 20;
 const BASE: &str = "https://catalogue.test/";
 const GRUB: &[u8] = b"MZ grub de test";
 
-fn hex(bytes: &[u8]) -> String {
-    digest(&SHA256, bytes)
-        .as_ref()
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
+fn sha256(bytes: &[u8]) -> String {
+    bonk_core::write::hex(digest(&SHA256, bytes).as_ref())
 }
 
 /// A catalog signed by a test key, offering `grub` when given, and the files it names.
@@ -25,7 +21,7 @@ fn served_catalog(grub: Option<&[u8]>) -> ServedCatalog {
     let entry = grub.map_or_else(String::new, |bytes| {
         format!(
             r#","grub":{{"version":"2.14","released":"2026-01-14","build":"6e330c761ee82877","efi":{{"x86_64":{{"path":"grub/2.14/BOOTX64.EFI","sha256":"{}","size_bytes":{}}}}},"source":{{"path":"grub/2.14/grub-2.14.tar.xz","sha256":"{fake}","size_bytes":1}},"source_signature":{{"path":"grub/2.14/grub-2.14.tar.xz.sig","sha256":"{fake}","size_bytes":1}}}}"#,
-            hex(bytes),
+            sha256(bytes),
             bytes.len()
         )
     });
@@ -95,7 +91,7 @@ fn preparer_un_coffre_ecrit_grub_du_catalogue_puis_relit() {
     assert_eq!(value["layout"]["table"], "mbr");
     assert_eq!(value["vault_label"], "BonkVault");
     assert_eq!(value["grub"]["version"], "2.14");
-    assert_eq!(value["grub"]["sha256"], hex(GRUB));
+    assert_eq!(value["grub"]["sha256"], sha256(GRUB));
     assert_eq!(value["verified"], true);
 
     let (code, out, err) = scenario.run(&["vault", "list", "usb-a", "--json"]);

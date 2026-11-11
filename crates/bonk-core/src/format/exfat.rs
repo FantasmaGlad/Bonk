@@ -10,6 +10,19 @@ pub(super) const BOOT_REGION: u64 = 12;
 const CHECKSUM_SECTOR: usize = 11;
 const MAX_CLUSTERS: u64 = (1 << 32) - 11;
 pub(super) const FIRST_CLUSTER: u32 = 2;
+pub(super) const ENTRY: usize = 32;
+pub(super) const ENTRY_LABEL: u8 = 0x83;
+pub(super) const ENTRY_FILE: u8 = 0x85;
+pub(super) const ENTRY_STREAM: u8 = 0xC0;
+pub(super) const ENTRY_NAME: u8 = 0xC1;
+pub(super) const ATTR_DIRECTORY: u16 = 0x10;
+pub(super) const NO_FAT_CHAIN: u8 = 0x02;
+/// UTF-16 units in one name entry.
+pub(super) const NAME_UNITS: usize = 15;
+pub(super) const END_OF_CHAIN: u32 = 0xFFFF_FFFF;
+/// One bound for writing and reading: Bonk never writes a directory it would refuse to read back, and a
+/// damaged or hostile volume cannot make it read more.
+pub(super) const MAX_DIRECTORY_BYTES: u64 = 32 << 20;
 const REVISION: u16 = 0x0100;
 
 /// Recommended up-case table of the exFAT specification, compressed, as Windows writes it. Its published
@@ -230,9 +243,7 @@ mod tests {
         }
     }
 
-    fn u32_at(bytes: &[u8], at: usize) -> u32 {
-        u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]])
-    }
+    use crate::bytes::u32_le as u32_at;
 
     #[test]
     fn la_table_de_majuscules_est_celle_de_la_specification() {

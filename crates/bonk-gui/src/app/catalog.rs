@@ -97,32 +97,16 @@ pub(crate) fn menu_button<'a>(
     .into()
 }
 
-fn without_doubles(mut values: Vec<String>, first: &str) -> Vec<String> {
-    values.sort();
-    values.dedup();
-    values.insert(0, first.to_owned());
+fn with_all(mut values: Vec<String>, all: &str) -> Vec<String> {
+    values.insert(0, all.to_owned());
     values
 }
 
 /// A category, or a single system and its versions.
 fn menu_filters<'a>(systems: &[System], filter: &MenuFilter, lang: Lang) -> Element<'a, Message> {
     let (all_cat, all_sys) = (all_categories(lang), all_systems(lang));
-    let categories = without_doubles(
-        systems.iter().map(|s| s.category.clone()).collect(),
-        all_cat,
-    );
-    let in_category = MenuFilter {
-        category: filter.category.clone(),
-        system: None,
-    };
-    let names = without_doubles(
-        in_category
-            .apply(systems)
-            .iter()
-            .map(|s| s.name.clone())
-            .collect(),
-        all_sys,
-    );
+    let (categories, names) = filter.lists(systems);
+    let (categories, names) = (with_all(categories, all_cat), with_all(names, all_sys));
     let category = filter
         .category
         .clone()
@@ -177,12 +161,9 @@ pub(crate) fn menu_list<'a>(
                     )
                 }
                 ChoiceSource::OfficialPage(page) => {
-                    let note = text(match lang {
-                        Lang::En => format!("download from {page}, then Other image"),
-                        Lang::Fr => format!("à télécharger sur {page}, puis Autre image"),
-                    })
-                    .size(12)
-                    .color(theme::SECONDARY);
+                    let note = text(official_page_note(page, lang))
+                        .size(12)
+                        .color(theme::SECONDARY);
                     container(column![line, note]).padding([4, 8]).into()
                 }
                 ChoiceSource::NotForUsb => container(line).padding([4, 8]).into(),

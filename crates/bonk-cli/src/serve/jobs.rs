@@ -202,10 +202,10 @@ pub(super) fn start_watch(
     let p: WatchParams = parse(params)?;
     stop_watch(state);
     let interval = Duration::from_millis(p.interval_ms.unwrap_or(2000).max(100));
-    let options = FilterOptions {
-        show_internal: p.show_internal || cfg.view.show_internal,
-        allow_virtual: p.allow_virtual || cfg.view.allow_virtual,
-    };
+    let options = cfg.view.widen(FilterOptions {
+        show_internal: p.show_internal,
+        allow_virtual: p.allow_virtual,
+    });
     let all = p.all || cfg.view.show_all;
     let (enumerate_fn, out) = (Arc::clone(&cfg.enumerate), out.clone());
     let stop = Arc::new(AtomicBool::new(false));

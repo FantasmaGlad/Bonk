@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use bonk_core::write::hex;
 use bonk_core::{BlockDevice, BlockError};
 use sha2::{Digest, Sha256};
 
@@ -8,10 +9,6 @@ use sha2::{Digest, Sha256};
 const BENCH_OFFSET: u64 = 16 << 30;
 #[cfg(any(feature = "banc", test))]
 const BENCH_BYTES: usize = 64 << 20;
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
-}
 
 /// Hash and throughput of an area read on the key.
 ///
