@@ -241,6 +241,9 @@ pub fn vault_list(job: &VaultListJob, deps: &Deps<'_>) -> Result<VaultListDone, 
 pub struct VaultAddJob {
     pub target: Target,
     pub source: std::path::PathBuf,
+    /// Name on the vault; by default the source's own. Android reads the chosen file through a descriptor
+    /// path that carries no name.
+    pub name: Option<String>,
     pub options: FilterOptions,
     pub trace_io: Option<TraceIo>,
     pub yes: bool,
@@ -297,10 +300,12 @@ fn edit_error(error: FormatError) -> JobError {
 }
 
 /// The ISO's name and family, checked as the vault menu will check them at boot.
-fn vault_source(path: &Path) -> Result<(String, u64, vault::IsoFamily), JobError> {
-    let name = path
-        .file_name()
-        .and_then(|name| name.to_str())
+fn vault_source(
+    path: &Path,
+    name: Option<&str>,
+) -> Result<(String, u64, vault::IsoFamily), JobError> {
+    let name = name
+        .or_else(|| path.file_name().and_then(|name| name.to_str()))
         .ok_or_else(|| {
             fail(
                 Code::IsoNotForVault,
@@ -469,7 +474,7 @@ pub fn vault_add(
     deps: &Deps<'_>,
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<VaultAddDone, JobError> {
-    let (name, size, family) = vault_source(&job.source)?;
+    let (name, size, family) = vault_source(&job.source, job.name.as_deref())?;
     confirmed(job.yes, "vault add")?;
     let (mut device, info, plan) = open_vault(
         &job.target,

@@ -359,6 +359,7 @@ fn run_add(args: &AddArgs, deps: &Deps<'_>, out: &mut dyn Write, err: &mut dyn W
     let job = VaultAddJob {
         target: args.common.target(),
         source: args.iso.clone(),
+        name: None,
         options: args.common.write_options(),
         trace_io: args.common.trace_io.map(TraceIo::from),
         yes: args.yes,

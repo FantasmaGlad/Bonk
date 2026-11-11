@@ -366,6 +366,7 @@ fn prepare_vault(kind: VaultKind, p: &TransferParams, cfg: &Config) -> Result<Ta
         VaultKind::Add => Task::VaultAdd(VaultAddJob {
             target,
             source: required(p.iso.clone(), "iso")?,
+            name: None,
             options: p.write_options(),
             trace_io,
             yes: p.yes,
