@@ -184,7 +184,12 @@ fn effects_out(model: &mut Model, effects: Vec<Effect>, draft: Option<Value>) ->
                     out.push(write);
                 }
             }
-            Effect::Copy(_) | Effect::ScrollList(_) | Effect::ScrollMenu(_) => {}
+            // The phone screen offers no vault panel: no message there asks for these.
+            Effect::Copy(_)
+            | Effect::ScrollList(_)
+            | Effect::ScrollMenu(_)
+            | Effect::RunVault(_)
+            | Effect::PickVaultIso => {}
         }
     }
     out

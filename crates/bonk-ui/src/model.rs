@@ -24,6 +24,9 @@ pub enum Effect {
     CancelWrite(u32),
     ScrollList(f32),
     ScrollMenu(f32),
+    /// `bonk vault` arguments, run as `bonk write` is.
+    RunVault(Vec<String>),
+    PickVaultIso,
 }
 
 pub type Effects = Vec<Effect>;
@@ -69,6 +72,7 @@ pub enum Message {
     /// Internal disk confirmation: give up.
     CloseInternal,
     Write(Event),
+    Vault(crate::vault::VaultMessage),
 }
 
 /// Each has the same effect as a click.
@@ -163,6 +167,7 @@ pub struct Model {
     /// Catalog image the window was opened for (`--image`, a link): it fills each draft until the user
     /// chooses something else. It only ever names a catalog entry, and never starts a write.
     pub requested: Option<String>,
+    pub vault: crate::vault::VaultState,
 }
 
 /// Where the image the window was opened for stands.
@@ -213,6 +218,18 @@ pub fn ui_event(message: &Message) -> Option<(&'static str, String)> {
         Message::DismissWrite => ("click_close_write", String::new()),
         Message::ConfirmInternal => ("click_confirm_internal", String::new()),
         Message::CloseInternal => ("click_close_internal", String::new()),
+        Message::Vault(message) => match message {
+            crate::vault::VaultMessage::Open => ("click_vault", String::new()),
+            crate::vault::VaultMessage::Close => ("click_close_vault", String::new()),
+            crate::vault::VaultMessage::Prepare => ("click_prepare_vault", String::new()),
+            crate::vault::VaultMessage::ConfirmPrepare => ("click_confirm_vault", String::new()),
+            crate::vault::VaultMessage::Browse => ("click_add_iso", String::new()),
+            // As for the image, the event detail does not carry the chosen path.
+            crate::vault::VaultMessage::Picked(path) => ("iso_picked", path.is_some().to_string()),
+            crate::vault::VaultMessage::Update => ("click_update_vault", String::new()),
+            crate::vault::VaultMessage::Cancel => ("click_cancel_vault", String::new()),
+            crate::vault::VaultMessage::Event(_) => return None,
+        },
         Message::Tick
         | Message::Clock
         | Message::Loaded(_)
@@ -299,6 +316,10 @@ impl Model {
     }
 
     pub fn equivalents(&self) -> Vec<String> {
+        // The vault panel open on the selected disk: its command is the one to copy.
+        if let Some(vault) = self.vault_equivalent() {
+            return vec![vault];
+        }
         let write = match &self.write {
             WriteState::Draft {
                 image,

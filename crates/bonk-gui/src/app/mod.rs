@@ -20,6 +20,7 @@ use bonk_core::write::Phase;
 pub(crate) use bonk_ui::model::{
     Effect, Focus, Message, Model, Nav, REFRESH_EVERY, WRITE_DELAY, WriteState,
 };
+pub(crate) use bonk_ui::vault::{VaultMessage, VaultState};
 
 use crate::theme;
 use crate::transfer;
@@ -122,6 +123,12 @@ impl App {
             }
             Effect::ScrollList(y) => snap(LIST, y),
             Effect::ScrollMenu(y) => snap(catalog::MENU, y),
+            Effect::RunVault(args) => Task::run(transfer::spawn(&self.program(), &args), |event| {
+                Message::Vault(VaultMessage::Event(event))
+            }),
+            Effect::PickVaultIso => Task::perform(pick_iso(self.lang), |path| {
+                Message::Vault(VaultMessage::Picked(path))
+            }),
         }
     }
 
@@ -172,6 +179,18 @@ fn save_language(program: &std::path::Path, lang: Lang) {
     if !saved.as_ref().is_ok_and(|output| output.status.success()) {
         log::warn!(target: "bonk::gui", "language choice not saved");
     }
+}
+
+async fn pick_iso(lang: Lang) -> Option<PathBuf> {
+    rfd::AsyncFileDialog::new()
+        .set_title(lang.pick(
+            "Choose the ISO to add to the vault",
+            "Choisir l'ISO à ajouter au coffre",
+        ))
+        .add_filter(lang.pick("ISO images", "Images ISO"), &["iso", "ISO"])
+        .pick_file()
+        .await
+        .map(|file| file.path().to_path_buf())
 }
 
 async fn pick_image(lang: Lang) -> Option<PathBuf> {

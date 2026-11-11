@@ -11,7 +11,7 @@ use crate::transfer::Outcome;
 use bonk_ui::text as phrases;
 
 use super::super::catalog::{CatalogState, find_url, menu_button, menu_list};
-use super::super::{App, Focus, Message, WRITE_DELAY, WriteState};
+use super::super::{App, Focus, Message, VaultMessage, WRITE_DELAY, WriteState};
 use super::{boxed, ring};
 
 impl App {
@@ -28,7 +28,8 @@ impl App {
         else {
             return None;
         };
-        (disk_id == &disk.id)
+        // One erasing action on screen at a time: the vault panel replaces the write panel of its disk.
+        (disk_id == &disk.id && self.vault.disk_id() != Some(disk.id.as_str()))
             .then(|| boxed(self.draft_panel(disk, image, hash, (*raw, *mbr), *opened)))
     }
 
@@ -118,6 +119,22 @@ impl App {
         ));
         if self.advanced {
             panel = panel.push(self.manual_options(image, hash, raw, mbr));
+        }
+        // Several ISO images on one drive instead of one image: the vault reads the drive before offering
+        // anything.
+        if !self.vault.disk_id().is_some_and(|id| id == disk.id) {
+            panel = panel.push(
+                button(
+                    text(lang.pick(
+                        "Use as a vault (several ISO images)...",
+                        "Utiliser comme coffre (plusieurs images ISO)...",
+                    ))
+                    .size(13),
+                )
+                .on_press(Message::Vault(VaultMessage::Open))
+                .padding([4, 10])
+                .style(theme::card_button(false)),
+            );
         }
         panel
             .push(ring(
