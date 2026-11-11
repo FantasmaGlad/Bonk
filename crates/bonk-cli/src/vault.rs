@@ -382,9 +382,10 @@ fn run_add(args: &AddArgs, deps: &Deps<'_>, out: &mut dyn Write, err: &mut dyn W
         )?;
         writeln!(
             out,
-            "  {}, {}",
+            "  {}, {}, {}",
             format_size(done.size_bytes, bonk_hal::Lang::En),
-            family_name(done.family)
+            family_name(done.family),
+            arch_name(done.arch)
         )?;
         writeln!(out, "  sha256 {}", done.sha256)?;
         if done.verified {
@@ -418,6 +419,13 @@ fn run_remove(args: &RemoveArgs, deps: &Deps<'_>, out: &mut dyn Write, err: &mut
             )
         },
     )
+}
+
+fn arch_name(arch: core_vault::IsoArch) -> &'static str {
+    match arch {
+        core_vault::IsoArch::X86_64 => "for x86_64 PCs",
+        core_vault::IsoArch::Aarch64 => "for ARM64 machines",
+    }
 }
 
 fn family_name(family: core_vault::IsoFamily) -> &'static str {
