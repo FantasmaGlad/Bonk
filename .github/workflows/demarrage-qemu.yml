@@ -98,7 +98,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Normally 15 s: an apt mirror outage would otherwise bill every job for its DNS waits.
       - name: Installer QEMU, SeaBIOS et OVMF
+        timeout-minutes: 5
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf
@@ -192,6 +194,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Installer QEMU et OVMF
+        timeout-minutes: 5
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf
@@ -258,6 +261,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Installer QEMU, SeaBIOS et OVMF
+        timeout-minutes: 5
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf
