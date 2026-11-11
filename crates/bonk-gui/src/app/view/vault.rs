@@ -75,7 +75,7 @@ impl App {
                     "Toutes les données de ce disque seront effacées. Cette action est irréversible.",
                 ))
                 .size(13)
-                .color(theme::SECONDARY),
+                .color(theme::muted()),
                 row![
                     action_button(words.erase, Some(VaultMessage::ConfirmPrepare), true),
                     action_button(lang.pick("Cancel", "Annuler"), Some(VaultMessage::Open), false),
@@ -87,13 +87,13 @@ impl App {
             VaultState::Ready { images, .. } => {
                 let mut list = column![].spacing(2);
                 if images.is_empty() {
-                    list = list.push(text(words.empty).size(13).color(theme::SECONDARY));
+                    list = list.push(text(words.empty).size(13).color(theme::muted()));
                 }
                 for (name, size) in images {
                     list = list.push(
                         row![
                             text(format_size(*size, lang)).size(13).width(80),
-                            text(name.as_str()).size(13).font(iced::Font::MONOSPACE),
+                            text(name.as_str()).size(13).font(theme::MONO),
                         ]
                         .spacing(8),
                     );

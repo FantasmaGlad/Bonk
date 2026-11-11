@@ -53,7 +53,7 @@ fn served_catalog_for(images: &[(&str, &[u8])]) -> ServedCatalog {
         .as_secs()
         + 3600;
     let manifest = format!(
-        r#"{{"schema_version":1,"sequence":1,"expires_unix":{expires},"families":[],"images":[]{entry}}}"#
+        r#"{{"schema_version":2,"sequence":1,"expires_unix":{expires},"families":[],"images":[]{entry}}}"#
     )
     .into_bytes();
     let mut files = HashMap::new();

@@ -32,8 +32,8 @@ fn le_bouton_copier_prend_le_focus_et_garde_la_vue() {
 #[test]
 fn evenements_de_l_interface_journalises() {
     assert_eq!(
-        ui_event(&Message::Refresh),
-        Some(("click_refresh", String::new()))
+        ui_event(&Message::Settings(bonk_ui::settings::SettingsMessage::Open)),
+        Some(("click_settings", String::new()))
     );
     assert_eq!(
         ui_event(&Message::ToggleInternal(true)),

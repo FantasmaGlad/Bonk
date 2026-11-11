@@ -144,7 +144,7 @@ pub(crate) fn menu_list<'a>(
             let line = match &choice.note {
                 Some(note) => Element::from(column![
                     line,
-                    text(note.as_str()).size(12).color(theme::SECONDARY)
+                    text(note.as_str()).size(12).color(theme::muted())
                 ]),
                 None => line.into(),
             };
@@ -163,7 +163,7 @@ pub(crate) fn menu_list<'a>(
                 ChoiceSource::OfficialPage(page) => {
                     let note = text(official_page_note(page, lang))
                         .size(12)
-                        .color(theme::SECONDARY);
+                        .color(theme::muted());
                     container(column![line, note]).padding([4, 8]).into()
                 }
                 ChoiceSource::NotForUsb => container(line).padding([4, 8]).into(),

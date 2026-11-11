@@ -83,6 +83,7 @@ pub(super) fn app_sur_disque_interne() -> App {
     let mut app = App {
         model: Model {
             show_internal: true,
+            system_dark: Some(false),
             ..Model::default()
         },
         program: Some(PathBuf::from("/bonk-programme-inexistant")),
@@ -219,10 +220,10 @@ fn le_panneau_montre_le_recapitulatif_et_le_decompte() {
         &app,
         "Toutes les données de ce disque seront effacées. Cette action est irréversible."
     ));
-    assert!(contient(
-        &app,
-        "Cle de test  série 4C530001  16,0 Go  1 partition(s)  étiquettes : CLE"
-    ));
+    // The recap names the image, then the disk it erases: no second full description of the disk.
+    assert!(contient(&app, "Disque effacé : Cle de test, 16,0 Go"));
+    assert!(contient(&app, "Image : aucune choisie pour l'instant"));
+    assert!(!contient(&app, "1 partition(s)"));
     // Frozen clock: an opening time in the future gives zero elapsed time, however slow the rendering (a slow
     // runner already passed 3 s before the first check).
     let mut figee = app_avec_panneau();
@@ -309,6 +310,8 @@ fn le_clavier_parcourt_le_panneau_et_l_action_respecte_le_delai() {
     app.focus = Some(Focus::Disk("usb-cle".to_owned()));
     let _ = app.update(Message::ToggleAdvanced);
     app.focus = Some(Focus::Disk("usb-cle".to_owned()));
+    nav(&mut app, Nav::Next);
+    assert_eq!(app.focus, Some(Focus::Details));
     nav(&mut app, Nav::Next);
     assert_eq!(app.focus, Some(Focus::Menu));
     nav(&mut app, Nav::Next);

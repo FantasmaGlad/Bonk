@@ -47,6 +47,6 @@ private fun DeviceTests(usb: UsbManager, device: UsbDevice) {
         } else {
             Small(stringResource(R.string.write_reserved, BuildConfig.BENCH_SERIAL))
         }
-        if (report.isNotEmpty()) Small(report, Tokens.INK)
+        if (report.isNotEmpty()) Small(report, LocalPalette.current.ink)
     }
 }

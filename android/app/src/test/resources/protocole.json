@@ -10,8 +10,14 @@
       "do": "pick"
     },
     {
-      "do": "save_language",
-      "value": "fr"
+      "do": "save_setting",
+      "key": "view.show_all",
+      "value": "true"
+    },
+    {
+      "do": "relaunch",
+      "key": "theme",
+      "value": "dark"
     },
     {
       "device": "/dev/bus/usb/001/002",
@@ -75,7 +81,29 @@
       "type": "select"
     },
     {
-      "type": "language"
+      "type": "details"
+    },
+    {
+      "on": true,
+      "type": "show_all"
+    },
+    {
+      "action": "open",
+      "type": "settings"
+    },
+    {
+      "action": "close",
+      "type": "settings"
+    },
+    {
+      "action": "language",
+      "type": "settings",
+      "value": "fr"
+    },
+    {
+      "action": "theme",
+      "type": "settings",
+      "value": "dark"
     },
     {
       "type": "menu"
@@ -190,14 +218,12 @@
     {
       "disks": [],
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
-      "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
       "lang": "fr",
-      "language": "English",
       "notice": "Lecture du catalogue pour trouver debian-13-netinst-x86_64...",
       "panel": null,
       "running": false,
-      "show_all": false,
-      "show_all_label": "Afficher aussi les disques écartés",
+      "settings": null,
+      "settings_button": "Paramètres",
       "status": "0 disque(s) affiché(s) sur 0 détecté(s). Actualisation automatique toutes les 2 s.",
       "vault": null
     },
@@ -205,8 +231,10 @@
       "disks": [
         {
           "badge": "PROPOSÉ",
+          "details": [],
+          "details_button": "Détails techniques",
           "device": "/dev/bus/usb/001/002",
-          "facts": "32,0 Go  S1  /dev/bus/usb/001/002",
+          "facts": "32,0 Go   USB",
           "id": "usb-S1-001-002",
           "model": "UDisk",
           "selected": true,
@@ -214,9 +242,7 @@
         }
       ],
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
-      "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
       "lang": "fr",
-      "language": "English",
       "notice": null,
       "panel": {
         "advanced": false,
@@ -227,6 +253,7 @@
         "hash_hint": "Empreinte SHA-256 (exigée pour une adresse)",
         "image": "/x.iso",
         "image_hint": "Adresse https:// de l'image",
+        "image_line": "Image : x.iso",
         "kind": "draft",
         "mbr": true,
         "mbr_label": "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
@@ -260,14 +287,14 @@
         "pick": "Choisir l'image...",
         "raw": false,
         "raw_label": "Écrire les octets tels quels, sans refuser une image non amorçable",
-        "summary": "UDisk  série S1  32,0 Go  0 partition(s)",
+        "summary": "Disque effacé : UDisk, 32,0 Go",
         "title": "ÉCRIRE UNE IMAGE SUR CE DISQUE",
         "vault_button": "Utiliser comme coffre (plusieurs images ISO)...",
         "warning": "Toutes les données de ce disque seront effacées. Cette action est irréversible."
       },
       "running": false,
-      "show_all": false,
-      "show_all_label": "Afficher aussi les disques écartés",
+      "settings": null,
+      "settings_button": "Paramètres",
       "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s.",
       "vault": null
     },
@@ -275,8 +302,10 @@
       "disks": [
         {
           "badge": "PROPOSÉ",
+          "details": [],
+          "details_button": "Détails techniques",
           "device": "/dev/bus/usb/001/002",
-          "facts": "32,0 Go  S1  /dev/bus/usb/001/002",
+          "facts": "32,0 Go   USB",
           "id": "usb-S1-001-002",
           "model": "UDisk",
           "selected": true,
@@ -284,9 +313,7 @@
         }
       ],
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
-      "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
       "lang": "fr",
-      "language": "English",
       "notice": null,
       "panel": {
         "cancel": "Annuler",
@@ -295,8 +322,8 @@
         "line": "Écriture : 1,0 Mo sur 4,1 Mo  (1,0 Mo/s)"
       },
       "running": true,
-      "show_all": false,
-      "show_all_label": "Afficher aussi les disques écartés",
+      "settings": null,
+      "settings_button": "Paramètres",
       "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s.",
       "vault": null
     },
@@ -304,8 +331,10 @@
       "disks": [
         {
           "badge": "PROPOSÉ",
+          "details": [],
+          "details_button": "Détails techniques",
           "device": "/dev/bus/usb/001/002",
-          "facts": "32,0 Go  S1  /dev/bus/usb/001/002",
+          "facts": "32,0 Go   USB",
           "id": "usb-S1-001-002",
           "model": "UDisk",
           "selected": true,
@@ -313,9 +342,7 @@
         }
       ],
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
-      "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
       "lang": "fr",
-      "language": "English",
       "notice": null,
       "panel": {
         "close": "Fermer",
@@ -323,8 +350,8 @@
         "message": "ÉCHEC : L'identité du disque a changé avant l'écriture (the drive changed) [E2002]"
       },
       "running": false,
-      "show_all": false,
-      "show_all_label": "Afficher aussi les disques écartés",
+      "settings": null,
+      "settings_button": "Paramètres",
       "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s.",
       "vault": null
     },
@@ -332,8 +359,10 @@
       "disks": [
         {
           "badge": "PROPOSÉ",
+          "details": [],
+          "details_button": "Détails techniques",
           "device": "/dev/bus/usb/001/002",
-          "facts": "32,0 Go  S1  /dev/bus/usb/001/002",
+          "facts": "32,0 Go   USB",
           "id": "usb-S1-001-002",
           "model": "UDisk",
           "selected": true,
@@ -341,9 +370,7 @@
         }
       ],
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
-      "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
       "lang": "fr",
-      "language": "English",
       "notice": null,
       "panel": {
         "advanced": false,
@@ -354,6 +381,7 @@
         "hash_hint": "Empreinte SHA-256 (exigée pour une adresse)",
         "image": "",
         "image_hint": "Adresse https:// de l'image",
+        "image_line": "Image : aucune choisie pour l'instant",
         "kind": "draft",
         "mbr": true,
         "mbr_label": "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
@@ -387,14 +415,14 @@
         "pick": "Choisir l'image...",
         "raw": false,
         "raw_label": "Écrire les octets tels quels, sans refuser une image non amorçable",
-        "summary": "UDisk  série S1  32,0 Go  0 partition(s)",
+        "summary": "Disque effacé : UDisk, 32,0 Go",
         "title": "ÉCRIRE UNE IMAGE SUR CE DISQUE",
         "vault_button": "Utiliser comme coffre (plusieurs images ISO)...",
         "warning": "Toutes les données de ce disque seront effacées. Cette action est irréversible."
       },
       "running": false,
-      "show_all": false,
-      "show_all_label": "Afficher aussi les disques écartés",
+      "settings": null,
+      "settings_button": "Paramètres",
       "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s.",
       "vault": {
         "busy": false,
@@ -430,8 +458,10 @@
       "disks": [
         {
           "badge": "PROPOSÉ",
+          "details": [],
+          "details_button": "Détails techniques",
           "device": "/dev/bus/usb/001/002",
-          "facts": "32,0 Go  S1  /dev/bus/usb/001/002",
+          "facts": "32,0 Go   USB",
           "id": "usb-S1-001-002",
           "model": "UDisk",
           "selected": true,
@@ -439,9 +469,7 @@
         }
       ],
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
-      "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
       "lang": "fr",
-      "language": "English",
       "notice": null,
       "panel": {
         "advanced": false,
@@ -452,6 +480,7 @@
         "hash_hint": "Empreinte SHA-256 (exigée pour une adresse)",
         "image": "",
         "image_hint": "Adresse https:// de l'image",
+        "image_line": "Image : aucune choisie pour l'instant",
         "kind": "draft",
         "mbr": true,
         "mbr_label": "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
@@ -485,14 +514,14 @@
         "pick": "Choisir l'image...",
         "raw": false,
         "raw_label": "Écrire les octets tels quels, sans refuser une image non amorçable",
-        "summary": "UDisk  série S1  32,0 Go  0 partition(s)",
+        "summary": "Disque effacé : UDisk, 32,0 Go",
         "title": "ÉCRIRE UNE IMAGE SUR CE DISQUE",
         "vault_button": "Utiliser comme coffre (plusieurs images ISO)...",
         "warning": "Toutes les données de ce disque seront effacées. Cette action est irréversible."
       },
       "running": true,
-      "show_all": false,
-      "show_all_label": "Afficher aussi les disques écartés",
+      "settings": null,
+      "settings_button": "Paramètres",
       "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s.",
       "vault": {
         "busy": true,

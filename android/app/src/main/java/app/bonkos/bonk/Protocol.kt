@@ -22,8 +22,17 @@ data object Clock : ToRust
 @Serializable @SerialName("select")
 data class Select(val id: String) : ToRust
 
-@Serializable @SerialName("language")
-data object SwitchLanguage : ToRust
+/** Shows or hides the technical details of the selected disk. */
+@Serializable @SerialName("details")
+data object ToggleDetails : ToRust
+
+/** Also show the disks the safety filter excludes, with the reason. */
+@Serializable @SerialName("show_all")
+data class ShowAll(val on: Boolean) : ToRust
+
+/** A settings page action: `open`, `close`, `language` or `theme` with its stored value. */
+@Serializable @SerialName("settings")
+data class SettingsAction(val action: String, val value: String? = null) : ToRust
 
 @Serializable @SerialName("menu")
 data object ToggleMenu : ToRust
@@ -120,8 +129,13 @@ data object LoadCatalog : Effect
 @Serializable @SerialName("pick")
 data object PickImage : Effect
 
-@Serializable @SerialName("save_language")
-data class SaveLanguage(val value: String) : Effect
+/** Kept for the next start; takes effect now. */
+@Serializable @SerialName("save_setting")
+data class SaveSetting(val key: String, val value: String) : Effect
+
+/** Kept, then the screen starts again: language and theme never change while it runs. */
+@Serializable @SerialName("relaunch")
+data class Relaunch(val key: String, val value: String) : Effect
 
 /** The confirmed draft: `device` is the chosen disk's device, absent if it left meanwhile. */
 @Serializable @SerialName("write")
@@ -160,15 +174,14 @@ data class Answer(val state: ScreenState = ScreenState(), val effects: List<Effe
 /** Everything the screen shows; texts already come in the chosen language. */
 @Serializable
 data class ScreenState(
-    val intro: String = "",
-    val language: String = "",
+    @SerialName("settings_button") val settingsButton: String = "",
+    /** The settings page; absent on the main page. */
+    val settings: SettingsView? = null,
     /** Language chosen in Bonk (`fr`, `en`): the app reads its own texts in it. */
     val lang: String = "en",
     val status: String = "",
     /** What became of the image a link asked for. */
     val notice: String? = null,
-    @SerialName("show_all") val showAll: Boolean = false,
-    @SerialName("show_all_label") val showAllLabel: String = "",
     val empty: String = "",
     val disks: List<DiskView> = emptyList(),
     val panel: Panel? = null,
@@ -194,6 +207,24 @@ data class VaultImage(val name: String, val size: String)
 data class VaultAction(val label: String, val action: String, val primary: Boolean)
 
 @Serializable
+data class SettingsView(
+    val title: String,
+    val back: String,
+    /** False while a drive is being written: a relaunch would end it. */
+    val enabled: Boolean,
+    val sections: List<SettingsSection>,
+    @SerialName("disks_title") val disksTitle: String,
+    @SerialName("show_all") val showAll: Boolean,
+    @SerialName("show_all_label") val showAllLabel: String,
+)
+
+@Serializable
+data class SettingsSection(val title: String, val note: String, val options: List<SettingsOption>)
+
+@Serializable
+data class SettingsOption(val label: String, val action: String, val value: String, val chosen: Boolean)
+
+@Serializable
 data class DiskView(
     val id: String,
     val device: String,
@@ -202,6 +233,10 @@ data class DiskView(
     val badge: String,
     val state: String,
     val selected: Boolean,
+    /** Device node, serial and partitions, when opened. */
+    val details: List<String> = emptyList(),
+    /** Under the selected card only. */
+    @SerialName("details_button") val detailsButton: String? = null,
 )
 
 /** The write panel, named by `kind`. Absent when no disk is chosen. */
@@ -213,8 +248,10 @@ sealed interface Panel
 @Serializable @SerialName("draft")
 data class DraftPanel(
     val title: String,
-    /** Absent if the chosen disk just left the list. */
+    /** The erased disk, in the recap; absent if it just left the list. */
     val summary: String? = null,
+    /** The image, in the recap. */
+    @SerialName("image_line") val imageLine: String = "",
     val warning: String,
     val menu: MenuView,
     val advanced: Boolean,

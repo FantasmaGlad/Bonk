@@ -101,17 +101,24 @@ val generateTokens by tasks.registering {
     doLast {
         @Suppress("UNCHECKED_CAST")
         val tokens = JsonSlurper().parse(input) as Map<String, Any>
-        val colors = tokens["color"] as Map<String, String>
+        val light = tokens["light"] as Map<String, String>
+        val dark = tokens["dark"] as Map<String, String>
         val text = tokens["text"] as Map<String, Int>
         val spacing = tokens["spacing"] as Map<String, Int>
+        // accent_soft becomes accentSoft.
+        fun property(name: String) = name.split("_").let { parts ->
+            parts.first() + parts.drop(1).joinToString("") { it.replaceFirstChar(Char::uppercase) }
+        }
+        fun palette(colors: Map<String, String>) =
+            colors.entries.joinToString(", ") { (name, hex) -> "${property(name)} = 0xFF${hex.removePrefix("#")}" }
         output.parentFile.mkdirs()
         output.writeText(
             buildString {
                 appendLine("package app.bonkos.bonk")
+                appendLine("data class Palette(${light.keys.joinToString(", ") { "val ${property(it)}: Long" }})")
                 appendLine("object Tokens {")
-                colors.forEach { (name, hex) ->
-                    appendLine("    const val ${name.uppercase()} = 0xFF${hex.removePrefix("#")}")
-                }
+                appendLine("    val LIGHT = Palette(${palette(light)})")
+                appendLine("    val DARK = Palette(${palette(dark)})")
                 appendLine("    const val RADIUS = ${tokens["radius"]}")
                 text.forEach { (name, size) -> appendLine("    const val TEXT_${name.uppercase()} = $size") }
                 spacing.forEach { (name, size) -> appendLine("    const val SPACE_${name.uppercase()} = $size") }

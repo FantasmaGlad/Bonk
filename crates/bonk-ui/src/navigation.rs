@@ -1,5 +1,6 @@
 use crate::catalog::{CatalogState, writable};
 use crate::model::{Effect, Effects, Focus, Message, Model, Nav, WriteState};
+use crate::settings::SettingsMessage;
 
 /// False out of bounds.
 pub fn is_disk(order: &[Focus], i: usize) -> bool {
@@ -7,12 +8,18 @@ pub fn is_disk(order: &[Focus], i: usize) -> bool {
 }
 
 impl Model {
-    /// Tab order: the controls, then the disks shown.
+    /// Tab order: the settings button, then the disks shown.
     pub fn focus_order(&self) -> Vec<Focus> {
-        let mut order = vec![Focus::Refresh, Focus::Internal, Focus::Virtual, Focus::All];
+        if self.screen == crate::settings::Screen::Settings {
+            return self.settings_focus_order();
+        }
+        let mut order = vec![Focus::Settings];
         if self.error.is_none() {
             for (disk, _) in self.entries() {
                 order.push(Focus::Disk(disk.id.clone()));
+                if self.selected.as_deref() == Some(disk.id.as_str()) {
+                    order.push(Focus::Details);
+                }
                 if self.write.disk_id() == Some(disk.id.as_str())
                     && matches!(self.write, WriteState::Draft { .. })
                 {
@@ -38,7 +45,6 @@ impl Model {
             order.push(Focus::Action);
         }
         order.push(Focus::Copy);
-        order.push(Focus::Language);
         order
     }
 
@@ -62,6 +68,9 @@ impl Model {
                 Vec::new()
             };
         }
+        if nav == Nav::Escape && self.screen == crate::settings::Screen::Settings {
+            return self.apply(Message::Settings(SettingsMessage::Close));
+        }
         // Menu open: arrows move in it, Escape closes it.
         if self.menu_open {
             match nav {
@@ -84,16 +93,7 @@ impl Model {
             Nav::Previous => Some(current.map_or(last, |i| if i == 0 { last } else { i - 1 })),
             // Arrows move between disks; from a control, Down enters the list.
             Nav::Down => match current {
-                Some(i)
-                    if !matches!(
-                        order[i],
-                        Focus::Refresh
-                            | Focus::Internal
-                            | Focus::Virtual
-                            | Focus::All
-                            | Focus::Copy
-                    ) =>
-                {
+                Some(i) if !matches!(order[i], Focus::Settings | Focus::Copy) => {
                     // Next disk, skipping the current disk's write panel.
                     (i + 1..order.len())
                         .find(|j| is_disk(&order, *j))
@@ -107,13 +107,13 @@ impl Model {
                     if matches!(
                         order[i],
                         Focus::Disk(_)
+                            | Focus::Details
                             | Focus::Menu
                             | Focus::Advanced
                             | Focus::Image
                             | Focus::Browse
                             | Focus::Hash
                             | Focus::Tor
-                            | Focus::Language
                             | Focus::Raw
                             | Focus::Mbr
                             | Focus::Action
@@ -121,11 +121,7 @@ impl Model {
                     ) =>
                 {
                     // Previous disk; from the panels and the copy button, the nearest disk.
-                    let from_disk = matches!(order[i], Focus::Disk(_));
-                    (0..i)
-                        .rev()
-                        .find(|j| is_disk(&order, *j))
-                        .filter(|j| *j >= 4 || !from_disk)
+                    (0..i).rev().find(|j| is_disk(&order, *j))
                 }
                 _ => None,
             },
@@ -174,11 +170,15 @@ impl Model {
     /// Space or Enter: same effect as a click on the focused widget.
     pub fn activate(&mut self) -> Effects {
         let message = match self.focus.clone() {
-            Some(Focus::Refresh) => Message::Refresh,
+            Some(Focus::Settings) => Message::Settings(SettingsMessage::Open),
+            Some(Focus::CloseSettings) => Message::Settings(SettingsMessage::Close),
+            Some(Focus::Language(choice)) => Message::Settings(SettingsMessage::Language(choice)),
+            Some(Focus::Theme(choice)) => Message::Settings(SettingsMessage::Theme(choice)),
             Some(Focus::Internal) => Message::ToggleInternal(!self.show_internal),
             Some(Focus::Virtual) => Message::ToggleVirtual(!self.allow_virtual),
             Some(Focus::All) => Message::ToggleAll(!self.show_all),
             Some(Focus::Disk(id)) => Message::Select(id),
+            Some(Focus::Details) => Message::ToggleDetails,
             Some(Focus::Copy) => Message::Copy,
             Some(Focus::Advanced) => Message::ToggleAdvanced,
             Some(Focus::Menu) => match (&self.catalog, self.menu_open) {
@@ -192,7 +192,6 @@ impl Model {
                 _ => return Vec::new(),
             },
             Some(Focus::Browse) => Message::BrowseImage,
-            Some(Focus::Language) => Message::SwitchLanguage,
             Some(Focus::Tor) if self.tor.is_some() => Message::ToggleTor(!self.use_tor),
             Some(Focus::Tor) => return Vec::new(),
             Some(Focus::Raw) => match &self.write {

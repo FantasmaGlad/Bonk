@@ -12,7 +12,7 @@ import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
-private const val CATALOG = "https://catalog.bonk-os.app/v1/catalog.json"
+private const val CATALOG = "https://catalog.bonk-os.app/v2/catalog.json"
 private const val BUFFER = 1 shl 20
 private const val RETRY_MS = 10_000L
 private const val TAG = "Bonk"

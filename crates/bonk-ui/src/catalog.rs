@@ -144,7 +144,8 @@ fn choice(image: &Image) -> Choice {
         id: image.id.clone(),
         name: image.name.clone(),
         label: label_of(image),
-        end_of_life: image.channel == Channel::EndOfLife,
+        // An archived version is no longer maintained either: the interface says so the same way.
+        end_of_life: matches!(image.channel, Channel::EndOfLife | Channel::Archive),
         note: image.note.clone(),
         source,
     }
