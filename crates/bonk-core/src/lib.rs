@@ -4,6 +4,7 @@ pub mod boot;
 mod bytes;
 pub mod codec;
 pub mod format;
+pub mod iso9660;
 pub mod msc;
 pub mod partition;
 pub mod pe;

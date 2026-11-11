@@ -31,6 +31,56 @@ pub const CASPER_EXFAT: &str = include_str!("vault_casper_exfat.sh");
 /// Next to the menu, which keeps GRUB's `config_directory` to name it.
 pub const CASPER_EXFAT_PATH: &str = "bonk/casper/20iso_scan";
 
+/// The live systems the menu starts from an ISO file, recognised by the same files it looks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum IsoFamily {
+    DebianLive,
+    Ubuntu,
+    Arch,
+    FedoraLive,
+}
+
+impl IsoFamily {
+    /// Files the menu tests, in its order: the first family whose files are all there wins.
+    const RULES: [(Self, &'static [&'static str]); 4] = [
+        (Self::DebianLive, &["live/vmlinuz", "live/initrd.img"]),
+        (Self::Ubuntu, &["casper/vmlinuz", "casper/initrd"]),
+        (
+            Self::Arch,
+            &[
+                "arch/boot/x86_64/vmlinuz-linux",
+                "arch/boot/x86_64/initramfs-linux.img",
+            ],
+        ),
+        (
+            Self::FedoraLive,
+            &["boot/x86_64/loader/linux", "boot/x86_64/loader/initrd"],
+        ),
+    ];
+}
+
+/// The family the vault menu would start, `None` for an ISO it shows as not supported.
+///
+/// # Errors
+/// Not an ISO 9660 image, or unreadable.
+pub fn iso_family<R: std::io::Read + std::io::Seek>(
+    iso: &mut crate::iso9660::Iso<R>,
+) -> std::io::Result<Option<IsoFamily>> {
+    for (family, files) in IsoFamily::RULES {
+        let mut all = true;
+        for file in files {
+            all &= iso.file_size(file)?.is_some();
+        }
+        if all {
+            // The menu checks the label too: other Kiwi images share this layout.
+            let fedora = family != IsoFamily::FedoraLive || iso.label().starts_with("Fedora-");
+            return Ok(fedora.then_some(family));
+        }
+    }
+    Ok(None)
+}
+
 /// A file of the boot partition: path from its root, `/` separated.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BootFile {
@@ -350,6 +400,38 @@ mod tests {
         write_table(dev, &plan, &ids())?;
         write_volumes(dev, &plan, &ids(), &boot())?;
         Ok(plan)
+    }
+
+    #[test]
+    fn familles_reconnues_comme_par_le_menu() -> std::io::Result<()> {
+        use crate::iso9660::{Iso, testing::image};
+        use std::io::Cursor;
+        let family = |label: &str, files: &[(&str, u32)]| {
+            iso_family(&mut Iso::open(Cursor::new(image(label, files)))?)
+        };
+        for (expected, files) in IsoFamily::RULES {
+            // Every file the rule needs is one the menu tests.
+            for file in files {
+                assert!(MENU.contains(&format!("(probe)/{file}")), "{file}");
+            }
+            let present: Vec<(&str, u32)> = files.iter().map(|f| (*f, 1)).collect();
+            assert_eq!(family("Fedora-WS-Live-44", &present)?, Some(expected));
+            assert_eq!(family("X", &present[..1])?, None, "{expected:?}");
+        }
+        let kiwi = [
+            ("boot/x86_64/loader/linux", 1),
+            ("boot/x86_64/loader/initrd", 1),
+        ];
+        assert_eq!(family("openSUSE-Live", &kiwi)?, None);
+        // Debian first, as in the menu, when an image carries both layouts.
+        let both = [
+            ("live/vmlinuz", 1),
+            ("live/initrd.img", 1),
+            ("casper/vmlinuz", 1),
+            ("casper/initrd", 1),
+        ];
+        assert_eq!(family("X", &both)?, Some(IsoFamily::DebianLive));
+        Ok(())
     }
 
     #[test]
