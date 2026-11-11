@@ -103,7 +103,7 @@ pub(crate) fn usable_end(
     })
 }
 
-/// Where the partition goes, without writing: also used by `--dry-run`.
+/// Where the partition goes, computed as the write does, without writing.
 pub fn plan(size: u64, block: u32, kind: TableKind) -> Result<PartitionPlan, FormatError> {
     let first_lba = ALIGNMENT.div_ceil(u64::from(block));
     match usable_end(size, block, kind)? {

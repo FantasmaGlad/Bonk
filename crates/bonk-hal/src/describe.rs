@@ -29,7 +29,8 @@ pub fn format_size(bytes: u64, lang: Lang) -> String {
     let factors = [1_000_000_000_000, 1_000_000_000, 1_000_000, 1_000];
     for (factor, unit) in factors.into_iter().zip(units) {
         if bytes >= factor {
-            let tenths = bytes * 10 / factor;
+            // Computed wide: `bytes * 10` overflows a u64 above 1.8 EB.
+            let tenths = u128::from(bytes) * 10 / u128::from(factor);
             return format!("{}{separator}{} {unit}", tenths / 10, tenths % 10);
         }
     }
@@ -171,6 +172,7 @@ mod tests {
         assert_eq!(format_size(16_008_609_792, Lang::En), "16.0 GB");
         assert_eq!(format_size(16_008_609_792, Lang::Fr), "16,0 Go");
         assert_eq!(format_size(512_110_190_592, Lang::En), "512.1 GB");
+        assert_eq!(format_size(u64::MAX, Lang::En), "18446744.0 TB");
         assert_eq!(format_size(2_000_398_934_016, Lang::Fr), "2,0 To");
         assert_eq!(format_size(15_999_999_999, Lang::En), "15.9 GB");
     }

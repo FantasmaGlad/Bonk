@@ -44,7 +44,7 @@ pub(crate) fn sources(
     } else {
         for read in reads {
             let status = if read.ok { "ok    " } else { "FAILED" };
-            let size = read.bytes.map_or_else(String::new, |b| format!("{b} o"));
+            let size = read.bytes.map_or_else(String::new, |b| format!("{b} B"));
             writeln!(
                 out,
                 "[{status}] {:<4} {}  {size}  {} us",

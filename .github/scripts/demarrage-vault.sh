@@ -30,8 +30,12 @@ if sudo -n true 2> /dev/null; then
   sudo losetup --detach "$boucle"
 else
   boucle=$(udisksctl loop-setup --no-user-interaction --file "$cle" | grep -o '/dev/loop[0-9]*')
+  # The desktop may have mounted it already: only a missing mount point is a failure.
   udisksctl mount --no-user-interaction --block-device "${boucle}p1" > /dev/null || true
-  point=$(findmnt --noheadings --output TARGET "${boucle}p1")
+  point=$(findmnt --noheadings --output TARGET "${boucle}p1") || {
+    echo "ERREUR : ${boucle}p1 non monté" >&2
+    exit 1
+  }
   cp "$travail/$nom" "$point/"
   sync
   udisksctl unmount --no-user-interaction --block-device "${boucle}p1" > /dev/null

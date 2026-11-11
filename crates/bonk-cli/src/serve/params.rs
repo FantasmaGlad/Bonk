@@ -149,7 +149,7 @@ impl TransferParams {
             Some("extract") => Ok(WriteMode::Extract),
             Some(autre) => Err(failure(
                 Code::ProtocolError,
-                format!("unknown mode: '{autre}' (auto or raw)"),
+                format!("unknown mode: '{autre}' (auto, raw or extract)"),
             )),
         }
     }

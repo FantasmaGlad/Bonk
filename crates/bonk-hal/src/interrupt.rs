@@ -30,7 +30,7 @@ fn install_windows() {
     // SAFETY: the handler only does an atomic store.
     let installed = unsafe { SetConsoleCtrlHandler(Some(on_console_event), 1) };
     if installed == 0 {
-        log::warn!(target: "bonk::cli", "Ctrl+C handler not installed: {}", std::io::Error::last_os_error());
+        log::warn!(target: "bonk::hal", "Ctrl+C handler not installed: {}", std::io::Error::last_os_error());
     }
     let handle = *STOP_EVENT.get_or_init(|| {
         let name = event_name(std::process::id());
@@ -38,7 +38,7 @@ fn install_windows() {
         unsafe { CreateEventW(std::ptr::null(), 1, 0, name.as_ptr()) as isize }
     });
     if handle == 0 {
-        log::warn!(target: "bonk::cli", "stop event not created: {}", std::io::Error::last_os_error());
+        log::warn!(target: "bonk::hal", "stop event not created: {}", std::io::Error::last_os_error());
     } else {
         // SAFETY: valid handle, kept until exit.
         unsafe {
