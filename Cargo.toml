@@ -27,8 +27,9 @@ serde_json = "1.0"
 # `kv` for structured fields, `std` to install the sink.
 log = { version = "0.4", features = ["kv", "std"] }
 # `smol`: only an executor provides `iced::time::every`. PNG only: SVG would pull the unmaintained rustybuzz.
+# `fira-sans`: the window draws the same text everywhere, without the system's fonts.
 image = { version = "0.25", default-features = false, features = ["png"] }
-iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia", "crisp", "web-colors", "smol", "x11", "wayland", "image-without-codecs"] }
+iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia", "crisp", "web-colors", "smol", "x11", "wayland", "image-without-codecs", "fira-sans"] }
 iced_test = "0.14"
 rfd = "0.17"
 # `ring` chosen by hand: ureq's `rustls` option would also pull `webpki-roots`.

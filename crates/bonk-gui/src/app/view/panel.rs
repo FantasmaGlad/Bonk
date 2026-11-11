@@ -75,7 +75,7 @@ impl App {
                 "Toutes les données de ce disque seront effacées. Cette action est irréversible.",
             ))
             .size(13)
-            .color(theme::SECONDARY),
+            .color(theme::muted()),
             ring(
                 menu_button(&self.catalog, image, self.menu_open, lang),
                 self.has_focus(Focus::Menu),
@@ -86,7 +86,7 @@ impl App {
             panel = panel.push(menu_list(systems, &self.menu_filter, self.menu_index, lang));
         }
         if let CatalogState::Failed(error) = &self.catalog {
-            panel = panel.push(text(error.clone()).size(13).color(theme::SECONDARY));
+            panel = panel.push(text(error.clone()).size(13).color(theme::muted()));
         }
         if let CatalogState::Ready(systems) = &self.catalog
             && find_url(systems, image).is_some()
@@ -97,7 +97,7 @@ impl App {
                     "Lien officiel et empreinte du catalogue signé : rien à régler.",
                 ))
                 .size(13)
-                .color(theme::SECONDARY),
+                .color(theme::muted()),
             );
         }
         panel = panel.push(ring(

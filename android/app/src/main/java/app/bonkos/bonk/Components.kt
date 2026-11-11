@@ -13,36 +13,55 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 
+/** Light or dark, chosen once at start: the screen relaunches to change it. */
+internal val LocalPalette = staticCompositionLocalOf { Tokens.LIGHT }
+
 @Composable
-internal fun BonkTheme(content: @Composable () -> Unit) {
-    val ink = Color(Tokens.INK)
-    val paper = Color(Tokens.PAPER)
-    MaterialTheme(
-        colorScheme =
-            lightColorScheme(
-                primary = ink,
-                onPrimary = paper,
+internal fun BonkTheme(palette: Palette, content: @Composable () -> Unit) {
+    val ink = Color(palette.ink)
+    val paper = Color(palette.paper)
+    val scheme =
+        if (palette == Tokens.DARK) {
+            darkColorScheme(
+                primary = Color(palette.accent),
+                onPrimary = Color(palette.onAccent),
                 background = paper,
                 onBackground = ink,
-                surface = paper,
+                surface = Color(palette.surface),
                 onSurface = ink,
-                outline = ink,
-                surfaceContainer = paper,
-            ),
-        content = content,
-    )
+                outline = Color(palette.muted),
+                surfaceContainer = Color(palette.surface),
+            )
+        } else {
+            lightColorScheme(
+                primary = Color(palette.accent),
+                onPrimary = Color(palette.onAccent),
+                background = paper,
+                onBackground = ink,
+                surface = Color(palette.surface),
+                onSurface = ink,
+                outline = Color(palette.muted),
+                surfaceContainer = Color(palette.surface),
+            )
+        }
+    CompositionLocalProvider(LocalPalette provides palette) {
+        MaterialTheme(colorScheme = scheme, content = content)
+    }
 }
 
 @Composable
-internal fun Small(text: String, color: Long = Tokens.SECONDARY) {
+internal fun Small(text: String, color: Long = LocalPalette.current.muted) {
     Text(text, fontSize = Tokens.TEXT_SMALL.sp, color = Color(color))
 }
 
@@ -53,16 +72,17 @@ internal fun Body(text: String) {
 
 @Composable
 internal fun Primary(label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    val palette = LocalPalette.current
     Button(
         onClick = onClick,
         enabled = enabled,
         shape = RoundedCornerShape(Tokens.RADIUS.dp),
         colors =
             ButtonDefaults.buttonColors(
-                containerColor = Color(Tokens.INK),
-                contentColor = Color(Tokens.PAPER),
-                disabledContainerColor = Color(Tokens.HOVER),
-                disabledContentColor = Color(Tokens.SECONDARY),
+                containerColor = Color(palette.accent),
+                contentColor = Color(palette.onAccent),
+                disabledContainerColor = Color(palette.sunk),
+                disabledContentColor = Color(palette.muted),
             ),
     ) {
         Body(label)
@@ -70,11 +90,19 @@ internal fun Primary(label: String, enabled: Boolean = true, onClick: () -> Unit
 }
 
 @Composable
-internal fun Secondary(label: String, onClick: () -> Unit) {
+internal fun Secondary(label: String, chosen: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
+    val palette = LocalPalette.current
     OutlinedButton(
         onClick = onClick,
+        enabled = enabled,
         shape = RoundedCornerShape(Tokens.RADIUS.dp),
-        border = BorderStroke(1.dp, Color(Tokens.INK)),
+        // Its own outline marks the choice: never a second frame around it.
+        border = BorderStroke(if (chosen) 2.dp else 1.dp, Color(if (chosen) palette.accent else palette.muted)),
+        colors =
+            ButtonDefaults.outlinedButtonColors(
+                containerColor = Color(if (chosen) palette.accentSoft else palette.surface),
+                contentColor = Color(palette.ink),
+            ),
     ) {
         Body(label)
     }
@@ -82,10 +110,14 @@ internal fun Secondary(label: String, onClick: () -> Unit) {
 
 @Composable
 internal fun Boxed(modifier: Modifier = Modifier, selected: Boolean = false, content: @Composable () -> Unit) {
+    val palette = LocalPalette.current
     OutlinedCard(
         shape = RoundedCornerShape(Tokens.RADIUS.dp),
-        border = BorderStroke(if (selected) 3.dp else 1.dp, Color(Tokens.INK)),
-        colors = CardDefaults.outlinedCardColors(containerColor = Color(Tokens.PAPER)),
+        border = BorderStroke(if (selected) 2.dp else 1.dp, Color(if (selected) palette.accent else palette.muted)),
+        colors =
+            CardDefaults.outlinedCardColors(
+                containerColor = Color(if (selected) palette.accentSoft else palette.surface),
+            ),
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(

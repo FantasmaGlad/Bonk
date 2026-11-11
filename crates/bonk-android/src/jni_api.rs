@@ -122,13 +122,24 @@ pub extern "system" fn Java_app_bonkos_bonk_Native_dispatch<'caller>(
     .resolve::<jni::errors::ThrowRuntimeExAndDefault>()
 }
 
+/// The choices kept in the app's preferences (`auto`, `en`, `fr`; `auto`, `light`, `dark`), and the
+/// system's language for `auto`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_app_bonkos_bonk_Native_setLanguage<'caller>(
-    _env: EnvUnowned<'caller>,
+pub extern "system" fn Java_app_bonkos_bonk_Native_start<'caller>(
+    mut env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
-    french: jboolean,
+    lang: JString<'caller>,
+    theme: JString<'caller>,
+    system_french: jboolean,
+    show_all: jboolean,
 ) {
-    screen::set_language(french);
+    env.with_env(|env| -> Result<_, Error> {
+        let lang = text_of(env, &lang)?;
+        let theme = text_of(env, &theme)?;
+        crate::settings::start(&lang, &theme, system_french, show_all);
+        Ok(())
+    })
+    .resolve::<jni::errors::ThrowRuntimeExAndDefault>()
 }
 
 /// Checks the signature of the catalog Kotlin downloaded (system HTTPS) and hands it to the screen. Without

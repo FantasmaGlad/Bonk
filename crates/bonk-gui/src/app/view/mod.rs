@@ -1,16 +1,18 @@
-use bonk_hal::{Disk, Eligibility};
-use iced::widget::{
-    Column, button, center, checkbox, column, container, opaque, row, scrollable, stack, text,
-};
+use iced::widget::{center, column, container, opaque, stack, text};
 use iced::{Element, Fill};
 
 use crate::theme;
 
-use super::navigation::LIST;
+use bonk_ui::settings::Screen;
+
 use super::{App, Focus, Message};
 
+mod command_bar;
 mod disk;
+mod header;
+mod list;
 mod panel;
+mod settings;
 mod vault;
 
 #[cfg(test)]
@@ -39,186 +41,33 @@ pub(super) fn boxed<'a>(body: Element<'a, Message>) -> Element<'a, Message> {
 
 impl App {
     pub(crate) fn view(&self) -> Element<'_, Message> {
-        let lang = self.lang;
-        let entries = self.entries();
-        let shown = entries.len();
-
-        let header = row![
-            column![
-                text("BONK").size(28),
-                text(lang.pick(
-                    "Disk detection. A write needs an offered disk, a summary and three seconds to think.",
-                    "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
-                ))
-                .size(14)
-                .color(theme::SECONDARY),
-            ]
-            .spacing(4)
-            .width(Fill),
-            // Each language is named in itself: findable without reading the other.
-            ring(
-                button(text(lang.pick("Français", "English")).size(14))
-                    .on_press(Message::SwitchLanguage)
-                    .padding([6, 14])
-                    .style(theme::card_button(false)),
-                self.has_focus(Focus::Language),
-            ),
-        ]
-        .align_y(iced::Center);
-
-        let controls = self.controls();
-
-        let body = match self.active_panel() {
-            Some(panel) => column![panel, self.disk_list(entries)].spacing(8).into(),
-            None => self.disk_list(entries),
-        };
-
-        let equivalent = row![
-            column![
-                text(lang.pick("Equivalent command", "Commande équivalente"))
-                    .size(13)
-                    .color(theme::SECONDARY),
-                text(self.equivalents().join("\n"))
-                    .size(13)
-                    .font(iced::Font::MONOSPACE),
-            ]
-            .width(Fill),
-            ring(
-                button(text(lang.pick("Copy", "Copier")).size(14))
-                    .on_press(Message::Copy)
-                    .padding([6, 14])
-                    .style(theme::primary_button),
-                self.focus == Some(Focus::Copy),
-            ),
-        ]
-        .align_y(iced::Center);
-
-        let status = text(self.status_line(shown))
-            .size(13)
-            .color(theme::SECONDARY);
-        let mut content = column![header, controls, status].spacing(14);
-        if let Some(notice) = self.requested_notice() {
-            content = content.push(notice);
+        // Until the system says light or dark, nothing is drawn: no flash of the wrong theme.
+        if self.dark().is_none() {
+            return container(text("")).width(Fill).height(Fill).into();
         }
-        let window = container(content.push(body).push(equivalent))
-            .padding(20)
-            .width(Fill)
-            .height(Fill);
+        let page = match self.screen {
+            Screen::Main => self.main_page(),
+            Screen::Settings => self.settings_page(),
+        };
+        let window = container(page).padding(20).width(Fill).height(Fill);
         match self.internal_to_confirm() {
-            Some(disk) => stack![window, opaque(center(internal_dialog(disk, lang)))].into(),
+            Some(disk) => stack![window, opaque(center(internal_dialog(disk, self.lang)))].into(),
             None => window.into(),
         }
     }
 
-    /// Nothing when the window was not opened for an image, or once a draft carries it.
-    fn requested_notice(&self) -> Option<Element<'_, Message>> {
-        let disk_chosen = matches!(self.write, super::WriteState::Draft { .. });
-        let (id, state) = self.requested()?;
-        bonk_ui::text::requested_line(self.lang, id, state, disk_chosen)
-            .map(|line| text(line).size(14).into())
-    }
-
-    fn controls(&self) -> Element<'_, Message> {
-        let lang = self.lang;
-        row![
-            ring(
-                button(text(lang.pick("Refresh", "Actualiser")).size(14))
-                    .on_press(Message::Refresh)
-                    .padding([6, 14])
-                    .style(theme::primary_button),
-                self.has_focus(Focus::Refresh),
-            ),
-            ring(
-                checkbox(self.show_internal)
-                    .label(lang.pick("Internal non-system disks", "Disques internes non système"))
-                    .on_toggle(Message::ToggleInternal)
-                    .size(18)
-                    .style(theme::checkbox_style),
-                self.has_focus(Focus::Internal),
-            ),
-            ring(
-                checkbox(self.allow_virtual)
-                    .label(lang.pick("Virtual disks (test mode)", "Disques virtuels (mode test)"))
-                    .on_toggle(Message::ToggleVirtual)
-                    .size(18)
-                    .style(theme::checkbox_style),
-                self.has_focus(Focus::Virtual),
-            ),
-            ring(
-                checkbox(self.show_all)
-                    .label(lang.pick(
-                        "Also show excluded disks",
-                        "Afficher aussi les disques écartés"
-                    ))
-                    .on_toggle(Message::ToggleAll)
-                    .size(18)
-                    .style(theme::checkbox_style),
-                self.has_focus(Focus::All),
-            ),
-        ]
-        .spacing(12)
-        .align_y(iced::Center)
-        .into()
-    }
-
-    /// Or what stands for it: detection error, empty list.
-    fn disk_list<'a>(&'a self, entries: Vec<(&'a Disk, Eligibility)>) -> Element<'a, Message> {
-        let lang = self.lang;
-        if let Some(erreur) = &self.error {
-            container(
-                column![
-                    text(lang.pick(
-                        "ERROR: the disks could not be detected.",
-                        "ERREUR : les disques n'ont pas pu être détectés."
-                    ))
-                    .size(16),
-                    text(erreur.as_str()).size(14).color(theme::SECONDARY),
-                    text(lang.pick(
-                        "No disk is offered while detection fails.",
-                        "Aucun disque n'est proposé tant que la détection échoue."
-                    ))
-                    .size(14)
-                    .color(theme::SECONDARY),
-                ]
-                .spacing(6),
-            )
-            .padding(12)
-            .style(theme::panel)
-            .width(Fill)
-            .into()
-        } else if entries.is_empty() {
-            let message = if self.loading && !self.answered {
-                lang.pick("Detecting...", "Détection en cours...")
-            } else if self.show_all {
-                lang.pick("No disk detected.", "Aucun disque détecté.")
-            } else {
-                lang.pick(
-                    "No disk offered. Plug in a USB drive or an SD card, or tick \"Also show excluded disks\" to see why this machine's disks are excluded.",
-                    "Aucun disque proposé. Branchez une clé USB ou une carte SD, ou cochez « Afficher aussi les disques écartés » pour voir pourquoi les disques de cette machine sont écartés.",
-                )
-            };
-            container(text(message).size(14).color(theme::SECONDARY))
-                .padding(12)
-                .into()
-        } else {
-            let mut cards: Vec<Element<'_, Message>> = Vec::new();
-            for (disk, verdict) in entries {
-                cards.push(self.card(disk, verdict));
-                // The write panel is outside the card: a click in it does not close the disk.
-                if self.selected.as_deref() == Some(disk.id.as_str())
-                    && let Some(panel) = self.write_panel(disk)
-                {
-                    cards.push(panel);
-                }
-                if let Some(panel) = self.vault_panel(disk) {
-                    cards.push(panel);
-                }
-            }
-            scrollable(Column::with_children(cards).spacing(4).width(Fill))
-                .id(LIST)
-                .height(Fill)
-                .into()
+    fn main_page(&self) -> Element<'_, Message> {
+        let entries = self.entries();
+        let shown = entries.len();
+        let body = match self.active_panel() {
+            Some(panel) => column![panel, self.disk_list(entries)].spacing(8).into(),
+            None => self.disk_list(entries),
+        };
+        let mut content = column![self.header(shown)].spacing(14);
+        if let Some(notice) = self.requested_notice() {
+            content = content.push(notice);
         }
+        content.push(body).push(self.command_bar()).into()
     }
 
     pub(super) fn has_focus(&self, target: Focus) -> bool {

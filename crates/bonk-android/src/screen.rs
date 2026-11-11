@@ -148,7 +148,7 @@ fn message_of(input: &Value, model: &Model) -> Option<Message> {
         "clock" => Message::Clock,
         "select" => Message::Select(text_of("id")?),
         "show_all" => Message::ToggleAll(flag()),
-        "language" => Message::SwitchLanguage,
+        "settings" => crate::settings::message_of(input)?,
         "menu" => Message::ToggleMenu,
         "category" => Message::MenuCategory(text_of("value")),
         "system" => Message::MenuSystem(text_of("value")),
@@ -207,10 +207,12 @@ fn effects_out(model: &mut Model, effects: Vec<Effect>, draft: Option<Value>) ->
             Effect::Enumerate => out.push(json!({"do": "enumerate"})),
             Effect::LoadCatalog => out.push(json!({"do": "catalog"})),
             Effect::PickImage => out.push(json!({"do": "pick"})),
-            Effect::SaveLanguage(lang) => out.push(json!({
-                "do": "save_language",
-                "value": if lang == Lang::Fr { "fr" } else { "en" },
-            })),
+            Effect::SaveSetting { key, value } => {
+                out.push(json!({"do": "save_setting", "key": key, "value": value}));
+            }
+            Effect::Relaunch { key, value } => {
+                out.push(json!({"do": "relaunch", "key": key, "value": value}));
+            }
             // No Tor on the phone without a dedicated app: the option stays off.
             Effect::DetectTor => {
                 let _ = model.update(Message::TorDetected(None));
@@ -543,11 +545,8 @@ fn panel_state(model: &Model) -> Value {
 pub fn state(model: &Model) -> Value {
     let lang = model.lang;
     json!({
-        "intro": lang.pick(
-            "Disk detection. A write needs an offered disk, a summary and three seconds to think.",
-            "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
-        ),
-        "language": lang.pick("Français", "English"),
+        "settings_button": lang.pick("Settings", "Paramètres"),
+        "settings": crate::settings::state(model),
         // The app reads its own texts (Android resources, notification) in this language.
         "lang": lang.pick("en", "fr"),
         "status": model.status_line(model.entries().len()),
@@ -555,8 +554,6 @@ pub fn state(model: &Model) -> Value {
             let disk_chosen = matches!(model.write, WriteState::Draft { .. });
             text::requested_line(lang, id, requested, disk_chosen)
         }),
-        "show_all": model.show_all,
-        "show_all_label": lang.pick("Also show excluded disks", "Afficher aussi les disques écartés"),
         "empty": lang.pick(
             "No disk offered. Plug in a USB drive or an SD card with an adapter.",
             "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
@@ -598,11 +595,6 @@ pub fn dispatch(input: &str) -> String {
     effects.extend(open_link(&mut model, &input));
     let effects = effects_out(&mut model, effects, draft);
     json!({"state": state(&model), "effects": effects}).to_string()
-}
-
-/// The system's language, or the one chosen last time.
-pub fn set_language(fr: bool) {
-    lock(&MODEL).lang = if fr { Lang::Fr } else { Lang::En };
 }
 
 #[cfg(test)]
@@ -881,7 +873,14 @@ mod tests {
                 Effect::Enumerate,
                 Effect::LoadCatalog,
                 Effect::PickImage,
-                Effect::SaveLanguage(Lang::Fr),
+                Effect::SaveSetting {
+                    key: "view.show_all",
+                    value: "true",
+                },
+                Effect::Relaunch {
+                    key: "theme",
+                    value: "dark",
+                },
                 Effect::StartWrite(Vec::new()),
                 Effect::PickVaultIso,
                 Effect::RunVault(bonk_ui::vault::vault_args(
@@ -910,7 +909,11 @@ mod tests {
             json!({"type": "tick"}),
             json!({"type": "clock"}),
             json!({"type": "select", "id": "usb-S1-001-002"}),
-            json!({"type": "language"}),
+            json!({"type": "show_all", "on": true}),
+            json!({"type": "settings", "action": "open"}),
+            json!({"type": "settings", "action": "close"}),
+            json!({"type": "settings", "action": "language", "value": "fr"}),
+            json!({"type": "settings", "action": "theme", "value": "dark"}),
             json!({"type": "menu"}),
             json!({"type": "category", "value": "Servers"}),
             json!({"type": "category"}),
@@ -1035,14 +1038,16 @@ mod tests {
     #[test]
     fn l_etat_dit_la_langue_choisie() {
         let mut model = loaded();
-        let avant = state(&model)["lang"].clone();
-        let _ = model.update(Message::SwitchLanguage);
-        let apres = state(&model)["lang"].clone();
-        assert_ne!(avant, apres);
-        assert!(
-            ["fr", "en"].contains(&apres.as_str().unwrap_or_default()),
-            "{apres}"
+        model.lang = Lang::Fr;
+        assert_eq!(state(&model)["lang"], "fr");
+        // A new language comes by a relaunch, never while the screen runs.
+        let input = json!({"type": "settings", "action": "language", "value": "en"});
+        let effects = model.update(message_of(&input, &model).unwrap_or(Message::Tick));
+        assert_eq!(
+            effects_out(&mut model, effects, None),
+            [json!({"do": "relaunch", "key": "lang", "value": "en"})]
         );
+        assert_eq!(state(&model)["lang"], "fr");
     }
 
     #[test]

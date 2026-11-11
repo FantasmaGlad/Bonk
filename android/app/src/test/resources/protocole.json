@@ -10,8 +10,14 @@
       "do": "pick"
     },
     {
-      "do": "save_language",
-      "value": "fr"
+      "do": "save_setting",
+      "key": "view.show_all",
+      "value": "true"
+    },
+    {
+      "do": "relaunch",
+      "key": "theme",
+      "value": "dark"
     },
     {
       "device": "/dev/bus/usb/001/002",
@@ -75,7 +81,26 @@
       "type": "select"
     },
     {
-      "type": "language"
+      "on": true,
+      "type": "show_all"
+    },
+    {
+      "action": "open",
+      "type": "settings"
+    },
+    {
+      "action": "close",
+      "type": "settings"
+    },
+    {
+      "action": "language",
+      "type": "settings",
+      "value": "fr"
+    },
+    {
+      "action": "theme",
+      "type": "settings",
+      "value": "dark"
     },
     {
       "type": "menu"
@@ -190,14 +215,12 @@
     {
       "disks": [],
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
-      "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
       "lang": "fr",
-      "language": "English",
       "notice": "Lecture du catalogue pour trouver debian-13-netinst-x86_64...",
       "panel": null,
       "running": false,
-      "show_all": false,
-      "show_all_label": "Afficher aussi les disques écartés",
+      "settings": null,
+      "settings_button": "Paramètres",
       "status": "0 disque(s) affiché(s) sur 0 détecté(s). Actualisation automatique toutes les 2 s.",
       "vault": null
     },
@@ -214,9 +237,7 @@
         }
       ],
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
-      "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
       "lang": "fr",
-      "language": "English",
       "notice": null,
       "panel": {
         "advanced": false,
@@ -266,8 +287,8 @@
         "warning": "Toutes les données de ce disque seront effacées. Cette action est irréversible."
       },
       "running": false,
-      "show_all": false,
-      "show_all_label": "Afficher aussi les disques écartés",
+      "settings": null,
+      "settings_button": "Paramètres",
       "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s.",
       "vault": null
     },
@@ -284,9 +305,7 @@
         }
       ],
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
-      "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
       "lang": "fr",
-      "language": "English",
       "notice": null,
       "panel": {
         "cancel": "Annuler",
@@ -295,8 +314,8 @@
         "line": "Écriture : 1,0 Mo sur 4,1 Mo  (1,0 Mo/s)"
       },
       "running": true,
-      "show_all": false,
-      "show_all_label": "Afficher aussi les disques écartés",
+      "settings": null,
+      "settings_button": "Paramètres",
       "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s.",
       "vault": null
     },
@@ -313,9 +332,7 @@
         }
       ],
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
-      "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
       "lang": "fr",
-      "language": "English",
       "notice": null,
       "panel": {
         "close": "Fermer",
@@ -323,8 +340,8 @@
         "message": "ÉCHEC : L'identité du disque a changé avant l'écriture (the drive changed) [E2002]"
       },
       "running": false,
-      "show_all": false,
-      "show_all_label": "Afficher aussi les disques écartés",
+      "settings": null,
+      "settings_button": "Paramètres",
       "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s.",
       "vault": null
     },
@@ -341,9 +358,7 @@
         }
       ],
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
-      "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
       "lang": "fr",
-      "language": "English",
       "notice": null,
       "panel": {
         "advanced": false,
@@ -393,8 +408,8 @@
         "warning": "Toutes les données de ce disque seront effacées. Cette action est irréversible."
       },
       "running": false,
-      "show_all": false,
-      "show_all_label": "Afficher aussi les disques écartés",
+      "settings": null,
+      "settings_button": "Paramètres",
       "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s.",
       "vault": {
         "busy": false,
@@ -439,9 +454,7 @@
         }
       ],
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
-      "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
       "lang": "fr",
-      "language": "English",
       "notice": null,
       "panel": {
         "advanced": false,
@@ -491,8 +504,8 @@
         "warning": "Toutes les données de ce disque seront effacées. Cette action est irréversible."
       },
       "running": true,
-      "show_all": false,
-      "show_all_label": "Afficher aussi les disques écartés",
+      "settings": null,
+      "settings_button": "Paramètres",
       "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s.",
       "vault": {
         "busy": true,

@@ -45,6 +45,11 @@ internal fun Screen(
     errors: Map<String, String>,
     send: (ToRust) -> Unit,
 ) {
+    val settings = state.settings
+    if (settings != null) {
+        SettingsPage(settings, send)
+        return
+    }
     Column(
         Modifier.safeDrawingPadding()
             .padding(Tokens.SPACE_PAGE.dp)
@@ -53,9 +58,8 @@ internal fun Screen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("BONK", fontSize = Tokens.TEXT_TITLE.sp, modifier = Modifier.weight(1f))
-            Secondary(state.language) { send(SwitchLanguage) }
+            Secondary(state.settingsButton) { send(SettingsAction("open")) }
         }
-        Small(state.intro)
         Small(state.status)
         state.notice?.let { Body(it) }
         val waiting = remember(revision, errors) { usb.drives().filterNot(usb::hasPermission) }
@@ -63,7 +67,7 @@ internal fun Screen(
         errors.forEach { (device, error) ->
             Boxed {
                 Body(stringResource(R.string.drive_unreadable, device))
-                Small(error, Tokens.INK)
+                Small(error, LocalPalette.current.ink)
             }
         }
         if (state.disks.isEmpty() && waiting.isEmpty() && errors.isEmpty()) Body(state.empty)
@@ -84,12 +88,12 @@ internal fun Screen(
                 // Without a known total the bar scrolls instead of lying about progress.
                 val fraction = panel.fraction
                 if (fraction == null) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Color(Tokens.INK))
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Color(LocalPalette.current.ink))
                 } else {
                     LinearProgressIndicator(
                         progress = { fraction },
                         modifier = Modifier.fillMaxWidth(),
-                        color = Color(Tokens.INK),
+                        color = Color(LocalPalette.current.ink),
                     )
                 }
                 Primary(panel.cancel) { send(Cancel) }
@@ -102,7 +106,7 @@ internal fun Screen(
         }
         // Absent from the published build: only useful with the test key named at build time.
         if (BuildConfig.BENCH_SERIAL.isNotEmpty()) {
-            HorizontalDivider(color = Color(Tokens.INK))
+            HorizontalDivider(color = Color(LocalPalette.current.ink))
             Tests(usb, revision)
         }
     }
@@ -124,7 +128,7 @@ private fun DiskCard(disk: DiskView, send: (ToRust) -> Unit) {
     Boxed(modifier, disk.selected) {
         Row {
             Text(disk.model, fontSize = Tokens.TEXT_BODY.sp, modifier = Modifier.weight(1f))
-            Small(disk.badge, Tokens.INK)
+            Small(disk.badge, LocalPalette.current.ink)
         }
         Small(disk.facts)
         Small(disk.state)
@@ -174,7 +178,7 @@ private fun Menu(menu: MenuView, send: (ToRust) -> Unit) {
             val index = row.index
             val modifier = if (index != null) Modifier.clickable { send(Choose(index)) } else Modifier
             Boxed(modifier = modifier) {
-                Small(row.title, if (index != null) Tokens.INK else Tokens.SECONDARY)
+                Small(row.title, if (index != null) LocalPalette.current.ink else LocalPalette.current.muted)
                 row.note?.let { Small(it) }
             }
         }
@@ -185,7 +189,7 @@ private fun Menu(menu: MenuView, send: (ToRust) -> Unit) {
 private fun Draft(panel: DraftPanel, send: (ToRust) -> Unit) {
     Boxed {
         Body(panel.title)
-        panel.summary?.let { Small(it, Tokens.INK) }
+        panel.summary?.let { Small(it, LocalPalette.current.ink) }
         Small(panel.warning)
         Menu(panel.menu, send)
         Secondary(panel.advancedButton) { send(ToggleAdvanced) }
@@ -205,11 +209,11 @@ private fun Draft(panel: DraftPanel, send: (ToRust) -> Unit) {
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(panel.raw, { send(Raw(it)) })
-                Small(panel.rawLabel, Tokens.INK)
+                Small(panel.rawLabel, LocalPalette.current.ink)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(panel.mbr, { send(Mbr(it)) })
-                Small(panel.mbrLabel, Tokens.INK)
+                Small(panel.mbrLabel, LocalPalette.current.ink)
             }
         }
         Primary(panel.button, panel.enabled) { send(Start) }
@@ -221,24 +225,24 @@ private fun Draft(panel: DraftPanel, send: (ToRust) -> Unit) {
 private fun Vault(vault: VaultView, send: (ToRust) -> Unit) {
     Boxed {
         Body(vault.title)
-        vault.lines.forEach { Small(it, Tokens.INK) }
+        vault.lines.forEach { Small(it, LocalPalette.current.ink) }
         if (vault.busy) {
             Small(stringResource(R.string.do_not_unplug))
             val fraction = vault.fraction
             if (fraction == null) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Color(Tokens.INK))
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Color(LocalPalette.current.ink))
             } else {
                 LinearProgressIndicator(
                     progress = { fraction },
                     modifier = Modifier.fillMaxWidth(),
-                    color = Color(Tokens.INK),
+                    color = Color(LocalPalette.current.ink),
                 )
             }
         }
         vault.images.forEach { image ->
             Row(horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp)) {
                 Small(image.size)
-                Small(image.name, Tokens.INK)
+                Small(image.name, LocalPalette.current.ink)
             }
         }
         vault.buttons.forEach { button ->

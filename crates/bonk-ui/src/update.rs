@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use bonk_core::format::table::TableKind;
 use bonk_core::write::Phase;
-use bonk_hal::{Disk, Lang};
+use bonk_hal::Disk;
 
 use crate::catalog::{self, CatalogState, ChoiceSource};
 use crate::command::WriteView;
@@ -14,10 +14,6 @@ impl Model {
     #[allow(clippy::too_many_lines)]
     pub fn apply(&mut self, message: Message) -> Effects {
         match message {
-            Message::Refresh => {
-                self.focus = Some(Focus::Refresh);
-                self.reload()
-            }
             Message::Tick => {
                 log::trace!(target: "bonk::gui", "tick");
                 self.reload()
@@ -26,15 +22,15 @@ impl Model {
             Message::Loaded(Err(erreur)) => self.on_detection_failed(erreur),
             Message::ToggleInternal(on) => {
                 self.show_internal = on;
-                self.after_view_option(Focus::Internal)
+                self.after_view_option(Focus::Internal, "view.show_internal", on)
             }
             Message::ToggleVirtual(on) => {
                 self.allow_virtual = on;
-                self.after_view_option(Focus::Virtual)
+                self.after_view_option(Focus::Virtual, "view.allow_virtual", on)
             }
             Message::ToggleAll(on) => {
                 self.show_all = on;
-                self.after_view_option(Focus::All)
+                self.after_view_option(Focus::All, "view.show_all", on)
             }
             Message::Select(id) => {
                 self.focus = Some(Focus::Disk(id.clone()));
@@ -98,7 +94,6 @@ impl Model {
                 self.tor = address;
                 Vec::new()
             }
-            Message::SwitchLanguage => self.switch_language(),
             Message::ToggleTor(on) => {
                 self.use_tor = on && self.tor.is_some();
                 self.focus = Some(Focus::Tor);
@@ -159,6 +154,7 @@ impl Model {
                 self.on_write_event(event);
                 Vec::new()
             }
+            Message::Settings(message) => self.apply_settings(message),
             Message::Vault(message) => self.apply_vault(message),
         }
     }
@@ -224,21 +220,15 @@ impl Model {
         Vec::new()
     }
 
-    /// A display box changed: the list too, hence the panel and the focus.
-    fn after_view_option(&mut self, focus: Focus) -> Effects {
+    /// A display box changed: the list too, hence the panel and the focus. Kept for the next start.
+    fn after_view_option(&mut self, focus: Focus, key: &'static str, on: bool) -> Effects {
         self.focus = Some(focus);
         self.sync_write();
         self.fix_focus();
-        Vec::new()
-    }
-
-    fn switch_language(&mut self) -> Effects {
-        self.lang = match self.lang {
-            Lang::En => Lang::Fr,
-            Lang::Fr => Lang::En,
-        };
-        self.focus = Some(Focus::Language);
-        vec![Effect::SaveLanguage(self.lang)]
+        vec![Effect::SaveSetting {
+            key,
+            value: if on { "true" } else { "false" },
+        }]
     }
 
     fn on_catalog_loaded(&mut self, result: Result<Vec<catalog::System>, String>) -> Effects {

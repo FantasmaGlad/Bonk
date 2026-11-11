@@ -12,6 +12,7 @@ fn main() -> ExitCode {
                     show_all: view.show_all,
                 },
                 view.lang,
+                bonk_gui::ThemeChoice::from_config(Some(view.theme)),
                 request.image,
             )
         }

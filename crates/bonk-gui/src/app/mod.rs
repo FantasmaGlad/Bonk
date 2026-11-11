@@ -1,5 +1,6 @@
 mod catalog;
 mod navigation;
+mod settings;
 #[cfg(test)]
 mod tests;
 mod view;
@@ -27,10 +28,21 @@ use crate::transfer;
 #[cfg(test)]
 use crate::transfer::Outcome;
 use bonk_ui::command::ViewOptions;
+use bonk_ui::settings::{LangChoice, SettingsMessage, ThemeChoice};
 
 use navigation::{LIST, map_key};
 
-#[derive(Debug, Default)]
+/// What the window opens with: `bonk config`, the command line and the system.
+#[derive(Debug, Default, Clone)]
+pub(crate) struct Start {
+    pub(crate) view: ViewOptions,
+    /// `None`: the system's language.
+    pub(crate) lang: Option<Lang>,
+    pub(crate) theme: ThemeChoice,
+    pub(crate) image: Option<String>,
+}
+
+#[derive(Debug)]
 pub(crate) struct App {
     model: Model,
     /// `bonk` itself, except in tests.
@@ -56,26 +68,40 @@ fn snap(id: &'static str, y: f32) -> Task<Message> {
 }
 
 impl App {
-    pub(crate) fn new(
-        initial: ViewOptions,
-        lang: Lang,
-        image: Option<String>,
-    ) -> (Self, Task<Message>) {
-        let (mut model, mut effects) = Model::new(initial, lang);
-        if let Some(id) = image {
+    pub(crate) fn new(start: Start) -> (Self, Task<Message>) {
+        let lang = start.lang.unwrap_or_else(crate::locale::detect);
+        let (mut model, mut effects) = Model::new(start.view, lang);
+        model.lang_choice = LangChoice::from_lang(start.lang);
+        model.theme_choice = start.theme;
+        if let Some(id) = start.image {
             effects.extend(model.request_image(id));
         }
         let app = Self {
             model,
             program: None,
         };
-        let task = app.run(effects);
+        app.draw_theme();
+        let mut task = app.run(effects);
+        if app.dark().is_none() {
+            let system = iced::system::theme().map(|mode| {
+                Message::Settings(SettingsMessage::SystemDark(mode == iced::theme::Mode::Dark))
+            });
+            task = Task::batch([system, task]);
+        }
         (app, task)
     }
 
     pub(crate) fn update(&mut self, message: Message) -> Task<Message> {
         let effects = self.model.update(message);
+        self.draw_theme();
         self.run(effects)
+    }
+
+    /// Once known, light or dark stays for the whole run.
+    fn draw_theme(&self) {
+        if let Some(dark) = self.dark() {
+            theme::choose(dark);
+        }
     }
 
     fn program(&self) -> PathBuf {
@@ -107,12 +133,17 @@ impl App {
             }
             Effect::Copy(text) => iced::clipboard::write(text),
             Effect::PickImage => Task::perform(pick_image(self.lang), Message::ImagePicked),
-            Effect::SaveLanguage(lang) => {
+            Effect::SaveSetting { key, value } => {
                 let program = self.program();
-                Task::perform(async move { save_language(&program, lang) }, |()| {
-                    Message::Refresh
-                })
-                .discard()
+                Task::perform(async move { settings::save(&program, key, value) }, |_| ()).discard()
+            }
+            Effect::Relaunch { key, value } => {
+                let program = self.program();
+                Task::perform(
+                    async move { settings::save(&program, key, value) && settings::relaunch() },
+                    |started| started,
+                )
+                .then(|started| if started { iced::exit() } else { Task::none() })
             }
             Effect::StartWrite(args) => {
                 Task::run(transfer::spawn(&self.program(), &args), Message::Write)
@@ -160,24 +191,6 @@ impl App {
 
     pub(crate) fn theme(&self) -> Theme {
         theme::bonk()
-    }
-}
-
-/// The window switches language even if saving fails: only the next launch forgets it. The setting goes
-/// through the command line, the configuration file's only owner.
-fn save_language(program: &std::path::Path, lang: Lang) {
-    let value = match lang {
-        Lang::En => "en",
-        Lang::Fr => "fr",
-    };
-    let mut command = std::process::Command::new(program);
-    bonk_hal::console::hide_child_console(&mut command);
-    let saved = command
-        .args(["config", "set", "lang", value])
-        .stdin(std::process::Stdio::null())
-        .output();
-    if !saved.as_ref().is_ok_and(|output| output.status.success()) {
-        log::warn!(target: "bonk::gui", "language choice not saved");
     }
 }
 

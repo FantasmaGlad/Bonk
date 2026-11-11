@@ -394,7 +394,16 @@ fn explain_schema_et_configuration() {
             .any(|n| n == "serve-request")
     );
     assert_eq!(response(&out, 6)["result"]["output"], "true");
-    assert_eq!(response(&out, 7)["result"]["settings"][3]["value"], "true");
+    let settings = response(&out, 7)["result"]["settings"].clone();
+    let show_all = settings
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|setting| setting["key"] == "view.show_all");
+    assert_eq!(
+        show_all.map(|setting| &setting["value"]),
+        Some(&serde_json::json!("true"))
+    );
     assert_eq!(response(&out, 8)["error"]["code"], "E5002");
     let _ = std::fs::remove_file(&file);
 }

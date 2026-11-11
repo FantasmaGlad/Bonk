@@ -83,6 +83,7 @@ pub(super) fn app_sur_disque_interne() -> App {
     let mut app = App {
         model: Model {
             show_internal: true,
+            system_dark: Some(false),
             ..Model::default()
         },
         program: Some(PathBuf::from("/bonk-programme-inexistant")),

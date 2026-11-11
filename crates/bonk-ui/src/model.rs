@@ -18,7 +18,16 @@ pub enum Effect {
     DetectTor,
     Copy(String),
     PickImage,
-    SaveLanguage(Lang),
+    /// Kept for the next start (`bonk config set`); takes effect now.
+    SaveSetting {
+        key: &'static str,
+        value: &'static str,
+    },
+    /// Kept, then the interface starts again: language and theme never change while it runs.
+    Relaunch {
+        key: &'static str,
+        value: &'static str,
+    },
     /// `bonk write` arguments; an interface without a command line ignores them.
     StartWrite(Vec<String>),
     CancelWrite(u32),
@@ -33,7 +42,6 @@ pub type Effects = Vec<Effect>;
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    Refresh,
     Tick,
     /// The error is already text (`EnumerateError` is not `Clone`).
     Loaded(Result<Vec<Disk>, String>),
@@ -49,7 +57,6 @@ pub enum Message {
     ToggleRaw(bool),
     TorDetected(Option<String>),
     ToggleTor(bool),
-    SwitchLanguage,
     ToggleMbr(bool),
     BrowseImage,
     /// `None`: closed without a choice.
@@ -73,6 +80,7 @@ pub enum Message {
     CloseInternal,
     Write(Event),
     Vault(crate::vault::VaultMessage),
+    Settings(crate::settings::SettingsMessage),
 }
 
 /// Each has the same effect as a click.
@@ -88,7 +96,11 @@ pub enum Nav {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Focus {
-    Refresh,
+    /// Opens the settings page.
+    Settings,
+    CloseSettings,
+    Language(crate::settings::LangChoice),
+    Theme(crate::settings::ThemeChoice),
     Internal,
     Virtual,
     All,
@@ -99,7 +111,6 @@ pub enum Focus {
     Menu,
     Advanced,
     Tor,
-    Language,
     Raw,
     Mbr,
     /// Write panel button: write, cancel or close depending on the state.
@@ -168,6 +179,11 @@ pub struct Model {
     /// chooses something else. It only ever names a catalog entry, and never starts a write.
     pub requested: Option<String>,
     pub vault: crate::vault::VaultState,
+    pub screen: crate::settings::Screen,
+    pub lang_choice: crate::settings::LangChoice,
+    pub theme_choice: crate::settings::ThemeChoice,
+    /// The system's answer for [`crate::settings::ThemeChoice::System`]; `None` until it comes.
+    pub system_dark: Option<bool>,
 }
 
 /// Where the image the window was opened for stands.
@@ -183,7 +199,6 @@ pub enum Requested<'a> {
 
 pub fn ui_event(message: &Message) -> Option<(&'static str, String)> {
     Some(match message {
-        Message::Refresh => ("click_refresh", String::new()),
         Message::ToggleInternal(on) => ("toggle_internal", on.to_string()),
         Message::ToggleVirtual(on) => ("toggle_virtual", on.to_string()),
         Message::ToggleAll(on) => ("toggle_all", on.to_string()),
@@ -198,7 +213,6 @@ pub fn ui_event(message: &Message) -> Option<(&'static str, String)> {
         Message::HashInput(text) => ("type_hash", format!("{} caractères", text.chars().count())),
         Message::ToggleRaw(on) => ("toggle_raw", on.to_string()),
         Message::ToggleTor(on) => ("toggle_tor", on.to_string()),
-        Message::SwitchLanguage => ("switch_language", String::new()),
         Message::TorDetected(found) => ("tor_detected", found.is_some().to_string()),
         Message::ToggleMbr(on) => ("toggle_mbr", on.to_string()),
         Message::BrowseImage => ("click_browse", String::new()),
@@ -229,6 +243,17 @@ pub fn ui_event(message: &Message) -> Option<(&'static str, String)> {
             crate::vault::VaultMessage::Update => ("click_update_vault", String::new()),
             crate::vault::VaultMessage::Cancel => ("click_cancel_vault", String::new()),
             crate::vault::VaultMessage::Event(_) => return None,
+        },
+        Message::Settings(message) => match message {
+            crate::settings::SettingsMessage::Open => ("click_settings", String::new()),
+            crate::settings::SettingsMessage::Close => ("click_close_settings", String::new()),
+            crate::settings::SettingsMessage::Language(choice) => {
+                ("choose_language", choice.config_value().to_owned())
+            }
+            crate::settings::SettingsMessage::Theme(choice) => {
+                ("choose_theme", choice.config_value().to_owned())
+            }
+            crate::settings::SettingsMessage::SystemDark(_) => return None,
         },
         Message::Tick
         | Message::Clock

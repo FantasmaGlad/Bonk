@@ -170,15 +170,14 @@ fn tor_propose_seulement_s_il_est_la_jamais_coche_seul() {
 }
 
 #[test]
-fn la_langue_change_d_un_clic_et_nomme_l_autre() {
+fn la_langue_se_choisit_dans_les_parametres_et_relance() {
+    use bonk_ui::settings::{LangChoice, SettingsMessage};
     let mut app = app_avec_panneau();
     assert!(app.status_line(1).contains("disque(s)"));
-    let _ = app.update(Message::SwitchLanguage);
-    assert_eq!(app.lang, bonk_hal::Lang::En);
-    assert!(
-        app.status_line(1).contains("disk(s)"),
-        "{}",
-        app.status_line(1)
-    );
-    assert_eq!(app.focus, Some(Focus::Language));
+    let _ = app.update(Message::Settings(SettingsMessage::Open));
+    let _ = app.update(Message::Settings(SettingsMessage::Language(LangChoice::En)));
+    // The window keeps its language until the relaunch.
+    assert_eq!(app.lang, bonk_hal::Lang::Fr);
+    assert_eq!(app.lang_choice, LangChoice::En);
+    assert_eq!(app.focus, Some(Focus::Language(LangChoice::En)));
 }

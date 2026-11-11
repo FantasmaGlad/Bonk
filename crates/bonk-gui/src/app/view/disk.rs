@@ -64,7 +64,7 @@ pub(in super::super) fn detail(disk: &Disk, lang: Lang) -> Element<'_, Message> 
             },
         ))
         .size(13)
-        .color(theme::SECONDARY),
+        .color(theme::muted()),
     ]
     .spacing(2);
 
@@ -72,7 +72,7 @@ pub(in super::super) fn detail(disk: &Disk, lang: Lang) -> Element<'_, Message> 
         lines = lines.push(
             text(lang.pick("No partition detected.", "Aucune partition détectée."))
                 .size(13)
-                .color(theme::SECONDARY),
+                .color(theme::muted()),
         );
     }
     for partition in &disk.partitions {
@@ -102,7 +102,7 @@ pub(in super::super) fn detail(disk: &Disk, lang: Lang) -> Element<'_, Message> 
                 mounts,
             ))
             .size(13)
-            .font(iced::Font::MONOSPACE),
+            .font(theme::MONO),
         );
     }
     container(lines).padding([8, 0]).into()
@@ -118,12 +118,10 @@ impl App {
             text(verdict_badge(&verdict, lang)).size(14),
         ];
         let facts = row![
-            text(disk.path.as_str())
-                .size(13)
-                .font(iced::Font::MONOSPACE),
+            text(disk.path.as_str()).size(13).font(theme::MONO),
             text(format_size(disk.size_bytes, lang)).size(13),
             text(bus_label(disk.bus, lang)).size(13),
-            text(disk.id.as_str()).size(13).font(iced::Font::MONOSPACE),
+            text(disk.id.as_str()).size(13).font(theme::MONO),
         ]
         .spacing(16);
         let mut content = column![top, facts.wrap()].spacing(4);
@@ -136,7 +134,7 @@ impl App {
             content = content.push(
                 text(state_label(&verdict, lang))
                     .size(13)
-                    .color(theme::SECONDARY),
+                    .color(theme::muted()),
             );
         }
         if selected {

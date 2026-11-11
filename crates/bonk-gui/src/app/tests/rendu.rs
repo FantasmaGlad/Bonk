@@ -14,6 +14,39 @@ fn la_fenetre_affiche_la_cle_et_pas_le_disque_systeme() {
     assert!(!contient(&app, "Écrire"));
 }
 
+/// The main page carries the disks alone; language, theme and expert boxes live on the settings page.
+#[test]
+fn les_reglages_quittent_la_page_principale() {
+    let mut app = loaded(sample());
+    for absent in ["Actualiser", "English", "Disques internes non système"] {
+        assert!(!contient(&app, absent), "{absent}");
+    }
+    assert!(contient(&app, "Paramètres"));
+    let _ = app.update(Message::Settings(bonk_ui::settings::SettingsMessage::Open));
+    for present in [
+        "Langue",
+        "English",
+        "Thème",
+        "Sombre",
+        "Disques internes non système",
+        "Bonk redémarre aussitôt pour l'appliquer.",
+    ] {
+        assert!(contient(&app, present), "{present}");
+    }
+    assert!(!contient(&app, "Cle de test"));
+}
+
+#[test]
+fn rien_n_est_dessine_avant_que_le_systeme_dise_clair_ou_sombre() {
+    let mut app = loaded(sample());
+    app.system_dark = None;
+    assert!(!contient(&app, "Cle de test"));
+    let _ = app.update(Message::Settings(
+        bonk_ui::settings::SettingsMessage::SystemDark(false),
+    ));
+    assert!(contient(&app, "Cle de test"));
+}
+
 #[test]
 fn la_fenetre_explique_pourquoi_un_disque_est_ecarte() {
     let mut app = loaded(sample());
@@ -64,46 +97,55 @@ fn captures_facultatives() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     };
     let dossier = std::path::PathBuf::from(dossier);
-    let mut app = loaded(sample());
-    let theme = app.theme();
-    let _ = app.update(Message::Select("usb-cle".to_owned()));
+    captures_fenetre(&dossier)?;
+    captures_ecriture(&dossier)?;
+    captures_coffre(&dossier)
+}
+
+type Capture = Result<(), Box<dyn std::error::Error>>;
+
+/// In the theme chosen now: [`crate::theme::choose`] is global to the process.
+fn capture(app: &App, height: f32, dossier: &std::path::Path, nom: &str) -> Capture {
     Simulator::with_size(
         iced::Settings::default(),
-        Size::new(960.0, 640.0),
+        Size::new(960.0, height),
         app.view(),
     )
-    .snapshot(&theme)?
-    .matches_image(dossier.join("fenetre-cle"))?;
+    .snapshot(&crate::theme::bonk())?
+    .matches_image(dossier.join(nom))?;
+    Ok(())
+}
+
+fn captures_fenetre(dossier: &std::path::Path) -> Capture {
+    let mut app = loaded(sample());
+    let _ = app.update(Message::Select("usb-cle".to_owned()));
+    capture(&app, 640.0, dossier, "fenetre-cle")?;
+    let _ = app.update(Message::Settings(bonk_ui::settings::SettingsMessage::Open));
+    capture(&app, 640.0, dossier, "fenetre-parametres")?;
+    // The other tests read texts, never colours: the dark capture does not disturb them.
+    crate::theme::choose(true);
+    let sombre = capture(&app, 640.0, dossier, "fenetre-parametres-sombre");
+    crate::theme::choose(false);
+    sombre?;
+    app.focus = Some(Focus::Virtual);
+    capture(&app, 640.0, dossier, "fenetre-focus-case")?;
     let _ = app.update(Message::ToggleAll(true));
     let _ = app.update(Message::ToggleInternal(true));
-    Simulator::with_size(
-        iced::Settings::default(),
-        Size::new(960.0, 640.0),
-        app.view(),
-    )
-    .snapshot(&theme)?
-    .matches_image(dossier.join("fenetre-tout"))?;
+    let _ = app.update(Message::Settings(bonk_ui::settings::SettingsMessage::Close));
+    capture(&app, 640.0, dossier, "fenetre-tout")?;
     // Keyboard focus on the second card, detail closed.
     let _ = app.update(Message::Select("usb-cle".to_owned()));
     nav(&mut app, Nav::Escape);
     nav(&mut app, Nav::Previous);
     nav(&mut app, Nav::Previous);
-    Simulator::with_size(
-        iced::Settings::default(),
-        Size::new(960.0, 640.0),
-        app.view(),
-    )
-    .snapshot(&theme)?
-    .matches_image(dossier.join("fenetre-focus"))?;
-    app.focus = Some(Focus::Virtual);
-    Simulator::with_size(
-        iced::Settings::default(),
-        Size::new(960.0, 640.0),
-        app.view(),
-    )
-    .snapshot(&theme)?
-    .matches_image(dossier.join("fenetre-focus-case"))?;
-    // Write panel: an image entered, then progress.
+    capture(&app, 640.0, dossier, "fenetre-focus")?;
+    let mut erreur = App::default();
+    let _ = erreur.update(Message::Loaded(Err("base udev introuvable".to_owned())));
+    capture(&erreur, 640.0, dossier, "fenetre-erreur")
+}
+
+/// Write panel: an image entered, then progress.
+fn captures_ecriture(dossier: &std::path::Path) -> Capture {
     let mut ecriture = loaded(sample());
     let _ = ecriture.update(Message::Select("usb-cle".to_owned()));
     let _ = ecriture.update(Message::ImageInput(
@@ -111,13 +153,7 @@ fn captures_facultatives() -> Result<(), Box<dyn std::error::Error>> {
     ));
     vieillir_le_panneau(&mut ecriture);
     ecriture.focus = Some(Focus::Action);
-    Simulator::with_size(
-        iced::Settings::default(),
-        Size::new(960.0, 760.0),
-        ecriture.view(),
-    )
-    .snapshot(&theme)?
-    .matches_image(dossier.join("fenetre-ecriture"))?;
+    capture(&ecriture, 760.0, dossier, "fenetre-ecriture")?;
     ecriture.program = Some(PathBuf::from("/n/existe/pas"));
     let _ = ecriture.update(Message::StartWrite);
     let _ = ecriture.update(Message::Write(transfer::Event::Progress {
@@ -126,61 +162,41 @@ fn captures_facultatives() -> Result<(), Box<dyn std::error::Error>> {
         total: Some(2_100_000_000),
         rate: 41e6,
     }));
-    Simulator::with_size(
-        iced::Settings::default(),
-        Size::new(960.0, 760.0),
-        ecriture.view(),
-    )
-    .snapshot(&theme)?
-    .matches_image(dossier.join("fenetre-progression"))?;
-    // Vault panel: listed, then a disk without a vault, then the question before erasing.
+    capture(&ecriture, 760.0, dossier, "fenetre-progression")
+}
+
+/// Vault panel: listed, then a disk without a vault, then the question before erasing.
+fn captures_coffre(dossier: &std::path::Path) -> Capture {
     let mut coffre = loaded(sample());
     let _ = coffre.update(Message::Select("usb-cle".to_owned()));
+    let images = vec![
+        (
+            "debian-live-13.1.0-amd64-standard.iso".to_owned(),
+            1_552_000_000,
+        ),
+        ("archlinux-x86_64.iso".to_owned(), 1_391_000_000),
+    ];
+    let disk_id = || "usb-cle".to_owned();
     for (nom, etat) in [
         (
             "fenetre-coffre",
             VaultState::Ready {
-                disk_id: "usb-cle".to_owned(),
-                images: vec![
-                    (
-                        "debian-live-13.1.0-amd64-standard.iso".to_owned(),
-                        1_552_000_000,
-                    ),
-                    ("archlinux-x86_64.iso".to_owned(), 1_391_000_000),
-                ],
+                disk_id: disk_id(),
+                images,
             },
         ),
         (
             "fenetre-coffre-absent",
-            VaultState::NotVault {
-                disk_id: "usb-cle".to_owned(),
-            },
+            VaultState::NotVault { disk_id: disk_id() },
         ),
         (
             "fenetre-coffre-confirmer",
-            VaultState::Confirming {
-                disk_id: "usb-cle".to_owned(),
-            },
+            VaultState::Confirming { disk_id: disk_id() },
         ),
     ] {
         coffre.vault = etat;
-        Simulator::with_size(
-            iced::Settings::default(),
-            Size::new(960.0, 760.0),
-            coffre.view(),
-        )
-        .snapshot(&theme)?
-        .matches_image(dossier.join(nom))?;
+        capture(&coffre, 760.0, dossier, nom)?;
     }
-    let mut erreur = App::default();
-    let _ = erreur.update(Message::Loaded(Err("base udev introuvable".to_owned())));
-    Simulator::with_size(
-        iced::Settings::default(),
-        Size::new(960.0, 640.0),
-        erreur.view(),
-    )
-    .snapshot(&theme)?
-    .matches_image(dossier.join("fenetre-erreur"))?;
     Ok(())
 }
 

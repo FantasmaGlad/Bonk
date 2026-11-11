@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.hardware.usb.UsbManager
 import android.net.Uri
 import android.os.Build
@@ -157,7 +158,12 @@ class MainActivity : ComponentActivity() {
                 askNotificationsIfNeeded()
                 actions.write(effect)
             }
-            is SaveLanguage -> getPreferences(MODE_PRIVATE).edit { putString("lang", effect.value) }
+            is SaveSetting -> getPreferences(MODE_PRIVATE).edit { putString(effect.key, effect.value) }
+            is Relaunch -> {
+                // Written before the restart reads it.
+                getPreferences(MODE_PRIVATE).edit(commit = true) { putString(effect.key, effect.value) }
+                recreate()
+            }
             PickVaultIso -> pickVaultIso.launch(arrayOf("*/*"))
             is VaultRun -> {
                 if (effect.action != "list") askNotificationsIfNeeded()
@@ -166,10 +172,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Read once per start: the screen relaunches to change it. */
+    private fun dark(theme: String): Boolean =
+        when (theme) {
+            "dark" -> true
+            "light" -> false
+            else -> resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Light background: system icons must stay dark whatever the phone theme.
-        val bars = SystemBarStyle.light(Tokens.PAPER.toInt(), Tokens.INK.toInt())
+        val preferences = getPreferences(MODE_PRIVATE)
+        val theme = preferences.getString("theme", "auto") ?: "auto"
+        val palette = if (dark(theme)) Tokens.DARK else Tokens.LIGHT
+        // System icons follow the page, not the phone theme.
+        val bars =
+            if (palette == Tokens.DARK) {
+                SystemBarStyle.dark(palette.paper.toInt())
+            } else {
+                SystemBarStyle.light(palette.paper.toInt(), palette.ink.toInt())
+            }
         enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
         actions =
             Actions(this, Bridge::send) { device, error ->
@@ -178,8 +200,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
         Bridge.listener = answered
-        val saved = getPreferences(MODE_PRIVATE).getString("lang", null)
-        Native.setLanguage((saved ?: Locale.getDefault().language) == "fr")
+        Native.start(
+            preferences.getString("lang", "auto") ?: "auto",
+            theme,
+            Locale.getDefault().language == "fr",
+            preferences.getString("view.show_all", "false") == "true",
+        )
         val filter =
             IntentFilter().apply {
                 addAction(ACTION_PERMISSION)
@@ -202,8 +228,8 @@ class MainActivity : ComponentActivity() {
             }
         }
         setContent {
-            BonkTheme {
-                Surface(Modifier.fillMaxSize(), color = Color(Tokens.PAPER)) {
+            BonkTheme(palette) {
+                Surface(Modifier.fillMaxSize(), color = Color(palette.paper)) {
                     val localized = remember(screen.lang) { inLanguage(screen.lang) }
                     CompositionLocalProvider(
                         LocalContext provides localized,

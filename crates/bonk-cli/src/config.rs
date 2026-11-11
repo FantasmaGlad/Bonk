@@ -27,6 +27,12 @@ pub(crate) const KEYS: &[Key] = &[
         help: "window language; auto follows the system; the command line is always in English",
     },
     Key {
+        name: "theme",
+        kind: Kind::Choice(&["auto", "light", "dark"]),
+        default: "auto",
+        help: "window theme; auto follows the system at each start",
+    },
+    Key {
         name: "log.format",
         kind: Kind::Choice(&["text", "json"]),
         default: "text",
@@ -86,6 +92,8 @@ pub struct ViewDefaults {
     pub allow_virtual: bool,
     /// `None`: the system's.
     pub lang: Option<bonk_hal::Lang>,
+    /// As stored: `auto`, `light` or `dark`; the window reads it.
+    pub theme: &'static str,
 }
 
 impl ViewDefaults {
@@ -224,6 +232,11 @@ pub(crate) fn view_defaults(effective: &[Effective]) -> ViewDefaults {
             Some("en") => Some(bonk_hal::Lang::En),
             Some("fr") => Some(bonk_hal::Lang::Fr),
             _ => None,
+        },
+        theme: match value_of(effective, "theme") {
+            Some("light") => "light",
+            Some("dark") => "dark",
+            _ => "auto",
         },
     }
 }
@@ -441,6 +454,7 @@ mod tests {
                 show_all: true,
                 allow_virtual: false,
                 lang: None,
+                theme: "auto",
             }
         );
     }

@@ -80,6 +80,19 @@ fn sample() -> Vec<Disk> {
     ]
 }
 
+/// A light window, as if the system had answered: until then nothing is drawn.
+impl Default for App {
+    fn default() -> Self {
+        Self {
+            model: Model {
+                system_dark: Some(false),
+                ..Model::default()
+            },
+            program: None,
+        }
+    }
+}
+
 fn loaded(disks: Vec<Disk>) -> App {
     let mut app = App::default();
     let _ = app.update(Message::Loaded(Ok(disks)));
@@ -137,7 +150,7 @@ fn la_selection_bascule_et_disparait_avec_le_disque() {
 #[test]
 fn une_enumeration_a_la_fois() {
     let mut app = App::default();
-    let _ = app.update(Message::Refresh);
+    let _ = app.update(Message::Tick);
     assert!(app.loading);
     // The timer starts nothing until the previous one is done: the state stays in progress.
     let _ = app.update(Message::Tick);
