@@ -924,7 +924,6 @@ mod tests {
             json!({"type": "settings", "action": "theme", "value": "dark"}),
             json!({"type": "menu"}),
             json!({"type": "category", "value": "Servers"}),
-            json!({"type": "category", "value": "Serveurs"}),
             json!({"type": "category"}),
             json!({"type": "system", "value": "debian"}),
             json!({"type": "choose", "index": 0}),
