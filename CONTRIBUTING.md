@@ -31,7 +31,9 @@ cargo test -p bonk --no-default-features --locked
 cargo deny check
 ```
 
-BIOS boot code: edit `boot/*.s`, run `boot/assemble.sh`, commit the regenerated `crates/bonk-core/src/boot/*.bin`. Only the Rust toolchain is used.
+BIOS boot code: edit `boot/*.s`, run `boot/assemble.sh`, commit the regenerated `crates/bonk-core/src/boot/*.bin` and `boot/test-*.bin`. Only the Rust toolchain is used.
+
+Icons: after changing `crates/bonk/assets/bonk-logo.png`, run `python3 .github/scripts/icones.py` (needs Pillow) and commit the generated icons.
 
 Commits follow Conventional Commits, in lower case, with a scope: `fix(parser): reject truncated headers`.
 
