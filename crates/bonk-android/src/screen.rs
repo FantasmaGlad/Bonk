@@ -237,7 +237,8 @@ fn effects_out(model: &mut Model, effects: Vec<Effect>, draft: Option<Value>) ->
 }
 
 /// The vault command the model asks for, for Kotlin to run: the phone has no `bonk` command. Kotlin
-/// downloads GRUB for `init` and `update`; Rust checks it against the signed catalog.
+/// downloads GRUB for `init` and `update`, one image per processor; Rust checks each against the signed
+/// catalog.
 fn vault_effect(model: &Model, args: &[String]) -> Option<Value> {
     let action = args.get(1)?.as_str();
     let disk_id = args.get(2)?;
@@ -247,10 +248,14 @@ fn vault_effect(model: &Model, args: &[String]) -> Option<Value> {
         .find(|disk| &disk.id == disk_id)
         .map(|disk| disk.path.clone());
     let iso = (action == "add").then(|| args.get(3)).flatten();
-    let grub = matches!(action, "init" | "update")
-        .then(crate::vault::grub_address)
-        .flatten()
-        .map(|(url, size)| json!({"url": url, "size_bytes": size}));
+    let grub: Vec<Value> = if matches!(action, "init" | "update") {
+        crate::vault::grub_downloads()
+            .into_iter()
+            .map(|image| json!({"arch": image.arch, "url": image.url, "size_bytes": image.size_bytes}))
+            .collect()
+    } else {
+        Vec::new()
+    };
     Some(json!({
         "do": "vault",
         "action": action,

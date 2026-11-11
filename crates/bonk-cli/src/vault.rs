@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -63,8 +64,8 @@ pub(crate) struct InitArgs {
 /// Where GRUB comes from, for `init` and `update`.
 #[derive(Debug, Args, Default)]
 pub(crate) struct GrubSource {
-    /// Folder holding BOOTX64.EFI, for a machine without network: checked against the hash of the
-    /// last catalog seen
+    /// Folder holding the GRUB images (BOOTX64.EFI, BOOTAA64.EFI), for a machine without network: each
+    /// checked against the hash of the last catalog seen
     #[arg(long, value_name = "DIR")]
     pub(crate) grub_dir: Option<PathBuf>,
 
@@ -184,11 +185,8 @@ pub(crate) fn run(
     }
 }
 
-/// Architecture of the GRUB written: the one the vault boots today.
-const GRUB_ARCH: &str = "x86_64";
-
-/// GRUB named by the signed catalog: from its address through the cache, or from `--grub-dir`, always
-/// checked against the signed hash.
+/// GRUB named by the signed catalog, one image per processor Bonk can write: from its address through the
+/// cache, or from `--grub-dir`, always checked against the signed hash.
 pub(crate) fn grub(
     args: &GrubSource,
     access: &catalog::Access,
@@ -202,33 +200,40 @@ pub(crate) fn grub(
         .catalog
         .grub
         .ok_or_else(|| catalog::refused("the catalog does not offer GRUB yet: try again later"))?;
-    let asset = entry
-        .efi
-        .get(GRUB_ARCH)
-        .ok_or_else(|| catalog::refused(format!("the catalog offers no GRUB for {GRUB_ARCH}")))?;
-    let data = match &args.grub_dir {
-        Some(folder) => local_grub(folder, asset, &entry.version)?,
-        None => {
-            let path = manifest::asset_path(&base, &dir, "grub", asset, &*access.fetch_file)
-                .map_err(|e| catalog::refused(format!("GRUB {}: {e}", entry.version)))?;
-            fs::read(&path).map_err(|e| catalog::refused(format!("{}: {e}", path.display())))?
-        }
-    };
-    let files = core_vault::boot_files(&[(GRUB_ARCH, data)])
-        .map_err(|e| catalog::refused(e.to_string()))?;
+    let mut images = Vec::new();
+    let mut efi = BTreeMap::new();
+    // A processor this Bonk has no removable-media name for is left to a later version.
+    for (arch, asset) in &entry.efi {
+        let Some(name) = core_vault::efi_file_name(arch) else {
+            continue;
+        };
+        let data = match &args.grub_dir {
+            Some(folder) => local_grub(&folder.join(name), asset, &entry.version)?,
+            None => {
+                let path = manifest::asset_path(&base, &dir, "grub", asset, &*access.fetch_file)
+                    .map_err(|e| catalog::refused(format!("GRUB {} {arch}: {e}", entry.version)))?;
+                fs::read(&path).map_err(|e| catalog::refused(format!("{}: {e}", path.display())))?
+            }
+        };
+        efi.insert(arch.clone(), asset.sha256.clone());
+        images.push((arch.as_str(), data));
+    }
+    if images.is_empty() {
+        return Err(catalog::refused(
+            "the catalog offers no GRUB image this version of Bonk can write",
+        ));
+    }
+    let files = core_vault::boot_files(&images).map_err(|e| catalog::refused(e.to_string()))?;
     let info = GrubInfo {
         version: entry.version,
         build: entry.build,
-        arch: GRUB_ARCH.to_owned(),
-        sha256: asset.sha256.clone(),
+        efi,
     };
     Ok((files, info))
 }
 
-fn local_grub(folder: &Path, asset: &manifest::Asset, version: &str) -> Result<Vec<u8>, JobError> {
-    let name = core_vault::efi_file_name(GRUB_ARCH).unwrap_or("BOOTX64.EFI");
-    let path = folder.join(name);
-    let data = fs::read(&path).map_err(|e| catalog::refused(format!("{}: {e}", path.display())))?;
+fn local_grub(path: &Path, asset: &manifest::Asset, version: &str) -> Result<Vec<u8>, JobError> {
+    let data = fs::read(path).map_err(|e| catalog::refused(format!("{}: {e}", path.display())))?;
     if !manifest::asset_matches(asset, &data) {
         return Err(catalog::refused(format!(
             "{} is not the GRUB {version} of the catalog (hash differs)",
@@ -298,11 +303,10 @@ fn run_init(
                 size(done.layout.efi, done.block_size)
             )?;
             if let Some(grub) = &done.grub {
-                writeln!(
-                    out,
-                    "  GRUB {} ({}), build {}, sha256 {}",
-                    grub.version, grub.arch, grub.build, grub.sha256
-                )?;
+                writeln!(out, "  GRUB {}, build {}", grub.version, grub.build)?;
+                for (arch, sha256) in &grub.efi {
+                    writeln!(out, "    {arch}: sha256 {sha256}")?;
+                }
             }
             if !done.unmounted.is_empty() {
                 writeln!(out, "  Unmount: {}", done.unmounted.join(", "))?;

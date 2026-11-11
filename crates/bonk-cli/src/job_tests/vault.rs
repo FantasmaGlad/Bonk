@@ -13,18 +13,40 @@ fn sha256(bytes: &[u8]) -> String {
     bonk_core::write::hex(digest(&SHA256, bytes).as_ref())
 }
 
-/// A catalog signed by a test key, offering `grub` when given, and the files it names.
+/// A catalog signed by a test key, offering `grub` for x86_64 when given, and the files it names.
 pub(crate) fn served_catalog(grub: Option<&[u8]>) -> ServedCatalog {
+    served_catalog_for(
+        &grub
+            .map(|bytes| vec![("x86_64", bytes)])
+            .unwrap_or_default(),
+    )
+}
+
+/// As [`served_catalog`], with one GRUB image per processor; none: no `grub` entry.
+fn served_catalog_for(images: &[(&str, &[u8])]) -> ServedCatalog {
     let pair = Ed25519KeyPair::from_seed_unchecked(&[7; 32]).expect("clé de test");
     let public: [u8; 32] = pair.public_key().as_ref().try_into().expect("32 octets");
     let fake = "c".repeat(64);
-    let entry = grub.map_or_else(String::new, |bytes| {
+    let path = |arch: &str| format!("grub/2.14/{arch}.EFI");
+    let efi: Vec<String> = images
+        .iter()
+        .map(|(arch, bytes)| {
+            format!(
+                r#""{arch}":{{"path":"{}","sha256":"{}","size_bytes":{}}}"#,
+                path(arch),
+                sha256(bytes),
+                bytes.len()
+            )
+        })
+        .collect();
+    let entry = if images.is_empty() {
+        String::new()
+    } else {
         format!(
-            r#","grub":{{"version":"2.14","released":"2026-01-14","build":"6e330c761ee82877","efi":{{"x86_64":{{"path":"grub/2.14/BOOTX64.EFI","sha256":"{}","size_bytes":{}}}}},"source":{{"path":"grub/2.14/grub-2.14.tar.xz","sha256":"{fake}","size_bytes":1}},"source_signature":{{"path":"grub/2.14/grub-2.14.tar.xz.sig","sha256":"{fake}","size_bytes":1}}}}"#,
-            sha256(bytes),
-            bytes.len()
+            r#","grub":{{"version":"2.14","released":"2026-01-14","build":"6e330c761ee82877","efi":{{{}}},"source":{{"path":"grub/2.14/grub-2.14.tar.xz","sha256":"{fake}","size_bytes":1}},"source_signature":{{"path":"grub/2.14/grub-2.14.tar.xz.sig","sha256":"{fake}","size_bytes":1}}}}"#,
+            efi.join(",")
         )
-    });
+    };
     let expires = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("horloge")
@@ -40,8 +62,8 @@ pub(crate) fn served_catalog(grub: Option<&[u8]>) -> ServedCatalog {
         pair.sign(&manifest).as_ref().to_vec(),
     );
     files.insert(format!("{BASE}catalog.json"), manifest);
-    if let Some(bytes) = grub {
-        files.insert(format!("{BASE}grub/2.14/BOOTX64.EFI"), bytes.to_vec());
+    for (arch, bytes) in images {
+        files.insert(format!("{BASE}{}", path(arch)), bytes.to_vec());
     }
     ServedCatalog {
         keys: vec![public],
@@ -91,7 +113,10 @@ fn preparer_un_coffre_ecrit_grub_du_catalogue_puis_relit() {
     assert_eq!(value["layout"]["table"], "mbr");
     assert_eq!(value["vault_label"], "BonkVault");
     assert_eq!(value["grub"]["version"], "2.14");
-    assert_eq!(value["grub"]["sha256"], sha256(GRUB));
+    assert_eq!(
+        value["grub"]["efi"],
+        serde_json::json!({"x86_64": sha256(GRUB)})
+    );
     assert_eq!(value["verified"], true);
 
     let (code, out, err) = scenario.run(&["vault", "list", "usb-a", "--json"]);
@@ -141,6 +166,37 @@ fn grub_local_controle_contre_le_catalogue() {
     assert!(err.contains("hash differs"), "{err}");
     assert!(scenario.log().is_empty(), "{:?}", scenario.log());
     std::fs::write(folder.0.join("BOOTX64.EFI"), GRUB).expect("fichier");
+    let (code, _, err) = scenario.run(&init_args(&cache, &["--grub-dir", &dir]));
+    assert_eq!(code, 0, "{err}");
+}
+
+/// One vault for every processor the catalog offers and Bonk can name; another processor is left for later.
+#[test]
+fn grub_de_chaque_processeur_ecrit_et_controle() {
+    const ARM: &[u8] = b"MZ grub arm64 de test";
+    let mut scenario = Scenario::sized(VAULT_DISK);
+    scenario.catalog =
+        served_catalog_for(&[("x86_64", GRUB), ("aarch64", ARM), ("mips64", b"MZ autre")]);
+    let cache = TempSource::dir("cache-processeurs");
+    let cache = cache.arg();
+    let (code, out, err) = scenario.run(&init_args(&cache, &[]));
+    assert_eq!(code, 0, "{err}");
+    let value: serde_json::Value = serde_json::from_str(&out).expect("JSON");
+    assert_eq!(
+        value["grub"]["efi"],
+        serde_json::json!({"aarch64": sha256(ARM), "x86_64": sha256(GRUB)})
+    );
+    assert_eq!(value["verified"], true);
+
+    // Offline, each image is needed and checked.
+    let folder = TempSource::dir("grub-processeurs");
+    std::fs::create_dir_all(&folder.0).expect("dossier");
+    std::fs::write(folder.0.join("BOOTX64.EFI"), GRUB).expect("fichier");
+    let dir = folder.arg();
+    let (code, _, err) = scenario.run(&init_args(&cache, &["--grub-dir", &dir]));
+    assert_eq!(code, EXIT_SOURCE, "{err}");
+    assert!(err.contains("BOOTAA64.EFI"), "{err}");
+    std::fs::write(folder.0.join("BOOTAA64.EFI"), ARM).expect("fichier");
     let (code, _, err) = scenario.run(&init_args(&cache, &["--grub-dir", &dir]));
     assert_eq!(code, 0, "{err}");
 }

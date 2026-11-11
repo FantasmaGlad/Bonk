@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use std::time::Instant;
@@ -27,8 +28,8 @@ use crate::errors::Code;
 pub struct GrubInfo {
     pub version: String,
     pub build: String,
-    pub arch: String,
-    pub sha256: String,
+    /// SHA-256 of each EFI image written, by processor (`x86_64`, `aarch64`).
+    pub efi: BTreeMap<String, String>,
 }
 
 pub struct VaultInitJob {

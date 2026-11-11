@@ -159,8 +159,8 @@ class Actions(
     }
 
     /** Rust checks the bytes against the signed catalog; the bound only stops a runaway download. */
-    private fun downloadGrub(grub: GrubDownload): File {
-        val target = File(context.cacheDir, "grub.download")
+    private fun downloadGrub(grub: GrubDownload, folder: File) {
+        val target = File(folder, grub.arch)
         open(grub.url).inputStream.use { input ->
             target.outputStream().use { output ->
                 val buffer = ByteArray(BUFFER)
@@ -174,7 +174,6 @@ class Actions(
                 }
             }
         }
-        return target
     }
 
     fun runVault(request: VaultRun) {
@@ -183,7 +182,15 @@ class Actions(
             val device =
                 usb.drives().firstOrNull { it.deviceName == request.device }
                     ?: throw BonkFailure("E1003", "the drive is no longer connected")
-            grub = request.grub?.let(::downloadGrub)
+            grub =
+                request.grub.takeIf { it.isNotEmpty() }?.let { images ->
+                    // One file per processor, named by it: Rust reads the folder.
+                    File(context.cacheDir, "grub").apply {
+                        deleteRecursively()
+                        mkdirs()
+                        images.forEach { downloadGrub(it, this) }
+                    }
+                }
             val iso = request.iso.orEmpty()
             usb.withDrive(device) { fd, raw ->
                 Native.vault(
@@ -207,7 +214,7 @@ class Actions(
         } catch (error: Exception) {
             send(Failed(error.message ?: error.toString()))
         } finally {
-            grub?.delete()
+            grub?.deleteRecursively()
         }
     }
 
