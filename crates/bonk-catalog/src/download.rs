@@ -38,7 +38,10 @@ pub enum DownloadError {
 impl fmt::Display for DownloadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Scheme(url) => write!(f, "{url}: only https:// is accepted"),
+            Self::Scheme(url) => write!(
+                f,
+                "{url}: only https:// is accepted (http:// only to this machine)"
+            ),
             Self::Refused { url, status } => write!(f, "{url}: the server answers {status}"),
             Self::Network(message) | Self::Inconsistent(message) => f.write_str(message),
             Self::Io(err) => write!(f, "download file: {err}"),

@@ -24,8 +24,8 @@ impl fmt::Display for LinkError {
 
 impl std::error::Error for LinkError {}
 
-/// A link comes from a web page: anything outside the catalog's own alphabet is refused, so it can carry
-/// neither a path, a query nor an option.
+/// The catalog's identifier rule, for its families and images and for links: a link comes from a web page,
+/// so anything outside this alphabet is refused and it can carry neither a path, a query nor an option.
 #[must_use]
 pub fn is_image_id(id: &str) -> bool {
     (1..=MAX_ID).contains(&id.len())
