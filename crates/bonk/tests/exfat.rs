@@ -77,3 +77,95 @@ fn une_arborescence_exfat_est_acceptee_par_fsck_exfat() {
     );
     assert!(text.contains("directories 4, files 3"), "{text}");
 }
+
+fn fsck(image: &[u8], label: &str) -> String {
+    let path = std::env::temp_dir().join(format!("bonk-exfat-{label}-{}.img", std::process::id()));
+    std::fs::write(&path, image).expect("image");
+    let fsck = Command::new("fsck.exfat")
+        .arg("-n")
+        .arg("-v")
+        .arg(&path)
+        .output()
+        .expect("fsck.exfat");
+    let _ = std::fs::remove_file(&path);
+    let text = String::from_utf8_lossy(&fsck.stdout).into_owned();
+    assert_eq!(
+        fsck.status.code(),
+        Some(0),
+        "{text}{}",
+        String::from_utf8_lossy(&fsck.stderr)
+    );
+    text
+}
+
+/// Added and removed in a volume made by Bonk then in one made by mkfs.exfat: the official tool finds both
+/// clean, files and free space included.
+#[test]
+fn un_ajout_et_un_retrait_sont_acceptes_par_fsck_exfat() {
+    use bonk_core::format::exfat_edit::{add_file, remove_file};
+
+    if !common::outil_disponible("fsck.exfat") || !common::outil_disponible("mkfs.exfat") {
+        return;
+    }
+    let made_by_bonk = {
+        let mut dev = MemoryDevice::new(64 * MIB, 512).expect("support");
+        bonk_core::format::exfat::write(
+            &mut dev,
+            &Volume {
+                first_lba: 0,
+                sectors: 64 * MIB / 512,
+                label: Some("BonkVault"),
+                volume_id: 0xB0B0,
+            },
+        )
+        .expect("volume");
+        dev.as_bytes().to_vec()
+    };
+    let made_by_mkfs = {
+        let path = std::env::temp_dir().join(format!("bonk-mkfs-exfat-{}.img", std::process::id()));
+        std::fs::write(&path, vec![0u8; 64 * MIB as usize]).expect("image");
+        let made = Command::new("mkfs.exfat")
+            .args(["-L", "BonkVault"])
+            .arg(&path)
+            .output()
+            .expect("mkfs.exfat");
+        assert!(
+            made.status.success(),
+            "{}",
+            String::from_utf8_lossy(&made.stderr)
+        );
+        let bytes = std::fs::read(&path).expect("relecture");
+        let _ = std::fs::remove_file(&path);
+        bytes
+    };
+    for (label, image) in [("bonk", made_by_bonk), ("mkfs", made_by_mkfs)] {
+        let mut dev = MemoryDevice::from_bytes(image, 512).expect("support");
+        let sectors = 64 * MIB / 512;
+        let big: Vec<u8> = (0..5_000_000u32).map(|i| (i * 13) as u8).collect();
+        for (name, data) in [
+            ("archlinux-x86_64.iso", big.as_slice()),
+            (
+                "Un nom assez long pour plusieurs entrées, été.iso",
+                b"bonk\n".as_slice(),
+            ),
+            ("vide.iso", [].as_slice()),
+        ] {
+            let mut reader = data;
+            add_file(
+                &mut dev,
+                0,
+                sectors,
+                name,
+                data.len() as u64,
+                &mut reader,
+                &mut |_| true,
+            )
+            .expect("ajout");
+        }
+        let text = fsck(dev.as_bytes(), label);
+        assert!(text.contains("files 3"), "{label}: {text}");
+        remove_file(&mut dev, 0, sectors, "archlinux-x86_64.iso").expect("retrait");
+        let text = fsck(dev.as_bytes(), label);
+        assert!(text.contains("files 2"), "{label}: {text}");
+    }
+}
