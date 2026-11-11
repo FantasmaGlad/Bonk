@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Boots a Windows installation drive image under QEMU until the setup screen shows.
 
-Windows setup writes nothing on the serial console: the proof is the screen, a solid purple background and
-the light blue frame of the "Windows Setup" window, measured on Windows 10 and 11 boots.
+Windows setup writes nothing on the serial console: the proof is the screen, a solid background and the light
+blue frame of the setup window, measured on Windows 10, 11 and Server 2022 boots.
 """
 import argparse
 import os
@@ -14,9 +14,10 @@ import time
 
 OVMF = "/usr/share/OVMF"
 MONITOR = "moniteur.sock"
-SETUP_PURPLE = (24, 0, 82)
+# Purple for the client editions, navy for Server.
+SETUP_BACKGROUNDS = {(24, 0, 82), (0, 25, 64)}
 WINDOW_FRAME = (185, 209, 234)
-PURPLE_SHARE = 0.30
+BACKGROUND_SHARE = 0.30
 # The frame is about 0.5% of the screen; Windows 10 draws the window inside purple, Windows 11 in white.
 FRAME_SHARE = 0.002
 LOOK_SECONDS = 10
@@ -69,15 +70,16 @@ def setup_shown(path):
     total = width * height
     if total == 0:
         return False, 0.0, 0.0
-    purple = frame = 0
+    background = frame = 0
     for offset in range(0, len(pixels) - 2, 3):
         pixel = (pixels[offset], pixels[offset + 1], pixels[offset + 2])
-        if pixel == SETUP_PURPLE:
-            purple += 1
+        if pixel in SETUP_BACKGROUNDS:
+            background += 1
         elif pixel == WINDOW_FRAME:
             frame += 1
-    purple_share, frame_share = purple / total, frame / total
-    return purple_share >= PURPLE_SHARE and frame_share >= FRAME_SHARE, purple_share, frame_share
+    background_share, frame_share = background / total, frame / total
+    shown = background_share >= BACKGROUND_SHARE and frame_share >= FRAME_SHARE
+    return shown, background_share, frame_share
 
 
 class Monitor:
@@ -137,9 +139,9 @@ def main():
             time.sleep(LOOK_SECONDS)
             if not monitor.screen(name):
                 continue
-            shown, purple, frame = setup_shown(name)
+            shown, background, frame = setup_shown(name)
             elapsed = int(time.monotonic() - start)
-            print(f"{args.mode} {elapsed} s : violet {purple:.2f}, cadre {frame:.4f}", flush=True)
+            print(f"{args.mode} {elapsed} s : fond {background:.2f}, cadre {frame:.4f}", flush=True)
             if shown:
                 print(f"OK ({args.mode}) : installateur de Windows atteint en {elapsed} s")
                 return 0
