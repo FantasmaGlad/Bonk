@@ -124,16 +124,10 @@ impl App {
         // anything.
         if !self.vault.disk_id().is_some_and(|id| id == disk.id) {
             panel = panel.push(
-                button(
-                    text(lang.pick(
-                        "Use as a vault (several ISO images)...",
-                        "Utiliser comme coffre (plusieurs images ISO)...",
-                    ))
-                    .size(13),
-                )
-                .on_press(Message::Vault(VaultMessage::Open))
-                .padding([4, 10])
-                .style(theme::card_button(false)),
+                button(text(bonk_ui::vault::VaultWords::new(lang).open).size(13))
+                    .on_press(Message::Vault(VaultMessage::Open))
+                    .padding([4, 10])
+                    .style(theme::card_button(false)),
             );
         }
         panel

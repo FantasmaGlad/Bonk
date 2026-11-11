@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use bonk_core::write::Phase;
+use bonk_hal::Lang;
 
 use crate::event::{Event, Outcome, VaultDone};
 use crate::model::{Effect, Effects, Model, WriteState};
@@ -23,6 +24,57 @@ impl VaultAction {
             Self::Prepare => "init",
             Self::Add => "add",
             Self::Update => "update",
+        }
+    }
+}
+
+/// The vault panel's texts, the same in the window and on the phone.
+pub struct VaultWords {
+    pub title: &'static str,
+    pub not_vault: &'static str,
+    pub prepare: &'static str,
+    pub erase: &'static str,
+    pub empty: &'static str,
+    pub add: &'static str,
+    pub update: &'static str,
+    /// On the write panel: opens the vault panel.
+    pub open: &'static str,
+}
+
+impl VaultWords {
+    #[must_use]
+    pub fn new(lang: Lang) -> Self {
+        Self {
+            title: lang.pick(
+                "VAULT: SEVERAL ISO IMAGES ON ONE DRIVE",
+                "COFFRE : PLUSIEURS IMAGES ISO SUR UNE CLÉ",
+            ),
+            not_vault: lang.pick(
+                "This disk is not a vault. Preparing it erases everything on it, then any ISO copied to it shows in a boot menu.",
+                "Ce disque n'est pas un coffre. Le préparer efface tout son contenu ; ensuite, chaque ISO copiée dessus apparaît dans un menu de démarrage.",
+            ),
+            prepare: lang.pick("Prepare as a vault...", "Préparer en coffre..."),
+            erase: lang.pick("Erase and prepare", "Effacer et préparer"),
+            empty: lang.pick("No ISO image yet.", "Aucune image ISO pour l'instant."),
+            add: lang.pick("Add an ISO...", "Ajouter une ISO..."),
+            update: lang.pick("Update GRUB", "Mettre à jour GRUB"),
+            open: lang.pick(
+                "Use as a vault (several ISO images)...",
+                "Utiliser comme coffre (plusieurs images ISO)...",
+            ),
+        }
+    }
+
+    #[must_use]
+    pub fn busy(lang: Lang, action: VaultAction) -> &'static str {
+        match action {
+            VaultAction::List => lang.pick("Reading the drive...", "Lecture de la clé..."),
+            VaultAction::Prepare => lang.pick("Preparing the vault...", "Préparation du coffre..."),
+            VaultAction::Add => lang.pick("Adding the ISO...", "Ajout de l'ISO..."),
+            VaultAction::Update => lang.pick(
+                "Updating GRUB and the menu...",
+                "Mise à jour de GRUB et du menu...",
+            ),
         }
     }
 }

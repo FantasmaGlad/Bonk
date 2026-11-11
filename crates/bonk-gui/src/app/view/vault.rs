@@ -1,9 +1,9 @@
-use bonk_hal::{Disk, Lang, format_size};
+use bonk_hal::{Disk, format_size};
 use iced::Element;
 use iced::widget::{button, column, progress_bar, row, text};
 
 use bonk_ui::text as phrases;
-use bonk_ui::vault::VaultAction;
+use bonk_ui::vault::{VaultAction, VaultWords};
 
 use crate::theme;
 
@@ -24,18 +24,6 @@ fn action_button<'a>(
     }
 }
 
-fn busy_line(lang: Lang, action: VaultAction) -> &'static str {
-    match action {
-        VaultAction::List => lang.pick("Reading the drive...", "Lecture de la clé..."),
-        VaultAction::Prepare => lang.pick("Preparing the vault...", "Préparation du coffre..."),
-        VaultAction::Add => lang.pick("Adding the ISO...", "Ajout de l'ISO..."),
-        VaultAction::Update => lang.pick(
-            "Updating GRUB and the menu...",
-            "Mise à jour de GRUB et du menu...",
-        ),
-    }
-}
-
 impl App {
     /// Below the card of the disk it reads: several ISO images on one drive, each started from a menu.
     pub(super) fn vault_panel<'a>(&'a self, disk: &'a Disk) -> Option<Element<'a, Message>> {
@@ -43,11 +31,8 @@ impl App {
             return None;
         }
         let lang = self.lang;
-        let title = text(lang.pick(
-            "VAULT: SEVERAL ISO IMAGES ON ONE DRIVE",
-            "COFFRE : PLUSIEURS IMAGES ISO SUR UNE CLÉ",
-        ))
-        .size(14);
+        let words = VaultWords::new(lang);
+        let title = text(words.title).size(14);
         let close = action_button(
             lang.pick("Close", "Fermer"),
             Some(VaultMessage::Close),
@@ -62,7 +47,7 @@ impl App {
                 total,
                 ..
             } => {
-                let mut panel = column![text(busy_line(lang, *action)).size(13)].spacing(8);
+                let mut panel = column![text(VaultWords::busy(lang, *action)).size(13)].spacing(8);
                 if let Some(phase) = phase {
                     let (line, fraction) = phrases::progress(lang, *phase, *done, *total, 0.0);
                     panel = panel.push(text(line).size(13)).push(progress_bar(0.0..=1.0, fraction).girth(14));
@@ -73,13 +58,9 @@ impl App {
                 panel.into()
             }
             VaultState::NotVault { .. } => column![
-                text(lang.pick(
-                    "This disk is not a vault. Preparing it erases everything on it, then any ISO copied to it shows in a boot menu.",
-                    "Ce disque n'est pas un coffre. Le préparer efface tout son contenu ; ensuite, chaque ISO copiée dessus apparaît dans un menu de démarrage.",
-                ))
-                .size(13),
+                text(words.not_vault).size(13),
                 row![
-                    action_button(lang.pick("Prepare as a vault...", "Préparer en coffre..."), Some(VaultMessage::Prepare), true),
+                    action_button(words.prepare, Some(VaultMessage::Prepare), true),
                     close,
                 ]
                 .spacing(8),
@@ -95,7 +76,7 @@ impl App {
                 .size(13)
                 .color(theme::SECONDARY),
                 row![
-                    action_button(lang.pick("Erase and prepare", "Effacer et préparer"), Some(VaultMessage::ConfirmPrepare), true),
+                    action_button(words.erase, Some(VaultMessage::ConfirmPrepare), true),
                     action_button(lang.pick("Cancel", "Annuler"), Some(VaultMessage::Open), false),
                 ]
                 .spacing(8),
@@ -105,7 +86,7 @@ impl App {
             VaultState::Ready { images, .. } => {
                 let mut list = column![].spacing(2);
                 if images.is_empty() {
-                    list = list.push(text(lang.pick("No ISO image yet.", "Aucune image ISO pour l'instant.")).size(13).color(theme::SECONDARY));
+                    list = list.push(text(words.empty).size(13).color(theme::SECONDARY));
                 }
                 for (name, size) in images {
                     list = list.push(
@@ -119,8 +100,8 @@ impl App {
                 column![
                     list,
                     row![
-                        action_button(lang.pick("Add an ISO...", "Ajouter une ISO..."), Some(VaultMessage::Browse), true),
-                        action_button(lang.pick("Update GRUB", "Mettre à jour GRUB"), Some(VaultMessage::Update), false),
+                        action_button(words.add, Some(VaultMessage::Browse), true),
+                        action_button(words.update, Some(VaultMessage::Update), false),
                         close,
                     ]
                     .spacing(8),
