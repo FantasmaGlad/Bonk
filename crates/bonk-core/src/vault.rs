@@ -25,6 +25,11 @@ const ESP_GUID_TEXT: &str = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B";
 pub const MENU: &str = include_str!("vault_menu.cfg");
 /// The path the GRUB image searches for.
 pub const MENU_PATH: &str = "bonk/grub.cfg";
+/// Ubuntu's iso-scan step with exFAT accepted, put into its initrd by the menu: kept apart, as it follows
+/// casper's own script.
+pub const CASPER_EXFAT: &str = include_str!("vault_casper_exfat.sh");
+/// Next to the menu, which names it through GRUB's `config_directory`.
+pub const CASPER_EXFAT_PATH: &str = "bonk/casper/20iso_scan";
 
 /// A file of the boot partition: path from its root, `/` separated.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,7 +49,7 @@ pub fn efi_file_name(arch: &str) -> Option<&'static str> {
     }
 }
 
-/// GRUB images by architecture, then the menu.
+/// GRUB images by architecture, then the menu and the files it uses.
 ///
 /// # Errors
 /// [`FormatError::Unsupported`] for an architecture without an EFI removable-media name.
@@ -63,6 +68,10 @@ pub fn boot_files(efi: &[(&str, Vec<u8>)]) -> Result<Vec<BootFile>, FormatError>
     files.push(BootFile {
         path: MENU_PATH.to_owned(),
         data: MENU.as_bytes().to_vec(),
+    });
+    files.push(BootFile {
+        path: CASPER_EXFAT_PATH.to_owned(),
+        data: CASPER_EXFAT.as_bytes().to_vec(),
     });
     Ok(files)
 }
@@ -488,7 +497,8 @@ mod tests {
                 "EFI/BOOT/BOOTX64.EFI",
                 "EFI/BOOT/BOOTAA64.EFI",
                 "EFI/BOOT/BOOTRISCV64.EFI",
-                "bonk/grub.cfg"
+                "bonk/grub.cfg",
+                "bonk/casper/20iso_scan"
             ]
         );
         assert!(files[3].data.starts_with(b"set timeout="));
