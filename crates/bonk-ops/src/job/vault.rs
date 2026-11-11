@@ -408,9 +408,15 @@ pub fn vault_add(
         report: &mut report,
     };
     log::info!(target: "bonk::write", name = name.as_str(), bytes = size; "vault add starting");
-    let added = vault::add_image(&mut *device, &plan, &name, size, &mut file, &mut |n| {
-        advance.add(n)
-    })
+    let added = vault::add_image(
+        &mut *device,
+        &plan,
+        &name,
+        size,
+        family,
+        &mut file,
+        &mut |n| advance.add(n),
+    )
     .map_err(edit_error)?;
     device.flush().map_err(|e| fail(Code::WriteFailed, e))?;
     drop_cache_before_verify(&mut *device);

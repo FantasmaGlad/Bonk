@@ -1,8 +1,9 @@
 #!/bin/sh
-# Stands in for casper's scripts/casper-premount/20iso_scan, which GRUB replaces in Ubuntu's initrd. Same
-# search for iso-scan/filename, with exFAT added to the file systems casper looks into: the vault's data
-# partition is exFAT, absent from casper's list. Written against casper 27.04.1: a casper that renames
-# find_path, casper-functions or casper-helpers, or moves this step, stops at its "Could not find the ISO".
+# Stands in for casper's scripts/casper-premount/20iso_scan, which GRUB replaces in Ubuntu's initrd. casper's
+# initrd has no exFAT driver: instead of finding the ISO in the file system, this hands casper the BonkVault
+# partition and the offset of the ISO in it (bonk.offset, written by `bonk vault add`), which casper maps as a
+# loop device (LIVEMEDIA_OFFSET). Written against casper 27.04.1: a casper that drops LIVEMEDIA_OFFSET,
+# wait_for_devs or /conf/param.conf, or moves this step, stops at its own "Unable to find a medium".
 
 PREREQ=""
 
@@ -21,36 +22,22 @@ esac
 . /scripts/casper-functions
 . /scripts/casper-helpers
 
-modprobe exfat 2> /dev/null
-
-is_supported_fs()
-{
-    [ -z "${1}" ] && return 1
-    case ${1} in
-        exfat|ext2|ext3|ext4|xfs|jfs|reiserfs|vfat|ntfs|iso9660|btrfs|udf)
-            return 0
-            ;;
-    esac
-    return 1
-}
-
-iso_path=
+offset=
 for x in $(cat /proc/cmdline); do
     case ${x} in
-        iso-scan/filename=*)
-            iso_path=${x#iso-scan/filename=}
+        bonk.offset=*)
+            offset=${x#bonk.offset=}
             ;;
     esac
 done
-if [ "$iso_path" ]; then
-    if find_path "${iso_path}" /isodevice rw; then
-        echo "LIVEMEDIA=${FOUNDPATH}" >> /conf/param.conf
-        if [ -f "${FOUNDPATH}" ]; then
-            echo "LIVEMEDIA_OFFSET=0" >> /conf/param.conf
-        fi
+if [ "$offset" ]; then
+    wait_for_devs
+    if vault=$(/sbin/blkid -L BonkVault); then
+        echo "LIVEMEDIA=${vault}" >> /conf/param.conf
+        echo "LIVEMEDIA_OFFSET=${offset}" >> /conf/param.conf
     else
         panic "
-Could not find the ISO $iso_path
+No BonkVault partition found
 "
     fi
 fi

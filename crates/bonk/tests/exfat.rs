@@ -102,7 +102,7 @@ fn fsck(image: &[u8], label: &str) -> String {
 /// clean, files and free space included.
 #[test]
 fn un_ajout_et_un_retrait_sont_acceptes_par_fsck_exfat() {
-    use bonk_core::format::exfat_edit::{add_file, remove_file};
+    use bonk_core::format::exfat_edit::{Span, add_file, remove_file};
 
     if !common::outil_disponible("fsck.exfat") || !common::outil_disponible("mkfs.exfat") {
         return;
@@ -140,7 +140,10 @@ fn un_ajout_et_un_retrait_sont_acceptes_par_fsck_exfat() {
     };
     for (label, image) in [("bonk", made_by_bonk), ("mkfs", made_by_mkfs)] {
         let mut dev = MemoryDevice::from_bytes(image, 512).expect("support");
-        let sectors = 64 * MIB / 512;
+        let span = Span {
+            first_lba: 0,
+            sectors: 64 * MIB / 512,
+        };
         let big: Vec<u8> = (0..5_000_000u32).map(|i| (i * 13) as u8).collect();
         for (name, data) in [
             ("archlinux-x86_64.iso", big.as_slice()),
@@ -153,10 +156,10 @@ fn un_ajout_et_un_retrait_sont_acceptes_par_fsck_exfat() {
             let mut reader = data;
             add_file(
                 &mut dev,
-                0,
-                sectors,
+                span,
                 name,
                 data.len() as u64,
+                false,
                 &mut reader,
                 &mut |_| true,
             )
@@ -164,7 +167,7 @@ fn un_ajout_et_un_retrait_sont_acceptes_par_fsck_exfat() {
         }
         let text = fsck(dev.as_bytes(), label);
         assert!(text.contains("files 3"), "{label}: {text}");
-        remove_file(&mut dev, 0, sectors, "archlinux-x86_64.iso").expect("retrait");
+        remove_file(&mut dev, span, "archlinux-x86_64.iso").expect("retrait");
         let text = fsck(dev.as_bytes(), label);
         assert!(text.contains("files 2"), "{label}: {text}");
     }

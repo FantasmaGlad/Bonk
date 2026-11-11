@@ -1,7 +1,7 @@
 use std::io::Read;
 
 use super::FormatError;
-use super::exfat::{END_OF_CHAIN, ENTRY, FIRST_CLUSTER, upcase_map};
+use super::exfat::{END_OF_CHAIN, ENTRY, FIRST_CLUSTER, checksum16, upcase_map};
 use super::exfat_read::Reader;
 use super::exfat_tree::{Placed, entries_for, entry_set, name_units};
 use super::tree::{verify_contiguous, write_contiguous};
@@ -12,6 +12,7 @@ const ENTRY_BITMAP: u8 = 0x81;
 const IN_USE: u8 = 0x80;
 const VOLUME_FLAGS: u64 = 106;
 const VOLUME_DIRTY: u8 = 0x02;
+const ATTR_HIDDEN: u8 = 0x02;
 
 /// A file added to the root of an existing exFAT volume, written by any system: contiguous, without a FAT
 /// chain, so a live system can map it at once.
@@ -20,6 +21,15 @@ pub struct Added {
     pub name: String,
     pub size_bytes: u64,
     pub sha256: String,
+    /// Where the data starts, in bytes from the start of the volume.
+    pub volume_offset: u64,
+}
+
+/// The partition holding the volume, in device sectors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Span {
+    pub first_lba: u64,
+    pub sectors: u64,
 }
 
 /// Where the volume is on the drive and what the edit touches, read before the first write.
@@ -202,14 +212,14 @@ fn upcased(units: &[u16], upcase: &[u16]) -> Vec<u16> {
 /// space or root slots, read or write failure, or stop requested.
 pub fn add_file(
     dev: &mut dyn BlockDevice,
-    first_lba: u64,
-    sectors: u64,
+    span: Span,
     name: &str,
     size: u64,
+    hidden: bool,
     reader: &mut dyn Read,
     advance: &mut dyn FnMut(u64) -> bool,
 ) -> Result<Added, FormatError> {
-    let mut volume = Volume::read(dev, first_lba, sectors)?;
+    let mut volume = Volume::read(dev, span.first_lba, span.sectors)?;
     let units = name_units(name)?;
     let upcase = upcase_map();
     let wanted = upcased(&units, &upcase);
@@ -233,7 +243,7 @@ pub fn add_file(
     let slot = volume.free_slots(entries_for(&units)).ok_or_else(|| {
         FormatError::TooLarge(format!("{name}: the volume's root directory is full"))
     })?;
-    let set = entry_set(
+    let mut set = entry_set(
         &units,
         &upcase,
         false,
@@ -243,6 +253,11 @@ pub fn add_file(
         },
         size,
     );
+    if hidden {
+        set[4] |= ATTR_HIDDEN;
+        let sum = checksum16(&set, &[2, 3]);
+        set[2..4].copy_from_slice(&sum.to_le_bytes());
+    }
 
     set_dirty(dev, volume.start, true)?;
     let offset = if count == 0 {
@@ -270,6 +285,7 @@ pub fn add_file(
         name: name.to_owned(),
         size_bytes: size,
         sha256,
+        volume_offset: if count == 0 { 0 } else { offset - volume.start },
     })
 }
 
@@ -279,13 +295,12 @@ pub fn add_file(
 /// [`FormatError::Name`] when absent, read failure, mismatch, or stop requested.
 pub fn verify_file(
     dev: &dyn BlockDevice,
-    first_lba: u64,
-    sectors: u64,
+    span: Span,
     name: &str,
     sha256: &str,
     advance: &mut dyn FnMut(u64) -> bool,
 ) -> Result<(), FormatError> {
-    let volume = Volume::read(dev, first_lba, sectors)?;
+    let volume = Volume::read(dev, span.first_lba, span.sectors)?;
     let raw = Reader::entries(&volume.root_bytes, &mut None)
         .into_iter()
         .find(|raw| raw.name == name && !raw.directory)
@@ -311,13 +326,8 @@ pub fn verify_file(
 ///
 /// # Errors
 /// [`FormatError::Name`] when the root has no such file, read or write failure.
-pub fn remove_file(
-    dev: &mut dyn BlockDevice,
-    first_lba: u64,
-    sectors: u64,
-    name: &str,
-) -> Result<u64, FormatError> {
-    let mut volume = Volume::read(dev, first_lba, sectors)?;
+pub fn remove_file(dev: &mut dyn BlockDevice, span: Span, name: &str) -> Result<u64, FormatError> {
+    let mut volume = Volume::read(dev, span.first_lba, span.sectors)?;
     let upcase = upcase_map();
     let wanted = upcased(&name.encode_utf16().collect::<Vec<_>>(), &upcase);
     let slots = volume.root_bytes.as_chunks::<ENTRY>().0.to_vec();
@@ -361,7 +371,7 @@ pub fn remove_file(
         }
         (first..first + clusters as u32).collect()
     } else {
-        Reader::open(dev, first_lba, sectors)?.chain(first)?
+        Reader::open(dev, span.first_lba, span.sectors)?.chain(first)?
     };
 
     set_dirty(dev, volume.start, true)?;
@@ -401,6 +411,10 @@ mod tests {
         label: Some("BonkVault"),
         volume_id: 7,
     };
+    const SPAN: Span = Span {
+        first_lba: VOLUME.first_lba,
+        sectors: VOLUME.sectors,
+    };
 
     fn empty() -> Result<MemoryDevice, FormatError> {
         let mut dev = MemoryDevice::new(66 * MIB, 512).map_err(FormatError::from)?;
@@ -412,10 +426,10 @@ mod tests {
         let mut reader = data;
         add_file(
             dev,
-            VOLUME.first_lba,
-            VOLUME.sectors,
+            SPAN,
             name,
             data.len() as u64,
+            false,
             &mut reader,
             &mut |_| true,
         )
@@ -448,24 +462,11 @@ mod tests {
         let data: Vec<u8> = (0..3_000_000u32).map(|i| (i * 7) as u8).collect();
         let added = add(&mut dev, "debian-live.iso", &data)?;
         assert_eq!(added.size_bytes, data.len() as u64);
-        let first = VOLUME.first_lba;
-        verify_file(
-            &dev,
-            first,
-            VOLUME.sectors,
-            "debian-live.iso",
-            &added.sha256,
-            &mut |_| true,
-        )?;
+        verify_file(&dev, SPAN, "debian-live.iso", &added.sha256, &mut |_| true)?;
         assert!(
-            verify_file(
-                &dev,
-                first,
-                VOLUME.sectors,
-                "debian-live.iso",
-                &"0".repeat(64),
-                &mut |_| true
-            )
+            verify_file(&dev, SPAN, "debian-live.iso", &"0".repeat(64), &mut |_| {
+                true
+            })
             .is_err()
         );
         add(&mut dev, "vide.txt", &[])?;
@@ -477,6 +478,8 @@ mod tests {
             ]
         );
         assert_eq!(content(&dev, "debian-live.iso")?, data);
+        let at = VOLUME.first_lba * 512 + added.volume_offset;
+        assert_eq!(read_range(&dev, at, data.len() as u64)?, data);
         let start = VOLUME.first_lba * 512;
         assert_eq!(
             read_range(&dev, start + VOLUME_FLAGS, 1)?[0] & VOLUME_DIRTY,
@@ -509,10 +512,10 @@ mod tests {
         let mut reader = std::io::repeat(0);
         let refused = add_file(
             &mut dev,
-            VOLUME.first_lba,
-            VOLUME.sectors,
+            SPAN,
             "trop.iso",
             100 * MIB,
+            false,
             &mut reader,
             &mut |_| true,
         );
@@ -530,15 +533,12 @@ mod tests {
             add(&mut dev, "b.iso", &big),
             Err(FormatError::TooLarge(_))
         ));
-        assert_eq!(
-            remove_file(&mut dev, VOLUME.first_lba, VOLUME.sectors, "A.ISO")?,
-            big.len() as u64
-        );
+        assert_eq!(remove_file(&mut dev, SPAN, "A.ISO")?, big.len() as u64);
         assert!(listed(&dev)?.is_empty());
         add(&mut dev, "b.iso", &big)?;
         assert_eq!(listed(&dev)?, [("b.iso".to_owned(), big.len() as u64)]);
         assert!(matches!(
-            remove_file(&mut dev, VOLUME.first_lba, VOLUME.sectors, "absent.iso"),
+            remove_file(&mut dev, SPAN, "absent.iso"),
             Err(FormatError::Name(_))
         ));
         Ok(())

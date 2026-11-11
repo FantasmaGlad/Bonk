@@ -25,8 +25,8 @@ const ESP_GUID_TEXT: &str = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B";
 pub const MENU: &str = include_str!("vault_menu.cfg");
 /// The path the GRUB image searches for.
 pub const MENU_PATH: &str = "bonk/grub.cfg";
-/// Ubuntu's iso-scan step with exFAT accepted, put into its initrd by the menu: kept apart, as it follows
-/// casper's own script.
+/// Ubuntu's iso-scan step, put into its initrd by the menu: it maps the ISO from the partition, which casper
+/// cannot read. Kept apart, as it follows casper's own scripts.
 pub const CASPER_EXFAT: &str = include_str!("vault_casper_exfat.sh");
 /// Next to the menu, which keeps GRUB's `config_directory` to name it.
 pub const CASPER_EXFAT_PATH: &str = "bonk/casper/20iso_scan";
@@ -91,18 +91,42 @@ pub fn add_image(
     plan: &VaultPlan,
     name: &str,
     size: u64,
+    family: IsoFamily,
     reader: &mut dyn std::io::Read,
     advance: &mut dyn FnMut(u64) -> bool,
 ) -> Result<exfat_edit::Added, FormatError> {
-    exfat_edit::add_file(
-        dev,
-        plan.vault.first_lba,
-        plan.vault.sectors(),
-        name,
-        size,
-        reader,
-        advance,
-    )
+    let span = vault_span(plan);
+    let added = exfat_edit::add_file(dev, span, name, size, false, reader, advance)?;
+    if family == IsoFamily::Ubuntu {
+        let location = location_file(added.volume_offset);
+        let size = location.len() as u64;
+        exfat_edit::add_file(
+            dev,
+            span,
+            &format!("{name}{LOCATION_SUFFIX}"),
+            size,
+            true,
+            &mut location.as_slice(),
+            &mut |_| true,
+        )?;
+    }
+    Ok(added)
+}
+
+/// Next to an Ubuntu ISO, hidden: where it starts on the data partition. casper cannot read exFAT, so the
+/// menu passes this offset and Bonk's iso-scan step maps the ISO straight from the partition.
+pub const LOCATION_SUFFIX: &str = ".bonk";
+
+fn vault_span(plan: &VaultPlan) -> exfat_edit::Span {
+    exfat_edit::Span {
+        first_lba: plan.vault.first_lba,
+        sectors: plan.vault.sectors(),
+    }
+}
+
+/// A GRUB script the menu sources.
+fn location_file(volume_offset: u64) -> Vec<u8> {
+    format!("set bonk_offset={volume_offset}\n").into_bytes()
 }
 
 /// # Errors
@@ -114,14 +138,7 @@ pub fn verify_image(
     sha256: &str,
     advance: &mut dyn FnMut(u64) -> bool,
 ) -> Result<(), FormatError> {
-    exfat_edit::verify_file(
-        dev,
-        plan.vault.first_lba,
-        plan.vault.sectors(),
-        name,
-        sha256,
-        advance,
-    )
+    exfat_edit::verify_file(dev, vault_span(plan), name, sha256, advance)
 }
 
 /// Removes an ISO from the root of the data partition; returns its size.
@@ -133,7 +150,13 @@ pub fn remove_image(
     plan: &VaultPlan,
     name: &str,
 ) -> Result<u64, FormatError> {
-    exfat_edit::remove_file(dev, plan.vault.first_lba, plan.vault.sectors(), name)
+    let span = vault_span(plan);
+    let freed = exfat_edit::remove_file(dev, span, name)?;
+    // Only Ubuntu ISOs have one: its absence is the usual case.
+    match exfat_edit::remove_file(dev, span, &format!("{name}{LOCATION_SUFFIX}")) {
+        Ok(_) | Err(FormatError::Name(_)) => Ok(freed),
+        Err(other) => Err(other),
+    }
 }
 
 /// A file of the boot partition: path from its root, `/` separated.
@@ -436,6 +459,7 @@ mod tests {
     use crate::block::MemoryDevice;
     use crate::format::NewFile;
     use crate::format::exfat_tree;
+    use crate::partition::read_range;
 
     const MIB: u64 = 1 << 20;
     const GIB: u64 = 1 << 30;
@@ -455,6 +479,51 @@ mod tests {
         write_table(dev, &plan, &ids())?;
         write_volumes(dev, &plan, &ids(), &boot())?;
         Ok(plan)
+    }
+
+    /// casper maps the ISO at this offset: it must point at the ISO's first byte on the partition.
+    #[test]
+    fn une_iso_ubuntu_laisse_son_emplacement_et_le_retrait_l_efface() -> Result<(), FormatError> {
+        let mut dev = MemoryDevice::new(256 << 20, 512)?;
+        let plan = init(&mut dev, TableKind::Mbr)?;
+        let data: Vec<u8> = (0..1_000_000u32).map(|i| (i % 251) as u8).collect();
+        let added = add_image(
+            &mut dev,
+            &plan,
+            "ubuntu.iso",
+            data.len() as u64,
+            IsoFamily::Ubuntu,
+            &mut data.as_slice(),
+            &mut |_| true,
+        )?;
+        let names: Vec<String> = images(&dev, &plan)?.into_iter().map(|f| f.path).collect();
+        assert_eq!(names, ["ubuntu.iso"]);
+        let span = vault_span(&plan);
+        let reader = Reader::open(&dev, span.first_lba, span.sectors)?;
+        let all: Vec<String> = reader.files()?.into_iter().map(|f| f.path).collect();
+        assert_eq!(all, ["ubuntu.iso", "ubuntu.iso.bonk"]);
+        let start = plan.vault.first_lba * 512 + added.volume_offset;
+        assert_eq!(read_range(&dev, start, data.len() as u64)?, data);
+        assert_eq!(
+            location_file(added.volume_offset),
+            format!("set bonk_offset={}\n", added.volume_offset).into_bytes()
+        );
+        remove_image(&mut dev, &plan, "ubuntu.iso")?;
+        let reader = Reader::open(&dev, span.first_lba, span.sectors)?;
+        assert!(reader.files()?.is_empty());
+        // Other families need none.
+        add_image(
+            &mut dev,
+            &plan,
+            "arch.iso",
+            3,
+            IsoFamily::Arch,
+            &mut &b"iso"[..],
+            &mut |_| true,
+        )?;
+        let reader = Reader::open(&dev, span.first_lba, span.sectors)?;
+        assert_eq!(reader.files()?.len(), 1);
+        Ok(())
     }
 
     #[test]
