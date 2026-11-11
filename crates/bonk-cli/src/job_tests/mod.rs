@@ -17,7 +17,7 @@ use bonk_ops::job::Io;
 
 mod format;
 mod internal;
-mod vault;
+pub(crate) mod vault;
 mod write;
 
 const DISK_SIZE: usize = 64 << 20;
@@ -243,13 +243,13 @@ impl Drop for TempSource {
 type Log = Rc<RefCell<Vec<String>>>;
 
 #[derive(Default)]
-struct ServedCatalog {
+pub(crate) struct ServedCatalog {
     keys: Vec<[u8; 32]>,
     files: Rc<std::collections::HashMap<String, Vec<u8>>>,
 }
 
 impl ServedCatalog {
-    fn access(&self) -> crate::catalog::Access {
+    pub(crate) fn access(&self) -> crate::catalog::Access {
         let (files, sized) = (Rc::clone(&self.files), Rc::clone(&self.files));
         crate::catalog::Access {
             keys: self.keys.clone(),

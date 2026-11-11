@@ -692,3 +692,42 @@ fn une_requete_trop_longue_est_sautee_sans_etre_gardee() {
         Incoming::TooLong,
     ] if a == "{\"a\":1}\n" && b == "{\"b\":2}\n"));
 }
+
+/// The vault through the service, on an image file: prepared, listed, then GRUB found current.
+#[test]
+fn le_coffre_par_le_service() {
+    use crate::job_tests::vault::{BASE, GRUB, served_catalog};
+
+    let mut f = fake(false, fixed());
+    f.cfg.catalog = served_catalog(Some(GRUB)).access();
+    let image = std::env::temp_dir().join(format!("bonk-serve-coffre-{}.img", std::process::id()));
+    let _ = std::fs::remove_file(&image);
+    let cache =
+        std::env::temp_dir().join(format!("bonk-serve-coffre-cache-{}", std::process::id()));
+    let target = format!("{:?}", image.display().to_string());
+    let cache_arg = format!("{:?}", cache.display().to_string());
+    let request = |id: u64, method: &str, extra: &str| {
+        format!(
+            r#"{{"id":{id},"method":"{method}","params":{{"target":{target},"simulate":true,"catalog_url":"{BASE}","cache_dir":{cache_arg}{extra}}}}}"#
+        )
+    };
+    let run = |id: u64, method: &str, extra: &str| {
+        let out = session_until(
+            &[&request(id, method, extra)],
+            &f.cfg,
+            &format!("\"id\":{id}"),
+        );
+        response(&out, id).clone()
+    };
+    let init = run(1, "vault.init", r#","size":268435456,"yes":true"#);
+    assert_eq!(init["result"]["verified"], true, "{init}");
+    assert_eq!(init["result"]["grub"]["version"], "2.14", "{init}");
+    let list = run(2, "vault.list", "");
+    assert_eq!(list["result"]["images"], serde_json::json!([]), "{list}");
+    let update = run(3, "vault.update", "");
+    assert_eq!(update["result"]["up_to_date"], true, "{update}");
+    let missing = run(4, "vault.add", r#","yes":true"#);
+    assert_eq!(missing["error"]["code"], "E6001", "{missing}");
+    let _ = std::fs::remove_file(&image);
+    let _ = std::fs::remove_dir_all(&cache);
+}

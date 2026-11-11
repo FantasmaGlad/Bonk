@@ -6,15 +6,15 @@ use ring::signature::{Ed25519KeyPair, KeyPair};
 use super::*;
 
 const VAULT_DISK: u64 = 256 << 20;
-const BASE: &str = "https://catalogue.test/";
-const GRUB: &[u8] = b"MZ grub de test";
+pub(crate) const BASE: &str = "https://catalogue.test/";
+pub(crate) const GRUB: &[u8] = b"MZ grub de test";
 
 fn sha256(bytes: &[u8]) -> String {
     bonk_core::write::hex(digest(&SHA256, bytes).as_ref())
 }
 
 /// A catalog signed by a test key, offering `grub` when given, and the files it names.
-fn served_catalog(grub: Option<&[u8]>) -> ServedCatalog {
+pub(crate) fn served_catalog(grub: Option<&[u8]>) -> ServedCatalog {
     let pair = Ed25519KeyPair::from_seed_unchecked(&[7; 32]).expect("clé de test");
     let public: [u8; 32] = pair.public_key().as_ref().try_into().expect("32 octets");
     let fake = "c".repeat(64);
