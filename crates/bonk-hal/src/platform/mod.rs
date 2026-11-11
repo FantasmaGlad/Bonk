@@ -4,6 +4,8 @@ mod linux;
 mod macos;
 #[cfg(target_os = "macos")]
 mod macos_disk;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+mod termux;
 #[cfg(target_os = "linux")]
 mod udisks;
 mod unsupported;
@@ -164,7 +166,12 @@ pub fn run_elevated_helper(client: u32, pipe: &str) -> Result<(), String> {
 }
 
 /// What every writing host reports; only elevation and host-written filesystems vary.
-#[cfg(any(windows, target_os = "macos", target_os = "linux"))]
+#[cfg(any(
+    windows,
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "android"
+))]
 fn writing_capabilities(
     elevate: Capability,
     hosted_format: impl Fn(Filesystem, &str) -> Capability,
@@ -199,6 +206,11 @@ fn native_capabilities(elevate: Capability) -> Vec<Capability> {
 
 #[must_use]
 pub fn current() -> &'static dyn Platform {
+    // Inside Termux the only way to a drive is the one termux-usb hands over.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    if let Some(termux) = termux::from_env() {
+        return termux;
+    }
     #[cfg(target_os = "linux")]
     {
         &linux::Linux

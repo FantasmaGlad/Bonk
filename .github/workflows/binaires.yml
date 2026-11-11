@@ -62,10 +62,14 @@ jobs:
           - { nom: windows-i686, cli: true, os: windows-2025, target: i686-pc-windows-msvc, outil: build, suffixe: "", fumee: true, glibc: false, exe: ".exe" }
           - { nom: macos-aarch64, cli: true, os: macos-latest, target: aarch64-apple-darwin, outil: build, suffixe: "", fumee: true, glibc: false, deploiement: "12.0" }
           - { nom: macos-x86_64, cli: true, os: macos-15-intel, target: x86_64-apple-darwin, outil: build, suffixe: "", fumee: true, glibc: false, deploiement: "12.0" }
+          # For Termux: bionic reads Android's DNS settings, a static musl binary would look for /etc/resolv.conf.
+          - { nom: android-aarch64, seule: true, os: ubuntu-24.04, target: aarch64-linux-android, outil: ndk, suffixe: "", options: --no-default-features, fumee: false, glibc: false }
+          - { nom: android-x86_64, seule: true, os: ubuntu-24.04, target: x86_64-linux-android, outil: ndk, suffixe: "", options: --no-default-features, fumee: false, glibc: false }
     env:
       TARGET: ${{ matrix.target }}
       NOM: ${{ matrix.nom }}
       EXE: ${{ matrix.exe }}
+      SEULE: ${{ matrix.seule }}
     steps:
       - name: Récupérer le code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -92,6 +96,16 @@ jobs:
           OPTIONS: ${{ matrix.options }}
         run: |
           if [ -n "$DEPLOIEMENT" ]; then export MACOSX_DEPLOYMENT_TARGET="$DEPLOIEMENT"; fi
+          # API level 26, the APK's minSdk.
+          if [ "$OUTIL" = ndk ]; then
+            ndk=$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 | sort -V | tail -1)
+            bin="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+            variable=$(echo "$TARGET" | tr '[:lower:]-' '[:upper:]_')
+            export "CARGO_TARGET_${variable}_LINKER=$bin/${TARGET}26-clang"
+            export "CC_${TARGET//-/_}=$bin/${TARGET}26-clang"
+            export "AR_${TARGET//-/_}=$bin/llvm-ar"
+            OUTIL=build
+          fi
           # shellcheck disable=SC2086
           cargo "$OUTIL" --release --locked -p bonk $OPTIONS --target "$TARGET$SUFFIXE"
         shell: bash
@@ -156,6 +170,9 @@ jobs:
           $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"').Matches[0].Groups[1].Value
           Write-Output "$($info.ProductName) $($info.ProductVersion) : $($info.FileDescription)"
           if ($info.ProductName -ne 'Bonk' -or $info.ProductVersion -ne $version) { exit 1 }
+      - name: Vérifier l'exécutable Android
+        if: matrix.outil == 'ndk'
+        run: readelf -l "target/$TARGET/release/bonk" | grep -F '/system/bin/linker64'
       - name: Essai de démarrage
         if: matrix.fumee
         run: |
@@ -177,7 +194,9 @@ jobs:
             v="$cargo_v-${SHA::8}"
           fi
           if [ -n "$EXE" ]; then ext=zip; else ext=tar.gz; fi
-          if [[ "$NOM" == *-musl ]]; then racine="bonk-cli-$v-${NOM%-musl}"; else racine="bonk-$v-$NOM"; fi
+          if [[ "$NOM" == *-musl ]]; then racine="bonk-cli-$v-${NOM%-musl}"
+          elif [ -n "$SEULE" ]; then racine="bonk-cli-$v-$NOM"
+          else racine="bonk-$v-$NOM"; fi
           {
             echo "dossier=$racine"
             echo "archive=$racine.$ext"

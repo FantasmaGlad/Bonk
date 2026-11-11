@@ -399,6 +399,14 @@ impl<T: BulkTransport> UsbDisk<T> {
             block_size,
         })
     }
+
+    /// Vendor and product as the drive names itself.
+    ///
+    /// # Errors
+    /// No answer, or a short reply.
+    pub fn inquiry(&self) -> Result<Inquiry, MscError> {
+        self.session.borrow_mut().inquiry()
+    }
 }
 
 impl<T: BulkTransport> BlockDevice for UsbDisk<T> {
