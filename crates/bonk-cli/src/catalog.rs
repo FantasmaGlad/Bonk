@@ -13,7 +13,7 @@ use crate::errors::{Code, report};
 use bonk_ops::job::{self, JobError};
 
 /// Up to the format version directory.
-const DEFAULT_URL: &str = "https://catalog.bonk-os.app/v1/";
+const DEFAULT_URL: &str = "https://catalog.bonk-os.app/v2/";
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum CatalogAction {
@@ -55,6 +55,7 @@ pub(crate) enum ChannelArg {
     Lts,
     Stable,
     EndOfLife,
+    Archive,
 }
 
 /// The service gets the same names as the command line.
@@ -258,6 +259,7 @@ fn channel_label(channel: Channel) -> &'static str {
         Channel::Lts => "LTS",
         Channel::Stable => "stable",
         Channel::EndOfLife => "END OF LIFE",
+        Channel::Archive => "ARCHIVE",
     }
 }
 
@@ -343,6 +345,7 @@ pub(crate) fn run(action: &CatalogAction, out: &mut dyn Write, err: &mut dyn Wri
             ChannelArg::Lts => Channel::Lts,
             ChannelArg::Stable => Channel::Stable,
             ChannelArg::EndOfLife => Channel::EndOfLife,
+            ChannelArg::Archive => Channel::Archive,
         }),
         sort: args.sort,
     };
@@ -401,6 +404,9 @@ mod tests {
             category: None,
             icon: format!("icons/{id}.svg"),
             icon_sha256: "b".repeat(64),
+            parent: None,
+            homepage: None,
+            icon_source: None,
         };
         Catalog {
             schema_version: 1,

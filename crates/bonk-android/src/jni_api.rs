@@ -160,7 +160,7 @@ fn load_catalog(dir: &str, json: Vec<u8>, signature: Vec<u8>) -> Result<(), Stri
             Ok(bytes.clone())
         }
     };
-    let base = "https://catalog.bonk-os.app/v1/";
+    let base = "https://catalog.bonk-os.app/v2/";
     let loaded = manifest::load(base, std::path::Path::new(dir), now, &TRUSTED_KEYS, &fetch)
         .map_err(|error| error.to_string())?;
     let mut catalog = loaded.catalog;

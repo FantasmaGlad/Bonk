@@ -9,7 +9,7 @@ use ring::signature::{ED25519, UnparsedPublicKey};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// The current key, in the publishing secrets, and an offline backup that keeps publishing possible without a
 /// new Bonk release if the first is lost.
@@ -38,6 +38,14 @@ pub struct Family {
     /// Logo, relative to the manifest. Its hash, covered by the signature, keeps it from being replaced.
     pub icon: String,
     pub icon_sha256: String,
+    /// The system a flavour derives from: `ubuntu` for Kubuntu.
+    #[serde(default)]
+    pub parent: Option<String>,
+    #[serde(default)]
+    pub homepage: Option<String>,
+    /// Official address the logo comes from.
+    #[serde(default)]
+    pub icon_source: Option<String>,
 }
 
 /// Life cycle of a version: what marks an old version.
@@ -50,6 +58,8 @@ pub enum Channel {
     Stable,
     /// Still offered, no longer maintained by the publisher: the interface says so.
     EndOfLife,
+    /// An older version, served by the publisher's own archive.
+    Archive,
 }
 
 /// An offered image.
@@ -565,7 +575,7 @@ mod tests {
 
     fn manifest(sequence: u64, expires: u64, images: &str) -> Vec<u8> {
         format!(
-            r#"{{"schema_version":1,"sequence":{sequence},"expires_unix":{expires},"families":[{}],"images":[{images}]}}"#,
+            r#"{{"schema_version":2,"sequence":{sequence},"expires_unix":{expires},"families":[{}],"images":[{images}]}}"#,
             familles()
         )
         .into_bytes()
@@ -691,10 +701,10 @@ mod tests {
                 seen: 5
             })
         ));
-        let futur = br#"{"schema_version":2,"autre_chose":true}"#;
+        let futur = br#"{"schema_version":3,"autre_chose":true}"#;
         assert_eq!(
             check(futur, &key, &[public], 0),
-            Err(CatalogError::UnsupportedVersion(2))
+            Err(CatalogError::UnsupportedVersion(3))
         );
         assert!(matches!(
             check(b"pas du json", &key, &[public], 0),
@@ -790,6 +800,9 @@ mod tests {
             category: None,
             icon: "icons/ubuntu.svg".to_owned(),
             icon_sha256: sha,
+            parent: None,
+            homepage: None,
+            icon_source: None,
         };
         let fetch = move |_: &str| Ok(contenu.clone());
         assert_eq!(
@@ -935,6 +948,9 @@ mod tests {
             category: None,
             icon: icon.to_owned(),
             icon_sha256: "b".repeat(64),
+            parent: None,
+            homepage: None,
+            icon_source: None,
         };
         assert_eq!(check_family(&family("icons/ubuntu.svg")), Ok(()));
         for refuse in [
