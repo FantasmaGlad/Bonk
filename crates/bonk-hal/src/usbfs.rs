@@ -124,7 +124,7 @@ fn with_shrinking_limit(
         match transfer(wanted.min(*limit)) {
             Err(error) if error.raw_os_error() == Some(libc::ENOMEM) && *limit > TRANSFER_MIN => {
                 *limit = (*limit / 2).max(TRANSFER_MIN);
-                log::debug!(target: "bonk::usbfs", limit = *limit; "transfer size reduced");
+                log::debug!(target: "bonk::hal", limit = *limit; "transfer size reduced");
             }
             result => return result,
         }
@@ -171,7 +171,8 @@ impl UsbfsTransport {
         let mut transport = Self {
             device,
             interface,
-            claimed_here: true,
+            // Set once claimed: before that, dropping must not release what was never taken.
+            claimed_here: false,
             transfer_limit: TRANSFER_START,
         };
         let mut detach = InterfaceIoctl {
@@ -186,7 +187,14 @@ impl UsbfsTransport {
             return Err(error);
         }
         let mut number = u32::from(interface.number);
-        transport.ioctl(USBDEVFS_CLAIMINTERFACE, (&raw mut number).cast())?;
+        if let Err(error) = transport.ioctl(USBDEVFS_CLAIMINTERFACE, (&raw mut number).cast()) {
+            // The kernel driver was detached above: give the drive back to it.
+            if let Err(reattach) = transport.reattach_driver() {
+                log::warn!(target: "bonk::hal", error:% = reattach; "the drive was not handed back to the kernel driver");
+            }
+            return Err(error);
+        }
+        transport.claimed_here = true;
         Ok(transport)
     }
 
@@ -292,6 +300,17 @@ impl BulkTransport for UsbfsTransport {
     }
 }
 
+impl UsbfsTransport {
+    fn reattach_driver(&mut self) -> io::Result<usize> {
+        let mut attach = InterfaceIoctl {
+            interface: libc::c_int::from(self.interface.number),
+            code: USBDEVFS_CONNECT as libc::c_int,
+            data: std::ptr::null_mut(),
+        };
+        self.ioctl(USBDEVFS_IOCTL, (&raw mut attach).cast())
+    }
+}
+
 impl Drop for UsbfsTransport {
     fn drop(&mut self) {
         if !self.claimed_here {
@@ -299,14 +318,9 @@ impl Drop for UsbfsTransport {
         }
         let mut number = u32::from(self.interface.number);
         let released = self.ioctl(USBDEVFS_RELEASEINTERFACE, (&raw mut number).cast());
-        let mut attach = InterfaceIoctl {
-            interface: libc::c_int::from(self.interface.number),
-            code: USBDEVFS_CONNECT as libc::c_int,
-            data: std::ptr::null_mut(),
-        };
-        let attached = self.ioctl(USBDEVFS_IOCTL, (&raw mut attach).cast());
+        let attached = self.reattach_driver();
         if released.is_err() || attached.is_err() {
-            log::warn!(target: "bonk::usbfs", "the drive was not handed back to the kernel driver");
+            log::warn!(target: "bonk::hal", "the drive was not handed back to the kernel driver");
         }
     }
 }
