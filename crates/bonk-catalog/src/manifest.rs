@@ -224,13 +224,6 @@ pub struct Trust<'a> {
     pub seen_sequence: u64,
 }
 
-fn is_identifier(text: &str) -> bool {
-    !text.is_empty()
-        && text.bytes().all(|b| {
-            b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'.' || b == b'_'
-        })
-}
-
 /// `YYYY-MM-DD` shape only: enough for text order to be date order.
 fn is_date(text: &str) -> bool {
     let bytes = text.as_bytes();
@@ -272,7 +265,7 @@ fn check_grub(grub: &Grub) -> Result<(), &'static str> {
 }
 
 fn check_family(family: &Family) -> Result<(), &'static str> {
-    if !is_identifier(&family.id) {
+    if !crate::link::is_image_id(&family.id) {
         return Err("identifier must be lowercase ASCII");
     }
     if !is_relative(&family.icon) {
@@ -294,7 +287,7 @@ fn is_mirror(address: &str) -> bool {
 }
 
 fn check_image(image: &Image) -> Result<(), &'static str> {
-    if !is_identifier(&image.id) {
+    if !crate::link::is_image_id(&image.id) {
         return Err("identifier must be lowercase ASCII");
     }
     if !is_date(&image.released) {
@@ -592,6 +585,23 @@ mod tests {
             r#"{{"id":"debian-13-netinst-x86_64","family":"debian","name":"Debian","version":"13.6","channel":"stable","released":"2026-01-10","edition":"netinst","arch":"x86_64","homepage":"https://www.debian.org/","url":"https://cdimage.debian.org/x.iso","sha256":"{}","size_bytes":123}}"#,
             "a".repeat(64)
         )
+    }
+
+    /// An identifier a link could not name is refused in the catalog too.
+    #[test]
+    fn un_identifiant_hors_de_la_regle_des_liens_est_refuse() -> Result<(), serde_json::Error> {
+        for id in ["-debian", &"a".repeat(129)] {
+            let image: Image =
+                serde_json::from_str(&debian().replace("debian-13-netinst-x86_64", id))?;
+            assert_eq!(
+                check_image(&image),
+                Err("identifier must be lowercase ASCII"),
+                "{id}"
+            );
+        }
+        let image: Image = serde_json::from_str(&debian())?;
+        assert_eq!(check_image(&image), Ok(()));
+        Ok(())
     }
 
     fn windows() -> String {
