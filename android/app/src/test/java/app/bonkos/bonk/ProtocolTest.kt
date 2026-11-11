@@ -27,6 +27,9 @@ class ProtocolTest {
                 PickImage,
                 SaveLanguage("fr"),
                 Write("usb-S1-001-002", "/dev/bus/usb/001/002", "/x.iso", "", raw = false, mbr = true),
+                PickVaultIso,
+                VaultRun("add", "usb-S1-001-002", "/dev/bus/usb/001/002", "/proc/self/fd/43"),
+                VaultRun("update", "usb-S1-001-002", "/dev/bus/usb/001/002"),
             ),
             answer.effects,
         )
@@ -71,6 +74,14 @@ class ProtocolTest {
                 Failed("unexpected"),
                 CatalogFailed("404"),
                 Open("bonk://install/debian-13-netinst-x86_64"),
+                VaultButton("open"),
+                VaultButton("close"),
+                VaultButton("prepare"),
+                VaultButton("confirm"),
+                VaultButton("browse"),
+                VaultButton("update"),
+                VaultButton("cancel"),
+                VaultPicked("/proc/self/fd/43"),
             )
         val expected = samples.getValue("messages").jsonArray
         assertEquals(expected.size, sent.size, "un message de Rust n'a pas de type Kotlin, ou l'inverse")
@@ -85,8 +96,9 @@ class ProtocolTest {
             samples.getValue("states").jsonArray.map {
                 Protocol.answer(JsonObject(mapOf("state" to it)).toString()).state
             }
-        assertEquals(4, states.size)
+        assertEquals(6, states.size)
         val (idle, draft, running, finished) = states
+        val (vaultReady, vaultBusy) = states.drop(4)
         assertEquals(null, idle.panel)
         assertTrue("debian-13-netinst-x86_64" in checkNotNull(idle.notice))
         assertEquals(null, draft.notice)
@@ -104,12 +116,24 @@ class ProtocolTest {
         assertEquals(0.25f, assertIs<RunningPanel>(running.panel).fraction)
 
         assertTrue("E2002" in assertIs<FinishedPanel>(finished.panel).message)
+        assertTrue(panel.vaultButton.isNotEmpty())
+
+        val ready = checkNotNull(vaultReady.vault)
+        assertEquals(listOf("debian-live.iso"), ready.images.map { it.name })
+        assertEquals(listOf("browse", "update", "close"), ready.buttons.map { it.action })
+        assertTrue(!ready.busy && !vaultReady.running)
+        val busy = checkNotNull(vaultBusy.vault)
+        assertTrue(busy.busy && vaultBusy.running)
+        assertEquals(0.25f, busy.fraction)
+        assertEquals(listOf("cancel"), busy.buttons.map { it.action })
     }
 
     @Test
-    fun uneDemandeDEcriturePasseAuServiceSansPerte() {
+    fun uneTachePasseAuServiceSansPerte() {
         val write = Write("usb-S1-001-002", "/dev/bus/usb/001/002", "https://x/y.iso", "ab", raw = true, mbr = false)
-        assertEquals(write, Protocol.decodeWrite(Protocol.encodeWrite(write)))
+        assertEquals(write, Protocol.decodeTask(Protocol.encodeTask(write)))
+        val vault = VaultRun("init", "usb-S1-001-002", "/dev/bus/usb/001/002", grub = GrubDownload("https://x/BOOTX64.EFI", 5))
+        assertEquals(vault, Protocol.decodeTask(Protocol.encodeTask(vault)))
     }
 
     @Test

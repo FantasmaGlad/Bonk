@@ -21,6 +21,25 @@
       "image": "/x.iso",
       "mbr": true,
       "raw": false
+    },
+    {
+      "do": "vault_pick"
+    },
+    {
+      "action": "add",
+      "device": "/dev/bus/usb/001/002",
+      "disk_id": "usb-S1-001-002",
+      "do": "vault",
+      "grub": null,
+      "iso": "/proc/self/fd/43"
+    },
+    {
+      "action": "update",
+      "device": "/dev/bus/usb/001/002",
+      "disk_id": "usb-S1-001-002",
+      "do": "vault",
+      "grub": null,
+      "iso": null
     }
   ],
   "messages": [
@@ -133,6 +152,38 @@
     {
       "link": "bonk://install/debian-13-netinst-x86_64",
       "type": "open"
+    },
+    {
+      "action": "open",
+      "type": "vault"
+    },
+    {
+      "action": "close",
+      "type": "vault"
+    },
+    {
+      "action": "prepare",
+      "type": "vault"
+    },
+    {
+      "action": "confirm",
+      "type": "vault"
+    },
+    {
+      "action": "browse",
+      "type": "vault"
+    },
+    {
+      "action": "update",
+      "type": "vault"
+    },
+    {
+      "action": "cancel",
+      "type": "vault"
+    },
+    {
+      "type": "vault_picked",
+      "value": "/proc/self/fd/43"
     }
   ],
   "states": [
@@ -147,7 +198,8 @@
       "running": false,
       "show_all": false,
       "show_all_label": "Afficher aussi les disques écartés",
-      "status": "0 disque(s) affiché(s) sur 0 détecté(s). Actualisation automatique toutes les 2 s."
+      "status": "0 disque(s) affiché(s) sur 0 détecté(s). Actualisation automatique toutes les 2 s.",
+      "vault": null
     },
     {
       "disks": [
@@ -210,12 +262,14 @@
         "raw_label": "Écrire les octets tels quels, sans refuser une image non amorçable",
         "summary": "UDisk  série S1  32,0 Go  0 partition(s)",
         "title": "ÉCRIRE UNE IMAGE SUR CE DISQUE",
+        "vault_button": "Utiliser comme coffre (plusieurs images ISO)...",
         "warning": "Toutes les données de ce disque seront effacées. Cette action est irréversible."
       },
       "running": false,
       "show_all": false,
       "show_all_label": "Afficher aussi les disques écartés",
-      "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s."
+      "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s.",
+      "vault": null
     },
     {
       "disks": [
@@ -243,7 +297,8 @@
       "running": true,
       "show_all": false,
       "show_all_label": "Afficher aussi les disques écartés",
-      "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s."
+      "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s.",
+      "vault": null
     },
     {
       "disks": [
@@ -270,7 +325,192 @@
       "running": false,
       "show_all": false,
       "show_all_label": "Afficher aussi les disques écartés",
-      "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s."
+      "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s.",
+      "vault": null
+    },
+    {
+      "disks": [
+        {
+          "badge": "PROPOSÉ",
+          "device": "/dev/bus/usb/001/002",
+          "facts": "32,0 Go  S1  /dev/bus/usb/001/002",
+          "id": "usb-S1-001-002",
+          "model": "UDisk",
+          "selected": true,
+          "state": "proposé"
+        }
+      ],
+      "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
+      "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
+      "lang": "fr",
+      "language": "English",
+      "notice": null,
+      "panel": {
+        "advanced": false,
+        "advanced_button": "Autre image ou options...",
+        "button": "Écrire et effacer ce disque (dans 3 s)",
+        "enabled": false,
+        "hash": "",
+        "hash_hint": "Empreinte SHA-256 (exigée pour une adresse)",
+        "image": "",
+        "image_hint": "Adresse https:// de l'image",
+        "kind": "draft",
+        "mbr": true,
+        "mbr_label": "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
+        "menu": {
+          "all_categories": "Toutes les catégories",
+          "all_systems": "Tous les systèmes",
+          "button": "Choisir un système...",
+          "categories": [
+            "Debian derivatives"
+          ],
+          "category": null,
+          "open": true,
+          "ready": true,
+          "rows": [
+            {
+              "index": 0,
+              "note": null,
+              "title": "Debian 13.7.0 netinst"
+            },
+            {
+              "index": null,
+              "note": "à télécharger sur https://www.debian.org/, puis Autre image",
+              "title": "Debian DVD"
+            }
+          ],
+          "system": null,
+          "systems": [
+            "Debian"
+          ]
+        },
+        "pick": "Choisir l'image...",
+        "raw": false,
+        "raw_label": "Écrire les octets tels quels, sans refuser une image non amorçable",
+        "summary": "UDisk  série S1  32,0 Go  0 partition(s)",
+        "title": "ÉCRIRE UNE IMAGE SUR CE DISQUE",
+        "vault_button": "Utiliser comme coffre (plusieurs images ISO)...",
+        "warning": "Toutes les données de ce disque seront effacées. Cette action est irréversible."
+      },
+      "running": false,
+      "show_all": false,
+      "show_all_label": "Afficher aussi les disques écartés",
+      "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s.",
+      "vault": {
+        "busy": false,
+        "buttons": [
+          {
+            "action": "browse",
+            "label": "Ajouter une ISO...",
+            "primary": true
+          },
+          {
+            "action": "update",
+            "label": "Mettre à jour GRUB",
+            "primary": false
+          },
+          {
+            "action": "close",
+            "label": "Fermer",
+            "primary": false
+          }
+        ],
+        "fraction": null,
+        "images": [
+          {
+            "name": "debian-live.iso",
+            "size": "1,5 Go"
+          }
+        ],
+        "lines": [],
+        "title": "COFFRE : PLUSIEURS IMAGES ISO SUR UNE CLÉ"
+      }
+    },
+    {
+      "disks": [
+        {
+          "badge": "PROPOSÉ",
+          "device": "/dev/bus/usb/001/002",
+          "facts": "32,0 Go  S1  /dev/bus/usb/001/002",
+          "id": "usb-S1-001-002",
+          "model": "UDisk",
+          "selected": true,
+          "state": "proposé"
+        }
+      ],
+      "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
+      "intro": "Détection des disques. Une écriture exige un disque proposé, un récapitulatif et trois secondes de réflexion.",
+      "lang": "fr",
+      "language": "English",
+      "notice": null,
+      "panel": {
+        "advanced": false,
+        "advanced_button": "Autre image ou options...",
+        "button": "Écrire et effacer ce disque (dans 3 s)",
+        "enabled": false,
+        "hash": "",
+        "hash_hint": "Empreinte SHA-256 (exigée pour une adresse)",
+        "image": "",
+        "image_hint": "Adresse https:// de l'image",
+        "kind": "draft",
+        "mbr": true,
+        "mbr_label": "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
+        "menu": {
+          "all_categories": "Toutes les catégories",
+          "all_systems": "Tous les systèmes",
+          "button": "Choisir un système...",
+          "categories": [
+            "Debian derivatives"
+          ],
+          "category": null,
+          "open": true,
+          "ready": true,
+          "rows": [
+            {
+              "index": 0,
+              "note": null,
+              "title": "Debian 13.7.0 netinst"
+            },
+            {
+              "index": null,
+              "note": "à télécharger sur https://www.debian.org/, puis Autre image",
+              "title": "Debian DVD"
+            }
+          ],
+          "system": null,
+          "systems": [
+            "Debian"
+          ]
+        },
+        "pick": "Choisir l'image...",
+        "raw": false,
+        "raw_label": "Écrire les octets tels quels, sans refuser une image non amorçable",
+        "summary": "UDisk  série S1  32,0 Go  0 partition(s)",
+        "title": "ÉCRIRE UNE IMAGE SUR CE DISQUE",
+        "vault_button": "Utiliser comme coffre (plusieurs images ISO)...",
+        "warning": "Toutes les données de ce disque seront effacées. Cette action est irréversible."
+      },
+      "running": true,
+      "show_all": false,
+      "show_all_label": "Afficher aussi les disques écartés",
+      "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s.",
+      "vault": {
+        "busy": true,
+        "buttons": [
+          {
+            "action": "cancel",
+            "label": "Annuler",
+            "primary": true
+          }
+        ],
+        "fraction": 0.25,
+        "images": [],
+        "lines": [
+          "Ajout de l'ISO...",
+          "Écriture : 1,0 Mo sur 4,1 Mo  (1,0 Mo/s)"
+        ],
+        "title": "COFFRE : PLUSIEURS IMAGES ISO SUR UNE CLÉ"
+      }
     }
   ]
 }

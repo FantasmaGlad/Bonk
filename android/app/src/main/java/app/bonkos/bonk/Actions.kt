@@ -148,6 +148,69 @@ class Actions(
         WriteService.start(context, request)
     }
 
+    /** Reading a vault is brief; what writes to the key belongs to the service, as a write does. */
+    fun vault(request: VaultRun) {
+        Bridge.cancelled = false
+        if (request.action == "list") {
+            thread { runVault(request) }
+        } else {
+            WriteService.start(context, request)
+        }
+    }
+
+    /** Rust checks the bytes against the signed catalog; the bound only stops a runaway download. */
+    private fun downloadGrub(grub: GrubDownload): File {
+        val target = File(context.cacheDir, "grub.download")
+        open(grub.url).inputStream.use { input ->
+            target.outputStream().use { output ->
+                val buffer = ByteArray(BUFFER)
+                var done = 0L
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    done += count
+                    if (done > grub.sizeBytes) throw BonkFailure("E3009", "GRUB is larger than the catalog says")
+                    output.write(buffer, 0, count)
+                }
+            }
+        }
+        return target
+    }
+
+    fun runVault(request: VaultRun) {
+        var grub: File? = null
+        try {
+            val device =
+                usb.drives().firstOrNull { it.deviceName == request.device }
+                    ?: throw BonkFailure("E1003", "the drive is no longer connected")
+            grub = request.grub?.let(::downloadGrub)
+            val iso = request.iso.orEmpty()
+            usb.withDrive(device) { fd, raw ->
+                Native.vault(
+                    fd,
+                    raw,
+                    request.action,
+                    request.diskId,
+                    device.deviceName,
+                    device.serialNumber.orEmpty(),
+                    iso,
+                    Bridge.nameOf(iso),
+                    grub?.path.orEmpty(),
+                )
+            }
+            send(Refresh)
+        } catch (error: BonkFailure) {
+            send(Failed(error.message.orEmpty(), error.code))
+        } catch (error: IOException) {
+            // Network cut, timeout: only the GRUB download does I/O here.
+            send(Failed(error.message ?: error.toString(), "E3009"))
+        } catch (error: Exception) {
+            send(Failed(error.message ?: error.toString()))
+        } finally {
+            grub?.delete()
+        }
+    }
+
     fun runWrite(request: Write) {
         var downloaded: File? = null
         try {

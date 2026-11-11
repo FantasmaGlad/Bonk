@@ -12,6 +12,7 @@ use bonk_ui::command::ViewOptions;
 use bonk_ui::event::{Event, Outcome};
 use bonk_ui::model::{Effect, Message, Model, WRITE_DELAY, WriteState};
 use bonk_ui::text;
+use bonk_ui::vault::{VaultAction, VaultMessage, VaultState, VaultWords};
 use serde_json::{Value, json};
 
 pub(crate) static CANCEL: AtomicBool = AtomicBool::new(false);
@@ -90,6 +91,15 @@ pub(crate) fn partitions_of(layout: &Layout) -> Vec<Value> {
         .collect()
 }
 
+/// As [`partitions_of`] reads them, in the shape the safety filter judges.
+pub(crate) fn partitions(layout: &Layout) -> Vec<Partition> {
+    partitions_of(layout)
+        .iter()
+        .enumerate()
+        .filter_map(partition_of)
+        .collect()
+}
+
 fn partition_of((index, value): (usize, &Value)) -> Option<Partition> {
     Some(Partition {
         path: format!("{}", index + 1),
@@ -101,6 +111,28 @@ fn partition_of((index, value): (usize, &Value)) -> Option<Partition> {
         is_system_volume: false,
         is_active_esp: false,
     })
+}
+
+fn vault_message(action: &str) -> Option<VaultMessage> {
+    Some(match action {
+        "open" => VaultMessage::Open,
+        "close" => VaultMessage::Close,
+        "prepare" => VaultMessage::Prepare,
+        "confirm" => VaultMessage::ConfirmPrepare,
+        "browse" => VaultMessage::Browse,
+        "update" => VaultMessage::Update,
+        "cancel" => VaultMessage::Cancel,
+        _ => return None,
+    })
+}
+
+/// What the engine or the app reports belongs to the drive work running: the vault's or the write's.
+fn drive_event(model: &Model, event: Event) -> Message {
+    if model.vault.is_busy() {
+        Message::Vault(VaultMessage::Event(event))
+    } else {
+        Message::Write(event)
+    }
 }
 
 fn message_of(input: &Value, model: &Model) -> Option<Message> {
@@ -143,18 +175,26 @@ fn message_of(input: &Value, model: &Model) -> Option<Message> {
         "close_confirm" => Message::CloseInternal,
         "cancel" => Message::CancelWrite,
         "dismiss" => Message::DismissWrite,
-        "download" => Message::Write(Event::Progress {
-            phase: Phase::Download,
-            done: input["done"].as_u64()?,
-            total: input["total"].as_u64(),
-            rate: input["rate"].as_f64().unwrap_or(0.0),
-        }),
+        "download" => drive_event(
+            model,
+            Event::Progress {
+                phase: Phase::Download,
+                done: input["done"].as_u64()?,
+                total: input["total"].as_u64(),
+                rate: input["rate"].as_f64().unwrap_or(0.0),
+            },
+        ),
         // Failure born in the app (cancel, key gone, download): its code, when it has one, shows the
         // translated title, as for an engine error.
-        "failed" => Message::Write(Event::Finished(Outcome::Failed {
-            code: text_of("code"),
-            message: text_of("message")?,
-        })),
+        "failed" => drive_event(
+            model,
+            Event::Finished(Outcome::Failed {
+                code: text_of("code"),
+                message: text_of("message")?,
+            }),
+        ),
+        "vault" => Message::Vault(vault_message(input["action"].as_str()?)?),
+        "vault_picked" => Message::Vault(VaultMessage::Picked(text_of("value").map(Into::into))),
         _ => return None,
     })
 }
@@ -184,10 +224,41 @@ fn effects_out(model: &mut Model, effects: Vec<Effect>, draft: Option<Value>) ->
                     out.push(write);
                 }
             }
+            Effect::RunVault(args) => {
+                CANCEL.store(false, Ordering::SeqCst);
+                let _ = model.update(Message::Vault(VaultMessage::Event(Event::Started(0))));
+                out.extend(vault_effect(model, &args));
+            }
+            Effect::PickVaultIso => out.push(json!({"do": "vault_pick"})),
             Effect::Copy(_) | Effect::ScrollList(_) | Effect::ScrollMenu(_) => {}
         }
     }
     out
+}
+
+/// The vault command the model asks for, for Kotlin to run: the phone has no `bonk` command. Kotlin
+/// downloads GRUB for `init` and `update`; Rust checks it against the signed catalog.
+fn vault_effect(model: &Model, args: &[String]) -> Option<Value> {
+    let action = args.get(1)?.as_str();
+    let disk_id = args.get(2)?;
+    let device = model
+        .disks
+        .iter()
+        .find(|disk| &disk.id == disk_id)
+        .map(|disk| disk.path.clone());
+    let iso = (action == "add").then(|| args.get(3)).flatten();
+    let grub = matches!(action, "init" | "update")
+        .then(crate::vault::grub_address)
+        .flatten()
+        .map(|(url, size)| json!({"url": url, "size_bytes": size}));
+    Some(json!({
+        "do": "vault",
+        "action": action,
+        "disk_id": disk_id,
+        "device": device,
+        "iso": iso,
+        "grub": grub,
+    }))
 }
 
 fn draft_of(model: &Model) -> Option<Value> {
@@ -300,6 +371,96 @@ fn chosen_title(model: &Model) -> Option<String> {
         .map(|(_, choice)| format!("{} {}", choice.name, choice.title(model.lang)))
 }
 
+fn vault_state(model: &Model) -> Value {
+    let lang = model.lang;
+    let words = VaultWords::new(lang);
+    let button = |label: &str, action: &str, primary: bool| json!({"label": label, "action": action, "primary": primary});
+    let close = button(lang.pick("Close", "Fermer"), "close", false);
+    let mut images = Vec::new();
+    let (lines, fraction, buttons) = match &model.vault {
+        VaultState::Closed => return Value::Null,
+        VaultState::Busy {
+            action,
+            phase,
+            done,
+            total,
+            rate,
+            ..
+        } => {
+            let mut lines = vec![VaultWords::busy(lang, *action).to_owned()];
+            let mut fraction = None;
+            if let Some(phase) = phase {
+                let (line, part) = text::progress(lang, *phase, *done, *total, *rate);
+                lines.push(line);
+                fraction = Some(part);
+            }
+            let cancel = (*action != VaultAction::List)
+                .then(|| button(lang.pick("Cancel", "Annuler"), "cancel", true));
+            (lines, fraction, cancel.into_iter().collect())
+        }
+        VaultState::NotVault { .. } => (
+            vec![words.not_vault.to_owned()],
+            None,
+            vec![button(words.prepare, "prepare", true), close],
+        ),
+        VaultState::Confirming { disk_id } => (
+            model
+                .disks
+                .iter()
+                .find(|disk| &disk.id == disk_id)
+                .map(|disk| text::disk_summary(lang, disk))
+                .into_iter()
+                .chain([lang
+                    .pick(
+                        "All the data on this disk will be erased. This cannot be undone.",
+                        "Toutes les données de ce disque seront effacées. Cette action est irréversible.",
+                    )
+                    .to_owned()])
+                .collect(),
+            None,
+            vec![
+                button(words.erase, "confirm", true),
+                button(lang.pick("Cancel", "Annuler"), "open", false),
+            ],
+        ),
+        VaultState::Ready {
+            images: found, ..
+        } => {
+            images = found
+                .iter()
+                .map(|(name, size)| json!({"name": name, "size": format_size(*size, lang)}))
+                .collect();
+            let lines = if found.is_empty() {
+                vec![words.empty.to_owned()]
+            } else {
+                Vec::new()
+            };
+            (
+                lines,
+                None,
+                vec![
+                    button(words.add, "browse", true),
+                    button(words.update, "update", false),
+                    close,
+                ],
+            )
+        }
+        VaultState::Finished { outcome, .. } => (
+            vec![text::outcome(lang, outcome)],
+            None,
+            vec![button("OK", "open", true)],
+        ),
+    };
+    json!({
+        "title": words.title,
+        "busy": model.vault.is_busy(),
+        "lines": lines,
+        "fraction": fraction,
+        "images": images,
+        "buttons": buttons,
+    })
+}
+
 fn panel_state(model: &Model) -> Value {
     let lang = model.lang;
     match &model.write {
@@ -347,6 +508,7 @@ fn panel_state(model: &Model) -> Value {
                 ),
                 "button": text::write_button(lang, elapsed, empty),
                 "enabled": elapsed >= WRITE_DELAY && !empty,
+                "vault_button": VaultWords::new(lang).open,
             })
         }
         WriteState::Running {
@@ -396,7 +558,8 @@ pub fn state(model: &Model) -> Value {
         ),
         "disks": disks_state(model),
         "panel": panel_state(model),
-        "running": matches!(model.write, WriteState::Running { .. }),
+        "vault": vault_state(model),
+        "running": matches!(model.write, WriteState::Running { .. }) || model.vault.is_busy(),
     })
 }
 
@@ -420,7 +583,8 @@ pub fn dispatch(input: &str) -> String {
     let mut effects = Vec::new();
     let pending: Vec<Event> = lock(&EVENTS).drain(..).collect();
     for event in pending {
-        effects.extend(model.update(Message::Write(event)));
+        let message = drive_event(&model, event);
+        effects.extend(model.update(message));
     }
     let draft = draft_of(&model);
     if let Some(message) = message_of(&input, &model) {
@@ -498,6 +662,32 @@ mod tests {
         assert_eq!(out[0]["do"], "write");
         assert_eq!(out[0]["device"], "/dev/bus/usb/001/002");
         assert!(matches!(model.write, WriteState::Running { .. }));
+    }
+
+    /// The phone runs the vault through Kotlin, which opens the key; what comes back fills the vault panel,
+    /// never the write panel.
+    #[test]
+    fn le_coffre_passe_par_kotlin_et_ses_retours_vont_au_coffre()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut model = loaded();
+        let message = message_of(&json!({"type": "vault", "action": "open"}), &model);
+        let effects = model.update(message.ok_or("message du coffre refusé")?);
+        let out = effects_out(&mut model, effects, None);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0]["do"], "vault");
+        assert_eq!(out[0]["action"], "list");
+        assert_eq!(out[0]["device"], "/dev/bus/usb/001/002");
+        assert!(model.vault.is_busy());
+        assert!(matches!(model.write, WriteState::Draft { .. }));
+        let failed = json!({"type": "failed", "message": "the drive is no longer connected", "code": "E1003"});
+        let _ = model.update(message_of(&failed, &model).ok_or("échec de l'application refusé")?);
+        assert!(matches!(
+            &model.vault,
+            VaultState::Finished { outcome: Outcome::Failed { code: Some(code), .. }, .. } if code == "E1003"
+        ));
+        assert!(matches!(model.write, WriteState::Draft { .. }));
+        assert_eq!(state(&model)["vault"]["buttons"][0]["action"], "open");
+        Ok(())
     }
 
     /// A row that changes height at each detection makes the whole screen jump.
@@ -591,6 +781,7 @@ mod tests {
     /// Every shape of the screen state: idle, draft with the menu open, writing, result.
     fn state_samples() -> Vec<Value> {
         use bonk_ui::catalog::{Choice, System};
+        use bonk_ui::event::VaultDone;
 
         let mut idle = Model::default();
         let _ = open_link(
@@ -648,6 +839,26 @@ mod tests {
             message: "the drive changed".to_owned(),
         })));
         samples.push(state(&model));
+        let _ = model.update(Message::DismissWrite);
+        let _ = model.update(Message::Select("usb-S1-001-002".to_owned()));
+        let _ = model.update(Message::Vault(VaultMessage::Open));
+        let _ = model.update(Message::Vault(VaultMessage::Event(Event::Finished(
+            Outcome::Vault(VaultDone::Listed(vec![(
+                "debian-live.iso".to_owned(),
+                1_500_000_000,
+            )])),
+        ))));
+        samples.push(state(&model));
+        let _ = model.update(Message::Vault(VaultMessage::Picked(Some(
+            "/proc/self/fd/43".into(),
+        ))));
+        let _ = model.update(Message::Vault(VaultMessage::Event(Event::Progress {
+            phase: Phase::Write,
+            done: 1 << 20,
+            total: Some(4 << 20),
+            rate: 1_048_576.0,
+        })));
+        samples.push(state(&model));
         samples
     }
 
@@ -667,6 +878,21 @@ mod tests {
                 Effect::PickImage,
                 Effect::SaveLanguage(Lang::Fr),
                 Effect::StartWrite(Vec::new()),
+                Effect::PickVaultIso,
+                Effect::RunVault(bonk_ui::vault::vault_args(
+                    VaultAction::Add,
+                    "usb-S1-001-002",
+                    Some("/proc/self/fd/43"),
+                    false,
+                    false,
+                )),
+                Effect::RunVault(bonk_ui::vault::vault_args(
+                    VaultAction::Update,
+                    "usb-S1-001-002",
+                    None,
+                    false,
+                    false,
+                )),
             ],
             draft,
         );
@@ -700,6 +926,14 @@ mod tests {
             json!({"type": "failed", "message": "unexpected"}),
             json!({"type": "catalog_failed", "message": "404"}),
             json!({"type": "open", "link": "bonk://install/debian-13-netinst-x86_64"}),
+            json!({"type": "vault", "action": "open"}),
+            json!({"type": "vault", "action": "close"}),
+            json!({"type": "vault", "action": "prepare"}),
+            json!({"type": "vault", "action": "confirm"}),
+            json!({"type": "vault", "action": "browse"}),
+            json!({"type": "vault", "action": "update"}),
+            json!({"type": "vault", "action": "cancel"}),
+            json!({"type": "vault_picked", "value": "/proc/self/fd/43"}),
         ];
         // `choose` only means something with a loaded catalog, and `open` is not a screen message: their
         // samples fix the shape only.

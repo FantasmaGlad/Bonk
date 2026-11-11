@@ -338,6 +338,19 @@ pub fn write_volumes(
     boot: &[BootFile],
 ) -> Result<(), FormatError> {
     exfat::write(dev, &exfat_volume(plan, ids))?;
+    write_boot(dev, plan, ids, boot)
+}
+
+/// Writes the boot partition alone: the data partition and its ISO images are not touched.
+///
+/// # Errors
+/// Write failure, or boot files too large for the partition.
+pub fn write_boot(
+    dev: &mut dyn BlockDevice,
+    plan: &VaultPlan,
+    ids: &Ids,
+    boot: &[BootFile],
+) -> Result<(), FormatError> {
     let volume = fat32_volume(plan, ids);
     let layout = boot_layout(dev.block_size(), &volume, boot)?;
     layout.write_structures(dev)?;
@@ -360,6 +373,44 @@ pub fn verify(
         ));
     }
     exfat::verify(dev, &exfat_volume(plan, ids))?;
+    verify_boot(dev, plan, ids, boot)
+}
+
+/// `Some` when the drive carries exactly the two vault partitions, the first an exFAT volume labelled
+/// [`VAULT_LABEL`], the second typed as an EFI system partition.
+/// The boot partition reads back with exactly these files: each at the place Bonk would write it, with the same
+/// bytes. Its volume id is not compared, as each preparation draws a new one.
+///
+/// # Errors
+/// Read failure.
+pub fn boot_matches(
+    dev: &dyn BlockDevice,
+    plan: &VaultPlan,
+    boot: &[BootFile],
+) -> Result<bool, FormatError> {
+    let volume = fat32_volume(plan, &Ids::from_seed(b"compare"));
+    let layout = boot_layout(dev.block_size(), &volume, boot)?;
+    for (index, file) in boot.iter().enumerate() {
+        let expected = crate::write::hex(&Sha256::digest(&file.data));
+        match layout.verify_file(dev, index, &expected, &mut |_| true) {
+            Ok(()) => {}
+            Err(FormatError::Mismatch(_)) => return Ok(false),
+            Err(other) => return Err(other),
+        }
+    }
+    Ok(true)
+}
+
+/// The boot partition alone read back as written.
+///
+/// # Errors
+/// Read failure or a difference.
+pub fn verify_boot(
+    dev: &dyn BlockDevice,
+    plan: &VaultPlan,
+    ids: &Ids,
+    boot: &[BootFile],
+) -> Result<(), FormatError> {
     let volume = fat32_volume(plan, ids);
     let layout = boot_layout(dev.block_size(), &volume, boot)?;
     layout.verify_structures(dev, &volume)?;
@@ -370,8 +421,6 @@ pub fn verify(
     Ok(())
 }
 
-/// `Some` when the drive carries exactly the two vault partitions, the first an exFAT volume labelled
-/// [`VAULT_LABEL`], the second typed as an EFI system partition.
 pub fn detect(dev: &dyn BlockDevice) -> Result<Option<VaultPlan>, FormatError> {
     let layout = inspect(dev)?;
     if layout.logical_block_size != dev.block_size()
@@ -523,6 +572,36 @@ mod tests {
         )?;
         let reader = Reader::open(&dev, span.first_lba, span.sectors)?;
         assert_eq!(reader.files()?.len(), 1);
+        Ok(())
+    }
+
+    /// GRUB and the menu change, the ISO images stay: same bytes at the same place.
+    #[test]
+    fn mettre_a_jour_le_demarrage_garde_les_iso() -> Result<(), FormatError> {
+        let mut dev = MemoryDevice::new(256 << 20, 512)?;
+        let plan = init(&mut dev, TableKind::Gpt)?;
+        let data: Vec<u8> = (0..2_000_000u32).map(|i| (i % 253) as u8).collect();
+        let added = add_image(
+            &mut dev,
+            &plan,
+            "debian-live.iso",
+            data.len() as u64,
+            IsoFamily::DebianLive,
+            &mut data.as_slice(),
+            &mut |_| true,
+        )?;
+        assert!(boot_matches(&dev, &plan, &boot())?);
+        let newer = boot_files(&[("x86_64", b"MZ grub x86_64, version suivante".repeat(2000))])?;
+        assert!(!boot_matches(&dev, &plan, &newer)?);
+
+        let ids = Ids::from_seed(b"mise a jour");
+        write_boot(&mut dev, &plan, &ids, &newer)?;
+        verify_boot(&dev, &plan, &ids, &newer)?;
+        assert!(boot_matches(&dev, &plan, &newer)?);
+        assert_eq!(detect(&dev)?, Some(plan));
+        let names: Vec<String> = images(&dev, &plan)?.into_iter().map(|f| f.path).collect();
+        assert_eq!(names, ["debian-live.iso"]);
+        verify_image(&dev, &plan, "debian-live.iso", &added.sha256, &mut |_| true)?;
         Ok(())
     }
 

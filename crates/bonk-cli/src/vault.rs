@@ -14,7 +14,8 @@ use crate::format::TableArg;
 use crate::transfer::{CommonArgs, finish, progress_mode, sink, target_line};
 use bonk_ops::job::{
     self, Deps, GrubInfo, JobError, TraceIo, VaultAddDone, VaultAddJob, VaultInitDone,
-    VaultInitJob, VaultListDone, VaultListJob, VaultRemoveDone, VaultRemoveJob,
+    VaultInitJob, VaultListDone, VaultListJob, VaultRemoveDone, VaultRemoveJob, VaultUpdateDone,
+    VaultUpdateJob,
 };
 
 #[derive(Debug, Subcommand)]
@@ -28,6 +29,8 @@ pub(crate) enum VaultAction {
     Add(AddArgs),
     /// Remove an ISO from the vault, by its name
     Remove(RemoveArgs),
+    /// Replace GRUB and the vault menu with those of the signed catalog when they differ; ISO images stay
+    Update(UpdateArgs),
 }
 
 #[derive(Debug, Args)]
@@ -53,18 +56,43 @@ pub(crate) struct InitArgs {
     #[arg(long)]
     force: bool,
 
+    #[command(flatten)]
+    grub: GrubSource,
+}
+
+/// Where GRUB comes from, for `init` and `update`.
+#[derive(Debug, Args, Default)]
+pub(crate) struct GrubSource {
     /// Folder holding BOOTX64.EFI, for a machine without network: checked against the hash of the
     /// last catalog seen
     #[arg(long, value_name = "DIR")]
-    grub_dir: Option<PathBuf>,
+    pub(crate) grub_dir: Option<PathBuf>,
 
     /// Catalog address (`BONK_CATALOG_URL`); its signature is checked wherever it comes from
     #[arg(long, value_name = "URL")]
-    catalog_url: Option<String>,
+    pub(crate) catalog_url: Option<String>,
 
     /// Download directory; by default the user's cache directory
     #[arg(long, value_name = "DIR")]
-    cache_dir: Option<PathBuf>,
+    pub(crate) cache_dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+#[command(long_about = None)]
+pub(crate) struct UpdateArgs {
+    #[command(flatten)]
+    common: CommonArgs,
+
+    /// Confirm: without --yes, Bonk only says whether an update is needed
+    #[arg(long)]
+    yes: bool,
+
+    /// Say whether an update is needed without writing anything
+    #[arg(long)]
+    dry_run: bool,
+
+    #[command(flatten)]
+    grub: GrubSource,
 }
 
 #[derive(Debug, Args)]
@@ -109,6 +137,7 @@ impl VaultAction {
             Self::List(args) => !args.common.simulate,
             Self::Add(args) => !args.common.simulate,
             Self::Remove(args) => !args.common.simulate,
+            Self::Update(args) => !args.common.simulate,
         }
     }
 }
@@ -123,6 +152,10 @@ pub(crate) fn schema_list() -> serde_json::Value {
 
 pub(crate) fn schema_add() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(VaultAddDone)).unwrap_or_default()
+}
+
+pub(crate) fn schema_update() -> serde_json::Value {
+    serde_json::to_value(schemars::schema_for!(VaultUpdateDone)).unwrap_or_default()
 }
 
 pub(crate) fn schema_remove() -> serde_json::Value {
@@ -147,6 +180,7 @@ pub(crate) fn run(
         VaultAction::List(args) => run_list(args, view, deps, out, err),
         VaultAction::Add(args) => run_add(args, deps, out, err),
         VaultAction::Remove(args) => run_remove(args, deps, out, err),
+        VaultAction::Update(args) => run_update(args, access, deps, out, err),
     }
 }
 
@@ -155,7 +189,10 @@ const GRUB_ARCH: &str = "x86_64";
 
 /// GRUB named by the signed catalog: from its address through the cache, or from `--grub-dir`, always
 /// checked against the signed hash.
-fn grub(args: &InitArgs, access: &catalog::Access) -> Result<(Vec<BootFile>, GrubInfo), JobError> {
+pub(crate) fn grub(
+    args: &GrubSource,
+    access: &catalog::Access,
+) -> Result<(Vec<BootFile>, GrubInfo), JobError> {
     let (loaded, dir, base) = catalog::load_from(
         access,
         args.catalog_url.as_deref(),
@@ -212,7 +249,7 @@ fn run_init(
     let (boot, grub) = if args.dry_run || !(args.yes || args.force) {
         (Vec::new(), None)
     } else {
-        match grub(args, access) {
+        match grub(&args.grub, access) {
             Ok((boot, info)) => (boot, Some(info)),
             Err(error) => {
                 return finish::<VaultInitDone>(Err(error), &args.common, out, err, |_, _| Ok(()));
@@ -322,6 +359,7 @@ fn run_add(args: &AddArgs, deps: &Deps<'_>, out: &mut dyn Write, err: &mut dyn W
     let job = VaultAddJob {
         target: args.common.target(),
         source: args.iso.clone(),
+        name: None,
         options: args.common.write_options(),
         trace_io: args.common.trace_io.map(TraceIo::from),
         yes: args.yes,
@@ -389,4 +427,54 @@ fn family_name(family: core_vault::IsoFamily) -> &'static str {
         core_vault::IsoFamily::Arch => "Arch Linux",
         core_vault::IsoFamily::FedoraLive => "Fedora live",
     }
+}
+
+fn run_update(
+    args: &UpdateArgs,
+    access: &catalog::Access,
+    deps: &Deps<'_>,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> u8 {
+    let (boot, grub) = match grub(&args.grub, access) {
+        Ok((boot, info)) => (boot, Some(info)),
+        Err(error) => {
+            return finish::<VaultUpdateDone>(Err(error), &args.common, out, err, |_, _| Ok(()));
+        }
+    };
+    let job = VaultUpdateJob {
+        target: args.common.target(),
+        boot,
+        grub,
+        options: args.common.write_options(),
+        trace_io: args.common.trace_io.map(TraceIo::from),
+        // Without confirmation, the check alone.
+        dry_run: args.dry_run || !args.yes,
+        yes: args.yes,
+        elevation: args.common.elevate.into(),
+    };
+    finish(
+        job::vault_update(&job, deps),
+        &args.common,
+        out,
+        err,
+        |done, out| {
+            let grub = done
+                .grub
+                .as_ref()
+                .map_or_else(String::new, |grub| format!("GRUB {} ", grub.version));
+            let state = if done.up_to_date {
+                "already up to date"
+            } else if done.updated {
+                "updated"
+            } else {
+                "out of date: add --yes to update"
+            };
+            writeln!(out, "Vault on {}: {grub}{state}", target_line(&done.target))?;
+            if done.verified {
+                writeln!(out, "  Read-back: matches")?;
+            }
+            Ok(())
+        },
+    )
 }

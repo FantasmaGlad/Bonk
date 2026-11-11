@@ -16,7 +16,8 @@ pub use source::{FileReader, ImageFile};
 pub use types::*;
 pub use vault::{
     GrubInfo, VaultAddDone, VaultAddJob, VaultInitDone, VaultInitJob, VaultListDone, VaultListJob,
-    VaultRemoveDone, VaultRemoveJob, vault_add, vault_init, vault_list, vault_remove,
+    VaultRemoveDone, VaultRemoveJob, VaultUpdateDone, VaultUpdateJob, vault_add, vault_init,
+    vault_list, vault_remove, vault_update,
 };
 pub use verify::{VerifyJob, verify};
 pub use write::{WriteJob, normalize_sha256, precheck, write};

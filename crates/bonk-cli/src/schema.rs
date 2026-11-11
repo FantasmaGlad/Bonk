@@ -35,6 +35,7 @@ pub(crate) fn registry() -> Vec<Entry> {
         ("vault-list", vault::schema_list),
         ("vault-add", vault::schema_add),
         ("vault-remove", vault::schema_remove),
+        ("vault-update", vault::schema_update),
         ("serve-request", serve::schema_request),
         ("serve-response", serve::schema_response),
     ]

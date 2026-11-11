@@ -25,6 +25,19 @@ object Native {
         mbr: Boolean,
     )
 
+    /** Blocks. `iso` and `name` for `add`, `grub` (the downloaded file) for `init` and `update`. */
+    external fun vault(
+        fd: Int,
+        descriptors: ByteArray,
+        action: String,
+        diskId: String,
+        device: String,
+        serial: String,
+        iso: String,
+        name: String,
+        grub: String,
+    )
+
     external fun probe(fd: Int, descriptors: ByteArray): String
 
     external fun readHash(fd: Int, descriptors: ByteArray, offset: Long, length: Int): String

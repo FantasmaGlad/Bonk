@@ -10,7 +10,7 @@ use jni::objects::{JByteArray, JClass, JString};
 use jni::sys::{jboolean, jint, jlong};
 use jni::{Env, EnvUnowned};
 
-use crate::{bench, screen, writer};
+use crate::{bench, screen, vault, writer};
 
 /// Duplicates the descriptor: the app's own stays with the app and closes with its connection.
 fn transport(fd: RawFd, descriptors: &[u8]) -> Result<UsbfsTransport, String> {
@@ -152,7 +152,8 @@ fn load_catalog(dir: &str, json: Vec<u8>, signature: Vec<u8>) -> Result<(), Stri
     let base = "https://catalog.bonk-os.app/v1/";
     let loaded = manifest::load(base, std::path::Path::new(dir), now, &TRUSTED_KEYS, &fetch)
         .map_err(|error| error.to_string())?;
-    let catalog = loaded.catalog;
+    let mut catalog = loaded.catalog;
+    vault::set_grub(base, catalog.grub.take());
     let mut images = catalog.images;
     images.sort_by(|a, b| {
         manifest::version_numbers(&b.version).cmp(&manifest::version_numbers(&a.version))
@@ -230,6 +231,52 @@ pub extern "system" fn Java_app_bonkos_bonk_Native_write<'caller>(
             mbr,
         };
         writer::write(
+            &request,
+            move || -> Result<Box<dyn BlockDevice>, BlockError> {
+                let transport = transport(fd, &descriptors)
+                    .map_err(|error| BlockError::Io(std::io::Error::other(error)))?;
+                Ok(Box::new(UsbDisk::open(transport)?))
+            },
+        );
+        Ok(())
+    })
+    .resolve::<jni::errors::ThrowRuntimeExAndDefault>()
+}
+
+/// Blocks until the vault action ends: call off the UI thread.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_app_bonkos_bonk_Native_vault<'caller>(
+    mut env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    fd: jint,
+    descriptors: JByteArray<'caller>,
+    action: JString<'caller>,
+    disk_id: JString<'caller>,
+    device: JString<'caller>,
+    serial: JString<'caller>,
+    iso: JString<'caller>,
+    name: JString<'caller>,
+    grub: JString<'caller>,
+) {
+    env.with_env(|env| -> Result<_, Error> {
+        let descriptors = env.convert_byte_array(&descriptors)?;
+        let action = text_of(env, &action)?;
+        let disk_id = text_of(env, &disk_id)?;
+        let device = text_of(env, &device)?;
+        let serial = text_of(env, &serial)?;
+        let iso = text_of(env, &iso)?;
+        let name = text_of(env, &name)?;
+        let grub = text_of(env, &grub)?;
+        let request = vault::Request {
+            action: &action,
+            disk_id: &disk_id,
+            device: &device,
+            serial: &serial,
+            iso: &iso,
+            name: &name,
+            grub: &grub,
+        };
+        vault::run(
             &request,
             move || -> Result<Box<dyn BlockDevice>, BlockError> {
                 let transport = transport(fd, &descriptors)

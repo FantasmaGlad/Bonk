@@ -133,6 +133,45 @@ fn captures_facultatives() -> Result<(), Box<dyn std::error::Error>> {
     )
     .snapshot(&theme)?
     .matches_image(dossier.join("fenetre-progression"))?;
+    // Vault panel: listed, then a disk without a vault, then the question before erasing.
+    let mut coffre = loaded(sample());
+    let _ = coffre.update(Message::Select("usb-cle".to_owned()));
+    for (nom, etat) in [
+        (
+            "fenetre-coffre",
+            VaultState::Ready {
+                disk_id: "usb-cle".to_owned(),
+                images: vec![
+                    (
+                        "debian-live-13.1.0-amd64-standard.iso".to_owned(),
+                        1_552_000_000,
+                    ),
+                    ("archlinux-x86_64.iso".to_owned(), 1_391_000_000),
+                ],
+            },
+        ),
+        (
+            "fenetre-coffre-absent",
+            VaultState::NotVault {
+                disk_id: "usb-cle".to_owned(),
+            },
+        ),
+        (
+            "fenetre-coffre-confirmer",
+            VaultState::Confirming {
+                disk_id: "usb-cle".to_owned(),
+            },
+        ),
+    ] {
+        coffre.vault = etat;
+        Simulator::with_size(
+            iced::Settings::default(),
+            Size::new(960.0, 760.0),
+            coffre.view(),
+        )
+        .snapshot(&theme)?
+        .matches_image(dossier.join(nom))?;
+    }
     let mut erreur = App::default();
     let _ = erreur.update(Message::Loaded(Err("base udev introuvable".to_owned())));
     Simulator::with_size(
@@ -143,4 +182,25 @@ fn captures_facultatives() -> Result<(), Box<dyn std::error::Error>> {
     .snapshot(&theme)?
     .matches_image(dossier.join("fenetre-erreur"))?;
     Ok(())
+}
+
+/// The vault panel shows under the card of its disk: the ISO images, then the question before erasing.
+#[test]
+fn le_coffre_s_affiche_sous_son_disque() {
+    let mut app = loaded(sample());
+    let _ = app.update(Message::Select("usb-cle".to_owned()));
+    app.vault = VaultState::Ready {
+        disk_id: "usb-cle".to_owned(),
+        images: vec![("archlinux-x86_64.iso".to_owned(), 1_391_000_000)],
+    };
+    assert!(contient(&app, "archlinux-x86_64.iso"));
+    app.vault = VaultState::Confirming {
+        disk_id: "usb-cle".to_owned(),
+    };
+    assert!(contient(&app, "Effacer et préparer") || contient(&app, "Erase and prepare"));
+    // On another disk, nothing.
+    app.vault = VaultState::NotVault {
+        disk_id: "ailleurs".to_owned(),
+    };
+    assert!(!contient(&app, "Préparer en coffre") && !contient(&app, "Prepare as a vault"));
 }

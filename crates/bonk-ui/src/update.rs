@@ -159,6 +159,7 @@ impl Model {
                 self.on_write_event(event);
                 Vec::new()
             }
+            Message::Vault(message) => self.apply_vault(message),
         }
     }
 

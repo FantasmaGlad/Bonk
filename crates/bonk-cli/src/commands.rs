@@ -95,6 +95,7 @@ pub(crate) fn run_serve(env: &Env, view: ViewDefaults) -> u8 {
         vars: env.vars.clone(),
         view,
         interrupted: Arc::new(bonk_hal::interrupt::requested),
+        catalog: crate::catalog::Access::default(),
     };
     bonk_hal::interrupt::install();
     serve::serve(

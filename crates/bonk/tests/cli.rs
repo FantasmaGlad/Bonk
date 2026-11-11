@@ -193,7 +193,12 @@ fn sous_affichage_virtuel_le_rendu_bascule_en_logiciel() -> Resultat {
     if !common::affichage_virtuel_disponible() {
         return Ok(());
     }
+    // An auth file of our own: without one, xvfb-run makes a temporary directory and exits 5 when removing it
+    // races the display, whatever the command did.
+    let autorisation = std::env::temp_dir().join(format!("bonk-xvfb-{}.auth", std::process::id()));
     let sortie = Command::new("xvfb-run")
+        .arg("-f")
+        .arg(&autorisation)
         .args(["-a", "-s", "-screen 0 1280x800x24", "timeout", "6"])
         .arg(env!("CARGO_BIN_EXE_bonk"))
         .arg("-v")
@@ -203,6 +208,7 @@ fn sous_affichage_virtuel_le_rendu_bascule_en_logiciel() -> Resultat {
         .env_remove("ICED_BACKEND")
         .env_remove("BONK_RENDER_FALLBACK")
         .output()?;
+    let _ = std::fs::remove_file(&autorisation);
     // Depending on the distribution `xvfb-run` sends the command's stderr to its stdout (`2>&1` in the Debian
     // script): the log is read from both streams.
     let journal = format!(

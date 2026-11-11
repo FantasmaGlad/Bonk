@@ -20,7 +20,9 @@ use crate::errors::{Code, EXIT_CANCELLED, EXIT_RUNTIME_ERROR};
 use crate::slot::JobSlot;
 use bonk_ops::job::Io;
 
-use jobs::{JobHandle, Kind, WatchHandle, start_or_fail, start_watch, stop_watch};
+use jobs::{
+    DiskKind, JobHandle, Kind, VaultKind, WatchHandle, start_or_fail, start_watch, stop_watch,
+};
 use methods::quick;
 use protocol::{Out, Request, failure};
 
@@ -42,6 +44,8 @@ pub(crate) struct Config {
     pub(crate) view: ViewDefaults,
     /// Ctrl+C or SIGTERM received: the service cancels the running operation and stops.
     pub(crate) interrupted: Arc<dyn Fn() -> bool + Send + Sync>,
+    /// For the GRUB of `vault.init` and `vault.update`, resolved before the operation starts.
+    pub(crate) catalog: crate::catalog::Access,
 }
 
 /// Name and description live here, and `handle` must handle every variant.
@@ -69,6 +73,11 @@ enum Method {
     DiskFormat,
     Capabilities,
     CatalogList,
+    VaultList,
+    VaultInit,
+    VaultAdd,
+    VaultRemove,
+    VaultUpdate,
 }
 
 #[derive(Default)]
@@ -110,10 +119,25 @@ fn handle(line: &str, cfg: &Config, out: &Out, state: &mut State) {
         return;
     };
     match method {
-        Method::DiskWrite => start_or_fail(Kind::Write, &request, cfg, out, state),
-        Method::DiskVerify => start_or_fail(Kind::Verify, &request, cfg, out, state),
-        Method::DiskRepairGpt => start_or_fail(Kind::Repair, &request, cfg, out, state),
-        Method::DiskFormat => start_or_fail(Kind::Format, &request, cfg, out, state),
+        Method::DiskWrite => start_or_fail(Kind::Disk(DiskKind::Write), &request, cfg, out, state),
+        Method::DiskVerify => {
+            start_or_fail(Kind::Disk(DiskKind::Verify), &request, cfg, out, state)
+        }
+        Method::DiskRepairGpt => {
+            start_or_fail(Kind::Disk(DiskKind::Repair), &request, cfg, out, state)
+        }
+        Method::DiskFormat => {
+            start_or_fail(Kind::Disk(DiskKind::Format), &request, cfg, out, state)
+        }
+        Method::VaultList => start_or_fail(Kind::Vault(VaultKind::List), &request, cfg, out, state),
+        Method::VaultInit => start_or_fail(Kind::Vault(VaultKind::Init), &request, cfg, out, state),
+        Method::VaultAdd => start_or_fail(Kind::Vault(VaultKind::Add), &request, cfg, out, state),
+        Method::VaultRemove => {
+            start_or_fail(Kind::Vault(VaultKind::Remove), &request, cfg, out, state)
+        }
+        Method::VaultUpdate => {
+            start_or_fail(Kind::Vault(VaultKind::Update), &request, cfg, out, state)
+        }
         Method::Cancel => {
             let running = state.slot.is_busy();
             if let (true, Some(job)) = (running, &state.job) {
@@ -233,7 +257,7 @@ fn read_lines(mut input: impl BufRead + Send + 'static) -> Receiver<Incoming> {
 }
 
 impl Method {
-    const ALL: [Self; 22] = [
+    const ALL: [Self; 27] = [
         Self::Ping,
         Self::Version,
         Self::Methods,
@@ -256,6 +280,11 @@ impl Method {
         Self::DiskFormat,
         Self::Capabilities,
         Self::CatalogList,
+        Self::VaultList,
+        Self::VaultInit,
+        Self::VaultAdd,
+        Self::VaultRemove,
+        Self::VaultUpdate,
     ];
 
     fn name(self) -> &'static str {
@@ -282,6 +311,11 @@ impl Method {
             Self::DiskFormat => "disk.format",
             Self::Capabilities => "capabilities",
             Self::CatalogList => "catalog.list",
+            Self::VaultList => "vault.list",
+            Self::VaultInit => "vault.init",
+            Self::VaultAdd => "vault.add",
+            Self::VaultRemove => "vault.remove",
+            Self::VaultUpdate => "vault.update",
         }
     }
 
@@ -309,6 +343,13 @@ impl Method {
             Self::DiskFormat => "bonk format: table and filesystem (long operation)",
             Self::Capabilities => "bonk capabilities: what this host allows",
             Self::CatalogList => "bonk catalog list: images of the signed catalog",
+            Self::VaultList => "bonk vault list: ISO images on a vault",
+            Self::VaultInit => {
+                "bonk vault init: prepares a vault, erases the disk (long operation)"
+            }
+            Self::VaultAdd => "bonk vault add: copies an ISO to a vault (long operation)",
+            Self::VaultRemove => "bonk vault remove: removes an ISO from a vault",
+            Self::VaultUpdate => "bonk vault update: GRUB and menu of the catalog (long operation)",
         }
     }
 

@@ -11,6 +11,7 @@ use super::{App, Focus, Message};
 
 mod disk;
 mod panel;
+mod vault;
 
 #[cfg(test)]
 pub(super) use bonk_ui::text::secondes_restantes;
@@ -207,6 +208,9 @@ impl App {
                 if self.selected.as_deref() == Some(disk.id.as_str())
                     && let Some(panel) = self.write_panel(disk)
                 {
+                    cards.push(panel);
+                }
+                if let Some(panel) = self.vault_panel(disk) {
                     cards.push(panel);
                 }
             }

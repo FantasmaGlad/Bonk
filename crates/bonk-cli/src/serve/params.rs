@@ -101,6 +101,12 @@ pub(super) struct TransferParams {
     /// `disk.format` table: `gpt` (default) or `mbr`.
     pub(super) table: Option<String>,
     pub(super) label: Option<String>,
+    /// `vault.add`: ISO image to copy.
+    pub(super) iso: Option<PathBuf>,
+    /// `vault.remove`: name of the ISO on the vault.
+    pub(super) name: Option<String>,
+    /// `vault.init`, `vault.update`: folder holding BOOTX64.EFI, checked against the catalog.
+    pub(super) grub_dir: Option<PathBuf>,
 }
 
 impl TransferParams {

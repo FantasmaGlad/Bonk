@@ -33,6 +33,52 @@ pub enum Outcome {
         code: Option<String>,
         message: String,
     },
+    /// A `bonk vault` command that succeeded.
+    Vault(VaultDone),
+}
+
+/// What a `bonk vault` command did, read from its JSON result.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VaultDone {
+    /// ISO images at the root: name and size.
+    Listed(Vec<(String, u64)>),
+    Prepared,
+    Added {
+        name: String,
+        bytes: u64,
+    },
+    /// `false`: the boot partition already held the catalog's files.
+    Updated {
+        changed: bool,
+    },
+}
+
+/// Each `vault` result has its own fields: the one present says which command answered.
+fn vault_done(value: &Value) -> Option<VaultDone> {
+    if let Some(images) = value["images"].as_array() {
+        let images = images
+            .iter()
+            .filter_map(|image| {
+                Some((
+                    image["path"].as_str()?.to_owned(),
+                    image["size_bytes"].as_u64()?,
+                ))
+            })
+            .collect();
+        return Some(VaultDone::Listed(images));
+    }
+    if value["vault_label"].is_string() {
+        return Some(VaultDone::Prepared);
+    }
+    if let (Some(name), Some(bytes)) = (value["name"].as_str(), value["size_bytes"].as_u64()) {
+        return Some(VaultDone::Added {
+            name: name.to_owned(),
+            bytes,
+        });
+    }
+    let changed = value["updated"].as_bool()?;
+    value["up_to_date"].as_bool()?;
+    Some(VaultDone::Updated { changed })
 }
 
 pub fn write_args(
@@ -72,6 +118,9 @@ pub fn parse_line(line: &str) -> Option<Event> {
             total: value["bytes_total"].as_u64(),
             rate: value["bytes_per_second"].as_f64().unwrap_or(0.0),
         }),
+        "result" if value["write"].is_null() => {
+            vault_done(&value).map(|done| Event::Finished(Outcome::Vault(done)))
+        }
         "result" => Some(Event::Finished(Outcome::Done {
             bytes: value["write"]["bytes"].as_u64()?,
             verified: !value["verify"].is_null(),

@@ -158,6 +158,43 @@ pub fn outcome(lang: Lang, outcome: &Outcome) -> String {
             code.as_ref()
                 .map_or_else(String::new, |c| format!(" [{c}]")),
         ),
+        Outcome::Vault(done) => vault_outcome(lang, done),
+    }
+}
+
+#[must_use]
+pub fn vault_outcome(lang: Lang, done: &crate::event::VaultDone) -> String {
+    use crate::event::VaultDone;
+    match done {
+        VaultDone::Listed(images) => format!(
+            "{} {}",
+            images.len(),
+            lang.pick("ISO image(s) on the vault.", "image(s) ISO sur le coffre.")
+        ),
+        VaultDone::Prepared => lang
+            .pick(
+                "VAULT READY: copy ISO images to it, or add them here.",
+                "COFFRE PRÊT : copiez-y des images ISO, ou ajoutez-les ici.",
+            )
+            .to_owned(),
+        VaultDone::Added { name, bytes } => format!(
+            "{} {name} ({}), {}",
+            lang.pick("ADDED:", "AJOUTÉE :"),
+            format_size(*bytes, lang),
+            lang.pick("read back and verified.", "relue et vérifiée.")
+        ),
+        VaultDone::Updated { changed: true } => lang
+            .pick(
+                "VAULT UPDATED: GRUB and the menu of the catalog, read back.",
+                "COFFRE MIS À JOUR : GRUB et le menu du catalogue, relus.",
+            )
+            .to_owned(),
+        VaultDone::Updated { changed: false } => lang
+            .pick(
+                "The vault is already up to date.",
+                "Le coffre est déjà à jour.",
+            )
+            .to_owned(),
     }
 }
 

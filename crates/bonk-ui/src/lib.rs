@@ -6,5 +6,6 @@ pub mod model;
 mod navigation;
 pub mod text;
 mod update;
+pub mod vault;
 
 pub use errors::french_title;
