@@ -39,6 +39,9 @@ pub enum Code {
     FormatFailed,
     FilesystemUnavailable,
     NotAVault,
+    IsoNotForVault,
+    VaultNoRoom,
+    VaultEntry,
     LogSettingInvalid,
     ConfigInvalid,
     WindowUnavailable,
@@ -391,6 +394,41 @@ pub const CATALOG: &[Entry] = &[
             "the exFAT volume is damaged",
         ],
         remedy: "Prepare the disk with `bonk vault init`, which erases it. A damaged volume can be checked by the system's exFAT tool first.",
+    },
+    Entry {
+        code: Code::IsoNotForVault,
+        id: "E7004",
+        exit: EXIT_USAGE,
+        title: "This ISO cannot start from the vault",
+        causes: &[
+            "not an ISO 9660 image",
+            "not a family the vault starts: Debian live, Ubuntu, Arch Linux, Fedora live",
+            "a space in its name: the started system could not find it again",
+            "a name not ending in .iso: the vault menu would not list it",
+        ],
+        remedy: "Write the image on its own drive with `bonk write`, or rename it without spaces.",
+    },
+    Entry {
+        code: Code::VaultNoRoom,
+        id: "E7005",
+        exit: EXIT_RUNTIME_ERROR,
+        title: "Not enough room on the vault",
+        causes: &[
+            "no free contiguous space as large as the ISO: a live system needs it in one piece",
+            "the vault's root directory is full",
+        ],
+        remedy: "Remove an ISO with `bonk vault remove`, or prepare a larger drive.",
+    },
+    Entry {
+        code: Code::VaultEntry,
+        id: "E7006",
+        exit: EXIT_USAGE,
+        title: "ISO name already on the vault, or not on it",
+        causes: &[
+            "`bonk vault add`: an ISO of the same name, case aside, is already there",
+            "`bonk vault remove`: no ISO of that name at the root of the vault",
+        ],
+        remedy: "List the vault with `bonk vault list`.",
     },
 ];
 

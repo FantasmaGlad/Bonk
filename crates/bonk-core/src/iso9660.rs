@@ -142,8 +142,8 @@ impl<R: Read + Seek> Iso<R> {
 }
 
 /// Test images: a root, directories and empty files, with Rock Ridge names, as `xorriso -R` lays them out.
-#[cfg(test)]
-pub(crate) mod testing {
+#[cfg(any(test, feature = "testing"))]
+pub mod testing {
     use super::*;
 
     fn record(name: &str, extent: u32, size: u32, directory: bool) -> Vec<u8> {
@@ -185,7 +185,8 @@ pub(crate) mod testing {
     }
 
     /// One sector per directory, files as given (path, size); data is never read.
-    pub(crate) fn image(label: &str, files: &[(&str, u32)]) -> Vec<u8> {
+    #[must_use]
+    pub fn image(label: &str, files: &[(&str, u32)]) -> Vec<u8> {
         let mut directories: Vec<String> = vec![String::new()];
         for (path, _) in files {
             let mut prefix = String::new();

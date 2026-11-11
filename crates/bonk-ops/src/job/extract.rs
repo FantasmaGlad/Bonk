@@ -384,16 +384,16 @@ impl WindowsImage {
 }
 
 /// Shared by the copy and the read-back.
-struct Advance<'a, 'b> {
-    phase: Phase,
-    done: u64,
-    total: u64,
-    started: Instant,
-    report: &'a mut (dyn FnMut(&Progress) -> Control + 'b),
+pub(super) struct Advance<'a, 'b> {
+    pub(super) phase: Phase,
+    pub(super) done: u64,
+    pub(super) total: u64,
+    pub(super) started: Instant,
+    pub(super) report: &'a mut (dyn FnMut(&Progress) -> Control + 'b),
 }
 
 impl Advance<'_, '_> {
-    fn add(&mut self, bytes: u64) -> bool {
+    pub(super) fn add(&mut self, bytes: u64) -> bool {
         self.done += bytes;
         let elapsed = self.started.elapsed();
         let event = Progress {

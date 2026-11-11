@@ -70,14 +70,14 @@ pub(crate) fn schema_progress() -> serde_json::Value {
 }
 
 /// `--quiet` removes the automatic progress line; an explicit `--progress json` stays.
-pub(super) fn progress_mode(mode: ProgressMode, quiet: bool) -> ProgressMode {
+pub(crate) fn progress_mode(mode: ProgressMode, quiet: bool) -> ProgressMode {
     match mode {
         ProgressMode::Auto if quiet => ProgressMode::None,
         other => other,
     }
 }
 
-pub(super) fn sink<'a>(
+pub(crate) fn sink<'a>(
     mode: ProgressMode,
     out: &'a mut dyn Write,
     err: &'a mut dyn Write,

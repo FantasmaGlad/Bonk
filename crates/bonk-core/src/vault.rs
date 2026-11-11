@@ -7,7 +7,7 @@ use crate::format::exfat_read::{FileEntry, Reader};
 use crate::format::table::{
     self, GUID_ESP, MBR_ESP, PartitionPlan, Slot, TableKind, gpt_type, mbr_type, usable_end,
 };
-use crate::format::{ALIGNMENT, Filesystem, FormatError, Ids, exfat, fat32, guid};
+use crate::format::{ALIGNMENT, Filesystem, FormatError, Ids, exfat, exfat_edit, fat32, guid};
 use crate::format::{NewFile, fat32_tree};
 use crate::partition::{MbrEntry, Severity, inspect};
 
@@ -79,6 +79,61 @@ pub fn iso_family<R: std::io::Read + std::io::Seek>(
         }
     }
     Ok(None)
+}
+
+/// Adds an ISO at the root of the vault's data partition, contiguous; the caller flushes then calls
+/// [`verify_image`].
+///
+/// # Errors
+/// See [`exfat_edit::add_file`].
+pub fn add_image(
+    dev: &mut dyn BlockDevice,
+    plan: &VaultPlan,
+    name: &str,
+    size: u64,
+    reader: &mut dyn std::io::Read,
+    advance: &mut dyn FnMut(u64) -> bool,
+) -> Result<exfat_edit::Added, FormatError> {
+    exfat_edit::add_file(
+        dev,
+        plan.vault.first_lba,
+        plan.vault.sectors(),
+        name,
+        size,
+        reader,
+        advance,
+    )
+}
+
+/// # Errors
+/// See [`exfat_edit::verify_file`].
+pub fn verify_image(
+    dev: &dyn BlockDevice,
+    plan: &VaultPlan,
+    name: &str,
+    sha256: &str,
+    advance: &mut dyn FnMut(u64) -> bool,
+) -> Result<(), FormatError> {
+    exfat_edit::verify_file(
+        dev,
+        plan.vault.first_lba,
+        plan.vault.sectors(),
+        name,
+        sha256,
+        advance,
+    )
+}
+
+/// Removes an ISO from the root of the data partition; returns its size.
+///
+/// # Errors
+/// See [`exfat_edit::remove_file`].
+pub fn remove_image(
+    dev: &mut dyn BlockDevice,
+    plan: &VaultPlan,
+    name: &str,
+) -> Result<u64, FormatError> {
+    exfat_edit::remove_file(dev, plan.vault.first_lba, plan.vault.sectors(), name)
 }
 
 /// A file of the boot partition: path from its root, `/` separated.

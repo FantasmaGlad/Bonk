@@ -33,6 +33,8 @@ pub(crate) fn registry() -> Vec<Entry> {
         ("capabilities", format::schema_capabilities),
         ("vault-init", vault::schema_init),
         ("vault-list", vault::schema_list),
+        ("vault-add", vault::schema_add),
+        ("vault-remove", vault::schema_remove),
         ("serve-request", serve::schema_request),
         ("serve-response", serve::schema_response),
     ]

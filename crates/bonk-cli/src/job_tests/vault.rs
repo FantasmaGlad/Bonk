@@ -220,3 +220,90 @@ fn la_fenetre_refuse_fixture() {
     assert!(conflict(&["bonk", "gui"]).is_some());
     assert!(conflict(&["bonk", "list"]).is_none());
 }
+
+/// An ISO the menu can start, as a file named `name` in the temporary directory.
+fn iso_file(name: &str, files: &[(&str, u32)]) -> std::path::PathBuf {
+    let path = std::env::temp_dir().join(format!("bonk-job-{}-{name}", std::process::id()));
+    let image = bonk_core::iso9660::testing::image("ARCH_202611", files);
+    std::fs::write(&path, image).expect("ISO de test");
+    path
+}
+
+#[test]
+fn ajouter_puis_retirer_une_iso_sur_le_coffre() {
+    let (scenario, cache) = vault_scenario(Some(GRUB), "cache-ajout");
+    let cache = cache.arg();
+    let (code, _, err) = scenario.run(&init_args(&cache, &[]));
+    assert_eq!(code, 0, "{err}");
+    let arch = iso_file(
+        "archlinux-x86_64.iso",
+        &[
+            ("arch/boot/x86_64/vmlinuz-linux", 1),
+            ("arch/boot/x86_64/initramfs-linux.img", 1),
+        ],
+    );
+    let arch_arg = arch.display().to_string();
+    let name = arch
+        .file_name()
+        .and_then(|n| n.to_str())
+        .expect("nom")
+        .to_owned();
+
+    let (code, _, err) = scenario.run(&["vault", "add", "usb-a", &arch_arg]);
+    assert_eq!(code, EXIT_USAGE, "{err}");
+    assert!(err.contains("E2004"), "{err}");
+
+    let (code, out, err) = scenario.run(&["vault", "add", "usb-a", &arch_arg, "--yes", "--json"]);
+    assert_eq!(code, 0, "{err}");
+    let value: serde_json::Value = serde_json::from_str(&out).expect("JSON");
+    assert_eq!(value["family"], "arch");
+    assert_eq!(value["name"], name.as_str());
+    assert_eq!(value["verified"], true);
+    let (code, out, err) = scenario.run(&["vault", "list", "usb-a", "--json"]);
+    assert_eq!(code, 0, "{err}");
+    let value: serde_json::Value = serde_json::from_str(&out).expect("JSON");
+    assert_eq!(value["images"][0]["path"], name.as_str());
+
+    let (code, _, err) = scenario.run(&["vault", "add", "usb-a", &arch_arg, "--yes"]);
+    assert_eq!(code, EXIT_USAGE, "{err}");
+    assert!(err.contains("E7006"), "{err}");
+
+    let (code, out, err) = scenario.run(&["vault", "remove", "usb-a", &name, "--yes"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(out.contains("Removed from the vault"), "{out}");
+    let (code, out, _) = scenario.run(&["vault", "list", "usb-a", "--json"]);
+    assert_eq!(code, 0);
+    let value: serde_json::Value = serde_json::from_str(&out).expect("JSON");
+    assert_eq!(value["images"], serde_json::json!([]));
+    let (code, _, err) = scenario.run(&["vault", "remove", "usb-a", &name, "--yes"]);
+    assert_eq!(code, EXIT_USAGE, "{err}");
+    assert!(err.contains("E7006"), "{err}");
+    let _ = std::fs::remove_file(&arch);
+}
+
+/// Checked on the file alone: the drive is not even opened.
+#[test]
+fn une_iso_que_le_menu_ne_demarre_pas_est_refusee_avant_le_disque() {
+    let (scenario, _cache) = vault_scenario(Some(GRUB), "cache-refus");
+    let inconnue = iso_file("inconnue.iso", &[("boot/vmlinuz", 1)]);
+    let espace = iso_file(
+        "avec espace.iso",
+        &[("live/vmlinuz", 1), ("live/initrd.img", 1)],
+    );
+    let extension = iso_file(
+        "debian-live.img",
+        &[("live/vmlinuz", 1), ("live/initrd.img", 1)],
+    );
+    let pas_iso = std::env::temp_dir().join(format!("bonk-job-{}-zero.iso", std::process::id()));
+    std::fs::write(&pas_iso, vec![0u8; 64 * 2048]).expect("fichier de test");
+    for path in [&inconnue, &espace, &extension, &pas_iso] {
+        let arg = path.display().to_string();
+        let (code, _, err) = scenario.run(&["vault", "add", "usb-a", &arg, "--yes"]);
+        assert_eq!(code, EXIT_USAGE, "{err}");
+        assert!(err.contains("E7004"), "{err}");
+    }
+    assert!(scenario.log().is_empty(), "{:?}", scenario.log());
+    for path in [&inconnue, &espace, &extension, &pas_iso] {
+        let _ = std::fs::remove_file(path);
+    }
+}

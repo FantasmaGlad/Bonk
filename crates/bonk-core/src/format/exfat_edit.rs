@@ -193,8 +193,9 @@ fn upcased(units: &[u16], upcase: &[u16]) -> Vec<u16> {
         .collect()
 }
 
-/// Adds `name` (root, `size` bytes read from `reader`) and reads it back. Data, then bitmap, then entries:
-/// interrupted, the volume holds at worst clusters marked used by no file.
+/// Adds `name` (root, `size` bytes read from `reader`); the caller flushes and reads it back with
+/// [`verify_file`]. Data, then bitmap, then entries: interrupted, the volume holds at worst clusters marked used
+/// by no file.
 ///
 /// # Errors
 /// [`FormatError::Name`] for a refused or existing name, [`FormatError::TooLarge`] without enough contiguous
@@ -265,12 +266,44 @@ pub fn add_file(
         .collect();
     patch(dev, &entries)?;
     set_dirty(dev, volume.start, false)?;
-    verify_contiguous(dev, offset, size, &sha256, name, advance)?;
     Ok(Added {
         name: name.to_owned(),
         size_bytes: size,
         sha256,
     })
+}
+
+/// Reads `name` back from the root and compares it with the SHA-256 it was written with.
+///
+/// # Errors
+/// [`FormatError::Name`] when absent, read failure, mismatch, or stop requested.
+pub fn verify_file(
+    dev: &dyn BlockDevice,
+    first_lba: u64,
+    sectors: u64,
+    name: &str,
+    sha256: &str,
+    advance: &mut dyn FnMut(u64) -> bool,
+) -> Result<(), FormatError> {
+    let volume = Volume::read(dev, first_lba, sectors)?;
+    let raw = Reader::entries(&volume.root_bytes, &mut None)
+        .into_iter()
+        .find(|raw| raw.name == name && !raw.directory)
+        .ok_or_else(|| FormatError::Name(format!("{name}: not on the volume")))?;
+    if raw.length == 0 {
+        return verify_contiguous(dev, 0, 0, sha256, name, advance);
+    }
+    if !raw.contiguous {
+        return Err(invalid(format!("{name}: not contiguous")));
+    }
+    verify_contiguous(
+        dev,
+        volume.cluster_offset(raw.first_cluster),
+        raw.length,
+        sha256,
+        name,
+        advance,
+    )
 }
 
 /// Removes `name` from the root: its entries marked unused, its clusters freed in the bitmap. Returns the bytes
@@ -415,6 +448,26 @@ mod tests {
         let data: Vec<u8> = (0..3_000_000u32).map(|i| (i * 7) as u8).collect();
         let added = add(&mut dev, "debian-live.iso", &data)?;
         assert_eq!(added.size_bytes, data.len() as u64);
+        let first = VOLUME.first_lba;
+        verify_file(
+            &dev,
+            first,
+            VOLUME.sectors,
+            "debian-live.iso",
+            &added.sha256,
+            &mut |_| true,
+        )?;
+        assert!(
+            verify_file(
+                &dev,
+                first,
+                VOLUME.sectors,
+                "debian-live.iso",
+                &"0".repeat(64),
+                &mut |_| true
+            )
+            .is_err()
+        );
         add(&mut dev, "vide.txt", &[])?;
         assert_eq!(
             listed(&dev)?,
