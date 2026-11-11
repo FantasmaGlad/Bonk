@@ -9,14 +9,6 @@ on:
       - "crates/**/Cargo.toml"
       - "deny.toml"
       - ".github/workflows/dependances.yml"
-  push:
-    branches: [main]
-    paths:
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/**/Cargo.toml"
-      - "deny.toml"
-      - ".github/workflows/dependances.yml"
   # Monday 06:23 UTC, away from the busy round hours.
   schedule:
     - cron: "23 6 * * 1"
@@ -27,7 +19,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   cargo-deny:

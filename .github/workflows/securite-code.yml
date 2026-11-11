@@ -1,9 +1,8 @@
 name: securite-code
 
+# No path filter: Scorecard (SAST) counts merged PRs without analysis, whatever their content. The weekly run
+# keeps main's analysis current, without repeating each PR after its merge.
 on:
-  push:
-    branches: [main]
-  # No path filter: Scorecard (SAST) counts merged PRs without analysis, whatever their content.
   pull_request:
   schedule:
     - cron: "29 4 * * 2"
@@ -14,7 +13,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   codeql:

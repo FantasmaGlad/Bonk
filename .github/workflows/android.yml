@@ -17,21 +17,6 @@ on:
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - ".github/workflows/android.yml"
-  push:
-    branches: [main]
-    paths:
-      - "android/**"
-      - "design/**"
-      - "crates/bonk-android/**"
-      - "crates/bonk-core/**"
-      - "crates/bonk-hal/**"
-      - "crates/bonk-ops/**"
-      - "crates/bonk-ui/**"
-      - "crates/bonk-catalog/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - ".github/workflows/android.yml"
   workflow_dispatch:
 
 permissions:
@@ -39,7 +24,7 @@ permissions:
 
 concurrency:
   group: android-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   apk:

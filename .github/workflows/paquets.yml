@@ -102,7 +102,7 @@ jobs:
           name: paquet-${{ matrix.nom }}
           path: dist/*
           if-no-files-found: error
-          retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
+          retention-days: ${{ github.ref_type == 'tag' && 7 || 3 }}
 
   cli:
     needs: manuel
@@ -167,7 +167,7 @@ jobs:
           name: paquet-cli
           path: dist/*
           if-no-files-found: error
-          retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
+          retention-days: ${{ github.ref_type == 'tag' && 7 || 3 }}
 
   # x86_64 only: Arch has no official ARM image.
   arch:
@@ -233,7 +233,7 @@ jobs:
           name: paquet-arch
           path: dist/*
           if-no-files-found: error
-          retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
+          retention-days: ${{ github.ref_type == 'tag' && 7 || 3 }}
 
   macos-universel:
     name: macos-universel
@@ -316,4 +316,4 @@ jobs:
           name: binaire-macos-universal
           path: dist/*
           if-no-files-found: error
-          retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
+          retention-days: ${{ github.ref_type == 'tag' && 7 || 3 }}

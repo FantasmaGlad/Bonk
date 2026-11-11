@@ -10,16 +10,6 @@ on:
       - "rust-toolchain.toml"
       - ".github/scripts/amorcage-qemu.py"
       - ".github/workflows/amorcage.yml"
-  push:
-    branches: [main]
-    paths:
-      - "boot/**"
-      - "crates/bonk-core/src/boot/**"
-      - "crates/bonk-core/src/format/**"
-      - "crates/bonk-ops/src/job/extract.rs"
-      - "rust-toolchain.toml"
-      - ".github/scripts/amorcage-qemu.py"
-      - ".github/workflows/amorcage.yml"
   workflow_dispatch:
 
 permissions:
@@ -27,7 +17,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   amorcage:
