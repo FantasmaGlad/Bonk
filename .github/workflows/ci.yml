@@ -10,24 +10,18 @@ on:
       - "rust-toolchain.toml"
       - ".github/workflows/ci.yml"
       - ".github/paquets-linux.txt"
-  push:
-    branches: [main]
-    paths:
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - ".github/workflows/ci.yml"
-      - ".github/paquets-linux.txt"
+      - ".github/scripts/essai-disque-virtuel.*"
+  # Merged PRs were checked one by one; the weekly run checks them together, on every system.
+  schedule:
+    - cron: "37 4 * * 1"
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# On main a run is never cancelled: its release build counts.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -92,9 +86,9 @@ jobs:
             echo "la version sans fenêtre embarque une bibliothèque graphique"
             exit 1
           fi
-      # The release build is only checked after merge: it is slower and the PR already proved the rest.
+      # Weekly only: slower, and the PR already proved the rest.
       - name: Build release
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: cargo build --workspace --release --locked
 
   msrv:
@@ -118,15 +112,49 @@ jobs:
           rustup toolchain install "$MSRV" --profile minimal
           cargo "+$MSRV" check --workspace --locked
 
+  # A macOS minute costs ten Linux ones: a PR runs the real systems only when it touches system code. The Linux
+  # job already lints Windows and macOS by cross-compiling.
+  perimetre:
+    name: systèmes à essayer
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      systemes: ${{ steps.choix.outputs.systemes }}
+    steps:
+      - name: Choisir
+        id: choix
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          tous='["ubuntu-24.04-arm","windows-latest","windows-11-arm","macos-latest","macos-15-intel"]'
+          if [ "$EVENT" != pull_request ]; then
+            echo "systemes=$tous" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          motif='^(crates/bonk-hal/|crates/bonk-ops/|crates/bonk/|Cargo\.lock$|rust-toolchain\.toml$|\.github/scripts/essai-disque-virtuel\.|\.github/workflows/ci\.yml$)'
+          if gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename' | grep -qE "$motif"; then
+            echo 'systemes=["windows-latest","macos-latest"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'systemes=[]' >> "$GITHUB_OUTPUT"
+          fi
+
   portabilite:
     name: portabilité (${{ matrix.os }})
-    needs: [qualite, msrv]
+    needs: [qualite, msrv, perimetre]
+    if: needs.perimetre.outputs.systemes != '[]'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-latest, macos-15-intel]
+        os: ${{ fromJSON(needs.perimetre.outputs.systemes) }}
     steps:
       - name: Récupérer le code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -153,5 +181,5 @@ jobs:
         if: runner.os == 'macOS'
         run: .github/scripts/essai-disque-virtuel.sh
       - name: Build release
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: cargo build --workspace --release --locked

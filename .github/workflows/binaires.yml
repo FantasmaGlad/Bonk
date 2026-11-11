@@ -1,16 +1,8 @@
 name: binaires
 
+# Thirteen targets, two of them macOS: built for a release, once a week and on demand, not at every merge.
 on:
   push:
-    branches: [main]
-    paths:
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - ".github/workflows/binaires.yml"
-      - ".github/pip/ziglang.txt"
-      - "android/**"
     tags: ["v*.*.*"]
   # A workflow change is validated by its own PR (build without attestation).
   pull_request:
@@ -271,7 +263,7 @@ jobs:
           name: binaire-${{ matrix.nom }}
           path: dist/bonk-*
           if-no-files-found: error
-          retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
+          retention-days: ${{ github.ref_type == 'tag' && 7 || 3 }}
       # After the archive: this build replaces the binary in target/.
       - name: Version en ligne de commande seule
         id: cli
@@ -311,7 +303,7 @@ jobs:
           name: binaire-cli-${{ matrix.nom }}
           path: cli/bonk-cli-*
           if-no-files-found: error
-          retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
+          retention-days: ${{ github.ref_type == 'tag' && 7 || 3 }}
 
   # centos:7 is the real glibc floor (2.17).
   compatibilite:
@@ -431,7 +423,7 @@ jobs:
           name: binaire-android
           path: dist/bonk-*
           if-no-files-found: error
-          retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
+          retention-days: ${{ github.ref_type == 'tag' && 7 || 3 }}
 
   publication:
     name: release (brouillon)

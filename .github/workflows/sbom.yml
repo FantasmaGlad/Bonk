@@ -42,4 +42,4 @@ jobs:
           name: sbom
           path: sbom/bonk.cdx.json
           if-no-files-found: error
-          retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
+          retention-days: ${{ github.ref_type == 'tag' && 7 || 3 }}

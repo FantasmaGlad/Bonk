@@ -49,4 +49,4 @@ jobs:
         with:
           name: plantages-fuzz
           path: fuzz/artifacts
-          retention-days: 30
+          retention-days: 7
