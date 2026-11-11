@@ -289,6 +289,7 @@ pub(crate) fn report_value(
                 id: f.id.clone(),
                 name: f.name.clone(),
                 category: f.category.clone(),
+                uses: f.uses.clone(),
                 icon_path: manifest::icon_path(&base, &dir, f, &fetch),
             })
             .collect(),
@@ -385,6 +386,11 @@ mod tests {
             note: None,
             usb_boot: true,
             mirrors: Vec::new(),
+            desktop: None,
+            kind: None,
+            media: None,
+            ram_mb: None,
+            ram_source: None,
             source,
         }
     }
@@ -407,6 +413,9 @@ mod tests {
             parent: None,
             homepage: None,
             icon_source: None,
+            uses: Vec::new(),
+            ram_mb: None,
+            ram_source: None,
         };
         Catalog {
             schema_version: 1,

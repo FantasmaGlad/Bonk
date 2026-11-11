@@ -262,7 +262,8 @@
           "all_systems": "Tous les systèmes",
           "button": "Choisir un système...",
           "categories": [
-            "Debian derivatives"
+            "Ordinateur de tous les jours",
+            "Serveurs"
           ],
           "category": null,
           "open": true,
@@ -390,7 +391,8 @@
           "all_systems": "Tous les systèmes",
           "button": "Choisir un système...",
           "categories": [
-            "Debian derivatives"
+            "Ordinateur de tous les jours",
+            "Serveurs"
           ],
           "category": null,
           "open": true,
@@ -489,7 +491,8 @@
           "all_systems": "Tous les systèmes",
           "button": "Choisir un système...",
           "categories": [
-            "Debian derivatives"
+            "Ordinateur de tous les jours",
+            "Serveurs"
           ],
           "category": null,
           "open": true,

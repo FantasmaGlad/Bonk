@@ -12,6 +12,7 @@ use bonk_ui::command::ViewOptions;
 use bonk_ui::event::{Event, Outcome};
 use bonk_ui::model::{Effect, Message, Model, WRITE_DELAY, WriteState};
 use bonk_ui::text;
+use bonk_ui::uses;
 use bonk_ui::vault::{VaultAction, VaultMessage, VaultState, VaultWords};
 use serde_json::{Value, json};
 
@@ -151,7 +152,9 @@ fn message_of(input: &Value, model: &Model) -> Option<Message> {
         "show_all" => Message::ToggleAll(flag()),
         "settings" => crate::settings::message_of(input)?,
         "menu" => Message::ToggleMenu,
-        "category" => Message::MenuCategory(text_of("value")),
+        "category" => Message::MenuCategory(
+            text_of("value").and_then(|shown| uses::id_of(&shown, model.lang)),
+        ),
         "system" => Message::MenuSystem(text_of("value")),
         "catalog_failed" => Message::CatalogLoaded(Err(text_of("message")?)),
         "choose" => {
@@ -338,6 +341,7 @@ fn menu_state(model: &Model) -> Value {
         return json!({"ready": false, "line": line});
     };
     let (categories, names) = model.menu_filter.lists(systems);
+    let categories: Vec<String> = categories.iter().map(|id| uses::label(id, lang)).collect();
     let filtered = model.menu_filter.apply(systems);
     let mut index = 0;
     let mut rows = Vec::new();
@@ -364,7 +368,7 @@ fn menu_state(model: &Model) -> Value {
         "button": chosen_title(model).unwrap_or_else(|| lang.pick("Choose a system...", "Choisir un système...").to_owned()),
         "all_categories": all_categories(lang),
         "all_systems": all_systems(lang),
-        "category": model.menu_filter.category,
+        "category": model.menu_filter.category.as_deref().map(|id| uses::label(id, lang)),
         "system": model.menu_filter.system,
         "categories": categories,
         "systems": names,
@@ -792,7 +796,7 @@ mod tests {
         let mut model = loaded();
         model.catalog = CatalogState::Ready(vec![System {
             name: "Debian".to_owned(),
-            category: "Debian derivatives".to_owned(),
+            uses: vec!["desktop".to_owned(), "server".to_owned()],
             icon: None,
             choices: vec![
                 Choice {

@@ -6,6 +6,8 @@ use iced::{Element, Length};
 
 pub(crate) use bonk_ui::catalog::*;
 
+use bonk_ui::uses;
+
 use crate::theme;
 
 use super::Message;
@@ -106,15 +108,16 @@ fn with_all(mut values: Vec<String>, all: &str) -> Vec<String> {
 fn menu_filters<'a>(systems: &[System], filter: &MenuFilter, lang: Lang) -> Element<'a, Message> {
     let (all_cat, all_sys) = (all_categories(lang), all_systems(lang));
     let (categories, names) = filter.lists(systems);
-    let (categories, names) = (with_all(categories, all_cat), with_all(names, all_sys));
+    let labels = categories.iter().map(|id| uses::label(id, lang)).collect();
+    let (categories, names) = (with_all(labels, all_cat), with_all(names, all_sys));
     let category = filter
         .category
-        .clone()
-        .unwrap_or_else(|| all_cat.to_owned());
+        .as_deref()
+        .map_or_else(|| all_cat.to_owned(), |id| uses::label(id, lang));
     let system = filter.system.clone().unwrap_or_else(|| all_sys.to_owned());
     row![
         pick_list(categories, Some(category), move |value: String| {
-            Message::MenuCategory((value != all_cat).then_some(value))
+            Message::MenuCategory(uses::id_of(&value, lang))
         })
         .text_size(13),
         pick_list(names, Some(system), move |value: String| {
