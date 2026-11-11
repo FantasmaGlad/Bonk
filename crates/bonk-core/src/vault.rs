@@ -332,7 +332,9 @@ mod tests {
     }
 
     fn boot() -> Vec<BootFile> {
-        boot_files(&[("x86_64", b"MZ grub x86_64".repeat(1000))]).unwrap_or_default()
+        let files = boot_files(&[("x86_64", b"MZ grub x86_64".repeat(1000))]);
+        assert!(files.is_ok(), "{files:?}");
+        files.unwrap_or_default()
     }
 
     fn init(dev: &mut MemoryDevice, table: TableKind) -> Result<VaultPlan, FormatError> {
