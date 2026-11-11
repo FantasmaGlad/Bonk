@@ -137,12 +137,12 @@ data class Write(
 @Serializable @SerialName("vault_pick")
 data object PickVaultIso : Effect
 
-/** Where Kotlin downloads GRUB; Rust checks the bytes against the signed catalog. */
+/** One GRUB image, for one processor; Rust checks the bytes against the signed catalog. */
 @Serializable
-data class GrubDownload(val url: String, @SerialName("size_bytes") val sizeBytes: Long)
+data class GrubDownload(val arch: String, val url: String, @SerialName("size_bytes") val sizeBytes: Long)
 
 /**
- * A vault action on the chosen disk. `iso` for `add`; `grub` for `init` and `update`, absent while the catalog
+ * A vault action on the chosen disk. `iso` for `add`; `grub` for `init` and `update`, empty while the catalog
  * offers none (Rust then refuses with the reason).
  */
 @Serializable @SerialName("vault")
@@ -151,7 +151,7 @@ data class VaultRun(
     @SerialName("disk_id") val diskId: String,
     val device: String?,
     val iso: String? = null,
-    val grub: GrubDownload? = null,
+    val grub: List<GrubDownload> = emptyList(),
 ) : Effect
 
 @Serializable

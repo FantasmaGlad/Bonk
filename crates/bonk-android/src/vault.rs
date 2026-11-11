@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Mutex;
@@ -16,9 +17,6 @@ use bonk_ui::event::{Event, Outcome};
 use crate::screen::{self, MODEL, lock};
 use crate::writer::{android_io, finished, push, report, same_drive};
 
-/// Architecture of the GRUB written: the one the vault boots today.
-const GRUB_ARCH: &str = "x86_64";
-
 /// GRUB as the last verified catalog names it, with the address the catalog was read from.
 static GRUB: Mutex<Option<(String, Grub)>> = Mutex::new(None);
 
@@ -26,15 +24,38 @@ pub(crate) fn set_grub(base: &str, grub: Option<Grub>) {
     *lock(&GRUB) = grub.map(|grub| (base.to_owned(), grub));
 }
 
-/// Where Kotlin downloads GRUB from, and its signed size: `None` while the catalog offers none.
-pub(crate) fn grub_address() -> Option<(String, u64)> {
-    address(lock(&GRUB).as_ref())
+/// One GRUB image to download: its processor, address and signed size.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Download {
+    pub(crate) arch: String,
+    pub(crate) url: String,
+    pub(crate) size_bytes: u64,
 }
 
-fn address(offered: Option<&(String, Grub)>) -> Option<(String, u64)> {
-    let (base, entry) = offered?;
-    let asset = entry.efi.get(GRUB_ARCH)?;
-    Some((format!("{base}{}", asset.path), asset.size_bytes))
+/// What Kotlin downloads, one file per processor Bonk can write: empty while the catalog offers none.
+pub(crate) fn grub_downloads() -> Vec<Download> {
+    downloads(lock(&GRUB).as_ref())
+}
+
+fn downloads(offered: Option<&(String, Grub)>) -> Vec<Download> {
+    let Some((base, entry)) = offered else {
+        return Vec::new();
+    };
+    writable(entry)
+        .map(|(arch, asset)| Download {
+            arch: arch.clone(),
+            url: format!("{base}{}", asset.path),
+            size_bytes: asset.size_bytes,
+        })
+        .collect()
+}
+
+/// A processor this Bonk has no removable-media name for is left to a later version.
+fn writable(entry: &Grub) -> impl Iterator<Item = (&String, &manifest::Asset)> {
+    entry
+        .efi
+        .iter()
+        .filter(|(arch, _)| core_vault::efi_file_name(arch).is_some())
 }
 
 fn refused(message: impl std::fmt::Display) -> JobError {
@@ -44,28 +65,35 @@ fn refused(message: impl std::fmt::Display) -> JobError {
     }
 }
 
-/// The file Kotlin downloaded, accepted only with the hash the signed catalog gives.
-fn boot(entry: Option<&Grub>, downloaded: &Path) -> Result<(Vec<BootFile>, GrubInfo), JobError> {
+/// The files Kotlin downloaded into `folder`, one named by each processor, accepted only with the hashes
+/// the signed catalog gives.
+fn boot(entry: Option<&Grub>, folder: &Path) -> Result<(Vec<BootFile>, GrubInfo), JobError> {
     let entry =
         entry.ok_or_else(|| refused("the catalog does not offer GRUB yet: try again later"))?;
-    let asset = entry
-        .efi
-        .get(GRUB_ARCH)
-        .ok_or_else(|| refused(format!("the catalog offers no GRUB for {GRUB_ARCH}")))?;
-    let data =
-        std::fs::read(downloaded).map_err(|e| refused(format!("GRUB {}: {e}", entry.version)))?;
-    if !manifest::asset_matches(asset, &data) {
-        return Err(refused(format!(
-            "GRUB {} does not match its signed hash",
-            entry.version
-        )));
+    let mut images = Vec::new();
+    let mut efi = BTreeMap::new();
+    for (arch, asset) in writable(entry) {
+        let data = std::fs::read(folder.join(arch))
+            .map_err(|e| refused(format!("GRUB {} {arch}: {e}", entry.version)))?;
+        if !manifest::asset_matches(asset, &data) {
+            return Err(refused(format!(
+                "GRUB {} {arch} does not match its signed hash",
+                entry.version
+            )));
+        }
+        efi.insert(arch.clone(), asset.sha256.clone());
+        images.push((arch.as_str(), data));
     }
-    let files = core_vault::boot_files(&[(GRUB_ARCH, data)]).map_err(refused)?;
+    if images.is_empty() {
+        return Err(refused(
+            "the catalog offers no GRUB image this version of Bonk can write",
+        ));
+    }
+    let files = core_vault::boot_files(&images).map_err(refused)?;
     let info = GrubInfo {
         version: entry.version.clone(),
         build: entry.build.clone(),
-        arch: GRUB_ARCH.to_owned(),
-        sha256: asset.sha256.clone(),
+        efi,
     };
     Ok((files, info))
 }
@@ -96,7 +124,7 @@ pub(crate) struct Request<'a> {
     /// `add`: the ISO and the name it gets on the vault.
     pub(crate) iso: &'a str,
     pub(crate) name: &'a str,
-    /// `init` and `update`: the GRUB file Kotlin downloaded.
+    /// `init` and `update`: the folder of the GRUB images Kotlin downloaded.
     pub(crate) grub: &'a str,
 }
 
@@ -218,6 +246,7 @@ mod tests {
     use super::*;
 
     const GRUB_BYTES: &[u8] = b"MZ grub de test";
+    const ARM_BYTES: &[u8] = b"MZ grub arm64 de test";
 
     /// One drive behind every opening, as the key behind each descriptor copy.
     struct Shared(Rc<RefCell<MemoryDevice>>);
@@ -306,11 +335,16 @@ mod tests {
         };
         let dir = std::env::temp_dir().join(format!("bonk-android-coffre-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("dossier");
-        let grub = dir.join("grub.download");
-        std::fs::write(&grub, GRUB_BYTES).expect("GRUB");
+        // As Kotlin lays them out: one file per processor, named by it.
+        let grub = dir.join("grub");
+        std::fs::create_dir_all(&grub).expect("dossier");
+        std::fs::write(grub.join("x86_64"), GRUB_BYTES).expect("GRUB");
+        std::fs::write(grub.join("aarch64"), ARM_BYTES).expect("GRUB");
         let grub = grub.display().to_string();
-        let forged = dir.join("forged.download");
-        std::fs::write(&forged, b"MZ autre GRUB").expect("GRUB");
+        let forged = dir.join("forged");
+        std::fs::create_dir_all(&forged).expect("dossier");
+        std::fs::write(forged.join("x86_64"), GRUB_BYTES).expect("GRUB");
+        std::fs::write(forged.join("aarch64"), b"MZ autre GRUB").expect("GRUB");
         let forged = forged.display().to_string();
         let iso = dir.join("42");
         let image = bonk_core::iso9660::testing::image(
@@ -323,7 +357,7 @@ mod tests {
         std::fs::write(&iso, &image).expect("ISO");
         let iso = iso.display().to_string();
 
-        assert_eq!(address(offered.as_ref()), None);
+        assert_eq!(downloads(offered.as_ref()), []);
         assert_eq!(
             failed_code(&run(&offered, &request("init", "", "", &grub))),
             Some(Code::CatalogRefused.id())
@@ -331,9 +365,15 @@ mod tests {
         let fake = asset("grub/x.tar.xz", b"x");
         let mut efi = BTreeMap::new();
         efi.insert(
-            GRUB_ARCH.to_owned(),
+            "x86_64".to_owned(),
             asset("grub/2.14/BOOTX64.EFI", GRUB_BYTES),
         );
+        efi.insert(
+            "aarch64".to_owned(),
+            asset("grub/2.14/BOOTAA64.EFI", ARM_BYTES),
+        );
+        // A processor Bonk cannot name yet: nothing to download for it.
+        efi.insert("mips64".to_owned(), asset("grub/2.14/X.EFI", b"x"));
         offered = Some((
             "https://catalog.test/v1/".to_owned(),
             Grub {
@@ -346,11 +386,19 @@ mod tests {
             },
         ));
         assert_eq!(
-            address(offered.as_ref()),
-            Some((
-                "https://catalog.test/v1/grub/2.14/BOOTX64.EFI".to_owned(),
-                GRUB_BYTES.len() as u64
-            ))
+            downloads(offered.as_ref()),
+            [
+                Download {
+                    arch: "aarch64".to_owned(),
+                    url: "https://catalog.test/v1/grub/2.14/BOOTAA64.EFI".to_owned(),
+                    size_bytes: ARM_BYTES.len() as u64,
+                },
+                Download {
+                    arch: "x86_64".to_owned(),
+                    url: "https://catalog.test/v1/grub/2.14/BOOTX64.EFI".to_owned(),
+                    size_bytes: GRUB_BYTES.len() as u64,
+                },
+            ]
         );
 
         assert_eq!(

@@ -43,7 +43,7 @@ pub enum IsoFamily {
 
 impl IsoFamily {
     /// Files the menu tests, in its order: the first family whose files are all there wins.
-    const RULES: [(Self, &'static [&'static str]); 4] = [
+    const RULES: [(Self, &'static [&'static str]); 5] = [
         (Self::DebianLive, &["live/vmlinuz", "live/initrd.img"]),
         (Self::Ubuntu, &["casper/vmlinuz", "casper/initrd"]),
         (
@@ -57,16 +57,54 @@ impl IsoFamily {
             Self::FedoraLive,
             &["boot/x86_64/loader/linux", "boot/x86_64/loader/initrd"],
         ),
+        (
+            Self::FedoraLive,
+            &["boot/aarch64/loader/linux", "boot/aarch64/loader/initrd"],
+        ),
     ];
 }
 
-/// The family the vault menu would start, `None` for an ISO it shows as not supported.
+/// The processor an ISO starts on, as GRUB names it in `grub_cpu`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum IsoArch {
+    X86_64,
+    Aarch64,
+}
+
+impl IsoArch {
+    #[must_use]
+    pub fn grub_cpu(self) -> &'static str {
+        match self {
+            Self::X86_64 => "x86_64",
+            Self::Aarch64 => "arm64",
+        }
+    }
+}
+
+/// Tested in the menu's order: a Kiwi kernel folder names its processor; Debian and Ubuntu share one layout
+/// across processors, so their own UEFI loader tells. GRUB compares Rock Ridge names with their case, Bonk
+/// without: these are spelled as the images spell them.
+const ARCH_RULES: [(&str, IsoArch); 3] = [
+    ("boot/aarch64/loader/linux", IsoArch::Aarch64),
+    ("boot/x86_64/loader/linux", IsoArch::X86_64),
+    ("EFI/boot/bootaa64.efi", IsoArch::Aarch64),
+];
+
+/// An ISO the vault menu starts, and the processor it starts on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IsoKind {
+    pub family: IsoFamily,
+    pub arch: IsoArch,
+}
+
+/// What the vault menu would start, `None` for an ISO it shows as not supported.
 ///
 /// # Errors
 /// Not an ISO 9660 image, or unreadable.
-pub fn iso_family<R: std::io::Read + std::io::Seek>(
+pub fn iso_kind<R: std::io::Read + std::io::Seek>(
     iso: &mut crate::iso9660::Iso<R>,
-) -> std::io::Result<Option<IsoFamily>> {
+) -> std::io::Result<Option<IsoKind>> {
     for (family, files) in IsoFamily::RULES {
         let mut all = true;
         for file in files {
@@ -74,8 +112,17 @@ pub fn iso_family<R: std::io::Read + std::io::Seek>(
         }
         if all {
             // The menu checks the label too: other Kiwi images share this layout.
-            let fedora = family != IsoFamily::FedoraLive || iso.label().starts_with("Fedora-");
-            return Ok(fedora.then_some(family));
+            if family == IsoFamily::FedoraLive && !iso.label().starts_with("Fedora-") {
+                return Ok(None);
+            }
+            let mut arch = IsoArch::X86_64;
+            for (file, found) in ARCH_RULES {
+                if iso.file_size(file)?.is_some() {
+                    arch = found;
+                    break;
+                }
+            }
+            return Ok(Some(IsoKind { family, arch }));
         }
     }
     Ok(None)
@@ -610,7 +657,8 @@ mod tests {
         use crate::iso9660::{Iso, testing::image};
         use std::io::Cursor;
         let family = |label: &str, files: &[(&str, u32)]| {
-            iso_family(&mut Iso::open(Cursor::new(image(label, files)))?)
+            iso_kind(&mut Iso::open(Cursor::new(image(label, files)))?)
+                .map(|kind| kind.map(|kind| kind.family))
         };
         for (expected, files) in IsoFamily::RULES {
             // Every file the rule needs is one the menu tests.
@@ -634,6 +682,43 @@ mod tests {
             ("casper/initrd", 1),
         ];
         assert_eq!(family("X", &both)?, Some(IsoFamily::DebianLive));
+        Ok(())
+    }
+
+    /// As the menu reads `iso_cpu`: the Kiwi kernel folder first, then the image's own ARM64 UEFI loader.
+    #[test]
+    fn processeur_reconnu_comme_par_le_menu() -> std::io::Result<()> {
+        use crate::iso9660::{Iso, testing::image};
+        use std::io::Cursor;
+        let arch = |label: &str, files: &[(&str, u32)]| {
+            iso_kind(&mut Iso::open(Cursor::new(image(label, files)))?)
+                .map(|kind| kind.map(|kind| kind.arch))
+        };
+        for (file, _) in ARCH_RULES {
+            assert!(MENU.contains(&format!("(probe)/{file}")), "{file}");
+        }
+        let casper = [("casper/vmlinuz", 1), ("casper/initrd", 1)];
+        assert_eq!(arch("Ubuntu", &casper)?, Some(IsoArch::X86_64));
+        let arm = [
+            ("casper/vmlinuz", 1),
+            ("casper/initrd", 1),
+            ("EFI/boot/bootaa64.efi", 1),
+        ];
+        assert_eq!(arch("Ubuntu", &arm)?, Some(IsoArch::Aarch64));
+        // Fedora's ARM64 image also carries an x86_64 loader: its kernel folder decides.
+        let fedora = [
+            ("boot/aarch64/loader/linux", 1),
+            ("boot/aarch64/loader/initrd", 1),
+            ("EFI/BOOT/bootx64.efi", 1),
+        ];
+        assert_eq!(arch("Fedora-WS-Live-44", &fedora)?, Some(IsoArch::Aarch64));
+        let fedora = [
+            ("boot/x86_64/loader/linux", 1),
+            ("boot/x86_64/loader/initrd", 1),
+            ("EFI/BOOT/BOOTAA64.EFI", 1),
+        ];
+        assert_eq!(arch("Fedora-WS-Live-44", &fedora)?, Some(IsoArch::X86_64));
+        assert_eq!(IsoArch::Aarch64.grub_cpu(), "arm64");
         Ok(())
     }
 

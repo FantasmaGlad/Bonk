@@ -25,7 +25,7 @@ object Native {
         mbr: Boolean,
     )
 
-    /** Blocks. `iso` and `name` for `add`, `grub` (the downloaded file) for `init` and `update`. */
+    /** Blocks. `iso` and `name` for `add`, `grub` (the folder of the downloaded images) for `init` and `update`. */
     external fun vault(
         fd: Int,
         descriptors: ByteArray,

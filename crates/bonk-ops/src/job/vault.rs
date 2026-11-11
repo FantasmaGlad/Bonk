@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use std::time::Instant;
@@ -27,8 +28,8 @@ use crate::errors::Code;
 pub struct GrubInfo {
     pub version: String,
     pub build: String,
-    pub arch: String,
-    pub sha256: String,
+    /// SHA-256 of each EFI image written, by processor (`x86_64`, `aarch64`).
+    pub efi: BTreeMap<String, String>,
 }
 
 pub struct VaultInitJob {
@@ -259,6 +260,8 @@ pub struct VaultAddDone {
     pub name: String,
     pub size_bytes: u64,
     pub family: vault::IsoFamily,
+    /// The processor it starts on; the vault menu lists the others after this machine's.
+    pub arch: vault::IsoArch,
     pub sha256: String,
     /// Read back from the drive after the cache was dropped.
     pub verified: bool,
@@ -299,11 +302,11 @@ fn edit_error(error: FormatError) -> JobError {
     }
 }
 
-/// The ISO's name and family, checked as the vault menu will check them at boot.
+/// The ISO's name, family and processor, checked as the vault menu will check them at boot.
 fn vault_source(
     path: &Path,
     name: Option<&str>,
-) -> Result<(String, u64, vault::IsoFamily), JobError> {
+) -> Result<(String, u64, vault::IsoKind), JobError> {
     let name = name
         .or_else(|| path.file_name().and_then(|name| name.to_str()))
         .ok_or_else(|| {
@@ -334,7 +337,7 @@ fn vault_source(
         .len();
     let mut iso = bonk_core::iso9660::Iso::open(std::io::BufReader::new(file))
         .map_err(|e| fail(Code::IsoNotForVault, format!("{name}: {e}")))?;
-    let family = vault::iso_family(&mut iso)
+    let kind = vault::iso_kind(&mut iso)
         .map_err(|e| fail(Code::IsoNotForVault, format!("{name}: {e}")))?
         .ok_or_else(|| {
             fail(
@@ -342,7 +345,7 @@ fn vault_source(
                 format!("{name}: not Debian live, Ubuntu, Arch Linux or Fedora live"),
             )
         })?;
-    Ok((name, size, family))
+    Ok((name, size, kind))
 }
 
 fn open_vault(
@@ -474,7 +477,7 @@ pub fn vault_add(
     deps: &Deps<'_>,
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<VaultAddDone, JobError> {
-    let (name, size, family) = vault_source(&job.source, job.name.as_deref())?;
+    let (name, size, kind) = vault_source(&job.source, job.name.as_deref())?;
     confirmed(job.yes, "vault add")?;
     let (mut device, info, plan) = open_vault(
         &job.target,
@@ -504,7 +507,7 @@ pub fn vault_add(
         &plan,
         &name,
         size,
-        family,
+        kind.family,
         &mut file,
         &mut |n| advance.add(n),
     )
@@ -529,7 +532,8 @@ pub fn vault_add(
         target: info,
         name,
         size_bytes: size,
-        family,
+        family: kind.family,
+        arch: kind.arch,
         sha256: added.sha256,
         verified: true,
     })

@@ -9,6 +9,7 @@ import sys
 import time
 
 OVMF = "/usr/share/OVMF"
+AAVMF = "/usr/share/AAVMF"
 # The BIOS loader only writes to the screen: fixed wait, shorter than the menu countdown.
 BIOS_MENU_SECONDS = 25
 # The GRUB menu shows shortly after the firmware banner.
@@ -20,7 +21,18 @@ MONITOR = "moniteur.sock"
 SERIAL = "serie.log"
 
 
-def firmware(mode):
+def firmware(mode, processor):
+    if processor == "aarch64":
+        if mode != "uefi":
+            raise SystemExit("aarch64 : UEFI seulement")
+        shutil.copy(os.path.join(AAVMF, "AAVMF_VARS.fd"), "vars.fd")
+        # Emulated: `max` adds features whose emulation is too slow to reach the menu in minutes.
+        # No network: `virt` would add a virtio card whose boot ROM is not installed.
+        return [
+            "-machine", "virt", "-cpu", "cortex-a72", "-nic", "none",
+            "-drive", f"if=pflash,format=raw,readonly=on,file={AAVMF}/AAVMF_CODE.no-secboot.fd",
+            "-drive", "if=pflash,format=raw,file=vars.fd",
+        ]
     if mode == "bios":
         return ["-machine", "q35"]
     code, variables, machine, extra = {
@@ -126,6 +138,7 @@ def main():
     parser.add_argument("--memoire", default="2048")
     parser.add_argument("--delai", type=int, default=600)
     parser.add_argument("--attente", type=int, help="secondes avant le menu, en remplacement du défaut")
+    parser.add_argument("--processeur", choices=["x86_64", "aarch64"], default="x86_64")
     args = parser.parse_args()
 
     image = os.path.abspath(args.image)
@@ -135,11 +148,13 @@ def main():
     for old in (SERIAL, MONITOR):
         if os.path.exists(old):
             os.remove(old)
-    accel = ["-enable-kvm", "-cpu", "host"] if os.access("/dev/kvm", os.W_OK) else []
-    print(f"{args.mode} : accélération {'KVM' if accel else 'absente'}", flush=True)
+    native = args.processeur == "x86_64"
+    accel = ["-enable-kvm", "-cpu", "host"] if native and os.access("/dev/kvm", os.W_OK) else []
+    print(f"{args.mode} {args.processeur} : accélération {'KVM' if accel else 'absente'}", flush=True)
     qemu = subprocess.Popen(
         [
-            "qemu-system-x86_64", *firmware(args.mode), *accel, "-m", args.memoire, "-smp", "2",
+            f"qemu-system-{args.processeur}", *firmware(args.mode, args.processeur), *accel,
+            "-m", args.memoire, "-smp", "2",
             "-display", "none", "-no-reboot", "-serial", f"file:{SERIAL}",
             "-monitor", f"unix:{MONITOR},server,nowait",
             "-drive", f"if=none,id=cle,format=raw,readonly=on,file={image}",
@@ -154,8 +169,10 @@ def main():
         else:
             wait_for(r"BdsDxe: starting", UEFI_BOOT_LIMIT_SECONDS, qemu)
             time.sleep(args.attente if args.attente is not None else GRUB_MENU_SECONDS)
-        monitor.screen("menu.png")
-        add_console(monitor, args.chargeur, args.entree, args.ligne)
+        # ARM64 firmware names its serial port to the kernel (SPCR): nothing to add, and no screen to dump.
+        if native:
+            monitor.screen("menu.png")
+            add_console(monitor, args.chargeur, args.entree, args.ligne)
         if wait_for(args.preuve, args.delai, qemu):
             monitor.screen("atteint.png")
             print(f"OK ({args.mode}) : vu sur la console série : {args.preuve}")

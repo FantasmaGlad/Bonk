@@ -30,7 +30,7 @@
       "device": "/dev/bus/usb/001/002",
       "disk_id": "usb-S1-001-002",
       "do": "vault",
-      "grub": null,
+      "grub": [],
       "iso": "/proc/self/fd/43"
     },
     {
@@ -38,7 +38,7 @@
       "device": "/dev/bus/usb/001/002",
       "disk_id": "usb-S1-001-002",
       "do": "vault",
-      "grub": null,
+      "grub": [],
       "iso": null
     }
   ],
