@@ -7,10 +7,11 @@ use bonk_core::{BlockDevice, BlockError};
 use bonk_hal::{Disk, Elevation, FilterOptions};
 use bonk_ops::job::{self, Deps, Io, Target, WriteJob, WriteMode, WriteOutcome};
 use bonk_ui::event::{Event, Outcome, parse_line};
+use serde::Serialize;
 
 use crate::screen::{CANCEL, EVENTS, MODEL, lock};
 
-fn push(event: Event) {
+pub(crate) fn push(event: Event) {
     lock(&EVENTS).push_back(event);
 }
 
@@ -22,7 +23,9 @@ fn unavailable(what: &str) -> BlockError {
 
 /// `open` opens the key the app handed over. No unmount and no table reread: Android detached its driver when
 /// handing the key, and takes it back when the app returns it.
-fn android_io(open: impl Fn() -> Result<Box<dyn BlockDevice>, BlockError> + 'static) -> Io {
+pub(crate) fn android_io(
+    open: impl Fn() -> Result<Box<dyn BlockDevice>, BlockError> + 'static,
+) -> Io {
     Io {
         prepare: Box::new(|_, _, _| Ok(())),
         unmount: Box::new(|_, _| Ok(Vec::new())),
@@ -36,21 +39,30 @@ fn android_io(open: impl Fn() -> Result<Box<dyn BlockDevice>, BlockError> + 'sta
 }
 
 /// In the command line format: one reader, as on the desktop.
-fn finished(result: Result<WriteOutcome, job::JobError>) -> Event {
+pub(crate) fn finished<T: Serialize>(result: Result<T, job::JobError>) -> Event {
     let failure =
         |message: String, code: Option<String>| Event::Finished(Outcome::Failed { code, message });
     match result {
         Err(error) => failure(error.message, Some(error.code.id().to_owned())),
-        Ok(outcome) => {
-            let line = match outcome {
-                WriteOutcome::Done(done) => serde_json::to_string(&done),
-                WriteOutcome::Extracted(done) => serde_json::to_string(&done),
-                WriteOutcome::Plan(plan) => serde_json::to_string(&plan),
-            };
-            line.ok()
-                .and_then(|line| parse_line(&line))
-                .unwrap_or_else(|| failure("unreadable result".to_owned(), None))
-        }
+        Ok(done) => serde_json::to_string(&done)
+            .ok()
+            .and_then(|line| parse_line(&line))
+            .unwrap_or_else(|| failure("unreadable result".to_owned(), None)),
+    }
+}
+
+/// Engine progress to the screen; the screen's cancel stops the engine.
+pub(crate) fn report(update: &Progress) -> Control {
+    push(Event::Progress {
+        phase: update.phase,
+        done: update.bytes_done,
+        total: update.bytes_total,
+        rate: update.bytes_per_second,
+    });
+    if CANCEL.load(Ordering::SeqCst) {
+        Control::Cancel
+    } else {
+        Control::Continue
     }
 }
 
@@ -67,7 +79,12 @@ pub(crate) struct Request<'a> {
 
 /// The engine re-check compares the list with itself on Android (the enumeration is the screen's): only this
 /// comparison ties the chosen disk to the device the app just opened.
-fn same_drive(disks: &[Disk], disk_id: &str, device: &str, serial: &str) -> Result<(), String> {
+pub(crate) fn same_drive(
+    disks: &[Disk],
+    disk_id: &str,
+    device: &str,
+    serial: &str,
+) -> Result<(), String> {
     let chosen = disks
         .iter()
         .find(|disk| disk.id == disk_id)
@@ -125,20 +142,16 @@ pub(crate) fn write(
         elevation: Elevation::Never,
         force: false,
     };
-    let mut progress = |update: &Progress| {
-        push(Event::Progress {
-            phase: update.phase,
-            done: update.bytes_done,
-            total: update.bytes_total,
-            rate: update.bytes_per_second,
-        });
-        if CANCEL.load(Ordering::SeqCst) {
-            Control::Cancel
-        } else {
-            Control::Continue
+    // Null when unserializable: read back as an unreadable result.
+    let result = job::write(&job, &deps, &mut report).map(|outcome| {
+        match outcome {
+            WriteOutcome::Done(done) => serde_json::to_value(done),
+            WriteOutcome::Extracted(done) => serde_json::to_value(done),
+            WriteOutcome::Plan(plan) => serde_json::to_value(plan),
         }
-    };
-    push(finished(job::write(&job, &deps, &mut progress)));
+        .unwrap_or_default()
+    });
+    push(finished(result));
 }
 
 #[cfg(test)]

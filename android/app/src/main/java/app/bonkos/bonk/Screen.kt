@@ -68,9 +68,14 @@ internal fun Screen(
         }
         if (state.disks.isEmpty() && waiting.isEmpty() && errors.isEmpty()) Body(state.empty)
         val panel = state.panel
+        val vault = state.vault
         state.disks.forEach { disk ->
             DiskCard(disk, send)
-            if (disk.selected && panel is DraftPanel) Draft(panel, send)
+            if (disk.selected && vault != null) {
+                Vault(vault, send)
+            } else if (disk.selected && panel is DraftPanel) {
+                Draft(panel, send)
+            }
         }
         when (panel) {
             is RunningPanel -> Boxed {
@@ -208,5 +213,40 @@ private fun Draft(panel: DraftPanel, send: (ToRust) -> Unit) {
             }
         }
         Primary(panel.button, panel.enabled) { send(Start) }
+        Secondary(panel.vaultButton) { send(VaultButton("open")) }
+    }
+}
+
+@Composable
+private fun Vault(vault: VaultView, send: (ToRust) -> Unit) {
+    Boxed {
+        Body(vault.title)
+        vault.lines.forEach { Small(it, Tokens.INK) }
+        if (vault.busy) {
+            Small(stringResource(R.string.do_not_unplug))
+            val fraction = vault.fraction
+            if (fraction == null) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Color(Tokens.INK))
+            } else {
+                LinearProgressIndicator(
+                    progress = { fraction },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color(Tokens.INK),
+                )
+            }
+        }
+        vault.images.forEach { image ->
+            Row(horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp)) {
+                Small(image.size)
+                Small(image.name, Tokens.INK)
+            }
+        }
+        vault.buttons.forEach { button ->
+            if (button.primary) {
+                Primary(button.label) { send(VaultButton(button.action)) }
+            } else {
+                Secondary(button.label) { send(VaultButton(button.action)) }
+            }
+        }
     }
 }

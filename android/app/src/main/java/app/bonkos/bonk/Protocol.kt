@@ -88,6 +88,13 @@ data class Open(val link: String) : ToRust
 @Serializable @SerialName("refresh")
 data object Refresh : ToRust
 
+/** A vault panel button: Rust names its action. */
+@Serializable @SerialName("vault")
+data class VaultButton(val action: String) : ToRust
+
+@Serializable @SerialName("vault_picked")
+data class VaultPicked(val value: String) : ToRust
+
 /** A key as the app sees it: USB device, serial and what the probe read. */
 @Serializable
 data class Drive(
@@ -127,6 +134,26 @@ data class Write(
     val mbr: Boolean,
 ) : Effect
 
+@Serializable @SerialName("vault_pick")
+data object PickVaultIso : Effect
+
+/** Where Kotlin downloads GRUB; Rust checks the bytes against the signed catalog. */
+@Serializable
+data class GrubDownload(val url: String, @SerialName("size_bytes") val sizeBytes: Long)
+
+/**
+ * A vault action on the chosen disk. `iso` for `add`; `grub` for `init` and `update`, absent while the catalog
+ * offers none (Rust then refuses with the reason).
+ */
+@Serializable @SerialName("vault")
+data class VaultRun(
+    val action: String,
+    @SerialName("disk_id") val diskId: String,
+    val device: String?,
+    val iso: String? = null,
+    val grub: GrubDownload? = null,
+) : Effect
+
 @Serializable
 data class Answer(val state: ScreenState = ScreenState(), val effects: List<Effect> = emptyList())
 
@@ -145,8 +172,26 @@ data class ScreenState(
     val empty: String = "",
     val disks: List<DiskView> = emptyList(),
     val panel: Panel? = null,
+    /** The vault panel of the chosen disk; it takes the place of the write panel. */
+    val vault: VaultView? = null,
     val running: Boolean = false,
 )
+
+@Serializable
+data class VaultView(
+    val title: String,
+    val busy: Boolean,
+    val lines: List<String>,
+    val fraction: Float? = null,
+    val images: List<VaultImage>,
+    val buttons: List<VaultAction>,
+)
+
+@Serializable
+data class VaultImage(val name: String, val size: String)
+
+@Serializable
+data class VaultAction(val label: String, val action: String, val primary: Boolean)
 
 @Serializable
 data class DiskView(
@@ -185,6 +230,7 @@ data class DraftPanel(
     @SerialName("mbr_label") val mbrLabel: String,
     val button: String,
     val enabled: Boolean,
+    @SerialName("vault_button") val vaultButton: String,
 ) : Panel
 
 @Serializable @SerialName("running")
@@ -241,7 +287,8 @@ object Protocol {
 
     fun outcome(text: String): Outcome = fromRust.decodeFromString(Outcome.serializer(), text)
 
-    fun encodeWrite(write: Write): String = fromRust.encodeToString(Write.serializer(), write)
+    /** A write or a vault action, handed to the service. */
+    fun encodeTask(task: Effect): String = fromRust.encodeToString(Effect.serializer(), task)
 
-    fun decodeWrite(text: String): Write = fromRust.decodeFromString(Write.serializer(), text)
+    fun decodeTask(text: String): Effect = fromRust.decodeFromString(Effect.serializer(), text)
 }

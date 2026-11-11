@@ -22,6 +22,8 @@ object Bridge {
 
     private var picked: ParcelFileDescriptor? = null
 
+    private var pickedName: String? = null
+
     fun send(message: ToRust) {
         if (message == Cancel) cancelled = true
         val text = Protocol.encode(message)
@@ -35,9 +37,14 @@ object Bridge {
 
     /** Open until the next choice, even if the screen that chose it is destroyed. */
     @Synchronized
-    fun pick(file: ParcelFileDescriptor?): String? {
+    fun pick(file: ParcelFileDescriptor?, name: String? = null): String? {
         picked?.close()
         picked = file
+        pickedName = name
         return file?.let { "/proc/self/fd/${it.fd}" }
     }
+
+    /** The descriptor path has no name: the vault names the ISO as the system showed it. */
+    @Synchronized
+    fun nameOf(path: String): String = pickedName.takeIf { picked?.let { "/proc/self/fd/${it.fd}" } == path }.orEmpty()
 }

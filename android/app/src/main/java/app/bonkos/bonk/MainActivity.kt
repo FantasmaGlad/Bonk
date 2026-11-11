@@ -10,6 +10,7 @@ import android.hardware.usb.UsbManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.util.Log
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -73,6 +74,21 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    private val pickVaultIso =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+            uri?.let {
+                Bridge.pick(contentResolver.openFileDescriptor(it, "r"), displayName(it))?.let { path ->
+                    send(VaultPicked(path))
+                }
+            }
+        }
+
+    /** The name the system shows: the descriptor path the engine reads carries none. */
+    private fun displayName(uri: Uri): String? =
+        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0) else null
+        }
+
     private fun send(message: ToRust) = Bridge.send(message)
 
     private val answered: (String) -> Unit = { raw -> show(raw) }
@@ -124,20 +140,29 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun askNotificationsIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     private fun accomplish(effect: Effect) {
         when (effect) {
             Enumerate -> actions.enumerate()
             LoadCatalog -> actions.catalog()
             PickImage -> pickFile.launch(arrayOf("*/*"))
             is Write -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                ) {
-                    askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }
+                askNotificationsIfNeeded()
                 actions.write(effect)
             }
             is SaveLanguage -> getPreferences(MODE_PRIVATE).edit { putString("lang", effect.value) }
+            PickVaultIso -> pickVaultIso.launch(arrayOf("*/*"))
+            is VaultRun -> {
+                if (effect.action != "list") askNotificationsIfNeeded()
+                actions.vault(effect)
+            }
         }
     }
 

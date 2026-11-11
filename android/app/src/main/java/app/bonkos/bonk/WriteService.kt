@@ -60,16 +60,25 @@ class WriteService : Service() {
                     .apply { acquire(WAKE_LOCK_MS) }
         }
         // Foreground first: Android refuses to stop a service that is not there yet.
-        val request = intent?.getStringExtra(REQUEST)?.let(Protocol::decodeWrite)
+        val request = intent?.getStringExtra(REQUEST)?.let(Protocol::decodeTask)
         if (request == null || !writing.compareAndSet(false, true)) {
             if (!writing.get()) stopSelf()
             return START_NOT_STICKY
         }
         thread {
+            val actions = Actions(this, Bridge::send) { _, _ -> }
             try {
-                Actions(this, Bridge::send) { _, _ -> }.runWrite(request)
+                when (request) {
+                    is Write -> actions.runWrite(request)
+                    is VaultRun -> actions.runVault(request)
+                    else -> {}
+                }
             } finally {
-                request.device?.let(Bridge.written::add)
+                when (request) {
+                    is Write -> request.device
+                    is VaultRun -> request.device
+                    else -> null
+                }?.let(Bridge.written::add)
                 writing.set(false)
                 stopSelf()
             }
@@ -83,8 +92,9 @@ class WriteService : Service() {
     }
 
     companion object {
-        fun start(context: Context, request: Write) {
-            val intent = Intent(context, WriteService::class.java).putExtra(REQUEST, Protocol.encodeWrite(request))
+        /** A write or a vault action that writes to the key. */
+        fun start(context: Context, request: Effect) {
+            val intent = Intent(context, WriteService::class.java).putExtra(REQUEST, Protocol.encodeTask(request))
             ContextCompat.startForegroundService(context, intent)
         }
     }

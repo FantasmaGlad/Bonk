@@ -13,6 +13,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 bonk-core.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 
@@ -23,6 +24,9 @@ bonk-ops.workspace = true
 bonk-ui.workspace = true
 jni = "0.22"
 libc.workspace = true
+
+[dev-dependencies]
+bonk-core = { workspace = true, features = ["testing"] }
 
 [features]
 # Destructive write test on the key named at build time: never in a published build.
