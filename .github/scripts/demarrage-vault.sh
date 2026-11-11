@@ -13,10 +13,13 @@ ici=$(cd "$(dirname "$0")" && pwd)
 nom=${source##*/}
 cle="$travail/cle.img"
 
-"$bonk" vault init --simulate "$cle" --size $((3 << 30)) --yes --progress none --cache-dir "$travail/cache"
+"$bonk" vault init --simulate "$cle" --size "${VAULT_SIZE:-$((3 << 30))}" --yes --progress none --cache-dir "$travail/cache"
 
 curl --fail --silent --show-error --location --retry 5 --retry-all-errors --continue-at - --output "$travail/$nom" "$source"
-attendu=$(curl --fail --silent --show-error --location "$sommes" | awk -v n="$nom" '$2 == n || $2 == "*" n {print $1}')
+# GNU lines (`sum  name`) or BSD lines (`SHA256 (name) = sum`, Fedora).
+attendu=$(curl --fail --silent --show-error --location "$sommes" | awk -v n="$nom" '
+  $2 == n || $2 == "*" n {print $1}
+  $1 == "SHA256" && $2 == "(" n ")" {print $4}')
 test -n "$attendu"
 echo "$attendu  $travail/$nom" | sha256sum --check --quiet
 
