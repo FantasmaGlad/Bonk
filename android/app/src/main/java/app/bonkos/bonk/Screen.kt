@@ -2,6 +2,7 @@ package app.bonkos.bonk
 
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -192,8 +193,6 @@ private fun Menu(menu: MenuView, send: (ToRust) -> Unit) {
 private fun Draft(panel: DraftPanel, send: (ToRust) -> Unit) {
     Boxed {
         Body(panel.title)
-        panel.summary?.let { Small(it, LocalPalette.current.ink) }
-        Small(panel.warning)
         Menu(panel.menu, send)
         Secondary(panel.advancedButton) { send(ToggleAdvanced) }
         if (panel.advanced) {
@@ -219,6 +218,18 @@ private fun Draft(panel: DraftPanel, send: (ToRust) -> Unit) {
                 Small(panel.mbrLabel, LocalPalette.current.ink)
             }
         }
+        // Read just before the action: the image, the disk it erases, the warning.
+        Body(panel.imageLine)
+        panel.summary?.let { Body(it) }
+        Text(
+            panel.warning,
+            fontSize = Tokens.TEXT_SMALL.sp,
+            color = Color(LocalPalette.current.warn),
+            modifier =
+                Modifier.fillMaxWidth()
+                    .background(Color(LocalPalette.current.warnSoft))
+                    .padding(Tokens.SPACE_MEDIUM.dp),
+        )
         Primary(panel.button, panel.enabled) { send(Start) }
         Secondary(panel.vaultButton) { send(VaultButton("open")) }
     }

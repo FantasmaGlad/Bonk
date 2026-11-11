@@ -2,12 +2,13 @@ use std::time::Instant;
 
 use bonk_hal::Disk;
 use iced::Element;
-use iced::widget::{button, checkbox, column, progress_bar, row, text, text_input};
+use iced::widget::{button, checkbox, column, container, progress_bar, row, text, text_input};
 
 use bonk_core::write::Phase;
 
 use crate::theme;
 use crate::transfer::Outcome;
+use bonk_ui::recap;
 use bonk_ui::text as phrases;
 
 use super::super::catalog::{CatalogState, find_url, menu_button, menu_list};
@@ -59,23 +60,12 @@ impl App {
         opened: Instant,
     ) -> Element<'a, Message> {
         let lang = self.lang;
-        // One clock read per render: the countdown, the button state and its label cannot disagree.
-        let elapsed = opened.elapsed();
-        let ready = elapsed >= WRITE_DELAY && !image.trim().is_empty();
-        let label = phrases::write_button(lang, elapsed, image.trim().is_empty());
         let mut panel = column![
             text(lang.pick(
                 "WRITE AN IMAGE TO THIS DISK",
                 "ÉCRIRE UNE IMAGE SUR CE DISQUE"
             ))
             .size(14),
-            text(phrases::disk_summary(lang, disk)).size(13),
-            text(lang.pick(
-                "All the data on this disk will be erased. This cannot be undone.",
-                "Toutes les données de ce disque seront effacées. Cette action est irréversible.",
-            ))
-            .size(13)
-            .color(theme::muted()),
             ring(
                 menu_button(&self.catalog, image, self.menu_open, lang),
                 self.has_focus(Focus::Menu),
@@ -85,60 +75,97 @@ impl App {
         if let (CatalogState::Ready(systems), true) = (&self.catalog, self.menu_open) {
             panel = panel.push(menu_list(systems, &self.menu_filter, self.menu_index, lang));
         }
-        if let CatalogState::Failed(error) = &self.catalog {
-            panel = panel.push(text(error.clone()).size(13).color(theme::muted()));
+        panel = panel.extend(self.catalog_note(image));
+        panel = panel.push(self.advanced_button());
+        if self.advanced {
+            panel = panel.push(self.manual_options(image, hash, raw, mbr));
         }
-        if let CatalogState::Ready(systems) = &self.catalog
-            && find_url(systems, image).is_some()
-        {
-            panel = panel.push(
+        panel = panel.extend(self.vault_button(disk));
+        panel.push(self.recap(disk, image, opened)).into()
+    }
+
+    /// Why nothing needs setting, or why the catalog is missing.
+    fn catalog_note(&self, image: &str) -> Option<Element<'_, Message>> {
+        let lang = self.lang;
+        match &self.catalog {
+            CatalogState::Failed(error) => {
+                Some(text(error.clone()).size(13).color(theme::muted()).into())
+            }
+            CatalogState::Ready(systems) if find_url(systems, image).is_some() => Some(
                 text(lang.pick(
                     "Official link and hash from the signed catalog: nothing to set.",
                     "Lien officiel et empreinte du catalogue signé : rien à régler.",
                 ))
                 .size(13)
-                .color(theme::muted()),
-            );
+                .color(theme::muted())
+                .into(),
+            ),
+            _ => None,
         }
-        panel = panel.push(ring(
-            button(
-                text(if self.advanced {
-                    lang.pick(
-                        "Hide the manual image and options",
-                        "Masquer l'image manuelle et les options",
-                    )
-                } else {
-                    lang.pick("Other image or options...", "Autre image ou options...")
-                })
-                .size(13),
+    }
+
+    fn advanced_button(&self) -> Element<'_, Message> {
+        let lang = self.lang;
+        let label = if self.advanced {
+            lang.pick(
+                "Hide the manual image and options",
+                "Masquer l'image manuelle et les options",
             )
-            .on_press(Message::ToggleAdvanced)
-            .padding([4, 10])
-            .style(theme::card_button(false)),
+        } else {
+            lang.pick("Other image or options...", "Autre image ou options...")
+        };
+        ring(
+            button(text(label).size(13))
+                .on_press(Message::ToggleAdvanced)
+                .padding([4, 10])
+                .style(theme::card_button(false)),
             self.has_focus(Focus::Advanced),
-        ));
-        if self.advanced {
-            panel = panel.push(self.manual_options(image, hash, raw, mbr));
-        }
-        // Several ISO images on one drive instead of one image: the vault reads the drive before offering
-        // anything.
-        if !self.vault.disk_id().is_some_and(|id| id == disk.id) {
-            panel = panel.push(
-                button(text(bonk_ui::vault::VaultWords::new(lang).open).size(13))
-                    .on_press(Message::Vault(VaultMessage::Open))
-                    .padding([4, 10])
-                    .style(theme::card_button(false)),
-            );
-        }
-        panel
-            .push(ring(
-                button(text(label).size(14))
+        )
+    }
+
+    /// Several ISO images on one drive instead of one image: the vault reads the drive before offering
+    /// anything.
+    fn vault_button(&self, disk: &Disk) -> Option<Element<'_, Message>> {
+        let open = self.vault.disk_id().is_some_and(|id| id == disk.id);
+        (!open).then(|| {
+            button(text(bonk_ui::vault::VaultWords::new(self.lang).open).size(13))
+                .on_press(Message::Vault(VaultMessage::Open))
+                .padding([4, 10])
+                .style(theme::card_button(false))
+                .into()
+        })
+    }
+
+    /// Read just before the action: the image, the disk it erases, the warning, then the button, enabled
+    /// once the delay to think has passed.
+    fn recap<'a>(
+        &'a self,
+        disk: &'a Disk,
+        image: &'a str,
+        opened: Instant,
+    ) -> Element<'a, Message> {
+        let lang = self.lang;
+        // One clock read per render: the countdown, the button state and its label cannot disagree.
+        let elapsed = opened.elapsed();
+        let empty = image.trim().is_empty();
+        let ready = elapsed >= WRITE_DELAY && !empty;
+        column![
+            text(recap::image_line(lang, &self.catalog, image)).size(14),
+            text(recap::disk_line(lang, disk)).size(14),
+            container(text(recap::warning(lang)).size(13))
+                .padding([8, 12])
+                .width(iced::Fill)
+                .style(theme::warning_banner),
+            ring(
+                button(text(phrases::write_button(lang, elapsed, empty)).size(14))
                     .on_press_maybe(ready.then_some(Message::StartWrite))
                     .padding([6, 14])
                     .style(theme::primary_button),
                 self.has_focus(Focus::Action),
-            ))
-            .into()
+            ),
+        ]
+        .spacing(8)
+        .into()
     }
 
     fn manual_options<'a>(

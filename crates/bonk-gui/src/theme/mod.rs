@@ -7,6 +7,7 @@ use iced::theme::Palette;
 pub(crate) use palette::{choose, colors};
 pub(crate) use widgets::{
     card, card_button, checkbox_style, focus_ring, input_style, link_button, panel, primary_button,
+    warning_banner,
 };
 
 /// Commands, paths, identifiers.

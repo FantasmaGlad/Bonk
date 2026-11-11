@@ -490,11 +490,9 @@ fn panel_state(model: &Model) -> Value {
             json!({
                 "kind": "draft",
                 "title": lang.pick("WRITE AN IMAGE TO THIS DISK", "ÉCRIRE UNE IMAGE SUR CE DISQUE"),
-                "summary": disk.map(|disk| text::disk_summary(lang, disk)),
-                "warning": lang.pick(
-                    "All the data on this disk will be erased. This cannot be undone.",
-                    "Toutes les données de ce disque seront effacées. Cette action est irréversible.",
-                ),
+                "summary": disk.map(|disk| bonk_ui::recap::disk_line(lang, disk)),
+                "image_line": bonk_ui::recap::image_line(lang, &model.catalog, image),
+                "warning": bonk_ui::recap::warning(lang),
                 "menu": menu_state(model),
                 "advanced": model.advanced,
                 "advanced_button": if model.advanced {
@@ -744,8 +742,8 @@ mod tests {
 
     /// The summary before erasing says what the key holds: a table read, never 0 by default.
     #[test]
-    fn le_recapitulatif_compte_les_partitions_lues_sur_la_cle()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn les_partitions_lues_sur_la_cle_arrivent_a_l_ecran() -> Result<(), Box<dyn std::error::Error>>
+    {
         use bonk_core::MemoryDevice;
         use bonk_core::format::table::{TableKind, write_table};
         use bonk_core::format::{Filesystem, Ids};
@@ -768,11 +766,12 @@ mod tests {
             ..Model::default()
         };
         let _ = model.update(Message::Loaded(Ok(disk_of(&value).into_iter().collect())));
-        let recap = state(&model)["panel"]["summary"]
+        // The partition read on the key reaches the screen: its label is on the card.
+        let facts = state(&model)["disks"][0]["facts"]
             .as_str()
             .unwrap_or_default()
             .to_owned();
-        assert!(recap.contains("1 partition(s)"), "{recap}");
+        assert!(facts.contains("DONNEES"), "{facts}");
         // A blank key really has no partition.
         let blank = MemoryDevice::new(64 << 20, 512)?;
         assert!(partitions_of(&bonk_core::partition::inspect(&blank)?).is_empty());

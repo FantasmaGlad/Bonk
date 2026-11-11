@@ -220,10 +220,10 @@ fn le_panneau_montre_le_recapitulatif_et_le_decompte() {
         &app,
         "Toutes les données de ce disque seront effacées. Cette action est irréversible."
     ));
-    assert!(contient(
-        &app,
-        "Cle de test  série 4C530001  16,0 Go  1 partition(s)  étiquettes : CLE"
-    ));
+    // The recap names the image, then the disk it erases: no second full description of the disk.
+    assert!(contient(&app, "Disque effacé : Cle de test, 16,0 Go"));
+    assert!(contient(&app, "Image : aucune choisie pour l'instant"));
+    assert!(!contient(&app, "1 partition(s)"));
     // Frozen clock: an opening time in the future gives zero elapsed time, however slow the rendering (a slow
     // runner already passed 3 s before the first check).
     let mut figee = app_avec_panneau();

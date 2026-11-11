@@ -138,3 +138,14 @@ pub(crate) fn link_button(_theme: &Theme, status: button::Status) -> button::Sty
         ..button::Style::default()
     }
 }
+
+/// Before erasing: the alert colours of the site, readable in both themes.
+pub(crate) fn warning_banner(_theme: &Theme) -> container::Style {
+    let c = colors();
+    container::Style {
+        background: Some(c.warn_soft.into()),
+        text_color: Some(c.warn),
+        border: border(Color::TRANSPARENT, 0.0),
+        ..container::Style::default()
+    }
+}
