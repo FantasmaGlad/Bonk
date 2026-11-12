@@ -8,6 +8,7 @@ use crate::catalog::{self, CatalogState, ChoiceSource};
 use crate::command::WriteView;
 use crate::event::{Event, write_args};
 use crate::model::{Effect, Effects, Focus, Message, Model, WRITE_DELAY, WriteState};
+use crate::source::ImageSource;
 
 impl Model {
     // A flat dispatch, one arm per message: splitting it would make it harder to follow.
@@ -87,10 +88,8 @@ impl Model {
                 vec![Effect::PickImage]
             }
             Message::ImagePicked(Some(path)) => {
-                if let WriteState::Draft { image, .. } = &mut self.write {
-                    *image = path.display().to_string();
-                    // A dropped image must be visible: the menu does not name it.
-                    self.advanced = true;
+                if matches!(self.write, WriteState::Draft { .. }) {
+                    self.fill_draft(&ImageSource::File(path));
                     self.requested = None;
                 }
                 Vec::new()
@@ -163,6 +162,7 @@ impl Model {
             }
             Message::Settings(message) => self.apply_settings(message),
             Message::Vault(message) => self.apply_vault(message),
+            Message::Library(message) => self.apply_library(message),
         }
     }
 
@@ -275,24 +275,7 @@ impl Model {
             return;
         };
         if matches!(&self.write, WriteState::Draft { image, .. } if image.is_empty()) {
-            self.fill_draft(url, sha256);
-        }
-    }
-
-    /// The catalog fixes everything: Bonk analyses the image and picks the mode itself.
-    fn fill_draft(&mut self, url: String, sha256: String) {
-        if let WriteState::Draft {
-            image,
-            hash,
-            raw,
-            mbr,
-            ..
-        } = &mut self.write
-        {
-            *image = url;
-            *hash = sha256;
-            *raw = false;
-            *mbr = TableKind::WINDOWS_DEFAULT == TableKind::Mbr;
+            self.fill_draft(&ImageSource::Catalog { url, sha256 });
         }
     }
 
@@ -300,7 +283,7 @@ impl Model {
         if let (WriteState::Draft { .. }, ChoiceSource::Download { url, sha256 }) =
             (&self.write, choice.source)
         {
-            self.fill_draft(url, sha256);
+            self.fill_draft(&ImageSource::Catalog { url, sha256 });
             self.requested = None;
             self.menu_open = false;
             self.focus = Some(Focus::Action);
@@ -344,6 +327,10 @@ impl Model {
                     opened: Instant::now(),
                 };
                 self.fill_requested();
+                if let Some(kept) = self.library.chosen.take() {
+                    self.fill_draft(&kept);
+                    self.requested = None;
+                }
             }
             (_, None) => self.write = WriteState::Idle,
         }

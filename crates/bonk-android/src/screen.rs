@@ -236,6 +236,8 @@ fn effects_out(model: &mut Model, effects: Vec<Effect>, draft: Option<Value>) ->
                 out.extend(vault_effect(model, &args));
             }
             Effect::PickVaultIso => out.push(json!({"do": "vault_pick"})),
+            // No download cache on Android: the library is a desktop page.
+            Effect::ListKept | Effect::RemoveKept(_) => {}
             Effect::Copy(_) | Effect::ScrollList(_) | Effect::ScrollMenu(_) => {}
         }
     }

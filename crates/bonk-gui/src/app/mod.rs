@@ -18,6 +18,7 @@ use iced::{Subscription, Task, Theme};
 
 #[cfg(test)]
 use bonk_core::write::Phase;
+use bonk_ui::library::{self, LibraryMessage};
 pub(crate) use bonk_ui::model::{
     Effect, Focus, Message, Model, Nav, REFRESH_EVERY, WRITE_DELAY, WriteState,
 };
@@ -168,6 +169,26 @@ impl App {
             Effect::PickVaultIso => Task::perform(pick_iso(self.lang), |path| {
                 Message::Vault(VaultMessage::Picked(path))
             }),
+            Effect::ListKept => {
+                let program = self.program();
+                Task::perform(
+                    async move {
+                        catalog::run_json(&program, &["cache", "list", "--json"])
+                            .and_then(|output| library::parse(&output))
+                    },
+                    |listed| Message::Library(LibraryMessage::Listed(listed)),
+                )
+            }
+            Effect::RemoveKept(sha256) => {
+                let program = self.program();
+                Task::perform(
+                    async move {
+                        catalog::run_json(&program, &["cache", "clean", &sha256, "--json"])
+                            .map(drop)
+                    },
+                    |removed| Message::Library(LibraryMessage::Removed(removed)),
+                )
+            }
         }
     }
 

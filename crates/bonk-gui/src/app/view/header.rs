@@ -1,6 +1,7 @@
 use iced::widget::{button, column, row, text};
 use iced::{Element, Fill};
 
+use bonk_ui::library::LibraryMessage;
 use bonk_ui::settings::SettingsMessage;
 
 use crate::theme;
@@ -20,6 +21,13 @@ impl App {
             .spacing(2)
             .width(Fill),
             ring(
+                button(text(lang.pick("Library", "Bibliothèque")).size(14))
+                    .on_press(Message::Library(LibraryMessage::Open))
+                    .padding([6, 14])
+                    .style(theme::card_button(false)),
+                self.has_focus(Focus::Library),
+            ),
+            ring(
                 button(text(lang.pick("Settings", "Paramètres")).size(14))
                     .on_press(Message::Settings(SettingsMessage::Open))
                     .padding([6, 14])
@@ -27,6 +35,7 @@ impl App {
                 self.has_focus(Focus::Settings),
             ),
         ]
+        .spacing(8)
         .align_y(iced::Center)
         .into()
     }

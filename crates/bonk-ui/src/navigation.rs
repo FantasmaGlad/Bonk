@@ -1,6 +1,7 @@
 use crate::catalog::{CatalogState, writable};
+use crate::library::LibraryMessage;
 use crate::model::{Effect, Effects, Focus, Message, Model, Nav, WriteState};
-use crate::settings::SettingsMessage;
+use crate::settings::{Screen, SettingsMessage};
 
 /// False out of bounds.
 pub fn is_disk(order: &[Focus], i: usize) -> bool {
@@ -10,10 +11,12 @@ pub fn is_disk(order: &[Focus], i: usize) -> bool {
 impl Model {
     /// Tab order: the settings button, then the disks shown.
     pub fn focus_order(&self) -> Vec<Focus> {
-        if self.screen == crate::settings::Screen::Settings {
-            return self.settings_focus_order();
+        match self.screen {
+            Screen::Settings => return self.settings_focus_order(),
+            Screen::Library => return self.library_focus_order(),
+            Screen::Main => {}
         }
-        let mut order = vec![Focus::Settings];
+        let mut order = vec![Focus::Library, Focus::Settings];
         if self.error.is_none() {
             for (disk, _) in self.entries() {
                 order.push(Focus::Disk(disk.id.clone()));
@@ -68,8 +71,11 @@ impl Model {
                 Vec::new()
             };
         }
-        if nav == Nav::Escape && self.screen == crate::settings::Screen::Settings {
+        if nav == Nav::Escape && self.screen == Screen::Settings {
             return self.apply(Message::Settings(SettingsMessage::Close));
+        }
+        if nav == Nav::Escape && self.screen == Screen::Library {
+            return self.apply(Message::Library(LibraryMessage::Close));
         }
         // Menu open: arrows move in it, Escape closes it.
         if self.menu_open {
@@ -93,7 +99,7 @@ impl Model {
             Nav::Previous => Some(current.map_or(last, |i| if i == 0 { last } else { i - 1 })),
             // Arrows move between disks; from a control, Down enters the list.
             Nav::Down => match current {
-                Some(i) if !matches!(order[i], Focus::Settings | Focus::Copy) => {
+                Some(i) if !matches!(order[i], Focus::Library | Focus::Settings | Focus::Copy) => {
                     // Next disk, skipping the current disk's write panel.
                     (i + 1..order.len())
                         .find(|j| is_disk(&order, *j))
@@ -172,6 +178,10 @@ impl Model {
         let message = match self.focus.clone() {
             Some(Focus::Settings) => Message::Settings(SettingsMessage::Open),
             Some(Focus::CloseSettings) => Message::Settings(SettingsMessage::Close),
+            Some(Focus::Library) => Message::Library(LibraryMessage::Open),
+            Some(Focus::CloseLibrary) => Message::Library(LibraryMessage::Close),
+            Some(Focus::KeptWrite(sha256)) => Message::Library(LibraryMessage::Write(sha256)),
+            Some(Focus::KeptRemove(sha256)) => Message::Library(LibraryMessage::Remove(sha256)),
             Some(Focus::Language(choice)) => Message::Settings(SettingsMessage::Language(choice)),
             Some(Focus::Theme(choice)) => Message::Settings(SettingsMessage::Theme(choice)),
             Some(Focus::Internal) => Message::ToggleInternal(!self.show_internal),

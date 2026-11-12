@@ -106,7 +106,8 @@ fn captures_facultatives() -> Result<(), Box<dyn std::error::Error>> {
     let dossier = std::path::PathBuf::from(dossier);
     captures_fenetre(&dossier)?;
     captures_ecriture(&dossier)?;
-    captures_coffre(&dossier)
+    captures_coffre(&dossier)?;
+    capture(&avec_une_image(), 640.0, &dossier, "fenetre-bibliotheque")
 }
 
 type Capture = Result<(), Box<dyn std::error::Error>>;
