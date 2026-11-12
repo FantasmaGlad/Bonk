@@ -20,9 +20,13 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+
+/** Smallest height of anything that answers a touch. */
+internal const val TOUCH_DP = 48
 
 /** Light or dark, chosen once at start: the screen relaunches to change it. */
 internal val LocalPalette = staticCompositionLocalOf { Tokens.LIGHT }
@@ -68,6 +72,18 @@ internal fun Small(text: String, color: Long = LocalPalette.current.muted) {
 @Composable
 internal fun Body(text: String) {
     Text(text, fontSize = Tokens.TEXT_BODY.sp)
+}
+
+/** One line; a long path or name loses its middle, never its start or its end. */
+@Composable
+internal fun OneLine(text: String, color: Long = LocalPalette.current.ink, size: Int = Tokens.TEXT_BODY) {
+    Text(
+        text,
+        fontSize = size.sp,
+        color = Color(color),
+        maxLines = 1,
+        overflow = TextOverflow.MiddleEllipsis,
+    )
 }
 
 @Composable
