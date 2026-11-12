@@ -14,6 +14,7 @@ use super::*;
 mod bibliotheque;
 mod clavier;
 mod commandes;
+mod disposition;
 mod lien;
 mod menu;
 mod panneau;
