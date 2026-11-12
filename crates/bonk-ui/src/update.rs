@@ -105,6 +105,7 @@ impl Model {
                 self.focus = Some(Focus::Tor);
                 Vec::new()
             }
+            Message::RequestImage(id) => self.request_image(id),
             Message::ToggleMenu => {
                 self.focus = Some(Focus::Menu);
                 self.menu_open = !self.menu_open;
