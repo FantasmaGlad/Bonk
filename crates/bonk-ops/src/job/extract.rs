@@ -392,7 +392,21 @@ pub(super) struct Advance<'a, 'b> {
     pub(super) report: &'a mut (dyn FnMut(&Progress) -> Control + 'b),
 }
 
-impl Advance<'_, '_> {
+impl<'a, 'b> Advance<'a, 'b> {
+    pub(super) fn start(
+        phase: Phase,
+        total: u64,
+        report: &'a mut (dyn FnMut(&Progress) -> Control + 'b),
+    ) -> Self {
+        Self {
+            phase,
+            done: 0,
+            total,
+            started: Instant::now(),
+            report,
+        }
+    }
+
     pub(super) fn add(&mut self, bytes: u64) -> bool {
         self.done += bytes;
         let elapsed = self.started.elapsed();
