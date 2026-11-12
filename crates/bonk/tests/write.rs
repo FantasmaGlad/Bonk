@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_lines, reason = "a scenario test reads in one piece")]
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};

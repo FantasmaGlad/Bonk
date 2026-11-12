@@ -447,36 +447,9 @@ pub(super) fn run(
         trace_io: job.trace_io,
     };
     let (mut device, info, unmounted) = open_target(chosen, &job.target, &request, deps)?;
-    let block = device.block_size();
-    let files = prepared.new_files();
     let ids = Ids::from_seed(&fresh_seed(&seed_name));
-    let partition = partition_plan(device.size(), block, job.table)?;
-    let extraction = prepared.describe(job.table, block);
-    let bios_boot = extraction.firmware.contains(&Firmware::Bios);
-    let volume = Volume {
-        first_lba: partition.first_lba,
-        sectors: partition.sectors(),
-        label: Some(LABEL),
-        volume_id: ids.volume_id,
-        bios_boot,
-    };
-    // Everything is computed before the first write: a refusal costs the key nothing.
-    let layout = fat32_tree::layout(&volume, block, &files, &prepared.directories)
-        .map_err(|e| format_failure(Code::WriteFailed, e))?;
+    let (layout, volume, extraction) = write_volume(&mut *device, prepared, job.table, &ids)?;
     let write_failure = |e| format_failure(Code::WriteFailed, e);
-    table::write_table(
-        &mut *device,
-        job.table,
-        Filesystem::Fat32,
-        Some(LABEL),
-        &ids,
-        bios_boot,
-    )
-    .map_err(write_failure)?;
-    layout
-        .write_structures(&mut *device)
-        .map_err(write_failure)?;
-
     let total = layout.data_bytes();
     let mut report = guarded(deps, progress);
     let started = Instant::now();
@@ -508,6 +481,35 @@ pub(super) fn run(
         verify,
         gpt_repair: None,
     })
+}
+
+/// Everything is computed before the first write: a refusal costs the key nothing. Then the table and
+/// the FAT32 structures; the files follow.
+fn write_volume<'a>(
+    device: &mut dyn BlockDevice,
+    prepared: &WindowsImage,
+    kind: TableKind,
+    ids: &Ids,
+) -> Result<(Layout, Volume<'a>, Extraction), JobError> {
+    let block = device.block_size();
+    let files = prepared.new_files();
+    let partition = partition_plan(device.size(), block, kind)?;
+    let extraction = prepared.describe(kind, block);
+    let bios_boot = extraction.firmware.contains(&Firmware::Bios);
+    let volume = Volume {
+        first_lba: partition.first_lba,
+        sectors: partition.sectors(),
+        label: Some(LABEL),
+        volume_id: ids.volume_id,
+        bios_boot,
+    };
+    let write_failure = |e| format_failure(Code::WriteFailed, e);
+    let layout =
+        fat32_tree::layout(&volume, block, &files, &prepared.directories).map_err(write_failure)?;
+    table::write_table(device, kind, Filesystem::Fat32, Some(LABEL), ids, bios_boot)
+        .map_err(write_failure)?;
+    layout.write_structures(device).map_err(write_failure)?;
+    Ok((layout, volume, extraction))
 }
 
 /// Each file's SHA-256, in order, for the read-back.
