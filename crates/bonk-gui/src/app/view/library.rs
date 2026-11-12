@@ -2,6 +2,7 @@ use iced::widget::{Column, button, column, row, scrollable, text};
 use iced::{Element, Fill};
 
 use bonk_hal::format_size;
+use bonk_ui::errors::technical;
 use bonk_ui::library::{Kept, LibraryMessage, Listing, day};
 
 use crate::theme;
@@ -33,7 +34,17 @@ impl App {
         .color(theme::muted());
         let mut content = column![title, note].spacing(14);
         if let Some(error) = &self.library.error {
-            content = content.push(text(error.as_str()).size(13));
+            content = content.push(
+                text(format!(
+                    "{} {}",
+                    lang.pick(
+                        "The cache action failed.",
+                        "L'action sur le cache a échoué."
+                    ),
+                    technical(lang, error)
+                ))
+                .size(13),
+            );
         }
         content.push(self.kept_list()).into()
     }
@@ -44,8 +55,9 @@ impl App {
         match &self.library.listing {
             Listing::Loading => quiet(lang.pick("Reading…", "Lecture…").to_owned()),
             Listing::Failed(error) => quiet(format!(
-                "{} {error}",
-                lang.pick("Cannot read the cache:", "Cache illisible :")
+                "{} {}",
+                lang.pick("Cannot read the cache.", "Cache illisible."),
+                technical(lang, error)
             )),
             Listing::Ready(kept) if kept.is_empty() => quiet(
                 lang.pick(

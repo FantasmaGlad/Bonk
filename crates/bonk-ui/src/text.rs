@@ -151,13 +151,7 @@ pub fn outcome(lang: Lang, outcome: &Outcome) -> String {
                 .as_ref()
                 .map_or_else(String::new, |signer| secure_boot_text(lang, signer)),
         ),
-        Outcome::Failed { code, message } => format!(
-            "{} {}{}",
-            lang.pick("FAILED:", "ÉCHEC :"),
-            failure_text(lang, code.as_deref(), message),
-            code.as_ref()
-                .map_or_else(String::new, |c| format!(" [{c}]")),
-        ),
+        Outcome::Failed { code, message } => failure_text(lang, code.as_deref(), message),
         Outcome::Vault(done) => vault_outcome(lang, done),
     }
 }
@@ -206,7 +200,7 @@ pub fn outcome_with_explain(lang: Lang, outcome: &Outcome) -> String {
             code: Some(code), ..
         } => match lang {
             Lang::En => format!("{text}: see \"bonk explain {code}\""),
-            Lang::Fr => format!("{text} : voir « bonk explain {code} »"),
+            Lang::Fr => format!("{text}. Voir « bonk explain {code} »."),
         },
         _ => text,
     }

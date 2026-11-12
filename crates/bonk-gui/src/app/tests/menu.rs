@@ -112,7 +112,10 @@ fn catalogue_indisponible_la_voie_manuelle_se_montre() {
     assert!(!contient(&app, "Choisir l'image..."));
     let _ = app.update(Message::CatalogLoaded(Err("expired".to_owned())));
     assert!(contient(&app, "Liste des systèmes indisponible"));
-    assert!(contient(&app, "expired"));
+    assert!(contient(
+        &app,
+        "Catalogue indisponible. Détail technique (en anglais) : expired"
+    ));
     assert!(contient(&app, "Choisir l'image..."));
 }
 

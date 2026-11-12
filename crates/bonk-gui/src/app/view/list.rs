@@ -2,6 +2,8 @@ use bonk_hal::{Disk, Eligibility};
 use iced::widget::{Column, column, container, scrollable, text};
 use iced::{Element, Fill};
 
+use bonk_ui::errors::technical;
+
 use crate::theme;
 
 use super::super::navigation::LIST;
@@ -56,7 +58,7 @@ impl App {
                     "ERREUR : les disques n'ont pas pu être détectés."
                 ))
                 .size(16),
-                text(erreur).size(14).color(theme::muted()),
+                text(technical(lang, erreur)).size(14).color(theme::muted()),
                 text(lang.pick(
                     "No disk is offered while detection fails.",
                     "Aucun disque n'est proposé tant que la détection échoue."

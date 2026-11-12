@@ -201,7 +201,7 @@ fn un_echec_s_affiche_avec_son_code_et_sa_commande_d_aide() {
     })));
     assert!(contient(
         &app,
-        "ÉCHEC : Ouverture du disque refusée (ouverture du disque refusée) [E4004] : voir « bonk explain E4004 »"
+        "ÉCHEC : Ouverture du disque refusée [E4004]. Détail technique (en anglais) : ouverture du disque refusée. Voir « bonk explain E4004 »."
     ));
 }
 
