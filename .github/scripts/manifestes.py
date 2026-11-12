@@ -74,6 +74,7 @@ def homebrew(r: Release) -> str:
   conflicts_with "bonk-cli", because: "both install the bonk command"
 
   on_macos do
+    depends_on macos: :monterey
     on_arm do
 {bloc("macos-aarch64")}    end
     on_intel do
