@@ -63,74 +63,15 @@ impl Model {
     }
 
     pub fn navigate(&mut self, nav: Nav) -> Effects {
-        // In front of the confirmation, the keyboard can only give up: Enter must not erase.
-        if self.confirming_internal {
-            return if nav == Nav::Escape {
-                self.apply(Message::CloseInternal)
-            } else {
-                Vec::new()
-            };
-        }
-        if nav == Nav::Escape && self.screen == Screen::Settings {
-            return self.apply(Message::Settings(SettingsMessage::Close));
-        }
-        if nav == Nav::Escape && self.screen == Screen::Library {
-            return self.apply(Message::Library(LibraryMessage::Close));
-        }
-        // Menu open: arrows move in it, Escape closes it.
-        if self.menu_open {
-            match nav {
-                Nav::Up | Nav::Down => return self.move_in_menu(nav),
-                Nav::Escape => {
-                    self.menu_open = false;
-                    return Vec::new();
-                }
-                _ => {}
-            }
+        if let Some(effects) = self.navigate_overlay(nav) {
+            return effects;
         }
         let order = self.focus_order();
         let current = self
             .focus
             .as_ref()
             .and_then(|focus| order.iter().position(|item| item == focus));
-        let last = order.len() - 1;
         let target = match nav {
-            Nav::Next => Some(current.map_or(0, |i| if i == last { 0 } else { i + 1 })),
-            Nav::Previous => Some(current.map_or(last, |i| if i == 0 { last } else { i - 1 })),
-            // Arrows move between disks; from a control, Down enters the list.
-            Nav::Down => match current {
-                Some(i) if !matches!(order[i], Focus::Library | Focus::Settings | Focus::Copy) => {
-                    // Next disk, skipping the current disk's write panel.
-                    (i + 1..order.len())
-                        .find(|j| is_disk(&order, *j))
-                        .or(Some(i))
-                }
-                _ => order.iter().position(|item| matches!(item, Focus::Disk(_))),
-            },
-            // Up goes back one disk; from the copy button, to the last disk.
-            Nav::Up => match current {
-                Some(i)
-                    if matches!(
-                        order[i],
-                        Focus::Disk(_)
-                            | Focus::Details
-                            | Focus::Menu
-                            | Focus::Advanced
-                            | Focus::Image
-                            | Focus::Browse
-                            | Focus::Hash
-                            | Focus::Tor
-                            | Focus::Raw
-                            | Focus::Mbr
-                            | Focus::Action
-                            | Focus::Copy
-                    ) =>
-                {
-                    // Previous disk; from the panels and the copy button, the nearest disk.
-                    (0..i).rev().find(|j| is_disk(&order, *j))
-                }
-                _ => None,
-            },
             Nav::Activate => return self.activate(),
             Nav::Escape => {
                 if self.selected.is_some() {
@@ -140,20 +81,47 @@ impl Model {
                 }
                 None
             }
+            Nav::Next | Nav::Previous | Nav::Down | Nav::Up => target(&order, current, nav),
         };
         let Some(index) = target else {
             return Vec::new();
         };
         self.focus = Some(order[index].clone());
-        // The list follows the focus: the card's position among the disks (approximate with open details,
-        // enough to keep it visible).
-        let disk_positions: Vec<usize> = (0..order.len()).filter(|i| is_disk(&order, *i)).collect();
-        let rank = disk_positions.iter().position(|i| *i == index);
-        if let Some(rank) = rank.filter(|_| disk_positions.len() > 1) {
-            let relative = rank as f32 / (disk_positions.len() - 1) as f32;
-            return vec![Effect::ScrollList(relative)];
+        follow(&order, index)
+    }
+
+    /// What answers the keyboard before the page: the confirmation, a page other than the main one, the
+    /// open menu.
+    fn navigate_overlay(&mut self, nav: Nav) -> Option<Effects> {
+        // In front of the confirmation, the keyboard can only give up: Enter must not erase.
+        if self.confirming_internal {
+            return Some(if nav == Nav::Escape {
+                self.apply(Message::CloseInternal)
+            } else {
+                Vec::new()
+            });
         }
-        Vec::new()
+        match (nav, self.screen) {
+            (Nav::Escape, Screen::Settings) => {
+                return Some(self.apply(Message::Settings(SettingsMessage::Close)));
+            }
+            (Nav::Escape, Screen::Library) => {
+                return Some(self.apply(Message::Library(LibraryMessage::Close)));
+            }
+            _ => {}
+        }
+        // Menu open: arrows move in it, Escape closes it.
+        if !self.menu_open {
+            return None;
+        }
+        match nav {
+            Nav::Up | Nav::Down => Some(self.move_in_menu(nav)),
+            Nav::Escape => {
+                self.menu_open = false;
+                Some(Vec::new())
+            }
+            _ => None,
+        }
     }
 
     fn move_in_menu(&mut self, nav: Nav) -> Effects {
@@ -222,5 +190,61 @@ impl Model {
             },
         };
         self.apply(message)
+    }
+}
+
+/// Where Tab, Shift+Tab and the arrows lead from `current` in `order`.
+fn target(order: &[Focus], current: Option<usize>, nav: Nav) -> Option<usize> {
+    let last = order.len() - 1;
+    match nav {
+        Nav::Next => Some(current.map_or(0, |i| if i == last { 0 } else { i + 1 })),
+        Nav::Previous => Some(current.map_or(last, |i| if i == 0 { last } else { i - 1 })),
+        // Arrows move between disks; from a control, Down enters the list.
+        Nav::Down => match current {
+            Some(i) if !matches!(order[i], Focus::Library | Focus::Settings | Focus::Copy) => {
+                // Next disk, skipping the current disk's write panel.
+                (i + 1..order.len())
+                    .find(|j| is_disk(order, *j))
+                    .or(Some(i))
+            }
+            _ => order.iter().position(|item| matches!(item, Focus::Disk(_))),
+        },
+        // Up goes back one disk; from the panels and the copy button, the nearest disk.
+        Nav::Up => match current {
+            Some(i) if in_disk_area(&order[i]) => (0..i).rev().find(|j| is_disk(order, *j)),
+            _ => None,
+        },
+        Nav::Activate | Nav::Escape => None,
+    }
+}
+
+fn in_disk_area(focus: &Focus) -> bool {
+    matches!(
+        focus,
+        Focus::Disk(_)
+            | Focus::Details
+            | Focus::Menu
+            | Focus::Advanced
+            | Focus::Image
+            | Focus::Browse
+            | Focus::Hash
+            | Focus::Tor
+            | Focus::Raw
+            | Focus::Mbr
+            | Focus::Action
+            | Focus::Copy
+    )
+}
+
+/// The list follows the focus: the card's position among the disks (approximate with open details, enough
+/// to keep it visible).
+fn follow(order: &[Focus], index: usize) -> Effects {
+    let disk_positions: Vec<usize> = (0..order.len()).filter(|i| is_disk(order, *i)).collect();
+    let rank = disk_positions.iter().position(|i| *i == index);
+    match rank.filter(|_| disk_positions.len() > 1) {
+        Some(rank) => vec![Effect::ScrollList(
+            rank as f32 / (disk_positions.len() - 1) as f32,
+        )],
+        None => Vec::new(),
     }
 }

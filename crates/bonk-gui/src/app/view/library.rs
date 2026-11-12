@@ -81,14 +81,24 @@ impl App {
         let details = column![
             text(title).size(16),
             text(facts.join(" · ")).size(13).color(theme::muted()),
-            text(format!("{} {short}…", lang.pick("SHA-256", "SHA-256")))
+            text(format!("SHA-256 {short}…"))
                 .size(12)
-                .font(iced::Font::MONOSPACE)
+                .font(theme::MONO)
                 .color(theme::muted()),
         ]
         .spacing(2)
         .width(Fill);
-        let removing = self.library.removing.as_deref() == Some(kept.sha256.as_str());
+        boxed(
+            row![details, self.kept_actions(kept)]
+                .spacing(12)
+                .align_y(iced::Center)
+                .into(),
+        )
+    }
+
+    /// An incomplete download is never written: it only resumes with the next write of its image.
+    fn kept_actions<'a>(&'a self, kept: &'a Kept) -> Element<'a, Message> {
+        let lang = self.lang;
         let mut actions = row![].spacing(8).align_y(iced::Center);
         if !kept.partial {
             actions = actions.push(ring(
@@ -99,26 +109,20 @@ impl App {
                 self.has_focus(Focus::KeptWrite(kept.sha256.clone())),
             ));
         }
-        let remove = if removing {
+        let remove = if self.library.removing.as_deref() == Some(kept.sha256.as_str()) {
             lang.pick("Removing…", "Suppression…")
         } else {
             lang.pick("Remove", "Supprimer")
         };
-        actions = actions.push(ring(
-            button(text(remove).size(14))
-                .on_press_maybe(
-                    self.can_remove_kept()
-                        .then(|| Message::Library(LibraryMessage::Remove(kept.sha256.clone()))),
-                )
-                .padding([6, 14])
-                .style(theme::card_button(false)),
-            self.has_focus(Focus::KeptRemove(kept.sha256.clone())),
-        ));
-        boxed(
-            row![details, actions]
-                .spacing(12)
-                .align_y(iced::Center)
-                .into(),
-        )
+        let message = Message::Library(LibraryMessage::Remove(kept.sha256.clone()));
+        actions
+            .push(ring(
+                button(text(remove).size(14))
+                    .on_press_maybe(self.can_remove_kept().then_some(message))
+                    .padding([6, 14])
+                    .style(theme::card_button(false)),
+                self.has_focus(Focus::KeptRemove(kept.sha256.clone())),
+            ))
+            .into()
     }
 }

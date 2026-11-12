@@ -176,89 +176,103 @@ impl App {
         mbr: bool,
     ) -> Element<'a, Message> {
         let lang = self.lang;
+        let tor = match &self.tor {
+            Some(_) => lang.pick(
+                "Download through Tor: slower, without showing your address to the publisher",
+                "Télécharger par Tor : plus lent, sans montrer votre adresse à l'éditeur",
+            ),
+            None => lang.pick(
+                "Download through Tor: no Tor detected on this computer",
+                "Télécharger par Tor : aucun Tor détecté sur cet ordinateur",
+            ),
+        };
+        let raw_label = lang.pick(
+            "Write the bytes as they are, without refusing a non-bootable image",
+            "Écrire les octets tels quels, sans refuser une image non amorçable",
+        );
+        let mbr_label = lang.pick(
+            "Windows drive: MBR table, boots in BIOS and UEFI up to 2 TiB (unchecked: GPT, UEFI only)",
+            "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
+        );
+        let tor_toggle = self
+            .tor
+            .is_some()
+            .then_some(Message::ToggleTor as fn(bool) -> Message);
         column![
-            row![
-                ring(
-                    text_input(
-                        lang.pick(
-                            "Path or https:// address of the image (.img, .iso, .gz, .xz, .zst)",
-                            "Chemin ou adresse https:// de l'image (.img, .iso, .gz, .xz, .zst)",
-                        ),
-                        image
-                    )
-                    .on_input(Message::ImageInput)
-                    .on_submit(Message::StartWrite)
-                    .padding(8)
-                    .size(14)
-                    .style(theme::input_style),
-                    self.has_focus(Focus::Image),
-                ),
-                ring(
-                    button(text(lang.pick("Choose the image...", "Choisir l'image...")).size(14))
-                        .on_press(Message::BrowseImage)
-                        .padding([6, 14])
-                        .style(theme::primary_button),
-                    self.has_focus(Focus::Browse),
-                ),
-            ]
-            .spacing(8)
-            .align_y(iced::Center),
-            ring(
-                text_input(
-                    lang.pick(
-                        "SHA-256 hash, or path or address of SHA256SUMS (required for an address)",
-                        "Empreinte SHA-256, ou chemin ou adresse de SHA256SUMS (exigée pour une adresse)",
-                    ),
-                    hash
-                )
-                .on_input(Message::HashInput)
-                .padding(8)
-                .size(14)
-                .style(theme::input_style),
-                self.has_focus(Focus::Hash),
-            ),
-            ring(
-                checkbox(self.use_tor)
-                    .label(match &self.tor {
-                        Some(_) => lang.pick(
-                            "Download through Tor: slower, without showing your address to the publisher",
-                            "Télécharger par Tor : plus lent, sans montrer votre adresse à l'éditeur",
-                        ),
-                        None => lang.pick(
-                            "Download through Tor: no Tor detected on this computer",
-                            "Télécharger par Tor : aucun Tor détecté sur cet ordinateur",
-                        ),
-                    })
-                    .on_toggle_maybe(self.tor.is_some().then_some(Message::ToggleTor))
-                    .size(16)
-                    .text_size(13),
-                self.has_focus(Focus::Tor),
-            ),
-            ring(
-                checkbox(raw)
-                    .label(lang.pick(
-                        "Write the bytes as they are, without refusing a non-bootable image",
-                        "Écrire les octets tels quels, sans refuser une image non amorçable",
-                    ))
-                    .on_toggle(Message::ToggleRaw)
-                    .size(16)
-                    .text_size(13),
-                self.has_focus(Focus::Raw),
-            ),
-            ring(
-                checkbox(mbr)
-                    .label(lang.pick(
-                        "Windows drive: MBR table, boots in BIOS and UEFI up to 2 TiB (unchecked: GPT, UEFI only)",
-                        "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
-                    ))
-                    .on_toggle(Message::ToggleMbr)
-                    .size(16)
-                    .text_size(13),
-                self.has_focus(Focus::Mbr),
-            ),
+            self.image_row(image),
+            self.hash_input(hash),
+            self.option_box(self.use_tor, tor, tor_toggle, Focus::Tor),
+            self.option_box(raw, raw_label, Some(Message::ToggleRaw), Focus::Raw),
+            self.option_box(mbr, mbr_label, Some(Message::ToggleMbr), Focus::Mbr),
         ]
         .spacing(8)
         .into()
+    }
+
+    fn image_row<'a>(&'a self, image: &'a str) -> Element<'a, Message> {
+        let lang = self.lang;
+        row![
+            ring(
+                text_input(
+                    lang.pick(
+                        "Path or https:// address of the image (.img, .iso, .gz, .xz, .zst)",
+                        "Chemin ou adresse https:// de l'image (.img, .iso, .gz, .xz, .zst)",
+                    ),
+                    image
+                )
+                .on_input(Message::ImageInput)
+                .on_submit(Message::StartWrite)
+                .padding(8)
+                .size(14)
+                .style(theme::input_style),
+                self.has_focus(Focus::Image),
+            ),
+            ring(
+                button(text(lang.pick("Choose the image...", "Choisir l'image...")).size(14))
+                    .on_press(Message::BrowseImage)
+                    .padding([6, 14])
+                    .style(theme::primary_button),
+                self.has_focus(Focus::Browse),
+            ),
+        ]
+        .spacing(8)
+        .align_y(iced::Center)
+        .into()
+    }
+
+    fn hash_input<'a>(&'a self, hash: &'a str) -> Element<'a, Message> {
+        ring(
+            text_input(
+                self.lang.pick(
+                    "SHA-256 hash, or path or address of SHA256SUMS (required for an address)",
+                    "Empreinte SHA-256, ou chemin ou adresse de SHA256SUMS (exigée pour une adresse)",
+                ),
+                hash,
+            )
+            .on_input(Message::HashInput)
+            .padding(8)
+            .size(14)
+            .style(theme::input_style),
+            self.has_focus(Focus::Hash),
+        )
+    }
+
+    /// `toggle`: absent when the option cannot be changed now.
+    fn option_box<'a>(
+        &'a self,
+        checked: bool,
+        label: &'a str,
+        toggle: Option<fn(bool) -> Message>,
+        focus: Focus,
+    ) -> Element<'a, Message> {
+        ring(
+            checkbox(checked)
+                .label(label)
+                .on_toggle_maybe(toggle)
+                .size(16)
+                .text_size(13),
+            self.has_focus(focus),
+        )
     }
 
     fn running_panel(
