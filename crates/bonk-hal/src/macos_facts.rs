@@ -117,54 +117,18 @@ fn stable_id(whole: &RawMedia, bus: Bus) -> String {
     id.split_whitespace().collect::<Vec<_>>().join("_")
 }
 
+/// Synthesized disks cannot be written: only their stores count.
+fn synthesized(m: &RawMedia) -> bool {
+    !m.physical_stores.is_empty()
+}
+
 /// # Errors
 /// No physical disk carries the system.
 pub fn normalize(media: &[RawMedia]) -> Result<Vec<Disk>, EnumerateError> {
-    // Synthesized disks cannot be written: only their stores count.
-    let synthesized = |m: &RawMedia| !m.physical_stores.is_empty();
     let mut disks: Vec<Disk> = media
         .iter()
         .filter(|m| m.whole && !synthesized(m))
-        .map(|whole| {
-            let (bus, kind) = bus_of(whole);
-            let partitions: Vec<Partition> = media
-                .iter()
-                .filter(|m| !m.whole && m.parent == whole.device && !synthesized(m))
-                .map(|part| {
-                    let stacked: Vec<&RawMedia> = media
-                        .iter()
-                        .filter(|v| v.physical_stores.contains(&part.device))
-                        .collect();
-                    let mut mount_points: Vec<String> = part.mount.iter().cloned().collect();
-                    mount_points.extend(stacked.iter().filter_map(|v| v.mount.clone()));
-                    Partition {
-                        path: format!("/dev/{}", part.device),
-                        label: part.label.clone(),
-                        fs_type: part.file_system.clone(),
-                        size_bytes: part.size_bytes,
-                        is_system_volume: mount_points.iter().any(|m| is_system_mount(m)),
-                        mount_points,
-                        holders: Vec::new(),
-                        is_active_esp: false,
-                    }
-                })
-                .collect();
-            Disk {
-                id: stable_id(whole, bus),
-                path: format!("/dev/{}", whole.device),
-                model: whole.name.clone().unwrap_or_default(),
-                serial: whole.serial.clone(),
-                size_bytes: whole.size_bytes,
-                bus,
-                kind,
-                removable_flag: whole.removable,
-                logical_block_size: whole.block_size,
-                location: whole.location.clone(),
-                fs_type: None,
-                holders: Vec::new(),
-                partitions,
-            }
-        })
+        .map(|whole| disk_of(media, whole))
         .collect();
     if !disks
         .iter()
@@ -175,19 +139,7 @@ pub fn normalize(media: &[RawMedia]) -> Result<Vec<Disk>, EnumerateError> {
             detail: "no physical disk holds the system volume".to_owned(),
         });
     }
-    // The ESP of the system disk is the one the host booted from.
-    for disk in &mut disks {
-        if disk.partitions.iter().any(|p| p.is_system_volume) {
-            let esps: Vec<String> = media
-                .iter()
-                .filter(|m| m.content.as_deref() == Some("EFI"))
-                .map(|m| format!("/dev/{}", m.device))
-                .collect();
-            for part in &mut disk.partitions {
-                part.is_active_esp = esps.contains(&part.path);
-            }
-        }
-    }
+    mark_active_esp(media, &mut disks);
     let ids: Vec<String> = disks.iter().map(|d| d.id.clone()).collect();
     for disk in &mut disks {
         if ids.iter().filter(|id| **id == disk.id).count() > 1 {
@@ -195,6 +147,67 @@ pub fn normalize(media: &[RawMedia]) -> Result<Vec<Disk>, EnumerateError> {
         }
     }
     Ok(disks)
+}
+
+fn disk_of(media: &[RawMedia], whole: &RawMedia) -> Disk {
+    let (bus, kind) = bus_of(whole);
+    let partitions = media
+        .iter()
+        .filter(|m| !m.whole && m.parent == whole.device && !synthesized(m))
+        .map(|part| partition_of(media, part))
+        .collect();
+    Disk {
+        id: stable_id(whole, bus),
+        path: format!("/dev/{}", whole.device),
+        model: whole.name.clone().unwrap_or_default(),
+        serial: whole.serial.clone(),
+        size_bytes: whole.size_bytes,
+        bus,
+        kind,
+        removable_flag: whole.removable,
+        logical_block_size: whole.block_size,
+        location: whole.location.clone(),
+        fs_type: None,
+        holders: Vec::new(),
+        partitions,
+    }
+}
+
+/// Mount points of the APFS volumes stored on a partition count as its own.
+fn partition_of(media: &[RawMedia], part: &RawMedia) -> Partition {
+    let mut mount_points: Vec<String> = part.mount.iter().cloned().collect();
+    mount_points.extend(
+        media
+            .iter()
+            .filter(|v| v.physical_stores.contains(&part.device))
+            .filter_map(|v| v.mount.clone()),
+    );
+    Partition {
+        path: format!("/dev/{}", part.device),
+        label: part.label.clone(),
+        fs_type: part.file_system.clone(),
+        size_bytes: part.size_bytes,
+        is_system_volume: mount_points.iter().any(|m| is_system_mount(m)),
+        mount_points,
+        holders: Vec::new(),
+        is_active_esp: false,
+    }
+}
+
+/// The ESP of the system disk is the one the host booted from.
+fn mark_active_esp(media: &[RawMedia], disks: &mut [Disk]) {
+    let esps: Vec<String> = media
+        .iter()
+        .filter(|m| m.content.as_deref() == Some("EFI"))
+        .map(|m| format!("/dev/{}", m.device))
+        .collect();
+    for disk in disks {
+        if disk.partitions.iter().any(|p| p.is_system_volume) {
+            for part in &mut disk.partitions {
+                part.is_active_esp = esps.contains(&part.path);
+            }
+        }
+    }
 }
 
 /// Serial numbers in `ioreg -r -l -w0 -c <class>` output: each top-level block is a device, and the whole

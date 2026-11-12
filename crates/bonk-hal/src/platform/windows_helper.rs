@@ -65,7 +65,29 @@ fn start() -> io::Result<Session> {
         .map_or(0, |elapsed| elapsed.as_nanos());
     let client = std::process::id();
     let name = format!(r"\\.\pipe\bonk-helper-{client}-{nanos}");
-    let wide_name = wide(&name);
+    let pipe = create_pipe(&name)?;
+    let process = launch_helper(&name, client)?;
+    // SAFETY: valid handle from `ShellExecuteExW`.
+    let helper = unsafe { GetProcessId(process) };
+    // A helper that dies before connecting would leave `ConnectNamedPipe` blocked: this thread unblocks it,
+    // and the process id check rejects that connection.
+    let (watched, watched_name) = (process as isize, name.clone());
+    std::thread::spawn(move || {
+        // SAFETY: handle kept open until exit, never closed here.
+        unsafe {
+            WaitForSingleObject(watched as HANDLE, INFINITE);
+        }
+        let _ = OpenOptions::new().read(true).open(watched_name);
+    });
+    accept(&pipe, helper)?;
+    Ok(Session {
+        reader: BufReader::new(pipe.try_clone()?),
+        pipe,
+    })
+}
+
+fn create_pipe(name: &str) -> io::Result<File> {
+    let wide_name = wide(name);
     // SAFETY: zero-terminated name; `FIRST_PIPE_INSTANCE` refuses a pipe someone else created.
     let pipe = unsafe {
         CreateNamedPipeW(
@@ -83,8 +105,11 @@ fn start() -> io::Result<Session> {
         return Err(io::Error::last_os_error());
     }
     // SAFETY: valid handle, now solely owned by this `File`.
-    let pipe = unsafe { File::from_raw_handle(pipe) };
+    Ok(unsafe { File::from_raw_handle(pipe) })
+}
 
+/// The helper is this executable, started with the `runas` verb: the system asks for the rights.
+fn launch_helper(name: &str, client: u32) -> io::Result<HANDLE> {
     let exe = wide(&std::env::current_exe()?.to_string_lossy());
     let verb = wide("runas");
     let parameters = wide(&format!(
@@ -111,20 +136,11 @@ fn start() -> io::Result<Session> {
     if process.is_null() {
         return Err(denied("the system started no helper"));
     }
-    // SAFETY: valid handle from `ShellExecuteExW`.
-    let helper = unsafe { GetProcessId(process) };
+    Ok(process)
+}
 
-    // A helper that dies before connecting would leave `ConnectNamedPipe` blocked: this thread unblocks it,
-    // and the process id check rejects that connection.
-    let (watched, watched_name) = (process as isize, name.clone());
-    std::thread::spawn(move || {
-        // SAFETY: handle kept open until exit, never closed here.
-        unsafe {
-            WaitForSingleObject(watched as HANDLE, INFINITE);
-        }
-        let _ = OpenOptions::new().read(true).open(watched_name);
-    });
-
+/// Only the helper just started may hold the pipe.
+fn accept(pipe: &File, helper: u32) -> io::Result<()> {
     // SAFETY: valid pipe handle, not overlapped.
     if unsafe { ConnectNamedPipe(pipe.as_raw_handle(), null_mut()) } == 0 {
         let error = io::Error::last_os_error();
@@ -140,10 +156,7 @@ fn start() -> io::Result<Session> {
             "the helper did not start, or another process connected",
         ));
     }
-    Ok(Session {
-        reader: BufReader::new(pipe.try_clone()?),
-        pipe,
-    })
+    Ok(())
 }
 
 /// Starts the helper if needed (one prompt per process), then sends the request.

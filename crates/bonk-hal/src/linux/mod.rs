@@ -66,24 +66,7 @@ pub fn enumerate(roots: &LinuxRoots) -> Result<Vec<Disk>, EnumerateError> {
         candidates = names.len(), mounts = mounts.len(), swaps = ctx.swaps.len();
         "enumerating block devices"
     );
-    let mut disks = Vec::new();
-    for name in names {
-        match read_disk(&ctx, &sys_block.join(&name), &name)? {
-            Some(disk) => {
-                log::debug!(
-                    target: "bonk_hal::linux",
-                    id = disk.id.as_str(), path = disk.path.as_str(), bus = format!("{:?}", disk.bus).as_str(),
-                    kind = format!("{:?}", disk.kind).as_str(), size_bytes = disk.size_bytes,
-                    partitions = disk.partitions.len();
-                    "disk found"
-                );
-                disks.push(disk);
-            }
-            None => {
-                log::trace!(target: "bonk_hal::linux", device = name.as_str(); "device ignored (stacked, memory, optical or hidden)")
-            }
-        }
-    }
+    let disks = read_disks(&ctx, &sys_block, names)?;
     log::debug!(
         target: "bonk_hal::linux",
         disks = disks.len(), millis = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
@@ -92,11 +75,53 @@ pub fn enumerate(roots: &LinuxRoots) -> Result<Vec<Disk>, EnumerateError> {
     Ok(disks)
 }
 
+fn read_disks(
+    ctx: &Context<'_>,
+    sys_block: &Path,
+    names: Vec<String>,
+) -> Result<Vec<Disk>, EnumerateError> {
+    let mut disks = Vec::new();
+    for name in names {
+        let Some(disk) = read_disk(ctx, &sys_block.join(&name), &name)? else {
+            log::trace!(target: "bonk_hal::linux", device = name.as_str(); "device ignored (stacked, memory, optical or hidden)");
+            continue;
+        };
+        log::debug!(
+            target: "bonk_hal::linux",
+            id = disk.id.as_str(), path = disk.path.as_str(), bus = format!("{:?}", disk.bus).as_str(),
+            kind = format!("{:?}", disk.kind).as_str(), size_bytes = disk.size_bytes,
+            partitions = disk.partitions.len();
+            "disk found"
+        );
+        disks.push(disk);
+    }
+    Ok(disks)
+}
+
 struct Context<'a> {
     roots: &'a LinuxRoots,
     canonical_sys: PathBuf,
     mounts: MountIndex,
     swaps: BTreeSet<String>,
+}
+
+/// A filesystem on the whole disk, without a partition table: its mount must still be seen.
+fn whole_disk_volume(
+    path: &str,
+    udev: &UdevRecord,
+    size_bytes: u64,
+    mounts: Vec<String>,
+) -> Partition {
+    Partition {
+        path: path.to_owned(),
+        label: udev.prop("ID_FS_LABEL").map(str::to_owned),
+        fs_type: None,
+        size_bytes,
+        is_system_volume: mounts.iter().any(|m| m == "/"),
+        is_active_esp: is_active_esp(udev, &mounts),
+        mount_points: mounts,
+        holders: Vec::new(),
+    }
 }
 
 fn read_disk(ctx: &Context<'_>, dir: &Path, name: &str) -> Result<Option<Disk>, EnumerateError> {
@@ -122,17 +147,7 @@ fn read_disk(ctx: &Context<'_>, dir: &Path, name: &str) -> Result<Option<Disk>, 
     let mut partitions = read_partitions(ctx, dir)?;
     let disk_mounts = ctx.mounts.of(&devnum, name);
     if partitions.is_empty() && !disk_mounts.is_empty() {
-        // A filesystem on the whole disk, without a partition table: its mount must still be seen.
-        partitions.push(Partition {
-            path: path.clone(),
-            label: udev.prop("ID_FS_LABEL").map(str::to_owned),
-            fs_type: None,
-            size_bytes,
-            is_system_volume: disk_mounts.iter().any(|m| m == "/"),
-            is_active_esp: is_active_esp(&udev, &disk_mounts),
-            mount_points: disk_mounts,
-            holders: Vec::new(),
-        });
+        partitions.push(whole_disk_volume(&path, &udev, size_bytes, disk_mounts));
     }
 
     Ok(Some(Disk {
