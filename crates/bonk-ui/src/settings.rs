@@ -8,6 +8,7 @@ pub enum Screen {
     #[default]
     Main,
     Settings,
+    Library,
 }
 
 /// `System` follows the machine at each start.

@@ -196,6 +196,13 @@ pub fn find_url<'a>(systems: &'a [System], url: &str) -> Option<(&'a System, &'a
     })
 }
 
+/// The catalog image published under this hash: what a kept download was checked against.
+pub fn find_sha256<'a>(systems: &'a [System], sha256: &str) -> Option<&'a Choice> {
+    systems.iter().flat_map(|system| &system.choices).find(
+        |choice| matches!(&choice.source, ChoiceSource::Download { sha256: s, .. } if s == sha256),
+    )
+}
+
 pub fn find_id<'a>(systems: &'a [System], id: &str) -> Option<(&'a System, &'a Choice)> {
     systems.iter().find_map(|system| {
         system

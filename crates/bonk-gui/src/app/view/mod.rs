@@ -10,6 +10,7 @@ use super::{App, Focus, Message};
 mod command_bar;
 mod disk;
 mod header;
+mod library;
 mod list;
 mod panel;
 mod settings;
@@ -48,6 +49,7 @@ impl App {
         let page = match self.screen {
             Screen::Main => self.main_page(),
             Screen::Settings => self.settings_page(),
+            Screen::Library => self.library_page(),
         };
         let window = container(page).padding(20).width(Fill).height(Fill);
         match self.internal_to_confirm() {

@@ -14,10 +14,18 @@ use super::Message;
 
 /// In a separate process. The last error line says why it failed.
 pub(crate) fn read(program: PathBuf) -> Result<Vec<System>, String> {
-    let mut command = std::process::Command::new(&program);
+    let output = run_json(&program, &["catalog", "list", "--json"])?;
+    serde_json::from_slice(&output)
+        .map(|report| bonk_ui::catalog::systems(&report))
+        .map_err(|e| e.to_string())
+}
+
+/// Standard output of a `bonk` command, or its last error line.
+pub(crate) fn run_json(program: &std::path::Path, args: &[&str]) -> Result<Vec<u8>, String> {
+    let mut command = std::process::Command::new(program);
     bonk_hal::console::hide_child_console(&mut command);
     let output = command
-        .args(["catalog", "list", "--json"])
+        .args(args)
         .stdin(std::process::Stdio::null())
         .output()
         .map_err(|e| format!("{}: cannot start: {e}", program.display()))?;
@@ -32,9 +40,7 @@ pub(crate) fn read(program: PathBuf) -> Result<Vec<System>, String> {
             |l| l["bonk: error: ".len()..].to_owned(),
         ));
     }
-    serde_json::from_slice(&output.stdout)
-        .map(|report| bonk_ui::catalog::systems(&report))
-        .map_err(|e| e.to_string())
+    Ok(output.stdout)
 }
 
 pub(super) const MENU: &str = "menu-images";

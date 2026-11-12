@@ -36,6 +36,10 @@ pub enum Effect {
     /// `bonk vault` arguments, run as `bonk write` is.
     RunVault(Vec<String>),
     PickVaultIso,
+    /// `bonk cache list --json`, answered by [`crate::library::LibraryMessage::Listed`].
+    ListKept,
+    /// `bonk cache clean <SHA256>`, answered by [`crate::library::LibraryMessage::Removed`].
+    RemoveKept(String),
 }
 
 pub type Effects = Vec<Effect>;
@@ -83,6 +87,7 @@ pub enum Message {
     Write(Event),
     Vault(crate::vault::VaultMessage),
     Settings(crate::settings::SettingsMessage),
+    Library(crate::library::LibraryMessage),
     /// A `bonk://install/` link opened while the window runs (macOS sends it to the running process).
     RequestImage(String),
 }
@@ -103,6 +108,12 @@ pub enum Focus {
     /// Opens the settings page.
     Settings,
     CloseSettings,
+    /// Opens the library page.
+    Library,
+    CloseLibrary,
+    /// Write or remove the kept image with this hash.
+    KeptWrite(String),
+    KeptRemove(String),
     Language(crate::settings::LangChoice),
     Theme(crate::settings::ThemeChoice),
     Internal,
@@ -187,6 +198,7 @@ pub struct Model {
     /// chooses something else. It only ever names a catalog entry, and never starts a write.
     pub requested: Option<String>,
     pub vault: crate::vault::VaultState,
+    pub library: crate::library::LibraryState,
     pub screen: crate::settings::Screen,
     pub lang_choice: crate::settings::LangChoice,
     pub theme_choice: crate::settings::ThemeChoice,
@@ -264,6 +276,16 @@ pub fn ui_event(message: &Message) -> Option<(&'static str, String)> {
                 ("choose_theme", choice.config_value().to_owned())
             }
             crate::settings::SettingsMessage::SystemDark(_) => return None,
+        },
+        Message::Library(message) => match message {
+            crate::library::LibraryMessage::Open => ("click_library", String::new()),
+            crate::library::LibraryMessage::Close => ("click_close_library", String::new()),
+            crate::library::LibraryMessage::Remove(sha256) => ("click_remove_kept", sha256.clone()),
+            crate::library::LibraryMessage::Write(sha256) => ("click_write_kept", sha256.clone()),
+            crate::library::LibraryMessage::Listed(_)
+            | crate::library::LibraryMessage::Removed(_) => {
+                return None;
+            }
         },
         Message::Tick
         | Message::Clock

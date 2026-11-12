@@ -17,18 +17,20 @@ pub(super) fn avec_tout_affiche() -> App {
 fn tab_parcourt_les_commandes_puis_les_disques_et_reboucle() {
     let mut app = avec_tout_affiche();
     let mut vus = Vec::new();
-    for _ in 0..10 {
+    for _ in 0..12 {
         nav(&mut app, Nav::Next);
         vus.push(app.focus.clone());
     }
     assert_eq!(
         vus,
         [
+            Some(Focus::Library),
             Some(Focus::Settings),
             Some(Focus::Disk("nvme-systeme".to_owned())),
             Some(Focus::Disk("usb-cle".to_owned())),
             Some(Focus::Disk("sata-libre".to_owned())),
             Some(Focus::Copy),
+            Some(Focus::Library),
             Some(Focus::Settings),
             Some(Focus::Disk("nvme-systeme".to_owned())),
             Some(Focus::Disk("usb-cle".to_owned())),

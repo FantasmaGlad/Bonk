@@ -11,6 +11,7 @@ use bonk_ui::model::ui_event;
 
 use super::*;
 
+mod bibliotheque;
 mod clavier;
 mod commandes;
 mod lien;
@@ -19,6 +20,7 @@ mod panneau;
 mod rendu;
 mod resultat;
 
+use bibliotheque::*;
 use clavier::*;
 use panneau::*;
 use rendu::*;
