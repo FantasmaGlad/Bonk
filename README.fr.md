@@ -47,7 +47,7 @@ Empreintes : [`SHA256SUMS`](https://github.com/FantasmaGlad/Bonk/releases/downlo
 
 ## Ligne de commande seule
 
-Sans fenêtre ni bibliothèque graphique, pour les serveurs et les scripts. Sans droits d'administrateur.
+Sans fenêtre ni bibliothèque graphique, pour les serveurs et les scripts. S'installe sans droits d'administrateur ; écrire sur une clé demande l'autorisation du système.
 
 ```bash
 curl -fsSL https://packages.bonk-os.app/install.sh | sh
@@ -70,7 +70,7 @@ Chaque gestionnaire de paquets la propose aussi sous le nom `bonk-cli`, dans les
 
 Scoop : `scoop install https://packages.bonk-os.app/scoop/bonk-cli.json`.
 
-Installer `bonk-cli` remplace `bonk` ; Zypper et pacman demandent d'abord. Pour revenir, retirer `bonk-cli`, puis installer `bonk`.
+Avec APT, DNF, Zypper et pacman, installer `bonk-cli` remplace `bonk` (Zypper et pacman demandent d'abord) ; avec Homebrew et Scoop, retirer `bonk` d'abord. Pour revenir, retirer `bonk-cli`, puis installer `bonk`.
 
 | Plateforme | Téléchargement | État |
 | :--- | :--- | :--- |

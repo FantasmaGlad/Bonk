@@ -47,7 +47,7 @@ Checksums: [`SHA256SUMS`](https://github.com/FantasmaGlad/Bonk/releases/download
 
 ## Command line only
 
-No window and no graphics libraries, for servers and scripts. No administrator rights needed.
+No window and no graphics libraries, for servers and scripts. Installs without administrator rights; writing to a drive asks the system for authorization.
 
 ```bash
 curl -fsSL https://packages.bonk-os.app/install.sh | sh
@@ -70,7 +70,7 @@ Every package manager also offers it as `bonk-cli`, from the [same repositories]
 
 Scoop: `scoop install https://packages.bonk-os.app/scoop/bonk-cli.json`.
 
-Installing `bonk-cli` replaces `bonk`; Zypper and pacman ask first. To go back, remove `bonk-cli`, then install `bonk`.
+With APT, DNF, Zypper and pacman, installing `bonk-cli` replaces `bonk` (Zypper and pacman ask first); with Homebrew and Scoop, remove `bonk` first. To go back, remove `bonk-cli`, then install `bonk`.
 
 | Platform | Download | Status |
 | :--- | :--- | :--- |
