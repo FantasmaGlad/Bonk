@@ -538,24 +538,7 @@ mod tests {
             csw
         }
 
-        fn handle_cbw(&mut self, cbw: &[u8]) {
-            assert_eq!(cbw.len(), CBW_LEN);
-            assert_eq!(
-                u32::from_le_bytes([cbw[0], cbw[1], cbw[2], cbw[3]]),
-                CBW_SIGNATURE
-            );
-            self.tag = u32::from_le_bytes([cbw[4], cbw[5], cbw[6], cbw[7]]);
-            let length = u32::from_le_bytes([cbw[8], cbw[9], cbw[10], cbw[11]]) as usize;
-            let cdb = &cbw[15..15 + cbw[14] as usize];
-            self.commands.push(cdb[0]);
-            self.status = 0;
-            self.residue = 0;
-            self.pending_in.clear();
-            let fault = if self.fault.0 == cdb[0] {
-                std::mem::replace(&mut self.fault.1, Fault::None)
-            } else {
-                Fault::None
-            };
+        fn apply(&mut self, fault: Fault, length: usize) {
             match fault {
                 Fault::StallDataIn => {
                     self.stall_in = true;
@@ -582,70 +565,95 @@ mod tests {
                 Fault::KeepsPart => self.residue = u32::try_from(BLOCK).unwrap_or(0),
                 Fault::None => {}
             }
+        }
+
+        fn answer(&mut self, cdb: &[u8]) {
+            match cdb[0] {
+                0x00 => {
+                    if self.not_ready > 0 {
+                        self.not_ready -= 1;
+                        self.status = 1;
+                    }
+                }
+                0x03 => {
+                    let mut sense = vec![0u8; 18];
+                    sense[2] = self.sense_key;
+                    sense[12] = self.sense_code;
+                    self.pending_in = sense;
+                }
+                0x12 => {
+                    let mut reply = vec![b' '; 36];
+                    reply[8..15].copy_from_slice(b"General");
+                    reply[16..21].copy_from_slice(b"UDisk");
+                    reply.truncate(self.inquiry_len);
+                    self.residue = u32::try_from(36 - self.inquiry_len).unwrap_or(0);
+                    self.pending_in = reply;
+                }
+                0x25 => {
+                    let last = if self.huge {
+                        u32::MAX
+                    } else {
+                        u32::try_from(self.storage.len() / BLOCK - 1).unwrap_or(0)
+                    };
+                    let mut reply = last.to_be_bytes().to_vec();
+                    reply.extend_from_slice(&(BLOCK as u32).to_be_bytes());
+                    self.pending_in = reply;
+                }
+                0x9E => {
+                    let mut reply = vec![0u8; 32];
+                    reply[..8].copy_from_slice(&(1u64 << 33).to_be_bytes());
+                    reply[8..12].copy_from_slice(&(BLOCK as u32).to_be_bytes());
+                    self.pending_in = reply;
+                }
+                0x28 | 0x88 | 0x2A | 0x8A => {
+                    let (lba, blocks) = if cdb.len() == 10 {
+                        (
+                            u64::from(u32::from_be_bytes([cdb[2], cdb[3], cdb[4], cdb[5]])),
+                            usize::from(u16::from_be_bytes([cdb[7], cdb[8]])),
+                        )
+                    } else {
+                        let mut lba = [0u8; 8];
+                        lba.copy_from_slice(&cdb[2..10]);
+                        (
+                            u64::from_be_bytes(lba),
+                            u32::from_be_bytes([cdb[10], cdb[11], cdb[12], cdb[13]]) as usize,
+                        )
+                    };
+                    self.max_blocks = self.max_blocks.max(blocks);
+                    let start = lba as usize * BLOCK;
+                    if matches!(cdb[0], 0x28 | 0x88) {
+                        self.pending_in = self.storage[start..start + blocks * BLOCK].to_vec();
+                    } else {
+                        self.expect_out = Some((lba, blocks * BLOCK));
+                        self.out.clear();
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        fn handle_cbw(&mut self, cbw: &[u8]) {
+            assert_eq!(cbw.len(), CBW_LEN);
+            assert_eq!(
+                u32::from_le_bytes([cbw[0], cbw[1], cbw[2], cbw[3]]),
+                CBW_SIGNATURE
+            );
+            self.tag = u32::from_le_bytes([cbw[4], cbw[5], cbw[6], cbw[7]]);
+            let length = u32::from_le_bytes([cbw[8], cbw[9], cbw[10], cbw[11]]) as usize;
+            let cdb = &cbw[15..15 + cbw[14] as usize];
+            self.commands.push(cdb[0]);
+            self.status = 0;
+            self.residue = 0;
+            self.pending_in.clear();
+            let fault = if self.fault.0 == cdb[0] {
+                std::mem::replace(&mut self.fault.1, Fault::None)
+            } else {
+                Fault::None
+            };
+            self.apply(fault, length);
             let bad_signature = fault == Fault::BadSignature;
             if self.status == 0 {
-                match cdb[0] {
-                    0x00 => {
-                        if self.not_ready > 0 {
-                            self.not_ready -= 1;
-                            self.status = 1;
-                        }
-                    }
-                    0x03 => {
-                        let mut sense = vec![0u8; 18];
-                        sense[2] = self.sense_key;
-                        sense[12] = self.sense_code;
-                        self.pending_in = sense;
-                    }
-                    0x12 => {
-                        let mut reply = vec![b' '; 36];
-                        reply[8..15].copy_from_slice(b"General");
-                        reply[16..21].copy_from_slice(b"UDisk");
-                        reply.truncate(self.inquiry_len);
-                        self.residue = u32::try_from(36 - self.inquiry_len).unwrap_or(0);
-                        self.pending_in = reply;
-                    }
-                    0x25 => {
-                        let last = if self.huge {
-                            u32::MAX
-                        } else {
-                            u32::try_from(self.storage.len() / BLOCK - 1).unwrap_or(0)
-                        };
-                        let mut reply = last.to_be_bytes().to_vec();
-                        reply.extend_from_slice(&(BLOCK as u32).to_be_bytes());
-                        self.pending_in = reply;
-                    }
-                    0x9E => {
-                        let mut reply = vec![0u8; 32];
-                        reply[..8].copy_from_slice(&(1u64 << 33).to_be_bytes());
-                        reply[8..12].copy_from_slice(&(BLOCK as u32).to_be_bytes());
-                        self.pending_in = reply;
-                    }
-                    0x28 | 0x88 | 0x2A | 0x8A => {
-                        let (lba, blocks) = if cdb.len() == 10 {
-                            (
-                                u64::from(u32::from_be_bytes([cdb[2], cdb[3], cdb[4], cdb[5]])),
-                                usize::from(u16::from_be_bytes([cdb[7], cdb[8]])),
-                            )
-                        } else {
-                            let mut lba = [0u8; 8];
-                            lba.copy_from_slice(&cdb[2..10]);
-                            (
-                                u64::from_be_bytes(lba),
-                                u32::from_be_bytes([cdb[10], cdb[11], cdb[12], cdb[13]]) as usize,
-                            )
-                        };
-                        self.max_blocks = self.max_blocks.max(blocks);
-                        let start = lba as usize * BLOCK;
-                        if matches!(cdb[0], 0x28 | 0x88) {
-                            self.pending_in = self.storage[start..start + blocks * BLOCK].to_vec();
-                        } else {
-                            self.expect_out = Some((lba, blocks * BLOCK));
-                            self.out.clear();
-                        }
-                    }
-                    _ => {}
-                }
+                self.answer(cdb);
             }
             let mut csw = self.csw();
             if bad_signature {

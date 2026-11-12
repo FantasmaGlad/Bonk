@@ -1,3 +1,8 @@
+#![cfg_attr(
+    test,
+    allow(clippy::too_many_lines, reason = "a scenario test reads in one piece")
+)]
+
 pub mod bench;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 mod jni_api;
