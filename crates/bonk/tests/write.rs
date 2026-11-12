@@ -171,13 +171,11 @@ fn garde_fous_de_la_ligne_de_commande() -> Resultat {
     fs::write(&source, image(1 << 20))?;
     let (s, c) = (chemin(&source), chemin(&cible));
 
-    // Without --yes: usage error, nothing created.
     let sortie = bonk(&["write", "--simulate", &c, &s, "--size", "2097152"])?;
     assert_eq!(sortie.status.code(), Some(2));
     assert!(texte(&sortie.stderr).trim_end().ends_with("[E2004]"));
     assert!(!cible.exists());
 
-    // --dry-run: the plan, nothing created.
     let sortie = bonk(&[
         "write",
         "--simulate",
@@ -194,19 +192,15 @@ fn garde_fous_de_la_ligne_de_commande() -> Resultat {
     assert_eq!(plan["steps"][0], "write");
     assert!(!cible.exists());
 
-    // Image larger than the target: code 6, nothing created.
     let sortie = bonk(&["write", "--simulate", &c, &s, "--size", "524288", "--yes"])?;
     assert_eq!(sortie.status.code(), Some(6));
     assert!(texte(&sortie.stderr).trim_end().ends_with("[E3003]"));
     assert!(!cible.exists());
 
-    // Unknown target size: clear usage error.
     let sortie = bonk(&["write", "--simulate", &c, &s, "--yes"])?;
-    // A raw image gives its size: the target is created at that size.
     assert_eq!(sortie.status.code(), Some(0), "{}", texte(&sortie.stderr));
     assert_eq!(fs::metadata(&cible)?.len(), 1 << 20);
 
-    // Unsupported format: code 6, and what to do.
     let bz = dir.file("src.bz2");
     fs::write(&bz, b"BZh91AY&SYxxxxxxxxxxxxxxxx")?;
     let sortie = bonk(&[
@@ -225,7 +219,6 @@ fn garde_fous_de_la_ligne_de_commande() -> Resultat {
         "{err}"
     );
 
-    // Unreadable image.
     let sortie = bonk(&["write", "--simulate", &c, "/n/existe/pas.img", "--yes"])?;
     assert_eq!(sortie.status.code(), Some(6));
     assert!(texte(&sortie.stderr).trim_end().ends_with("[E3001]"));
@@ -432,7 +425,6 @@ fn reparation_du_gpt_apres_ecriture_sur_un_support_plus_grand() -> Resultat {
         a.iter()
             .all(|c| c != "gpt_backup_not_at_end" && c != "gpt_backup_missing")
     }));
-    // A second time: nothing to do.
     let encore = bonk(&[
         "repair-gpt",
         "--simulate",

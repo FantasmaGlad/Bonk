@@ -92,7 +92,6 @@ pub enum Message {
     RequestImage(String),
 }
 
-/// Each has the same effect as a click.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Nav {
     Next,
@@ -315,7 +314,6 @@ impl WriteState {
 }
 
 impl Model {
-    /// And what it must do first.
     #[must_use]
     pub fn new(initial: ViewOptions, lang: Lang) -> (Self, Effects) {
         (

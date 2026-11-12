@@ -519,7 +519,6 @@ fn les_lectures_de_sources_sont_enregistrees_avec_leur_contenu() -> Result<(), B
             .iter()
             .any(|r| r.kind == "dir" && r.path.ends_with("sys/block"))
     );
-    // Recording stops with the call.
     let again = enumerate(&fake.roots())?;
     assert_eq!(again.len(), 1);
     let (_, none_left) = enumerate_recorded(&fake.roots());
@@ -557,7 +556,6 @@ fn une_capture_rejouee_redonne_les_memes_disques() -> Result<(), Box<dyn Error>>
     );
     let replayed = enumerate_from_reads(&reads)?;
     assert_eq!(replayed, original);
-    // The bus comes from the canonical path.
     assert_eq!(find(&replayed, "/dev/sdb")?.bus, Bus::Usb);
     assert_eq!(find(&replayed, "/dev/sdb")?.partitions[0].holders, ["dm-0"]);
     // Without the links the bus is lost: the information goes through them.

@@ -197,7 +197,6 @@ mod tests {
                 value: "fr"
             }]
         );
-        // The same choice again changes nothing.
         assert!(
             model
                 .update(Message::Settings(SettingsMessage::Language(LangChoice::Fr)))

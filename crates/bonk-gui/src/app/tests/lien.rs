@@ -25,7 +25,6 @@ fn une_image_demandee_lit_le_catalogue_sans_attendre_un_disque() {
         &app,
         "Lecture du catalogue pour trouver ubuntu-26.04-desktop-x86_64..."
     ));
-    // Asked again while it loads: one read only.
     assert!(app.model.request_image(UBUNTU.to_owned()).is_empty());
 }
 
@@ -71,7 +70,6 @@ fn une_image_demandee_n_ecrit_jamais_d_elle_meme() {
         .update(Message::CatalogLoaded(Ok(versions_du_catalogue())));
     assert!(effects.is_empty(), "{effects:?}");
     assert!(matches!(app.write, WriteState::Draft { .. }));
-    // The delay to think still holds: a click right away starts nothing.
     let effects = app.model.update(Message::StartWrite);
     assert!(effects.is_empty(), "{effects:?}");
     assert!(matches!(app.write, WriteState::Draft { .. }));
@@ -94,7 +92,6 @@ fn le_choix_de_l_utilisateur_l_emporte_sur_l_image_demandee() {
     let autre = versions_du_catalogue()[0].choices[1].clone();
     let _ = app.update(Message::MenuChose(autre));
     assert_eq!(app.requested, None);
-    // Another disk opens an empty draft: the request no longer applies.
     let _ = app.update(Message::Select("usb-cle".to_owned()));
     let _ = app.update(Message::Select("usb-cle".to_owned()));
     assert_eq!(brouillon(&app), Some(("", "")));

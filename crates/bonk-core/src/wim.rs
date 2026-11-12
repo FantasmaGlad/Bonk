@@ -430,7 +430,6 @@ mod tests {
                 panic!()
             };
             assert_eq!(lookup.stored, table.len() as u64);
-            // Each resource at its new place, with the part number.
             let mut position = HEADER_LEN as u64;
             for entry in table.as_chunks::<ENTRY_LEN>().0 {
                 let resource = Resource::read(entry);
@@ -444,7 +443,6 @@ mod tests {
             assert_eq!(xml.offset + xml.stored, total(part));
             seen.extend(sources(part));
         }
-        // Nothing lost or doubled: every resource, plus the XML once per part.
         let (xml_offset, xml_len) = (size - 50, 50);
         let resources: Vec<_> = seen.iter().filter(|s| s.0 != xml_offset).collect();
         assert_eq!(resources.len(), 6);
@@ -452,7 +450,6 @@ mod tests {
             seen.iter().filter(|s| **s == (xml_offset, xml_len)).count(),
             3
         );
-        // Metadata and boot data are in the first part.
         let Segment::Bytes(first) = &parts[0][0] else {
             panic!()
         };

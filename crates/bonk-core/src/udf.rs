@@ -599,7 +599,6 @@ pub mod testing {
                 fid(0, "boot.wim", 8),
             ],
         );
-        // Inline file.
         let s = block(5);
         img[s + 34] = 3;
         img[s + 56..s + 64].copy_from_slice(&5u64.to_le_bytes());
@@ -655,7 +654,6 @@ mod tests {
         read_content(image.as_slice(), &parts.content, 0, &mut buf).unwrap();
         assert!(buf[..2048].iter().all(|b| *b == 0xAA));
         assert!(buf[2048..].iter().all(|b| *b == 0xBB));
-        // Across both extents.
         let mut buf = [0; 4];
         read_content(image.as_slice(), &parts.content, 2046, &mut buf).unwrap();
         assert_eq!(buf, [0xAA, 0xAA, 0xBB, 0xBB]);

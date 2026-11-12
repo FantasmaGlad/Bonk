@@ -36,12 +36,10 @@ fn le_panneau_d_ecriture_ne_s_ouvre_que_sur_un_disque_propose() {
         matches!(app.write, WriteState::Idle),
         "désélectionner referme le panneau"
     );
-    // An internal disk is offered, so writable, only with the option.
     let _ = app.update(Message::Select("sata-libre".to_owned()));
     assert!(matches!(app.write, WriteState::Idle));
     let _ = app.update(Message::ToggleInternal(true));
     assert!(matches!(&app.write, WriteState::Draft { disk_id, .. } if disk_id == "sata-libre"));
-    // Removing the option closes the panel: the disk is no longer offered.
     let _ = app.update(Message::ToggleInternal(false));
     assert!(matches!(app.write, WriteState::Idle));
 }
@@ -50,7 +48,6 @@ fn le_panneau_d_ecriture_ne_s_ouvre_que_sur_un_disque_propose() {
 fn l_ecriture_exige_une_image_et_trois_secondes() {
     let mut app = app_avec_panneau();
     figer_le_decompte(&mut app);
-    // Immediately: refused, even with an image.
     let _ = app.update(Message::ImageInput("/tmp/x.img".to_owned()));
     let _ = app.update(Message::StartWrite);
     assert!(
@@ -58,11 +55,9 @@ fn l_ecriture_exige_une_image_et_trois_secondes() {
         "le délai de réflexion n'est pas écoulé"
     );
     vieillir_le_panneau(&mut app);
-    // Delay over but empty field: refused.
     let _ = app.update(Message::ImageInput("   ".to_owned()));
     let _ = app.update(Message::StartWrite);
     assert!(matches!(app.write, WriteState::Draft { .. }));
-    // Image entered and delay over: the write starts.
     let _ = app.update(Message::ImageInput("/tmp/x.img".to_owned()));
     let _ = app.update(Message::StartWrite);
     assert!(matches!(&app.write, WriteState::Running { disk_id, .. } if disk_id == "usb-cle"));
@@ -73,7 +68,6 @@ fn un_disque_devenu_interdit_n_est_pas_ecrit() {
     let mut app = app_avec_panneau();
     let _ = app.update(Message::ImageInput("/tmp/x.img".to_owned()));
     vieillir_le_panneau(&mut app);
-    // The key was unplugged meanwhile: the list no longer has it.
     let _ = app.update(Message::Loaded(Ok(vec![])));
     let _ = app.update(Message::StartWrite);
     assert!(matches!(app.write, WriteState::Idle));
@@ -185,7 +179,6 @@ fn progression_puis_resultat() {
         "ÉCRITURE TERMINÉE : 4,0 Mo écrits, relus et vérifiés, GPT de secours réparé."
     ));
     let _ = app.update(Message::DismissWrite);
-    // Closed: the disk is no longer selected, nothing opens; selecting it again opens a fresh panel.
     assert!(matches!(app.write, WriteState::Idle));
     let _ = app.update(Message::Select("usb-cle".to_owned()));
     assert!(matches!(app.write, WriteState::Draft { .. }));
@@ -246,7 +239,6 @@ fn le_decompte_diminue_avec_le_temps_ecoule() {
     assert_eq!(secondes_restantes(Duration::from_secs(1)), 2);
     assert_eq!(secondes_restantes(Duration::from_millis(1500)), 2);
     assert_eq!(secondes_restantes(Duration::from_millis(2999)), 1);
-    // Once the delay is over, the button shows no countdown.
     assert_eq!(secondes_restantes(Duration::from_secs(10)), 0);
 }
 
@@ -330,7 +322,6 @@ fn le_clavier_parcourt_le_panneau_et_l_action_respecte_le_delai() {
     assert_eq!(app.focus, Some(Focus::Mbr));
     nav(&mut app, Nav::Next);
     assert_eq!(app.focus, Some(Focus::Action));
-    // Space on the button before the delay: no effect.
     let _ = app.update(Message::ImageInput("/tmp/x.img".to_owned()));
     app.focus = Some(Focus::Action);
     nav(&mut app, Nav::Activate);
@@ -338,7 +329,6 @@ fn le_clavier_parcourt_le_panneau_et_l_action_respecte_le_delai() {
     vieillir_le_panneau(&mut app);
     nav(&mut app, Nav::Activate);
     assert!(matches!(app.write, WriteState::Running { .. }));
-    // The arrows skip the panel: Down does not stop on the field or the button.
     let mut autre = app_avec_panneau();
     let _ = autre.update(Message::ToggleAll(true));
     autre.focus = Some(Focus::Disk("usb-cle".to_owned()));

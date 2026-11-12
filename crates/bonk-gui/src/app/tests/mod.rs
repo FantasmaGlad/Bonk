@@ -145,7 +145,6 @@ fn la_selection_bascule_et_disparait_avec_le_disque() {
     let _ = app.update(Message::Select("usb-cle".to_owned()));
     assert_eq!(app.selected, None);
     let _ = app.update(Message::Select("usb-cle".to_owned()));
-    // The key is unplugged: the selection drops.
     let _ = app.update(Message::Loaded(Ok(vec![])));
     assert_eq!(app.selected, None);
 }
@@ -170,7 +169,6 @@ fn un_echec_vide_la_liste_au_lieu_de_la_garder() {
     assert!(app.disks.is_empty());
     assert_eq!(app.selected, None);
     assert_eq!(app.error.as_deref(), Some("base udev introuvable"));
-    // A successful enumeration clears the error.
     let _ = app.update(Message::Loaded(Ok(sample())));
     assert_eq!(app.error, None);
 }
