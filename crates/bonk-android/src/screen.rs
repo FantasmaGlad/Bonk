@@ -157,16 +157,7 @@ fn message_of(input: &Value, model: &Model) -> Option<Message> {
         ),
         "system" => Message::MenuSystem(text_of("value")),
         "catalog_failed" => Message::CatalogLoaded(Err(text_of("message")?)),
-        "choose" => {
-            let CatalogState::Ready(systems) = &model.catalog else {
-                return None;
-            };
-            let index = usize::try_from(input["index"].as_u64()?).ok()?;
-            let choice = writable(&model.menu_filter.apply(systems))
-                .get(index)
-                .copied()?;
-            Message::MenuChose(choice.clone())
-        }
+        "choose" => chosen(input, model)?,
         "advanced" => Message::ToggleAdvanced,
         "image" => Message::ImageInput(text_of("value")?),
         "hash" => Message::HashInput(text_of("value")?),
@@ -179,27 +170,39 @@ fn message_of(input: &Value, model: &Model) -> Option<Message> {
         "close_confirm" => Message::CloseInternal,
         "cancel" => Message::CancelWrite,
         "dismiss" => Message::DismissWrite,
-        "download" => drive_event(
-            model,
-            Event::Progress {
-                phase: Phase::Download,
-                done: input["done"].as_u64()?,
-                total: input["total"].as_u64(),
-                rate: input["rate"].as_f64().unwrap_or(0.0),
-            },
-        ),
-        // Failure born in the app (cancel, key gone, download): its code, when it has one, shows the
-        // translated title, as for an engine error.
-        "failed" => drive_event(
-            model,
-            Event::Finished(Outcome::Failed {
-                code: text_of("code"),
-                message: text_of("message")?,
-            }),
-        ),
+        "download" | "failed" => drive_event(model, app_event(input)?),
         "vault" => Message::Vault(vault_message(input["action"].as_str()?)?),
         "vault_picked" => Message::Vault(VaultMessage::Picked(text_of("value").map(Into::into))),
         _ => return None,
+    })
+}
+
+/// The writable menu row the user touched, by its position.
+fn chosen(input: &Value, model: &Model) -> Option<Message> {
+    let CatalogState::Ready(systems) = &model.catalog else {
+        return None;
+    };
+    let index = usize::try_from(input["index"].as_u64()?).ok()?;
+    let choice = writable(&model.menu_filter.apply(systems))
+        .get(index)
+        .copied()?;
+    Some(Message::MenuChose(choice.clone()))
+}
+
+/// Download progress, or a failure born in the app (cancel, key gone, download): its code, when it has one,
+/// shows the translated title, as for an engine error.
+fn app_event(input: &Value) -> Option<Event> {
+    Some(match input["type"].as_str()? {
+        "download" => Event::Progress {
+            phase: Phase::Download,
+            done: input["done"].as_u64()?,
+            total: input["total"].as_u64(),
+            rate: input["rate"].as_f64().unwrap_or(0.0),
+        },
+        _ => Event::Finished(Outcome::Failed {
+            code: input["code"].as_str().map(str::to_owned),
+            message: input["message"].as_str()?.to_owned(),
+        }),
     })
 }
 
@@ -388,13 +391,19 @@ fn chosen_title(model: &Model) -> Option<String> {
         .map(|(_, choice)| format!("{} {}", choice.name, choice.title(model.lang)))
 }
 
+fn vault_button(label: &str, action: &str, primary: bool) -> Value {
+    json!({"label": label, "action": action, "primary": primary})
+}
+
+/// Lines, progress fraction and buttons of a vault state.
+type VaultBody = (Vec<String>, Option<f32>, Vec<Value>);
+
 fn vault_state(model: &Model) -> Value {
     let lang = model.lang;
     let words = VaultWords::new(lang);
-    let button = |label: &str, action: &str, primary: bool| json!({"label": label, "action": action, "primary": primary});
-    let close = button(lang.pick("Close", "Fermer"), "close", false);
+    let close = vault_button(lang.pick("Close", "Fermer"), "close", false);
     let mut images = Vec::new();
-    let (lines, fraction, buttons) = match &model.vault {
+    let (lines, fraction, buttons): VaultBody = match &model.vault {
         VaultState::Closed => return Value::Null,
         VaultState::Busy {
             action,
@@ -403,69 +412,28 @@ fn vault_state(model: &Model) -> Value {
             total,
             rate,
             ..
-        } => {
-            let mut lines = vec![VaultWords::busy(lang, *action).to_owned()];
-            let mut fraction = None;
-            if let Some(phase) = phase {
-                let (line, part) = text::progress(lang, *phase, *done, *total, *rate);
-                lines.push(line);
-                fraction = Some(part);
-            }
-            let cancel = (*action != VaultAction::List)
-                .then(|| button(lang.pick("Cancel", "Annuler"), "cancel", true));
-            (lines, fraction, cancel.into_iter().collect())
-        }
+        } => vault_busy(
+            lang,
+            *action,
+            phase.map(|phase| (phase, *done, *total, *rate)),
+        ),
         VaultState::NotVault { .. } => (
             vec![words.not_vault.to_owned()],
             None,
-            vec![button(words.prepare, "prepare", true), close],
+            vec![vault_button(words.prepare, "prepare", true), close],
         ),
-        VaultState::Confirming { disk_id } => (
-            model
-                .disks
-                .iter()
-                .find(|disk| &disk.id == disk_id)
-                .map(|disk| text::disk_summary(lang, disk))
-                .into_iter()
-                .chain([lang
-                    .pick(
-                        "All the data on this disk will be erased. This cannot be undone.",
-                        "Toutes les données de ce disque seront effacées. Cette action est irréversible.",
-                    )
-                    .to_owned()])
-                .collect(),
-            None,
-            vec![
-                button(words.erase, "confirm", true),
-                button(lang.pick("Cancel", "Annuler"), "open", false),
-            ],
-        ),
-        VaultState::Ready {
-            images: found, ..
-        } => {
+        VaultState::Confirming { disk_id } => vault_confirming(model, &words, disk_id),
+        VaultState::Ready { images: found, .. } => {
             images = found
                 .iter()
                 .map(|(name, size)| json!({"name": name, "size": format_size(*size, lang)}))
                 .collect();
-            let lines = if found.is_empty() {
-                vec![words.empty.to_owned()]
-            } else {
-                Vec::new()
-            };
-            (
-                lines,
-                None,
-                vec![
-                    button(words.add, "browse", true),
-                    button(words.update, "update", false),
-                    close,
-                ],
-            )
+            vault_ready(&words, found.is_empty(), close)
         }
         VaultState::Finished { outcome, .. } => (
             vec![text::outcome(lang, outcome)],
             None,
-            vec![button("OK", "open", true)],
+            vec![vault_button("OK", "open", true)],
         ),
     };
     json!({
@@ -478,54 +446,61 @@ fn vault_state(model: &Model) -> Value {
     })
 }
 
+/// `progress`: phase, bytes done, total, bytes per second; absent before the first event.
+fn vault_busy(
+    lang: Lang,
+    action: VaultAction,
+    progress: Option<(Phase, u64, Option<u64>, f64)>,
+) -> VaultBody {
+    let mut lines = vec![VaultWords::busy(lang, action).to_owned()];
+    let mut fraction = None;
+    if let Some((phase, done, total, rate)) = progress {
+        let (line, part) = text::progress(lang, phase, done, total, rate);
+        lines.push(line);
+        fraction = Some(part);
+    }
+    let cancel = (action != VaultAction::List)
+        .then(|| vault_button(lang.pick("Cancel", "Annuler"), "cancel", true));
+    (lines, fraction, cancel.into_iter().collect())
+}
+
+fn vault_ready(words: &VaultWords, empty: bool, close: Value) -> VaultBody {
+    let lines = empty.then(|| words.empty.to_owned()).into_iter().collect();
+    let buttons = vec![
+        vault_button(words.add, "browse", true),
+        vault_button(words.update, "update", false),
+        close,
+    ];
+    (lines, None, buttons)
+}
+
+fn vault_confirming(model: &Model, words: &VaultWords, disk_id: &str) -> VaultBody {
+    let lang = model.lang;
+    let lines = model
+        .disks
+        .iter()
+        .find(|disk| disk.id == disk_id)
+        .map(|disk| text::disk_summary(lang, disk))
+        .into_iter()
+        .chain([lang
+            .pick(
+                "All the data on this disk will be erased. This cannot be undone.",
+                "Toutes les données de ce disque seront effacées. Cette action est irréversible.",
+            )
+            .to_owned()])
+        .collect();
+    let buttons = vec![
+        vault_button(words.erase, "confirm", true),
+        vault_button(lang.pick("Cancel", "Annuler"), "open", false),
+    ];
+    (lines, None, buttons)
+}
+
 fn panel_state(model: &Model) -> Value {
     let lang = model.lang;
     match &model.write {
         WriteState::Idle => Value::Null,
-        WriteState::Draft {
-            disk_id,
-            image,
-            hash,
-            raw,
-            mbr,
-            opened,
-        } => {
-            let elapsed = opened.elapsed();
-            let empty = image.trim().is_empty();
-            let disk = model.disks.iter().find(|disk| &disk.id == disk_id);
-            json!({
-                "kind": "draft",
-                "title": lang.pick("WRITE AN IMAGE TO THIS DISK", "ÉCRIRE UNE IMAGE SUR CE DISQUE"),
-                "summary": disk.map(|disk| bonk_ui::recap::disk_line(lang, disk)),
-                "image_line": bonk_ui::recap::image_line(lang, &model.catalog, image),
-                "warning": bonk_ui::recap::warning(lang),
-                "menu": menu_state(model),
-                "advanced": model.advanced,
-                "advanced_button": if model.advanced {
-                    lang.pick("Hide the manual image and options", "Masquer l'image manuelle et les options")
-                } else {
-                    lang.pick("Other image or options...", "Autre image ou options...")
-                },
-                "image": image,
-                "image_hint": lang.pick("https:// address of the image", "Adresse https:// de l'image"),
-                "pick": lang.pick("Choose the image...", "Choisir l'image..."),
-                "hash": hash,
-                "hash_hint": lang.pick("SHA-256 hash (required for an address)", "Empreinte SHA-256 (exigée pour une adresse)"),
-                "raw": raw,
-                "raw_label": lang.pick(
-                    "Write the bytes as they are, without refusing a non-bootable image",
-                    "Écrire les octets tels quels, sans refuser une image non amorçable",
-                ),
-                "mbr": mbr,
-                "mbr_label": lang.pick(
-                    "Windows drive: MBR table, boots in BIOS and UEFI up to 2 TiB (unchecked: GPT, UEFI only)",
-                    "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
-                ),
-                "button": text::write_button(lang, elapsed, empty),
-                "enabled": elapsed >= WRITE_DELAY && !empty,
-                "vault_button": VaultWords::new(lang).open,
-            })
-        }
+        WriteState::Draft { .. } => draft_state(model),
         WriteState::Running {
             phase,
             done,
@@ -547,6 +522,56 @@ fn panel_state(model: &Model) -> Value {
             "close": lang.pick("Close", "Fermer"),
         }),
     }
+}
+
+fn draft_state(model: &Model) -> Value {
+    let lang = model.lang;
+    let WriteState::Draft {
+        disk_id,
+        image,
+        hash,
+        raw,
+        mbr,
+        opened,
+    } = &model.write
+    else {
+        return Value::Null;
+    };
+    let elapsed = opened.elapsed();
+    let empty = image.trim().is_empty();
+    let disk = model.disks.iter().find(|disk| &disk.id == disk_id);
+    json!({
+        "kind": "draft",
+        "title": lang.pick("WRITE AN IMAGE TO THIS DISK", "ÉCRIRE UNE IMAGE SUR CE DISQUE"),
+        "summary": disk.map(|disk| bonk_ui::recap::disk_line(lang, disk)),
+        "image_line": bonk_ui::recap::image_line(lang, &model.catalog, image),
+        "warning": bonk_ui::recap::warning(lang),
+        "menu": menu_state(model),
+        "advanced": model.advanced,
+        "advanced_button": if model.advanced {
+            lang.pick("Hide the manual image and options", "Masquer l'image manuelle et les options")
+        } else {
+            lang.pick("Other image or options...", "Autre image ou options...")
+        },
+        "image": image,
+        "image_hint": lang.pick("https:// address of the image", "Adresse https:// de l'image"),
+        "pick": lang.pick("Choose the image...", "Choisir l'image..."),
+        "hash": hash,
+        "hash_hint": lang.pick("SHA-256 hash (required for an address)", "Empreinte SHA-256 (exigée pour une adresse)"),
+        "raw": raw,
+        "raw_label": lang.pick(
+            "Write the bytes as they are, without refusing a non-bootable image",
+            "Écrire les octets tels quels, sans refuser une image non amorçable",
+        ),
+        "mbr": mbr,
+        "mbr_label": lang.pick(
+            "Windows drive: MBR table, boots in BIOS and UEFI up to 2 TiB (unchecked: GPT, UEFI only)",
+            "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
+        ),
+        "button": text::write_button(lang, elapsed, empty),
+        "enabled": elapsed >= WRITE_DELAY && !empty,
+        "vault_button": VaultWords::new(lang).open,
+    })
 }
 
 #[must_use]

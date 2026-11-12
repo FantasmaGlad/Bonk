@@ -161,9 +161,14 @@ fn outcome(
         enumerate: &enumerate,
         io: &io,
     };
+    act(request, grub, &deps)
+}
+
+fn act(request: &Request<'_>, grub: Option<&Grub>, deps: &Deps<'_>) -> Event {
     let target = Target::Disk(request.disk_id.to_owned());
     let options = FilterOptions::default();
     let elevation = Elevation::Never;
+    let with_boot = || boot(grub, Path::new(request.grub));
     match request.action {
         "list" => finished(job::vault_list(
             &VaultListJob {
@@ -172,61 +177,59 @@ fn outcome(
                 trace_io: None,
                 elevation,
             },
-            &deps,
+            deps,
         )),
-        "init" => finished(
-            boot(grub, Path::new(request.grub)).and_then(|(boot, grub)| {
-                job::vault_init(
-                    &VaultInitJob {
-                        target,
-                        boot,
-                        grub: Some(grub),
-                        table: TableKind::VAULT_DEFAULT,
-                        options,
-                        trace_io: None,
-                        dry_run: false,
-                        yes: true,
-                        force: false,
-                        elevation,
-                    },
-                    &deps,
-                )
-            }),
-        ),
-        "add" => finished(job::vault_add(
-            &VaultAddJob {
-                target,
-                source: request.iso.into(),
-                name: (!request.name.is_empty()).then(|| request.name.to_owned()),
-                options,
-                trace_io: None,
-                yes: true,
-                elevation,
-            },
-            &deps,
-            &mut report,
-        )),
+        "init" => finished(with_boot().and_then(|(boot, grub)| {
+            job::vault_init(
+                &VaultInitJob {
+                    target,
+                    boot,
+                    grub: Some(grub),
+                    table: TableKind::VAULT_DEFAULT,
+                    options,
+                    trace_io: None,
+                    dry_run: false,
+                    yes: true,
+                    force: false,
+                    elevation,
+                },
+                deps,
+            )
+        })),
+        "add" => finished(job::vault_add(&add_job(target, request), deps, &mut report)),
         "update" => finished(
-            boot(grub, Path::new(request.grub)).and_then(|(boot, grub)| {
-                job::vault_update(
-                    &VaultUpdateJob {
-                        target,
-                        boot,
-                        grub: Some(grub),
-                        options,
-                        trace_io: None,
-                        dry_run: false,
-                        yes: true,
-                        elevation,
-                    },
-                    &deps,
-                )
-            }),
+            with_boot()
+                .and_then(|(boot, grub)| job::vault_update(&update_job(target, boot, grub), deps)),
         ),
         other => Event::Finished(Outcome::Failed {
             code: Some(Code::InvalidArgument.id().to_owned()),
             message: format!("unknown vault action: {other}"),
         }),
+    }
+}
+
+fn add_job(target: Target, request: &Request<'_>) -> VaultAddJob {
+    VaultAddJob {
+        target,
+        source: request.iso.into(),
+        name: (!request.name.is_empty()).then(|| request.name.to_owned()),
+        options: FilterOptions::default(),
+        trace_io: None,
+        yes: true,
+        elevation: Elevation::Never,
+    }
+}
+
+fn update_job(target: Target, boot: Vec<BootFile>, grub: GrubInfo) -> VaultUpdateJob {
+    VaultUpdateJob {
+        target,
+        boot,
+        grub: Some(grub),
+        options: FilterOptions::default(),
+        trace_io: None,
+        dry_run: false,
+        yes: true,
+        elevation: Elevation::Never,
     }
 }
 

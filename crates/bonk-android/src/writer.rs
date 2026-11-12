@@ -100,26 +100,9 @@ pub(crate) fn same_drive(
     Ok(())
 }
 
-/// Writes and verifies end to end. Blocks: the app calls it off the UI thread and reads progress elsewhere.
-pub(crate) fn write(
-    request: &Request<'_>,
-    open: impl Fn() -> Result<Box<dyn BlockDevice>, BlockError> + 'static,
-) {
-    let disks: Vec<Disk> = lock(&MODEL).disks.clone();
-    if let Err(message) = same_drive(&disks, request.disk_id, request.device, request.serial) {
-        push(Event::Finished(Outcome::Failed {
-            code: Some(bonk_ops::errors::Code::IdentityChanged.id().to_owned()),
-            message,
-        }));
-        return;
-    }
-    let io = android_io(open);
-    let enumerate = move || Ok(disks.clone());
-    let deps = Deps {
-        enumerate: &enumerate,
-        io: &io,
-    };
-    let job = WriteJob {
+/// The app shows no expert option: verification and GPT repair always run.
+fn write_job(request: &Request<'_>) -> WriteJob {
+    WriteJob {
         target: Target::Disk(request.disk_id.to_owned()),
         source: Path::new(request.source).to_path_buf(),
         options: FilterOptions::default(),
@@ -141,7 +124,29 @@ pub(crate) fn write(
         },
         elevation: Elevation::Never,
         force: false,
+    }
+}
+
+/// Writes and verifies end to end. Blocks: the app calls it off the UI thread and reads progress elsewhere.
+pub(crate) fn write(
+    request: &Request<'_>,
+    open: impl Fn() -> Result<Box<dyn BlockDevice>, BlockError> + 'static,
+) {
+    let disks: Vec<Disk> = lock(&MODEL).disks.clone();
+    if let Err(message) = same_drive(&disks, request.disk_id, request.device, request.serial) {
+        push(Event::Finished(Outcome::Failed {
+            code: Some(bonk_ops::errors::Code::IdentityChanged.id().to_owned()),
+            message,
+        }));
+        return;
+    }
+    let io = android_io(open);
+    let enumerate = move || Ok(disks.clone());
+    let deps = Deps {
+        enumerate: &enumerate,
+        io: &io,
     };
+    let job = write_job(request);
     // Null when unserializable: read back as an unreadable result.
     let result = job::write(&job, &deps, &mut report).map(|outcome| {
         match outcome {
