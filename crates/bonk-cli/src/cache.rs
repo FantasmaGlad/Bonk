@@ -28,7 +28,8 @@ pub(crate) fn image_path(cache: &Path, sha256: &str, name: &str) -> PathBuf {
 pub(crate) enum CacheAction {
     /// List the kept images, incomplete downloads included
     List(ListArgs),
-    /// Remove the kept images; an address is downloaded again on the next write
+    /// Remove the kept images, or only the one with the given hash; an address is downloaded again on the
+    /// next write
     Clean(CleanArgs),
 }
 
@@ -44,6 +45,9 @@ pub(crate) struct ListArgs {
 
 #[derive(Debug, Args)]
 pub(crate) struct CleanArgs {
+    /// SHA-256 of the one image to remove; without it, all are removed
+    #[arg(value_name = "SHA256")]
+    sha256: Option<String>,
     /// Download directory; by default the user's cache directory
     #[arg(long, value_name = "DIR")]
     cache_dir: Option<PathBuf>,
@@ -62,6 +66,8 @@ pub(crate) struct Entry {
     bytes: u64,
     /// Incomplete download, resumed on the next write.
     partial: bool,
+    /// Last change, in seconds since 1970; null when the system does not say.
+    modified: Option<u64>,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
@@ -107,9 +113,15 @@ fn read_entries(cache: &Path) -> io::Result<Vec<Entry>> {
             if !file.file_type()?.is_file() || name.ends_with(".validateur") {
                 continue;
             }
+            let metadata = file.metadata()?;
             entries.push(Entry {
                 partial: name.ends_with(".part"),
-                bytes: file.metadata()?.len(),
+                bytes: metadata.len(),
+                modified: metadata
+                    .modified()
+                    .ok()
+                    .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|age| age.as_secs()),
                 name,
                 sha256: sha256.clone(),
             });
@@ -122,9 +134,12 @@ pub(crate) fn total_bytes(cache: &Path) -> io::Result<u64> {
     Ok(read_entries(cache)?.iter().map(|entry| entry.bytes).sum())
 }
 
-fn remove_files(cache: &Path) -> io::Result<()> {
-    for (_, directory) in hash_directories(cache)? {
-        fs::remove_dir_all(directory)?;
+/// `only`: the one hash directory to remove; the others stay.
+fn remove_files(cache: &Path, only: Option<&str>) -> io::Result<()> {
+    for (sha256, directory) in hash_directories(cache)? {
+        if only.is_none_or(|kept| kept == sha256) {
+            fs::remove_dir_all(directory)?;
+        }
     }
     Ok(())
 }
@@ -159,6 +174,15 @@ pub(crate) fn run(action: &CacheAction, out: &mut dyn Write, err: &mut dyn Write
         CacheAction::List(args) => (args.cache_dir.as_deref(), args.json, None),
         CacheAction::Clean(args) => (args.cache_dir.as_deref(), args.json, Some(args.dry_run)),
     };
+    let only = match action {
+        CacheAction::Clean(CleanArgs {
+            sha256: Some(text), ..
+        }) => match job::normalize_sha256(text) {
+            Ok(sha256) => Some(sha256),
+            Err(error) => return report(err, error.code, error.message),
+        },
+        _ => None,
+    };
     let Some(cache) = directory(given) else {
         return report(
             err,
@@ -166,11 +190,14 @@ pub(crate) fn run(action: &CacheAction, out: &mut dyn Write, err: &mut dyn Write
             "no known cache directory: give it with --cache-dir",
         );
     };
-    let done = read_entries(&cache).and_then(|entries| {
+    let done = read_entries(&cache).and_then(|mut entries| {
+        if let Some(sha256) = &only {
+            entries.retain(|entry| &entry.sha256 == sha256);
+        }
         let total_bytes = entries.iter().map(|entry| entry.bytes).sum();
         let removed_bytes = match clean {
             Some(false) => {
-                remove_files(&cache)?;
+                remove_files(&cache, only.as_deref())?;
                 Some(total_bytes)
             }
             Some(true) | None => None,

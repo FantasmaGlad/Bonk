@@ -938,6 +938,49 @@ fn le_cache_se_liste_et_se_vide_sans_toucher_au_reste() {
     assert!(images.join("autre").exists());
 }
 
+#[test]
+fn une_seule_image_du_cache_se_retire_et_chacune_a_sa_date() {
+    let cache = TempSource::dir("cache-une");
+    let images = std::path::Path::new(&cache.arg()).join("images");
+    let (gardee, retiree) = ("a".repeat(64), "b".repeat(64));
+    for (sha, name) in [(&gardee, "garde.iso"), (&retiree, "retire.iso")] {
+        std::fs::create_dir_all(images.join(sha)).unwrap();
+        std::fs::write(images.join(sha).join(name), b"image").unwrap();
+    }
+    let scenario = Scenario::new();
+
+    let (code, out, _) = scenario.run(&["cache", "list", "--cache-dir", &cache.arg(), "--json"]);
+    assert_eq!(code, 0, "{out}");
+    let value: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert!(value["entries"][0]["modified"].as_u64().is_some(), "{out}");
+
+    let majuscules = retiree.to_ascii_uppercase();
+    let (code, out, _) = scenario.run(&[
+        "cache",
+        "clean",
+        &majuscules,
+        "--cache-dir",
+        &cache.arg(),
+        "--json",
+    ]);
+    assert_eq!(code, 0, "{out}");
+    let value: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(value["removed_bytes"], 5, "{out}");
+    assert!(!images.join(&retiree).exists());
+    assert!(images.join(&gardee).join("garde.iso").exists());
+
+    let (code, _, err) = scenario.run(&[
+        "cache",
+        "clean",
+        "pas-une-empreinte",
+        "--cache-dir",
+        &cache.arg(),
+    ]);
+    assert_ne!(code, 0);
+    assert!(err.contains("invalid SHA-256"), "{err}");
+    assert!(images.join(&gardee).exists());
+}
+
 /// A refused flush leaves the data in a cache that may never reach the drive: the write fails, even if the
 /// read-back, served by that cache, looks right.
 #[test]
