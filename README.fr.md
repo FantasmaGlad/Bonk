@@ -41,6 +41,8 @@
 
 Mêmes paquets sur les dérivées : <img src="docs/icons/linuxmint.svg" width="16" height="16" valign="middle" alt="linuxmint" title="Linux Mint"> Linux Mint · <img src="docs/icons/popos.svg" width="16" height="16" valign="middle" alt="popos" title="Pop!_OS"> Pop!_OS · <img src="docs/icons/zorin.svg" width="16" height="16" valign="middle" alt="zorin" title="Zorin OS"> Zorin OS · <img src="docs/icons/raspberrypi.svg" width="16" height="16" valign="middle" alt="raspberrypi" title="Raspberry Pi OS"> Raspberry Pi OS · <img src="docs/icons/rockylinux.svg" width="16" height="16" valign="middle" alt="rockylinux" title="Rocky Linux"> Rocky Linux · <img src="docs/icons/almalinux.svg" width="16" height="16" valign="middle" alt="almalinux" title="AlmaLinux"> AlmaLinux · <img src="docs/icons/manjaro.svg" width="16" height="16" valign="middle" alt="manjaro" title="Manjaro"> Manjaro · <img src="docs/icons/endeavouros.svg" width="16" height="16" valign="middle" alt="endeavouros" title="EndeavourOS"> EndeavourOS · <img src="docs/icons/cachyos.svg" width="16" height="16" valign="middle" alt="cachyos" title="CachyOS"> CachyOS
 
+Chromebook : dans l'environnement de développement Linux (Crostini, Debian), le paquet Debian ou le [dépôt APT](https://bonk-os.app/install/). Pas encore essayé sur un Chromebook.
+
 Fichiers portables `.exe`, `.zip` et `.tar.gz` : [dernière version](https://github.com/FantasmaGlad/Bonk/releases/latest).
 
 Empreintes : [`SHA256SUMS`](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/SHA256SUMS). Provenance : `gh attestation verify <fichier> --repo FantasmaGlad/Bonk`.
