@@ -155,87 +155,103 @@ pub(super) fn open_target(
     request: &OpenRequest,
     deps: &Deps<'_>,
 ) -> Result<OpenedTarget, JobError> {
+    let (device, unmounted) = match (&chosen.disk, target) {
+        (Some(disk), _) => open_disk(disk, request, deps)?,
+        (None, Target::Image { path, size }) => (open_image(path, *size, request)?, Vec::new()),
+        (None, Target::Disk(_)) => unreachable!("a disk target always has a chosen disk"),
+    };
+    let device = traced(device, request.trace_io, chosen.disk.is_some());
+    let mut info = chosen.info;
+    info.size_bytes = Some(device.size());
+    Ok((device, info, unmounted))
+}
+
+fn open_disk(
+    disk: &Disk,
+    request: &OpenRequest,
+    deps: &Deps<'_>,
+) -> Result<(Box<dyn BlockDevice>, Vec<String>), JobError> {
     let &OpenRequest {
         options,
         access,
         elevation,
-        size_hint,
-        trace_io,
+        ..
     } = request;
-    let writing = access == Access::ReadWrite;
-    let (device, unmounted): (Box<dyn BlockDevice>, Vec<String>) = match (&chosen.disk, target) {
-        (Some(disk), _) => {
-            let identity = TargetIdentity::from(disk);
-            // Rights first: a refusal must leave the key neither unmounted nor touched.
-            let prepared = (deps.io.prepare)(Path::new(&disk.path), access, elevation);
-            // Cancelled while waiting for authorization: the key stays mounted and untouched.
-            if (deps.io.cancelled)() {
-                return Err(fail(Code::Cancelled, "cancelled before opening the disk"));
-            }
-            prepared.map_err(open_error)?;
-            // Unmount only to write: reading a mounted volume does not disturb it.
-            let unmounted = if writing {
-                (deps.io.unmount)(disk, elevation).map_err(map_open_target)?
-            } else {
-                Vec::new()
-            };
-            // Identity re-checked right before opening.
-            let fresh = enumerate(deps)?;
-            let again = reverify(&identity, &fresh, options).map_err(map_open_target)?;
-            let opened = (deps.io.open_node)(Path::new(&again.path), access, elevation);
-            if (deps.io.cancelled)() {
-                return Err(fail(Code::Cancelled, "cancelled before opening the disk"));
-            }
-            let node = opened.map_err(open_error)?;
-            if node.size() != identity.size_bytes {
-                return Err(map_open_target(OpenTargetError::IdentityChanged {
-                    expected: Box::new(identity.clone()),
-                    actual: Box::new(TargetIdentity {
-                        size_bytes: node.size(),
-                        ..identity
-                    }),
-                }));
-            }
-            (node, unmounted)
-        }
-        (None, Target::Image { path, size }) => {
-            let device = if path.exists() {
-                FileDevice::open(path, access, DEFAULT_BLOCK_SIZE).map_err(open_error)?
-            } else if writing {
-                let wanted = size.or(size_hint).ok_or_else(|| {
-                    fail(
-                        Code::InvalidArgument,
-                        "target image size unknown: give it with --size",
-                    )
-                })?;
-                FileDevice::create(
-                    path,
-                    wanted.div_ceil(u64::from(DEFAULT_BLOCK_SIZE)) * u64::from(DEFAULT_BLOCK_SIZE),
-                    DEFAULT_BLOCK_SIZE,
-                )
-                .map_err(open_error)?
-            } else {
-                return Err(fail(
-                    Code::SourceUnreadable,
-                    format!("{}: file missing", path.display()),
-                ));
-            };
-            (Box::new(device) as Box<dyn BlockDevice>, Vec::new())
-        }
-        (None, Target::Disk(_)) => unreachable!("a disk target always has a chosen disk"),
+    let identity = TargetIdentity::from(disk);
+    // Rights first: a refusal must leave the key neither unmounted nor touched.
+    let prepared = (deps.io.prepare)(Path::new(&disk.path), access, elevation);
+    // Cancelled while waiting for authorization: the key stays mounted and untouched.
+    if (deps.io.cancelled)() {
+        return Err(fail(Code::Cancelled, "cancelled before opening the disk"));
+    }
+    prepared.map_err(open_error)?;
+    // Unmount only to write: reading a mounted volume does not disturb it.
+    let unmounted = if access == Access::ReadWrite {
+        (deps.io.unmount)(disk, elevation).map_err(map_open_target)?
+    } else {
+        Vec::new()
     };
-    let device: Box<dyn BlockDevice> = match trace_io {
-        Some(mode) => {
-            // Data of a real disk is never logged, even on request.
-            let head = mode == TraceIo::Data && chosen.disk.is_none();
-            if mode == TraceIo::Data && !head {
-                log::warn!(target: "bonk::write", "--trace-io=data ignored: reserved for image files");
-            }
-            Box::new(TracedDevice::new(device, head))
-        }
-        None => device,
+    // Identity re-checked right before opening.
+    let fresh = enumerate(deps)?;
+    let again = reverify(&identity, &fresh, options).map_err(map_open_target)?;
+    let opened = (deps.io.open_node)(Path::new(&again.path), access, elevation);
+    if (deps.io.cancelled)() {
+        return Err(fail(Code::Cancelled, "cancelled before opening the disk"));
+    }
+    let node = opened.map_err(open_error)?;
+    if node.size() != identity.size_bytes {
+        return Err(map_open_target(OpenTargetError::IdentityChanged {
+            expected: Box::new(identity.clone()),
+            actual: Box::new(TargetIdentity {
+                size_bytes: node.size(),
+                ..identity
+            }),
+        }));
+    }
+    Ok((node, unmounted))
+}
+
+fn open_image(
+    path: &Path,
+    size: Option<u64>,
+    request: &OpenRequest,
+) -> Result<Box<dyn BlockDevice>, JobError> {
+    let device = if path.exists() {
+        FileDevice::open(path, request.access, DEFAULT_BLOCK_SIZE).map_err(open_error)?
+    } else if request.access == Access::ReadWrite {
+        let wanted = size.or(request.size_hint).ok_or_else(|| {
+            fail(
+                Code::InvalidArgument,
+                "target image size unknown: give it with --size",
+            )
+        })?;
+        FileDevice::create(
+            path,
+            wanted.div_ceil(u64::from(DEFAULT_BLOCK_SIZE)) * u64::from(DEFAULT_BLOCK_SIZE),
+            DEFAULT_BLOCK_SIZE,
+        )
+        .map_err(open_error)?
+    } else {
+        return Err(fail(
+            Code::SourceUnreadable,
+            format!("{}: file missing", path.display()),
+        ));
     };
-    let mut info = chosen.info;
-    info.size_bytes = Some(device.size());
-    Ok((device, info, unmounted))
+    Ok(Box::new(device))
+}
+
+/// Data of a real disk is never logged, even on request.
+fn traced(
+    device: Box<dyn BlockDevice>,
+    trace_io: Option<TraceIo>,
+    is_disk: bool,
+) -> Box<dyn BlockDevice> {
+    let Some(mode) = trace_io else {
+        return device;
+    };
+    let head = mode == TraceIo::Data && !is_disk;
+    if mode == TraceIo::Data && !head {
+        log::warn!(target: "bonk::write", "--trace-io=data ignored: reserved for image files");
+    }
+    Box::new(TracedDevice::new(device, head))
 }

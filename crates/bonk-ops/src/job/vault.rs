@@ -15,7 +15,7 @@ use serde::Serialize;
 
 use super::extract::Advance;
 use super::format::{fresh_seed, wait_for_partitions};
-use super::target::{OpenRequest, choose, open_read_only, open_target, reread_table};
+use super::target::{Chosen, OpenRequest, choose, open_read_only, open_target, reread_table};
 use super::translate::guarded;
 use super::translate::support_lost;
 use super::types::{Deps, JobError, SCHEMA_VERSION, Target, TargetInfo, TraceIo, fail};
@@ -127,6 +127,28 @@ fn write_vault(
     Ok(plan)
 }
 
+fn init_done(
+    job: &VaultInitJob,
+    target: TargetInfo,
+    layout: VaultPlan,
+    block_size: u32,
+    unmounted: Vec<String>,
+) -> VaultInitDone {
+    VaultInitDone {
+        schema_version: SCHEMA_VERSION,
+        event: if job.dry_run { "plan" } else { "result" },
+        dry_run: job.dry_run,
+        target,
+        layout,
+        block_size,
+        vault_label: vault::VAULT_LABEL,
+        efi_label: vault::EFI_LABEL,
+        grub: job.grub.clone(),
+        unmounted,
+        verified: !job.dry_run,
+    }
+}
+
 pub fn vault_init(job: &VaultInitJob, deps: &Deps<'_>) -> Result<VaultInitDone, JobError> {
     let chosen = choose(&job.target, job.options, deps)?;
     let size = chosen.info.size_bytes.ok_or_else(|| {
@@ -136,30 +158,9 @@ pub fn vault_init(job: &VaultInitJob, deps: &Deps<'_>) -> Result<VaultInitDone, 
         )
     })?;
     let planned = vault::plan(size, chosen.block_size(), job.table).map_err(init_error)?;
-    let result = |event, dry_run, target, layout, block_size, unmounted, verified| VaultInitDone {
-        schema_version: SCHEMA_VERSION,
-        event,
-        dry_run,
-        target,
-        layout,
-        block_size,
-        vault_label: vault::VAULT_LABEL,
-        efi_label: vault::EFI_LABEL,
-        grub: job.grub.clone(),
-        unmounted,
-        verified,
-    };
     if job.dry_run {
         let block = chosen.block_size();
-        return Ok(result(
-            "plan",
-            true,
-            chosen.info,
-            planned,
-            block,
-            chosen.mounts,
-            false,
-        ));
+        return Ok(init_done(job, chosen.info, planned, block, chosen.mounts));
     }
     if !job.yes && !job.force {
         return Err(fail(
@@ -168,21 +169,25 @@ pub fn vault_init(job: &VaultInitJob, deps: &Deps<'_>) -> Result<VaultInitDone, 
         ));
     }
     confirm_internal(&chosen, job.options, job.force)?;
+    init_target(job, chosen, size, deps)
+}
 
+fn init_target(
+    job: &VaultInitJob,
+    chosen: Chosen,
+    size: u64,
+    deps: &Deps<'_>,
+) -> Result<VaultInitDone, JobError> {
     let seed_name = chosen.info.path.clone();
     let identity = chosen.disk.as_ref().map(TargetIdentity::from);
-    let (mut device, info, unmounted) = open_target(
-        chosen,
-        &job.target,
-        &OpenRequest {
-            options: job.options,
-            access: Access::ReadWrite,
-            elevation: job.elevation,
-            size_hint: Some(size),
-            trace_io: job.trace_io,
-        },
-        deps,
-    )?;
+    let request = OpenRequest {
+        options: job.options,
+        access: Access::ReadWrite,
+        elevation: job.elevation,
+        size_hint: Some(size),
+        trace_io: job.trace_io,
+    };
+    let (mut device, info, unmounted) = open_target(chosen, &job.target, &request, deps)?;
     if (deps.io.cancelled)() {
         return Err(fail(Code::Cancelled, "cancelled before writing the vault"));
     }
@@ -211,9 +216,7 @@ pub fn vault_init(job: &VaultInitJob, deps: &Deps<'_>) -> Result<VaultInitDone, 
         }
     }
     log::info!(target: "bonk::write", "vault init finished");
-    Ok(result(
-        "result", false, info, plan, block_size, unmounted, true,
-    ))
+    Ok(init_done(job, info, plan, block_size, unmounted))
 }
 
 pub fn vault_list(job: &VaultListJob, deps: &Deps<'_>) -> Result<VaultListDone, JobError> {
