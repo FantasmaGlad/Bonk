@@ -49,10 +49,24 @@ pub fn french_title(code: &str) -> Option<&'static str> {
         .map(|(_, title)| *title)
 }
 
+/// Engine and system messages stay in English: shown only after a sentence in the window's language,
+/// and labelled as such.
+#[must_use]
+pub fn technical(lang: Lang, message: &str) -> String {
+    match lang {
+        Lang::En => format!("Details: {message}"),
+        Lang::Fr => format!("Détail technique (en anglais) : {message}"),
+    }
+}
+
+/// The code follows the title, so the English detail closes the line instead of splitting a sentence.
+#[must_use]
 pub fn failure_text(lang: Lang, code: Option<&str>, message: &str) -> String {
+    let tag = code.map_or_else(String::new, |c| format!(" [{c}]"));
     match (lang, code.and_then(french_title)) {
-        (Lang::Fr, Some(title)) => format!("{title} ({message})"),
-        _ => message.to_owned(),
+        (Lang::En, _) => format!("FAILED: {message}{tag}"),
+        (Lang::Fr, Some(title)) => format!("ÉCHEC : {title}{tag}. {}", technical(lang, message)),
+        (Lang::Fr, None) => format!("ÉCHEC{tag}. {}", technical(lang, message)),
     }
 }
 
@@ -61,15 +75,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn le_francais_precede_le_detail_et_l_anglais_reste_tel_quel() {
+    fn le_detail_anglais_ne_se_glisse_jamais_dans_une_phrase_francaise() {
         assert_eq!(
             failure_text(Lang::Fr, Some("E3005"), "bad hash"),
-            "L'empreinte de l'image ne correspond pas (bad hash)"
+            "ÉCHEC : L'empreinte de l'image ne correspond pas [E3005]. Détail technique (en anglais) : bad hash"
         );
         assert_eq!(
             failure_text(Lang::En, Some("E3005"), "bad hash"),
-            "bad hash"
+            "FAILED: bad hash [E3005]"
         );
-        assert_eq!(failure_text(Lang::Fr, None, "bad"), "bad");
+        assert_eq!(
+            failure_text(Lang::Fr, None, "bad"),
+            "ÉCHEC. Détail technique (en anglais) : bad"
+        );
     }
 }

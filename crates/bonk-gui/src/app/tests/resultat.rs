@@ -36,7 +36,7 @@ fn le_resultat_reste_jusqu_a_la_fermeture() {
     let _ = app.update(Message::Loaded(Ok(Vec::new())));
     assert!(contient(
         &app,
-        "ÉCHEC : Échec de l'écriture (clé débranchée) [E4001] : voir « bonk explain E4001 »"
+        "ÉCHEC : Échec de l'écriture [E4001]. Détail technique (en anglais) : clé débranchée. Voir « bonk explain E4001 »."
     ));
     assert!(matches!(app.write, WriteState::Finished { .. }));
     let _ = app.update(Message::Select("sata-libre".to_owned()));

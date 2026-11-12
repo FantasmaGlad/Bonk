@@ -8,6 +8,7 @@ use bonk_core::write::Phase;
 
 use crate::theme;
 use crate::transfer::Outcome;
+use bonk_ui::errors::technical;
 use bonk_ui::recap;
 use bonk_ui::text as phrases;
 
@@ -88,9 +89,16 @@ impl App {
     fn catalog_note(&self, image: &str) -> Option<Element<'_, Message>> {
         let lang = self.lang;
         match &self.catalog {
-            CatalogState::Failed(error) => {
-                Some(text(error.clone()).size(13).color(theme::muted()).into())
-            }
+            CatalogState::Failed(error) => Some(
+                text(format!(
+                    "{} {}",
+                    lang.pick("Catalog unavailable.", "Catalogue indisponible."),
+                    technical(lang, error)
+                ))
+                .size(13)
+                .color(theme::muted())
+                .into(),
+            ),
             CatalogState::Ready(systems) if find_url(systems, image).is_some() => Some(
                 text(lang.pick(
                     "Official link and hash from the signed catalog: nothing to set.",

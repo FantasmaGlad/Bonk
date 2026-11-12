@@ -348,7 +348,7 @@
       "panel": {
         "close": "Fermer",
         "kind": "finished",
-        "message": "ÉCHEC : L'identité du disque a changé avant l'écriture (the drive changed) [E2002]"
+        "message": "ÉCHEC : L'identité du disque a changé avant l'écriture [E2002]. Détail technique (en anglais) : the drive changed"
       },
       "running": false,
       "settings": null,
