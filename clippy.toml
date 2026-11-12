@@ -1,2 +1,2 @@
-# Beyond this a function reads badly: split it rather than raise the cap.
-too-many-lines-threshold = 120
+# Beyond this a function reads badly: split it rather than raise the cap. Tests are exempt where they say so.
+too-many-lines-threshold = 70

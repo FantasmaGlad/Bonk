@@ -1,3 +1,8 @@
+#![cfg_attr(
+    test,
+    allow(clippy::too_many_lines, reason = "a scenario test reads in one piece")
+)]
+
 mod cache;
 mod catalog;
 #[cfg(test)]
