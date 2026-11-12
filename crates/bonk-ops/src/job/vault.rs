@@ -1,8 +1,6 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use std::time::Instant;
-
 use bonk_core::BlockDevice;
 use bonk_core::format::exfat_read::FileEntry;
 use bonk_core::format::table::TableKind;
@@ -494,13 +492,7 @@ pub fn vault_add(
         )
     })?;
     let mut report = guarded(deps, progress);
-    let mut advance = Advance {
-        phase: Phase::Write,
-        done: 0,
-        total: size,
-        started: Instant::now(),
-        report: &mut report,
-    };
+    let mut advance = Advance::start(Phase::Write, size, &mut report);
     log::info!(target: "bonk::write", name = name.as_str(), bytes = size; "vault add starting");
     let added = vault::add_image(
         &mut *device,
@@ -514,13 +506,7 @@ pub fn vault_add(
     .map_err(edit_error)?;
     device.flush().map_err(|e| fail(Code::WriteFailed, e))?;
     drop_cache_before_verify(&mut *device);
-    let mut advance = Advance {
-        phase: Phase::Verify,
-        done: 0,
-        total: size,
-        started: Instant::now(),
-        report: &mut report,
-    };
+    let mut advance = Advance::start(Phase::Verify, size, &mut report);
     vault::verify_image(&*device, &plan, &name, &added.sha256, &mut |n| {
         advance.add(n)
     })
