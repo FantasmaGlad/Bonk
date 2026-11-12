@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   fuzz:
     name: cargo-fuzz
@@ -34,7 +38,9 @@ jobs:
           restore-keys: corpus-fuzz-
       - name: Fuzzer chaque cible
         run: |
-          for cible in $(cargo +nightly fuzz list); do
+          cibles=$(cargo +nightly fuzz list)
+          test -n "$cibles"
+          for cible in $cibles; do
             cargo +nightly fuzz run "$cible" -- -max_total_time=300
           done
       - name: Garder le corpus

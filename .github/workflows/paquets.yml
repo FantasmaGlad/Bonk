@@ -77,6 +77,7 @@ jobs:
           tar -xzf archive/bonk-*.tar.gz -C archive
           cp archive/bonk-*/bonk "target/$TARGET/release/bonk"
       - name: Construire les paquets
+        shell: bash
         run: |
           cargo deb -p bonk --no-build --target "$TARGET" --locked --output dist/
           cargo generate-rpm -p crates/bonk --target "$TARGET" --output dist/
@@ -135,6 +136,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends rpm zstd
       - name: Construire les paquets
+        shell: bash
         run: |
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
           mkdir dist
@@ -255,6 +257,7 @@ jobs:
           pattern: binaire-*macos-*
           path: archives
       - name: Assembler le binaire universel
+        shell: bash
         id: universel
         run: |
           set -e

@@ -79,6 +79,7 @@ jobs:
         run: cargo check --manifest-path fuzz/Cargo.toml --locked
       # The windowless build must not break silently, nor pull Iced in another way.
       - name: Version en ligne de commande seule
+        shell: bash
         run: |
           cargo clippy -p bonk --all-targets --no-default-features --locked -- -D warnings
           cargo test -p bonk --no-default-features --locked
@@ -126,6 +127,7 @@ jobs:
       systemes: ${{ steps.choix.outputs.systemes }}
     steps:
       - name: Choisir
+        shell: bash
         id: choix
         env:
           GH_TOKEN: ${{ github.token }}
