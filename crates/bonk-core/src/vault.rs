@@ -9,7 +9,7 @@ use crate::format::table::{
 };
 use crate::format::{ALIGNMENT, Filesystem, FormatError, Ids, exfat, exfat_edit, fat32, guid};
 use crate::format::{NewFile, fat32_tree};
-use crate::partition::{MbrEntry, Severity, inspect};
+use crate::partition::{Layout, MbrEntry, Severity, inspect};
 
 /// exFAT volume label and partition name of the data partition.
 pub const VAULT_LABEL: &str = "BonkVault";
@@ -478,61 +478,63 @@ pub fn detect(dev: &dyn BlockDevice) -> Result<Option<VaultPlan>, FormatError> {
     {
         return Ok(None);
     }
-    let found = match (&layout.gpt, &layout.mbr) {
-        (Some(gpt), Some(mbr)) if mbr.protective => {
-            let [vault, efi] = gpt.entries.as_slice() else {
-                return Ok(None);
-            };
-            (efi.type_guid == ESP_GUID_TEXT).then_some((
-                TableKind::Gpt,
-                vault.first_lba,
-                vault.last_lba,
-                efi.first_lba,
-                efi.last_lba,
-            ))
-        }
-        (None, Some(mbr)) if !mbr.protective => {
-            let [vault, efi] = mbr.entries.as_slice() else {
-                return Ok(None);
-            };
-            let last = |entry: &MbrEntry| {
-                (u64::from(entry.start_lba) + u64::from(entry.sectors)).checked_sub(1)
-            };
-            match (efi.kind == MBR_ESP, last(vault), last(efi)) {
-                (true, Some(vault_last), Some(efi_last)) => Some((
-                    TableKind::Mbr,
-                    u64::from(vault.start_lba),
-                    vault_last,
-                    u64::from(efi.start_lba),
-                    efi_last,
-                )),
-                _ => None,
-            }
-        }
-        _ => None,
-    };
-    let Some((table, vault_first, vault_last, efi_first, efi_last)) = found else {
+    let Some(plan) = vault_partitions(&layout) else {
         return Ok(None);
     };
-    if vault_last < vault_first || efi_last < efi_first {
-        return Ok(None);
-    }
-    let plan = VaultPlan {
-        table,
-        vault: PartitionPlan {
-            first_lba: vault_first,
-            last_lba: vault_last,
-        },
-        efi: PartitionPlan {
-            first_lba: efi_first,
-            last_lba: efi_last,
-        },
-    };
-    match Reader::open(dev, vault_first, plan.vault.sectors()) {
+    match Reader::open(dev, plan.vault.first_lba, plan.vault.sectors()) {
         Ok(reader) if reader.label()?.as_deref() == Some(VAULT_LABEL) => Ok(Some(plan)),
         Ok(_) | Err(FormatError::Invalid(_)) => Ok(None),
         Err(err) => Err(err),
     }
+}
+
+/// Exactly two partitions, the second an EFI system partition, under GPT or a plain MBR.
+fn vault_partitions(layout: &Layout) -> Option<VaultPlan> {
+    let (table, vault, efi) = match (&layout.gpt, &layout.mbr) {
+        (Some(gpt), Some(mbr)) if mbr.protective => {
+            let [vault, efi] = gpt.entries.as_slice() else {
+                return None;
+            };
+            if efi.type_guid != ESP_GUID_TEXT {
+                return None;
+            }
+            (
+                TableKind::Gpt,
+                (vault.first_lba, vault.last_lba),
+                (efi.first_lba, efi.last_lba),
+            )
+        }
+        (None, Some(mbr)) if !mbr.protective => {
+            let [vault, efi] = mbr.entries.as_slice() else {
+                return None;
+            };
+            if efi.kind != MBR_ESP {
+                return None;
+            }
+            let span = |entry: &MbrEntry| {
+                let first = u64::from(entry.start_lba);
+                (first + u64::from(entry.sectors))
+                    .checked_sub(1)
+                    .map(|last| (first, last))
+            };
+            (TableKind::Mbr, span(vault)?, span(efi)?)
+        }
+        _ => return None,
+    };
+    if vault.1 < vault.0 || efi.1 < efi.0 {
+        return None;
+    }
+    Some(VaultPlan {
+        table,
+        vault: PartitionPlan {
+            first_lba: vault.0,
+            last_lba: vault.1,
+        },
+        efi: PartitionPlan {
+            first_lba: efi.0,
+            last_lba: efi.1,
+        },
+    })
 }
 
 /// Files whose name ends in `.iso`, whatever the case, anywhere on the data partition.

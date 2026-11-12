@@ -156,7 +156,7 @@ pub(crate) fn has_solid_resources(lookup: &[u8]) -> Result<bool, WimError> {
 
 #[derive(Default)]
 struct Part {
-    entries: Vec<(Resource, [u8; ENTRY_LEN - RESOURCE_LEN])>,
+    entries: Vec<Entry>,
     resources_len: u64,
 }
 
@@ -183,8 +183,28 @@ pub fn split(
     }
     let xml = Resource::read(&header[AT_XML..AT_XML + RESOURCE_LEN]);
     let boot = Resource::read(&header[AT_BOOT..AT_BOOT + RESOURCE_LEN]);
-    let fixed = HEADER_LEN as u64 + xml.stored;
+    let items = metadata_first(lookup, file_size)?;
+    if xml
+        .offset
+        .checked_add(xml.stored)
+        .is_none_or(|end| end > file_size)
+    {
+        return Err(WimError::Malformed("XML outside the file"));
+    }
+    let parts = pack(items, HEADER_LEN as u64 + xml.stored, part_limit)?;
+    let total = u16::try_from(parts.len()).map_err(|_| WimError::Malformed("too many parts"))?;
+    let mut files = Vec::with_capacity(parts.len());
+    for (index, part) in parts.iter().enumerate() {
+        let number = u16::try_from(index + 1).map_err(|_| WimError::Malformed("too many parts"))?;
+        files.push(part_file(header, part, number, total, xml, boot));
+    }
+    Ok(files)
+}
 
+type Entry = (Resource, [u8; ENTRY_LEN - RESOURCE_LEN]);
+
+/// Lookup entries, metadata resources first.
+fn metadata_first(lookup: &[u8], file_size: u64) -> Result<Vec<Entry>, WimError> {
     let mut metadata = Vec::new();
     let mut streams = Vec::new();
     for raw in lookup.as_chunks::<ENTRY_LEN>().0 {
@@ -204,16 +224,14 @@ pub fn split(
             streams.push((resource, rest));
         }
     }
-    if xml
-        .offset
-        .checked_add(xml.stored)
-        .is_none_or(|end| end > file_size)
-    {
-        return Err(WimError::Malformed("XML outside the file"));
-    }
+    metadata.extend(streams);
+    Ok(metadata)
+}
 
+/// `fixed` is what every part carries besides its resources and table: header and XML.
+fn pack(items: Vec<Entry>, fixed: u64, part_limit: u64) -> Result<Vec<Part>, WimError> {
     let mut parts = vec![Part::default()];
-    for item in metadata.into_iter().chain(streams) {
+    for item in items {
         let need = |part: &Part| {
             fixed + part.resources_len + item.0.stored + part.table_len() + ENTRY_LEN as u64
         };
@@ -228,72 +246,87 @@ pub fn split(
             part.entries.push(item);
         }
     }
+    Ok(parts)
+}
 
-    let total = u16::try_from(parts.len()).map_err(|_| WimError::Malformed("too many parts"))?;
-    let mut files = Vec::with_capacity(parts.len());
-    for (index, part) in parts.iter().enumerate() {
-        let number = u16::try_from(index + 1).map_err(|_| WimError::Malformed("too many parts"))?;
-        let mut position = HEADER_LEN as u64;
-        let mut sources = Vec::new();
-        let mut table = Vec::with_capacity(part.entries.len() * ENTRY_LEN);
-        let mut new_boot = Resource::NONE;
-        for (resource, rest) in &part.entries {
-            let placed = Resource {
-                offset: position,
-                ..*resource
-            };
-            if resource.offset == boot.offset
-                && boot.stored != 0
-                && resource.flags & RESOURCE_METADATA != 0
-            {
-                new_boot = placed;
-            }
-            table.extend_from_slice(&placed.encode());
-            table.extend_from_slice(rest);
-            let at = table.len() - (ENTRY_LEN - RESOURCE_LEN);
-            table[at..at + 2].copy_from_slice(&number.to_le_bytes());
-            sources.push(Segment::Source {
-                offset: resource.offset,
-                len: resource.stored,
-            });
-            position += resource.stored;
+fn part_file(
+    header: &[u8],
+    part: &Part,
+    number: u16,
+    total: u16,
+    xml: Resource,
+    boot: Resource,
+) -> Vec<Segment> {
+    let mut position = HEADER_LEN as u64;
+    let mut sources = Vec::new();
+    let mut table = Vec::with_capacity(part.entries.len() * ENTRY_LEN);
+    let mut new_boot = Resource::NONE;
+    for (resource, rest) in &part.entries {
+        let placed = Resource {
+            offset: position,
+            ..*resource
+        };
+        if resource.offset == boot.offset
+            && boot.stored != 0
+            && resource.flags & RESOURCE_METADATA != 0
+        {
+            new_boot = placed;
         }
-        let lookup_resource = Resource {
-            stored: table.len() as u64,
-            flags: 0,
-            offset: position,
-            original: table.len() as u64,
-        };
-        position += table.len() as u64;
-        let xml_resource = Resource {
-            offset: position,
-            ..xml
-        };
-        let mut head = header[..HEADER_LEN].to_vec();
-        let flags = u32::from_le_bytes([
-            head[AT_FLAGS],
-            head[AT_FLAGS + 1],
-            head[AT_FLAGS + 2],
-            head[AT_FLAGS + 3],
-        ]);
-        head[AT_FLAGS..AT_FLAGS + 4].copy_from_slice(&(flags | FLAG_SPANNED).to_le_bytes());
-        head[AT_PART..AT_PART + 2].copy_from_slice(&number.to_le_bytes());
-        head[AT_TOTAL_PARTS..AT_TOTAL_PARTS + 2].copy_from_slice(&total.to_le_bytes());
-        head[AT_LOOKUP..AT_LOOKUP + RESOURCE_LEN].copy_from_slice(&lookup_resource.encode());
-        head[AT_XML..AT_XML + RESOURCE_LEN].copy_from_slice(&xml_resource.encode());
-        head[AT_BOOT..AT_BOOT + RESOURCE_LEN].copy_from_slice(&new_boot.encode());
-        // Integrity hashes cover the source file: a part has none.
-        head[AT_INTEGRITY..AT_INTEGRITY + RESOURCE_LEN].fill(0);
-        let mut segments = vec![Segment::Bytes(head)];
-        segments.extend(sources);
-        segments.push(Segment::Bytes(table));
-        segments.push(Segment::Source {
-            offset: xml.offset,
-            len: xml.stored,
+        table.extend_from_slice(&placed.encode());
+        table.extend_from_slice(rest);
+        let at = table.len() - (ENTRY_LEN - RESOURCE_LEN);
+        table[at..at + 2].copy_from_slice(&number.to_le_bytes());
+        sources.push(Segment::Source {
+            offset: resource.offset,
+            len: resource.stored,
         });
-        files.push(segments);
+        position += resource.stored;
     }
-    Ok(files)
+    let lookup = Resource {
+        stored: table.len() as u64,
+        flags: 0,
+        offset: position,
+        original: table.len() as u64,
+    };
+    let xml_placed = Resource {
+        offset: position + table.len() as u64,
+        ..xml
+    };
+    let head = part_header(header, number, total, lookup, xml_placed, new_boot);
+    let mut segments = vec![Segment::Bytes(head)];
+    segments.extend(sources);
+    segments.push(Segment::Bytes(table));
+    segments.push(Segment::Source {
+        offset: xml.offset,
+        len: xml.stored,
+    });
+    segments
+}
+
+fn part_header(
+    header: &[u8],
+    number: u16,
+    total: u16,
+    lookup: Resource,
+    xml: Resource,
+    boot: Resource,
+) -> Vec<u8> {
+    let mut head = header[..HEADER_LEN].to_vec();
+    let flags = u32::from_le_bytes([
+        head[AT_FLAGS],
+        head[AT_FLAGS + 1],
+        head[AT_FLAGS + 2],
+        head[AT_FLAGS + 3],
+    ]);
+    head[AT_FLAGS..AT_FLAGS + 4].copy_from_slice(&(flags | FLAG_SPANNED).to_le_bytes());
+    head[AT_PART..AT_PART + 2].copy_from_slice(&number.to_le_bytes());
+    head[AT_TOTAL_PARTS..AT_TOTAL_PARTS + 2].copy_from_slice(&total.to_le_bytes());
+    head[AT_LOOKUP..AT_LOOKUP + RESOURCE_LEN].copy_from_slice(&lookup.encode());
+    head[AT_XML..AT_XML + RESOURCE_LEN].copy_from_slice(&xml.encode());
+    head[AT_BOOT..AT_BOOT + RESOURCE_LEN].copy_from_slice(&boot.encode());
+    // Integrity hashes cover the source file: a part has none.
+    head[AT_INTEGRITY..AT_INTEGRITY + RESOURCE_LEN].fill(0);
+    head
 }
 
 #[cfg(test)]

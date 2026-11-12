@@ -124,6 +124,47 @@ pub struct Layout {
     pub findings: Vec<Finding>,
 }
 
+/// The GPT header is at sector 1, so 512 or 4096 bytes in.
+fn logical_block_size(dev: &dyn BlockDevice, size: u64) -> u32 {
+    [512u32, 4096]
+        .into_iter()
+        .find(|bs| {
+            u64::from(*bs) + 8 <= size
+                && read_range(dev, u64::from(*bs), 8).is_ok_and(|b| b.as_slice() == GPT_SIGNATURE)
+        })
+        .unwrap_or(512)
+}
+
+/// Entries come from the first copy whose table checksum holds, else from any readable copy.
+fn read_gpt(dev: &dyn BlockDevice, block: u64, last_lba: u64) -> Result<Option<Gpt>, BlockError> {
+    let primary = read_header(dev, 1, block)?;
+    let backup_lba = primary
+        .as_ref()
+        .map_or(last_lba, |(h, _)| h.alternate_lba)
+        .min(last_lba);
+    let backup = if backup_lba > 1 {
+        read_header(dev, backup_lba, block)?
+    } else {
+        None
+    };
+    if primary.is_none() && backup.is_none() {
+        return Ok(None);
+    }
+    let entries = primary
+        .as_ref()
+        .filter(|(h, _)| h.entries_crc_ok)
+        .or(backup.as_ref().filter(|(h, _)| h.entries_crc_ok))
+        .or(primary.as_ref())
+        .or(backup.as_ref())
+        .map(|(_, entries)| entries.clone())
+        .unwrap_or_default();
+    Ok(Some(Gpt {
+        primary: primary.map(|(h, _)| h),
+        backup: backup.map(|(h, _)| h),
+        entries,
+    }))
+}
+
 /// Unreadable or inconsistent content becomes a finding, not an error.
 pub fn inspect(dev: &dyn BlockDevice) -> Result<Layout, BlockError> {
     let size = dev.size();
@@ -151,49 +192,11 @@ pub fn inspect(dev: &dyn BlockDevice) -> Result<Layout, BlockError> {
         });
     }
 
-    // The GPT header is at sector 1, so 512 or 4096 bytes in.
-    let logical = [512u32, 4096]
-        .into_iter()
-        .find(|bs| {
-            u64::from(*bs) + 8 <= size
-                && read_range(dev, u64::from(*bs), 8).is_ok_and(|b| b.as_slice() == GPT_SIGNATURE)
-        })
-        .unwrap_or(512);
+    let logical = logical_block_size(dev, size);
     let block = u64::from(logical);
-
-    let sector0 = read_range(dev, 0, 512)?;
-    let mbr = parse_mbr(&sector0);
-
-    let primary = read_header(dev, 1, block)?;
-    let total_lba = size / block;
-    let last_lba = total_lba.saturating_sub(1);
-    let backup_lba = primary
-        .as_ref()
-        .map_or(last_lba, |(h, _)| h.alternate_lba)
-        .min(last_lba);
-    let backup = if backup_lba > 1 {
-        read_header(dev, backup_lba, block)?
-    } else {
-        None
-    };
-
-    let gpt = if primary.is_some() || backup.is_some() {
-        let entries = primary
-            .as_ref()
-            .filter(|(h, _)| h.entries_crc_ok)
-            .or(backup.as_ref().filter(|(h, _)| h.entries_crc_ok))
-            .or(primary.as_ref())
-            .or(backup.as_ref())
-            .map(|(_, entries)| entries.clone())
-            .unwrap_or_default();
-        Some(Gpt {
-            primary: primary.as_ref().map(|(h, _)| h.clone()),
-            backup: backup.as_ref().map(|(h, _)| h.clone()),
-            entries,
-        })
-    } else {
-        None
-    };
+    let mbr = parse_mbr(&read_range(dev, 0, 512)?);
+    let last_lba = (size / block).saturating_sub(1);
+    let gpt = read_gpt(dev, block, last_lba)?;
 
     match (&mbr, &gpt) {
         (None, None) => note(

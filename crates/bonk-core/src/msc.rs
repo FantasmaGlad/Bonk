@@ -154,59 +154,66 @@ impl<T: BulkTransport> MassStorage<T> {
             return Err(error.into());
         }
 
-        let mut done = 0;
-        match data {
-            Data::None => {}
-            Data::In(buf) => {
-                while done < buf.len() {
-                    let asked = buf.len() - done;
-                    match self.transport.receive(&mut buf[done..]) {
-                        Ok(read) => {
-                            done += read;
-                            // Short packet: the data phase ended, the status follows.
-                            if read < asked {
-                                break;
-                            }
-                        }
-                        Err(BulkError::Stall) => {
-                            self.transport.clear_halt(Direction::In)?;
-                            break;
-                        }
-                        Err(error) => return Err(error.into()),
-                    }
-                }
-            }
-            Data::Out(buf) => match self.transport.send(buf) {
-                Ok(()) => done = buf.len(),
-                Err(BulkError::Stall) => self.transport.clear_halt(Direction::Out)?,
-                Err(error) => return Err(error.into()),
-            },
-        }
-
+        let done = self.transfer(data)?;
         let csw = self.read_status()?;
-        if u32::from_le_bytes([csw[0], csw[1], csw[2], csw[3]]) != CSW_SIGNATURE {
-            self.transport.reset()?;
-            return Err(MscError::Protocol("bad status signature"));
-        }
-        if u32::from_le_bytes([csw[4], csw[5], csw[6], csw[7]]) != tag {
-            self.transport.reset()?;
-            return Err(MscError::Protocol("status of another command"));
-        }
-        match csw[12] {
-            0 => {}
-            1 => return Err(MscError::Check(None)),
-            2 => {
-                self.transport.reset()?;
-                return Err(MscError::Phase);
-            }
-            _ => {
-                self.transport.reset()?;
-                return Err(MscError::Protocol("unknown status"));
-            }
-        }
+        self.check_status(&csw, tag)?;
         // Trust the device residue too: a device may pad with zeros.
         let residue = u32::from_le_bytes([csw[8], csw[9], csw[10], csw[11]]) as usize;
         Ok(done.min(length.saturating_sub(residue)))
+    }
+
+    fn transfer(&mut self, data: Data<'_>) -> Result<usize, MscError> {
+        match data {
+            Data::None => Ok(0),
+            Data::In(buf) => self.receive_all(buf),
+            Data::Out(buf) => match self.transport.send(buf) {
+                Ok(()) => Ok(buf.len()),
+                Err(BulkError::Stall) => {
+                    self.transport.clear_halt(Direction::Out)?;
+                    Ok(0)
+                }
+                Err(error) => Err(error.into()),
+            },
+        }
+    }
+
+    fn receive_all(&mut self, buf: &mut [u8]) -> Result<usize, MscError> {
+        let mut done = 0;
+        while done < buf.len() {
+            let asked = buf.len() - done;
+            match self.transport.receive(&mut buf[done..]) {
+                Ok(read) => {
+                    done += read;
+                    // Short packet: the data phase ended, the status follows.
+                    if read < asked {
+                        break;
+                    }
+                }
+                Err(BulkError::Stall) => {
+                    self.transport.clear_halt(Direction::In)?;
+                    break;
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+        Ok(done)
+    }
+
+    fn check_status(&mut self, csw: &[u8; CSW_LEN], tag: u32) -> Result<(), MscError> {
+        let failure = if u32::from_le_bytes([csw[0], csw[1], csw[2], csw[3]]) != CSW_SIGNATURE {
+            MscError::Protocol("bad status signature")
+        } else if u32::from_le_bytes([csw[4], csw[5], csw[6], csw[7]]) != tag {
+            MscError::Protocol("status of another command")
+        } else {
+            match csw[12] {
+                0 => return Ok(()),
+                1 => return Err(MscError::Check(None)),
+                2 => MscError::Phase,
+                _ => MscError::Protocol("unknown status"),
+            }
+        };
+        self.transport.reset()?;
+        Err(failure)
     }
 
     /// A stall during status is cleared once (bulk-only specification); the second time, reset.

@@ -6,7 +6,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::block::{BlockDevice, BlockError};
-use crate::partition::{GptHeader, Layout, MBR_PROTECTIVE, crc32, inspect, read_range};
+use crate::partition::{Gpt, GptHeader, Layout, MBR_PROTECTIVE, crc32, inspect, read_range};
 
 const REPAIRABLE: [&str; 8] = [
     "gpt_backup_not_at_end",
@@ -136,27 +136,32 @@ fn disk_guid_bytes(
     Ok(guid)
 }
 
-/// Rebuilds missing or damaged headers and table; nothing is written until a valid header is found.
-pub fn repair_gpt(dev: &mut dyn BlockDevice) -> Result<RepairReport, RepairError> {
-    let layout = inspect(dev)?;
-    let gpt = layout.gpt.as_ref().ok_or(RepairError::NotGpt)?;
-    let block = u64::from(layout.logical_block_size);
-    let block_len = usize::try_from(block).unwrap_or(512);
-    let last = (dev.size() / block).saturating_sub(1);
+/// Geometry of the rebuilt GPT, decided before anything is written.
+struct Rebuild {
+    model: GptHeader,
+    from_primary: bool,
+    guid: [u8; 16],
+    table: Vec<u8>,
+    table_crc: u32,
+    last: u64,
+    last_usable: u64,
+    backup_table_lba: u64,
+    primary_entries_lba: u64,
+}
 
+fn plan(dev: &dyn BlockDevice, gpt: &Gpt, block: u64) -> Result<Rebuild, RepairError> {
+    let last = (dev.size() / block).saturating_sub(1);
     let good = |h: &Option<GptHeader>| h.clone().filter(|h| h.header_crc_ok && h.entries_crc_ok);
-    let (primary, backup) = (good(&gpt.primary), good(&gpt.backup));
-    let (model, from_primary) = match (&primary, &backup) {
-        (Some(h), _) => (h.clone(), true),
-        (None, Some(h)) => (h.clone(), false),
+    let (model, from_primary) = match (good(&gpt.primary), good(&gpt.backup)) {
+        (Some(h), _) => (h, true),
+        (None, Some(h)) => (h, false),
         (None, None) => return Err(RepairError::NoValidHeader),
     };
     let guid = disk_guid_bytes(dev, model.read_at_lba, block)?;
     let table_len = u64::from(model.entry_count) * u64::from(model.entry_size);
-    let table = read_range(dev, model.entries_lba * block, table_len)?;
+    let mut table = read_range(dev, model.entries_lba * block, table_len)?;
     let table_crc = crc32(&table);
     let table_sectors = table_len.div_ceil(block);
-
     let backup_table_lba = last
         .checked_sub(table_sectors)
         .ok_or(RepairError::TooSmall)?;
@@ -172,87 +177,110 @@ pub fn repair_gpt(dev: &mut dyn BlockDevice) -> Result<RepairReport, RepairError
     if last_usable < first_usable || gpt.entries.iter().any(|e| e.last_lba > last_usable) {
         return Err(RepairError::TooSmall);
     }
-    let model = GptHeader {
-        first_usable_lba: first_usable,
-        ..model
-    };
-
-    let mut padded_table = table.clone();
-    padded_table.resize(
-        usize::try_from(table_sectors * block).unwrap_or(table.len()),
-        0,
-    );
-    let mut actions = Vec::new();
-
-    // Backup first: until it is current, the primary stays the only good copy.
-    dev.write_at(backup_table_lba * block, &padded_table)?;
-    actions.push("backup_table_written");
-    let common = Common {
-        model: &model,
+    let padded = usize::try_from(table_sectors * block).unwrap_or(table.len());
+    table.resize(padded, 0);
+    Ok(Rebuild {
+        model: GptHeader {
+            first_usable_lba: first_usable,
+            ..model
+        },
+        from_primary,
         guid,
-        last_usable,
+        table,
         table_crc,
-        block: block_len,
-    };
-    dev.write_at(
-        last * block,
-        &header_bytes(
-            &common,
-            &Placement {
-                my_lba: last,
-                alternate_lba: 1,
-                entries_lba: backup_table_lba,
-            },
-        ),
-    )?;
-    actions.push("backup_header_written");
-    if !from_primary {
-        dev.write_at(2 * block, &padded_table)?;
-        actions.push("primary_table_restored");
-    }
-    dev.write_at(
-        block,
-        &header_bytes(
-            &common,
-            &Placement {
-                my_lba: 1,
-                alternate_lba: last,
-                entries_lba: primary_entries_lba,
-            },
-        ),
-    )?;
-    actions.push(if from_primary {
-        "primary_header_updated"
-    } else {
-        "primary_header_restored"
-    });
+        last,
+        last_usable,
+        backup_table_lba,
+        primary_entries_lba,
+    })
+}
 
-    // The protective MBR must cover the grown drive.
-    let mut sector0 = read_range(dev, 0, block)?;
-    let protective = (0..4)
-        .map(|i| 446 + i * 16)
-        .find(|at| sector0[at + 4] == MBR_PROTECTIVE);
-    if let Some(at) = protective.filter(|_| sector0[510] == 0x55 && sector0[511] == 0xAA) {
-        let sectors = u32::try_from(last).unwrap_or(u32::MAX);
-        if u32::from_le_bytes([
-            sector0[at + 12],
-            sector0[at + 13],
-            sector0[at + 14],
-            sector0[at + 15],
-        ]) != sectors
-        {
-            put_u32(&mut sector0, at + 8, 1);
-            put_u32(&mut sector0, at + 12, sectors);
-            dev.write_at(0, &sector0)?;
-            actions.push("protective_mbr_resized");
-        }
+/// Rebuilds missing or damaged headers and table; nothing is written until a valid header is found.
+pub fn repair_gpt(dev: &mut dyn BlockDevice) -> Result<RepairReport, RepairError> {
+    let layout = inspect(dev)?;
+    let gpt = layout.gpt.as_ref().ok_or(RepairError::NotGpt)?;
+    let block = u64::from(layout.logical_block_size);
+    let r = plan(dev, gpt, block)?;
+    let mut actions = write_copies(dev, &r, block)?;
+    if resize_protective_mbr(dev, r.last, block)? {
+        actions.push("protective_mbr_resized");
     }
     dev.flush()?;
     Ok(RepairReport {
         actions,
-        backup_header_lba: last,
-        last_usable_lba: last_usable,
+        backup_header_lba: r.last,
+        last_usable_lba: r.last_usable,
     })
+}
+
+/// Backup first: until it is current, the primary stays the only good copy.
+fn write_copies(
+    dev: &mut dyn BlockDevice,
+    r: &Rebuild,
+    block: u64,
+) -> Result<Vec<&'static str>, RepairError> {
+    let mut actions = Vec::new();
+    let common = Common {
+        model: &r.model,
+        guid: r.guid,
+        last_usable: r.last_usable,
+        table_crc: r.table_crc,
+        block: usize::try_from(block).unwrap_or(512),
+    };
+    dev.write_at(r.backup_table_lba * block, &r.table)?;
+    actions.push("backup_table_written");
+    let backup = Placement {
+        my_lba: r.last,
+        alternate_lba: 1,
+        entries_lba: r.backup_table_lba,
+    };
+    dev.write_at(r.last * block, &header_bytes(&common, &backup))?;
+    actions.push("backup_header_written");
+    if !r.from_primary {
+        dev.write_at(2 * block, &r.table)?;
+        actions.push("primary_table_restored");
+    }
+    let primary = Placement {
+        my_lba: 1,
+        alternate_lba: r.last,
+        entries_lba: r.primary_entries_lba,
+    };
+    dev.write_at(block, &header_bytes(&common, &primary))?;
+    actions.push(if r.from_primary {
+        "primary_header_updated"
+    } else {
+        "primary_header_restored"
+    });
+    Ok(actions)
+}
+
+/// The protective MBR must cover the grown drive.
+fn resize_protective_mbr(
+    dev: &mut dyn BlockDevice,
+    last: u64,
+    block: u64,
+) -> Result<bool, RepairError> {
+    let mut sector0 = read_range(dev, 0, block)?;
+    let protective = (0..4)
+        .map(|i| 446 + i * 16)
+        .find(|at| sector0[at + 4] == MBR_PROTECTIVE);
+    let Some(at) = protective.filter(|_| sector0[510] == 0x55 && sector0[511] == 0xAA) else {
+        return Ok(false);
+    };
+    let sectors = u32::try_from(last).unwrap_or(u32::MAX);
+    let current = u32::from_le_bytes([
+        sector0[at + 12],
+        sector0[at + 13],
+        sector0[at + 14],
+        sector0[at + 15],
+    ]);
+    if current == sectors {
+        return Ok(false);
+    }
+    put_u32(&mut sector0, at + 8, 1);
+    put_u32(&mut sector0, at + 12, sectors);
+    dev.write_at(0, &sector0)?;
+    Ok(true)
 }
 
 #[cfg(test)]

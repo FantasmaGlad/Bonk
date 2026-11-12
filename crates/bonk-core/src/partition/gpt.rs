@@ -37,23 +37,14 @@ pub(super) fn read_header(
     let entry_size = u32_le(&sector, 84);
     let entries_crc = u32_le(&sector, 88);
 
-    let table_bytes = u64::from(entry_count) * u64::from(entry_size);
-    let plausible = entry_size >= 128
-        && entry_size.is_multiple_of(8)
-        && table_bytes > 0
-        && table_bytes <= GPT_ENTRIES_LIMIT
-        && entries_lba.checked_mul(block).is_some_and(|start| {
-            start
-                .checked_add(table_bytes.div_ceil(block) * block)
-                .is_some_and(|end| end <= dev.size())
-        });
-    let (entries, entries_crc_ok) = if plausible {
-        let raw = read_range(dev, entries_lba * block, table_bytes)?;
-        let ok = crc32(&raw) == entries_crc;
-        (parse_entries(&raw, entry_size), ok)
-    } else {
-        (Vec::new(), false)
-    };
+    let (entries, entries_crc_ok) = read_entries(
+        dev,
+        block,
+        entries_lba,
+        entry_count,
+        entry_size,
+        entries_crc,
+    )?;
 
     Ok(Some((
         GptHeader {
@@ -73,6 +64,32 @@ pub(super) fn read_header(
         },
         entries,
     )))
+}
+
+/// An implausible table is not read: its fields may point anywhere.
+fn read_entries(
+    dev: &dyn BlockDevice,
+    block: u64,
+    entries_lba: u64,
+    entry_count: u32,
+    entry_size: u32,
+    entries_crc: u32,
+) -> Result<(Vec<GptEntry>, bool), BlockError> {
+    let table_bytes = u64::from(entry_count) * u64::from(entry_size);
+    let plausible = entry_size >= 128
+        && entry_size.is_multiple_of(8)
+        && table_bytes > 0
+        && table_bytes <= GPT_ENTRIES_LIMIT
+        && entries_lba.checked_mul(block).is_some_and(|start| {
+            start
+                .checked_add(table_bytes.div_ceil(block) * block)
+                .is_some_and(|end| end <= dev.size())
+        });
+    if !plausible {
+        return Ok((Vec::new(), false));
+    }
+    let raw = read_range(dev, entries_lba * block, table_bytes)?;
+    Ok((parse_entries(&raw, entry_size), crc32(&raw) == entries_crc))
 }
 
 pub(super) fn parse_entries(raw: &[u8], entry_size: u32) -> Vec<GptEntry> {
@@ -111,6 +128,8 @@ pub(super) fn check_gpt(
     check_gpt_entries(gpt, block, note);
 }
 
+type Note<'a> = dyn FnMut(Severity, &'static str, String) + 'a;
+
 /// Presence, checksums, location, consistency between both headers.
 pub(super) fn check_gpt_headers(
     gpt: &Gpt,
@@ -123,85 +142,95 @@ pub(super) fn check_gpt_headers(
             "gpt_primary_missing",
             "primary GPT header (sector 1) missing or unreadable".to_owned(),
         ),
-        Some(h) => {
-            if !h.header_crc_ok {
-                note(
-                    Severity::Error,
-                    "gpt_primary_header_crc",
-                    "wrong primary GPT header checksum".to_owned(),
-                );
-            }
-            if !h.entries_crc_ok {
-                note(
-                    Severity::Error,
-                    "gpt_primary_entries_crc",
-                    "wrong primary partition table checksum or unreadable table".to_owned(),
-                );
-            }
-            if h.my_lba != 1 {
-                note(
-                    Severity::Error,
-                    "gpt_primary_wrong_location",
-                    format!("the primary header claims sector {} instead of 1", h.my_lba),
-                );
-            }
-        }
+        Some(h) => check_primary(h, note),
     }
-    match (&gpt.backup, &gpt.primary) {
-        (None, _) => note(
+    match &gpt.backup {
+        None => note(
             Severity::Warning,
             "gpt_backup_missing",
             "backup GPT header missing: truncated image, or a disk larger than the written \
              image (the backup is not at the end)"
                 .to_owned(),
         ),
-        (Some(b), primary) => {
-            if !b.header_crc_ok {
-                note(
-                    Severity::Error,
-                    "gpt_backup_header_crc",
-                    "wrong backup GPT header checksum".to_owned(),
-                );
-            }
-            if !b.entries_crc_ok {
-                note(
-                    Severity::Error,
-                    "gpt_backup_entries_crc",
-                    "wrong backup table checksum or unreadable table".to_owned(),
-                );
-            }
-            if b.read_at_lba != last_lba {
-                note(
-                    Severity::Warning,
-                    "gpt_backup_not_at_end",
-                    format!(
-                        "the backup GPT is at sector {}, not the last one ({last_lba}): \
-                         disk larger than the written image",
-                        b.read_at_lba
-                    ),
-                );
-            }
-            if let Some(p) = primary {
-                if p.disk_guid != b.disk_guid {
-                    note(
-                        Severity::Error,
-                        "gpt_guid_mismatch",
-                        "the disk GUID differs between the primary and backup GPT".to_owned(),
-                    );
-                }
-                if p.alternate_lba != b.read_at_lba || b.alternate_lba != 1 {
-                    note(
-                        Severity::Warning,
-                        "gpt_headers_not_pointing_to_each_other",
-                        format!(
-                            "the primary names sector {} for the backup (read at {}), the backup \
-                             names sector {} for the primary",
-                            p.alternate_lba, b.read_at_lba, b.alternate_lba
-                        ),
-                    );
-                }
+        Some(b) => {
+            check_backup(b, last_lba, note);
+            if let Some(p) = &gpt.primary {
+                check_pair(p, b, note);
             }
         }
+    }
+}
+
+fn check_primary(h: &GptHeader, note: &mut Note<'_>) {
+    if !h.header_crc_ok {
+        note(
+            Severity::Error,
+            "gpt_primary_header_crc",
+            "wrong primary GPT header checksum".to_owned(),
+        );
+    }
+    if !h.entries_crc_ok {
+        note(
+            Severity::Error,
+            "gpt_primary_entries_crc",
+            "wrong primary partition table checksum or unreadable table".to_owned(),
+        );
+    }
+    if h.my_lba != 1 {
+        note(
+            Severity::Error,
+            "gpt_primary_wrong_location",
+            format!("the primary header claims sector {} instead of 1", h.my_lba),
+        );
+    }
+}
+
+fn check_backup(b: &GptHeader, last_lba: u64, note: &mut Note<'_>) {
+    if !b.header_crc_ok {
+        note(
+            Severity::Error,
+            "gpt_backup_header_crc",
+            "wrong backup GPT header checksum".to_owned(),
+        );
+    }
+    if !b.entries_crc_ok {
+        note(
+            Severity::Error,
+            "gpt_backup_entries_crc",
+            "wrong backup table checksum or unreadable table".to_owned(),
+        );
+    }
+    if b.read_at_lba != last_lba {
+        note(
+            Severity::Warning,
+            "gpt_backup_not_at_end",
+            format!(
+                "the backup GPT is at sector {}, not the last one ({last_lba}): \
+                 disk larger than the written image",
+                b.read_at_lba
+            ),
+        );
+    }
+}
+
+fn check_pair(p: &GptHeader, b: &GptHeader, note: &mut Note<'_>) {
+    if p.disk_guid != b.disk_guid {
+        note(
+            Severity::Error,
+            "gpt_guid_mismatch",
+            "the disk GUID differs between the primary and backup GPT".to_owned(),
+        );
+    }
+    if p.alternate_lba != b.read_at_lba || b.alternate_lba != 1 {
+        note(
+            Severity::Warning,
+            "gpt_headers_not_pointing_to_each_other",
+            format!(
+                "the primary names sector {} for the backup (read at {}), the backup \
+                 names sector {} for the primary",
+                p.alternate_lba, b.read_at_lba, b.alternate_lba
+            ),
+        );
     }
 }
 
@@ -217,46 +246,7 @@ pub(super) fn check_gpt_entries(
         .or(gpt.backup.as_ref())
         .map(|h| (h.first_usable_lba, h.last_usable_lba));
     for entry in &gpt.entries {
-        if entry.last_lba < entry.first_lba {
-            note(
-                Severity::Error,
-                "gpt_entry_bad_range",
-                format!(
-                    "partition {}: end ({}) before start ({})",
-                    entry.index + 1,
-                    entry.last_lba,
-                    entry.first_lba
-                ),
-            );
-            continue;
-        }
-        if let Some((first, last)) = usable
-            && (entry.first_lba < first || entry.last_lba > last)
-        {
-            note(
-                Severity::Error,
-                "gpt_entry_out_of_range",
-                format!(
-                    "partition {}: sectors {} to {} outside the usable area ({first} to {last})",
-                    entry.index + 1,
-                    entry.first_lba,
-                    entry.last_lba
-                ),
-            );
-        }
-        // Read from the drive: out of range, it was already reported above.
-        let start = entry.first_lba.checked_mul(block);
-        if start.is_some_and(|start| !start.is_multiple_of(ALIGNMENT_BYTES)) {
-            note(
-                Severity::Info,
-                "gpt_entry_unaligned",
-                format!(
-                    "partition {}: starts at sector {}, not aligned on 1 MiB",
-                    entry.index + 1,
-                    entry.first_lba
-                ),
-            );
-        }
+        check_entry(entry, usable, block, note);
     }
     for (i, a) in gpt.entries.iter().enumerate() {
         for b in &gpt.entries[i + 1..] {
@@ -268,5 +258,48 @@ pub(super) fn check_gpt_entries(
                 );
             }
         }
+    }
+}
+
+fn check_entry(entry: &GptEntry, usable: Option<(u64, u64)>, block: u64, note: &mut Note<'_>) {
+    if entry.last_lba < entry.first_lba {
+        note(
+            Severity::Error,
+            "gpt_entry_bad_range",
+            format!(
+                "partition {}: end ({}) before start ({})",
+                entry.index + 1,
+                entry.last_lba,
+                entry.first_lba
+            ),
+        );
+        return;
+    }
+    if let Some((first, last)) = usable
+        && (entry.first_lba < first || entry.last_lba > last)
+    {
+        note(
+            Severity::Error,
+            "gpt_entry_out_of_range",
+            format!(
+                "partition {}: sectors {} to {} outside the usable area ({first} to {last})",
+                entry.index + 1,
+                entry.first_lba,
+                entry.last_lba
+            ),
+        );
+    }
+    // Read from the drive: out of range, it was already reported above.
+    let start = entry.first_lba.checked_mul(block);
+    if start.is_some_and(|start| !start.is_multiple_of(ALIGNMENT_BYTES)) {
+        note(
+            Severity::Info,
+            "gpt_entry_unaligned",
+            format!(
+                "partition {}: starts at sector {}, not aligned on 1 MiB",
+                entry.index + 1,
+                entry.first_lba
+            ),
+        );
     }
 }

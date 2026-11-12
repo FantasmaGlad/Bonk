@@ -203,6 +203,29 @@ fn upcased(units: &[u16], upcase: &[u16]) -> Vec<u16> {
         .collect()
 }
 
+fn bytes(writes: Vec<(u64, u8)>) -> Vec<(u64, Vec<u8>)> {
+    writes
+        .into_iter()
+        .map(|(at, byte)| (at, vec![byte]))
+        .collect()
+}
+
+fn file_entry_set(
+    units: &[u16],
+    upcase: &[u16],
+    placed: Placed,
+    size: u64,
+    hidden: bool,
+) -> Vec<u8> {
+    let mut set = entry_set(units, upcase, false, placed, size);
+    if hidden {
+        set[4] |= ATTR_HIDDEN;
+        let sum = checksum16(&set, &[2, 3]);
+        set[2..4].copy_from_slice(&sum.to_le_bytes());
+    }
+    set
+}
+
 /// Adds `name` (root, `size` bytes read from `reader`); the caller flushes and reads it back with
 /// [`verify_file`]. Data, then bitmap, then entries: interrupted, the volume holds at worst clusters marked used
 /// by no file.
@@ -223,11 +246,11 @@ pub fn add_file(
     let units = name_units(name)?;
     let upcase = upcase_map();
     let wanted = upcased(&units, &upcase);
-    for raw in Reader::entries(&volume.root_bytes, &mut None) {
-        let existing: Vec<u16> = raw.name.encode_utf16().collect();
-        if upcased(&existing, &upcase) == wanted {
-            return Err(FormatError::Name(format!("{name}: already on the volume")));
-        }
+    let taken = Reader::entries(&volume.root_bytes, &mut None)
+        .iter()
+        .any(|raw| upcased(&raw.name.encode_utf16().collect::<Vec<_>>(), &upcase) == wanted);
+    if taken {
+        return Err(FormatError::Name(format!("{name}: already on the volume")));
     }
     let count = size.div_ceil(volume.cluster_bytes);
     let first_cluster = if count == 0 {
@@ -243,22 +266,11 @@ pub fn add_file(
     let slot = volume.free_slots(entries_for(&units)).ok_or_else(|| {
         FormatError::TooLarge(format!("{name}: the volume's root directory is full"))
     })?;
-    let mut set = entry_set(
-        &units,
-        &upcase,
-        false,
-        Placed {
-            first_cluster,
-            clusters,
-        },
-        size,
-    );
-    if hidden {
-        set[4] |= ATTR_HIDDEN;
-        let sum = checksum16(&set, &[2, 3]);
-        set[2..4].copy_from_slice(&sum.to_le_bytes());
-    }
-
+    let placed = Placed {
+        first_cluster,
+        clusters,
+    };
+    let set = file_entry_set(&units, &upcase, placed, size, hidden);
     set_dirty(dev, volume.start, true)?;
     let offset = if count == 0 {
         0
@@ -266,12 +278,10 @@ pub fn add_file(
         volume.cluster_offset(first_cluster)
     };
     let sha256 = write_contiguous(dev, offset, size, reader, advance)?;
-    let bitmap: Vec<(u64, Vec<u8>)> = volume
-        .bitmap_writes(first_cluster.max(FIRST_CLUSTER), clusters, true)
-        .into_iter()
-        .map(|(at, byte)| (at, vec![byte]))
-        .collect();
-    patch(dev, &bitmap)?;
+    patch(
+        dev,
+        &bytes(volume.bitmap_writes(first_cluster.max(FIRST_CLUSTER), clusters, true)),
+    )?;
     let entries: Vec<(u64, Vec<u8>)> = set
         .as_chunks::<ENTRY>()
         .0
@@ -328,16 +338,54 @@ pub fn verify_file(
 /// [`FormatError::Name`] when the root has no such file, read or write failure.
 pub fn remove_file(dev: &mut dyn BlockDevice, span: Span, name: &str) -> Result<u64, FormatError> {
     let mut volume = Volume::read(dev, span.first_lba, span.sectors)?;
-    let upcase = upcase_map();
-    let wanted = upcased(&name.encode_utf16().collect::<Vec<_>>(), &upcase);
+    let wanted = upcased(&name.encode_utf16().collect::<Vec<_>>(), &upcase_map());
     let slots = volume.root_bytes.as_chunks::<ENTRY>().0.to_vec();
+    let found = find_root_file(&slots, &wanted)
+        .ok_or_else(|| FormatError::Name(format!("{name}: not on the volume")))?;
+    let freed: Vec<u32> = if found.first == 0 {
+        Vec::new()
+    } else if found.contiguous {
+        let clusters = found.length.div_ceil(volume.cluster_bytes);
+        if u64::from(found.first - FIRST_CLUSTER) + clusters > u64::from(volume.clusters) {
+            return Err(invalid("exFAT file beyond the volume"));
+        }
+        (found.first..found.first + clusters as u32).collect()
+    } else {
+        Reader::open(dev, span.first_lba, span.sectors)?.chain(found.first)?
+    };
+    set_dirty(dev, volume.start, true)?;
+    let entries: Vec<(u64, Vec<u8>)> = (found.slot..found.slot + found.count)
+        .map(|at| {
+            let mut entry = slots[at].to_vec();
+            entry[0] &= !IN_USE;
+            (volume.root_slots[at], entry)
+        })
+        .collect();
+    patch(dev, &entries)?;
+    let mut bitmap = Vec::new();
+    for cluster in freed.into_iter().filter(|c| *c != END_OF_CHAIN) {
+        bitmap.extend(volume.bitmap_writes(cluster, 1, false));
+    }
+    patch(dev, &bytes(bitmap))?;
+    set_dirty(dev, volume.start, false)?;
+    Ok(found.length)
+}
+
+struct Found {
+    slot: usize,
+    count: usize,
+    first: u32,
+    length: u64,
+    contiguous: bool,
+}
+
+/// Walks the root entry sets until the end marker; `wanted` is the upper-cased name.
+fn find_root_file(slots: &[[u8; ENTRY]], wanted: &[u16]) -> Option<Found> {
+    let upcase = upcase_map();
     let mut index = 0;
-    let found = loop {
-        let Some(entry) = slots.get(index) else {
-            break None;
-        };
+    while let Some(entry) = slots.get(index) {
         if entry[0] == 0 {
-            break None;
+            return None;
         }
         let secondary = usize::from(entry[1]);
         if entry[0] != super::exfat::ENTRY_FILE || index + 1 + secondary > slots.len() {
@@ -350,52 +398,17 @@ pub fn remove_file(dev: &mut dyn BlockDevice, span: Span, name: &str) -> Result<
             && !raw.directory
             && upcased(&raw.name.encode_utf16().collect::<Vec<_>>(), &upcase) == wanted
         {
-            break Some((
-                index,
-                secondary + 1,
-                raw.first_cluster,
-                raw.length,
-                raw.contiguous,
-            ));
+            return Some(Found {
+                slot: index,
+                count: secondary + 1,
+                first: raw.first_cluster,
+                length: raw.length,
+                contiguous: raw.contiguous,
+            });
         }
         index += 1 + secondary;
-    };
-    let (slot, count, first, length, contiguous) =
-        found.ok_or_else(|| FormatError::Name(format!("{name}: not on the volume")))?;
-    let freed: Vec<u32> = if first == 0 {
-        Vec::new()
-    } else if contiguous {
-        let clusters = length.div_ceil(volume.cluster_bytes);
-        if u64::from(first - FIRST_CLUSTER) + clusters > u64::from(volume.clusters) {
-            return Err(invalid("exFAT file beyond the volume"));
-        }
-        (first..first + clusters as u32).collect()
-    } else {
-        Reader::open(dev, span.first_lba, span.sectors)?.chain(first)?
-    };
-
-    set_dirty(dev, volume.start, true)?;
-    let entries: Vec<(u64, Vec<u8>)> = (slot..slot + count)
-        .map(|at| {
-            let mut entry = slots[at].to_vec();
-            entry[0] &= !IN_USE;
-            (volume.root_slots[at], entry)
-        })
-        .collect();
-    patch(dev, &entries)?;
-    let mut bitmap = Vec::new();
-    for cluster in freed {
-        if cluster != END_OF_CHAIN {
-            bitmap.extend(volume.bitmap_writes(cluster, 1, false));
-        }
     }
-    let bitmap: Vec<(u64, Vec<u8>)> = bitmap
-        .into_iter()
-        .map(|(at, byte)| (at, vec![byte]))
-        .collect();
-    patch(dev, &bitmap)?;
-    set_dirty(dev, volume.start, false)?;
-    Ok(length)
+    None
 }
 
 #[cfg(test)]
