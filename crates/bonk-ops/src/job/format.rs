@@ -11,7 +11,7 @@ use bonk_hal::{Access, Elevation, FilterOptions, OpenTargetError, TargetIdentity
 use super::target::{
     Chosen, OpenRequest, choose, enumerate, map_open_target, open_target, reread_table,
 };
-use super::types::{Deps, FormatDone, JobError, SCHEMA_VERSION, Target, TraceIo, fail};
+use super::types::{Deps, FormatDone, JobError, SCHEMA_VERSION, Target, TargetInfo, TraceIo, fail};
 use super::verify::drop_cache_before_verify;
 use super::write::confirm_internal;
 use crate::errors::Code;
@@ -351,8 +351,16 @@ fn hand_over_to_host(
     Ok(())
 }
 
-pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> {
-    let chosen = choose(&job.target, job.options, deps)?;
+/// Choices fixed before anything is written.
+struct Settled {
+    size: u64,
+    filesystem: Filesystem,
+    label: Option<String>,
+    planned: PartitionPlan,
+    cluster_bytes: Option<u32>,
+}
+
+fn settle(job: &FormatJob, chosen: &Chosen, deps: &Deps<'_>) -> Result<Settled, JobError> {
     let size = chosen.info.size_bytes.ok_or_else(|| {
         fail(
             Code::InvalidArgument,
@@ -366,45 +374,50 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
         .map(|label| normalize_label(filesystem, label))
         .transpose()
         .map_err(|message| fail(Code::InvalidArgument, message))?;
-    check_available(filesystem, &chosen, deps)?;
-
+    check_available(filesystem, chosen, deps)?;
     // Geometry refusal before any action, with the sector size the system reports; it is read again at open,
     // before writing the table.
     let block = chosen.block_size();
     let planned = table::plan(size, block, job.table).map_err(format_error)?;
     let cluster_bytes =
         native_cluster_bytes(filesystem, planned.sectors(), block).map_err(format_error)?;
-    let result = |event, dry_run, info, partition, cluster_bytes, unmounted, verified| FormatDone {
-        schema_version: SCHEMA_VERSION,
-        event,
-        dry_run,
-        target: info,
-        table: job.table,
+    Ok(Settled {
+        size,
         filesystem,
+        label,
+        planned,
+        cluster_bytes,
+    })
+}
+
+fn done(job: &FormatJob, s: &Settled, target: TargetInfo, unmounted: Vec<String>) -> FormatDone {
+    FormatDone {
+        schema_version: SCHEMA_VERSION,
+        event: if job.dry_run { "plan" } else { "result" },
+        dry_run: job.dry_run,
+        target,
+        table: job.table,
+        filesystem: s.filesystem,
         filesystem_defaulted: job.filesystem.is_none(),
-        file_size_limit_bytes: filesystem.file_size_limit(),
-        label: label.clone(),
-        partition,
-        written_by: if filesystem.is_native() {
+        file_size_limit_bytes: s.filesystem.file_size_limit(),
+        label: s.label.clone(),
+        partition: s.planned,
+        written_by: if s.filesystem.is_native() {
             "bonk"
         } else {
             "system"
         },
-        cluster_bytes,
+        cluster_bytes: s.cluster_bytes,
         unmounted,
-        verified,
-    };
+        verified: !job.dry_run,
+    }
+}
+
+pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> {
+    let chosen = choose(&job.target, job.options, deps)?;
+    let settled = settle(job, &chosen, deps)?;
     if job.dry_run {
-        let (info, mounts) = (chosen.info, chosen.mounts);
-        return Ok(result(
-            "plan",
-            true,
-            info,
-            planned,
-            cluster_bytes,
-            mounts,
-            false,
-        ));
+        return Ok(done(job, &settled, chosen.info, chosen.mounts));
     }
     if !job.yes && !job.force {
         return Err(fail(
@@ -413,25 +426,30 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
         ));
     }
     confirm_internal(&chosen, job.options, job.force)?;
+    format_target(job, chosen, settled, deps)
+}
 
+fn format_target(
+    job: &FormatJob,
+    chosen: Chosen,
+    mut settled: Settled,
+    deps: &Deps<'_>,
+) -> Result<FormatDone, JobError> {
     let seed_name = chosen.info.path.clone();
     let identity = chosen.disk.as_ref().map(TargetIdentity::from);
-    let (mut device, info, unmounted) = open_target(
-        chosen,
-        &job.target,
-        &OpenRequest {
-            options: job.options,
-            access: Access::ReadWrite,
-            elevation: job.elevation,
-            size_hint: Some(size),
-            trace_io: job.trace_io,
-        },
-        deps,
-    )?;
+    let request = OpenRequest {
+        options: job.options,
+        access: Access::ReadWrite,
+        elevation: job.elevation,
+        size_hint: Some(settled.size),
+        trace_io: job.trace_io,
+    };
+    let (mut device, info, unmounted) = open_target(chosen, &job.target, &request, deps)?;
     if (deps.io.cancelled)() {
         return Err(fail(Code::Cancelled, "cancelled before formatting"));
     }
     let ids = Ids::from_seed(&fresh_seed(&seed_name));
+    let filesystem = settled.filesystem;
     log::info!(
         target: "bonk::write",
         target_path = info.path.as_str(), table = job.table.name(), filesystem = filesystem.name();
@@ -441,7 +459,7 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
         &mut *device,
         job.table,
         filesystem,
-        label.as_deref(),
+        settled.label.as_deref(),
         &ids,
         &*deps.io.cancelled,
     )?;
@@ -453,24 +471,13 @@ pub fn format(job: &FormatJob, deps: &Deps<'_>) -> Result<FormatDone, JobError> 
             path: &info.path,
             elevation: job.elevation,
         };
-        hand_over_to_host(
-            &disk,
-            partition.sectors() * block,
-            filesystem,
-            label.as_deref(),
-            deps,
-        )?;
+        let bytes = partition.sectors() * block;
+        hand_over_to_host(&disk, bytes, filesystem, settled.label.as_deref(), deps)?;
     }
     log::info!(target: "bonk::write", filesystem = filesystem.name(); "format finished");
-    Ok(result(
-        "result",
-        false,
-        info,
-        partition,
-        cluster_bytes,
-        unmounted,
-        true,
-    ))
+    settled.planned = partition;
+    settled.cluster_bytes = cluster_bytes;
+    Ok(done(job, &settled, info, unmounted))
 }
 
 #[cfg(test)]

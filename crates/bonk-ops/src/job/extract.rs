@@ -418,25 +418,21 @@ pub(super) fn run(
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<ExtractDone, JobError> {
     let seed_name = chosen.info.path.clone();
-    let (mut device, info, unmounted) = open_target(
-        chosen,
-        &job.target,
-        &OpenRequest {
-            options: job.options,
-            access: bonk_hal::Access::ReadWrite,
-            elevation: job.elevation,
-            // Simulation file to create: large enough for the volume, sparse, never less than FAT32 needs.
-            size_hint: Some(
-                prepared
-                    .describe(job.table, DEFAULT_BLOCK_SIZE)
-                    .bytes
-                    .saturating_mul(2)
-                    .max(MIN_SIMULATED),
-            ),
-            trace_io: job.trace_io,
-        },
-        deps,
-    )?;
+    let request = OpenRequest {
+        options: job.options,
+        access: bonk_hal::Access::ReadWrite,
+        elevation: job.elevation,
+        // Simulation file to create: large enough for the volume, sparse, never less than FAT32 needs.
+        size_hint: Some(
+            prepared
+                .describe(job.table, DEFAULT_BLOCK_SIZE)
+                .bytes
+                .saturating_mul(2)
+                .max(MIN_SIMULATED),
+        ),
+        trace_io: job.trace_io,
+    };
+    let (mut device, info, unmounted) = open_target(chosen, &job.target, &request, deps)?;
     let block = device.block_size();
     let files = prepared.new_files();
     let ids = Ids::from_seed(&fresh_seed(&seed_name));
@@ -470,27 +466,7 @@ pub(super) fn run(
     let total = layout.data_bytes();
     let mut report = guarded(deps, progress);
     let started = Instant::now();
-    let mut sums = Vec::with_capacity(prepared.items.len());
-    {
-        let mut advance = Advance {
-            phase: Phase::Write,
-            done: 0,
-            total,
-            started,
-            report: &mut report,
-        };
-        for (index, item) in prepared.items.iter().enumerate() {
-            let mut reader = ItemReader {
-                image: file,
-                item,
-                position: 0,
-            };
-            let sum = layout
-                .write_file(&mut *device, index, &mut reader, &mut |n| advance.add(n))
-                .map_err(write_failure)?;
-            sums.push(sum);
-        }
-    }
+    let sums = write_files(&mut *device, &layout, prepared, file, started, &mut report)?;
     layout
         .finish(&mut *device, &volume)
         .map_err(write_failure)?;
@@ -501,7 +477,6 @@ pub(super) fn run(
         elapsed_ms: u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX),
         bytes_per_second: total as f64 / elapsed.as_secs_f64().max(0.001),
     };
-
     let verify = verify_all(&mut *device, &layout, &volume, &sums, total, &mut report)?;
     drop(device);
     if matches!(job.target, Target::Disk(_)) {
@@ -519,6 +494,37 @@ pub(super) fn run(
         verify,
         gpt_repair: None,
     })
+}
+
+/// Each file's SHA-256, in order, for the read-back.
+fn write_files(
+    device: &mut dyn BlockDevice,
+    layout: &Layout,
+    prepared: &WindowsImage,
+    file: &ImageFile,
+    started: Instant,
+    report: &mut dyn FnMut(&Progress) -> Control,
+) -> Result<Vec<String>, JobError> {
+    let mut sums = Vec::with_capacity(prepared.items.len());
+    let mut advance = Advance {
+        phase: Phase::Write,
+        done: 0,
+        total: layout.data_bytes(),
+        started,
+        report,
+    };
+    for (index, item) in prepared.items.iter().enumerate() {
+        let mut reader = ItemReader {
+            image: file,
+            item,
+            position: 0,
+        };
+        let sum = layout
+            .write_file(device, index, &mut reader, &mut |n| advance.add(n))
+            .map_err(|e| format_failure(Code::WriteFailed, e))?;
+        sums.push(sum);
+    }
+    Ok(sums)
 }
 
 fn verify_all(

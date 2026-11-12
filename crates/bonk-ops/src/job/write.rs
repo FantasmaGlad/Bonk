@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use bonk_core::BlockDevice;
 use bonk_core::analysis::{self, ImageKind, ImageReport};
-use bonk_core::codec::Format;
+use bonk_core::codec::{Format, Source};
 use bonk_core::format::table::TableKind;
 use bonk_core::partition::inspect;
 use bonk_core::repair::{RepairReport, needs_repair, repair_gpt};
@@ -443,7 +443,7 @@ pub fn write(
 ) -> Result<WriteOutcome, JobError> {
     refuse_source_as_target(job)?;
     let file = ImageFile::open(&job.source)?;
-    let (mut source, source_info) = file.decoded()?;
+    let (source, source_info) = file.decoded()?;
     let chosen = choose(&job.target, job.options, deps)?;
     let image = analyze_source(&file, &job.source, source_info.size_bytes)?;
     if let Some(windows) = windows_image(&file, &source_info, &image, job.mode)? {
@@ -492,6 +492,34 @@ pub fn write(
         )?;
     }
 
+    let checked = Checked {
+        source_info,
+        image,
+        sha256_checked,
+    };
+    write_raw(job, chosen, source, checked, deps, progress)
+}
+
+/// What the checks before any write established.
+struct Checked {
+    source_info: SourceInfo,
+    image: ImageReport,
+    sha256_checked: bool,
+}
+
+fn write_raw(
+    job: &WriteJob,
+    chosen: Chosen,
+    mut source: Source,
+    checked: Checked,
+    deps: &Deps<'_>,
+    progress: &mut dyn FnMut(&Progress) -> Control,
+) -> Result<WriteOutcome, JobError> {
+    let Checked {
+        source_info,
+        image,
+        sha256_checked,
+    } = checked;
     log::info!(
         target: "bonk::write",
         target_kind = chosen.info.kind.name(), target_path = chosen.info.path.as_str(),
@@ -501,18 +529,14 @@ pub fn write(
     if chosen.disk.is_some() {
         announce_authorization(source_info.size_bytes, deps, progress)?;
     }
-    let (mut device, info, unmounted) = open_target(
-        chosen,
-        &job.target,
-        &OpenRequest {
-            options: job.options,
-            access: Access::ReadWrite,
-            elevation: job.elevation,
-            size_hint: source_info.size_bytes,
-            trace_io: job.trace_io,
-        },
-        deps,
-    )?;
+    let request = OpenRequest {
+        options: job.options,
+        access: Access::ReadWrite,
+        elevation: job.elevation,
+        size_hint: source_info.size_bytes,
+        trace_io: job.trace_io,
+    };
+    let (mut device, info, unmounted) = open_target(chosen, &job.target, &request, deps)?;
     let mut report_progress = guarded(deps, progress);
     let write = engine::write_image(
         &mut source.reader,
@@ -524,23 +548,16 @@ pub fn write(
     .map_err(|e| map_write_error(e, source_info.format))?;
     log::info!(target: "bonk::write", bytes = write.bytes, millis = write.elapsed_ms; "write finished");
     check_complete(&image, write.bytes, job.mode)?;
-
     let verify = if job.verify {
-        let report = engine::verify(
+        Some(verify_written(
             &mut *device,
-            write.bytes,
-            &write.sha256,
-            DEFAULT_CHUNK,
+            &write,
+            source_info.format,
             &mut report_progress,
-        )
-        .map_err(|e| map_verify_error(e, source_info.format))?;
-        log::info!(target: "bonk::write", bytes = report.bytes; "verification passed");
-        warn_if_cache_kept(&report);
-        Some(report)
+        )?)
     } else {
         None
     };
-
     let gpt_repair = if job.repair_gpt {
         repair_if_needed(&mut *device)?
     } else {
@@ -562,6 +579,19 @@ pub fn write(
         verify,
         gpt_repair,
     })))
+}
+
+fn verify_written(
+    device: &mut dyn BlockDevice,
+    write: &engine::WriteReport,
+    format: Format,
+    progress: &mut dyn FnMut(&Progress) -> Control,
+) -> Result<engine::VerifyReport, JobError> {
+    let report = engine::verify(device, write.bytes, &write.sha256, DEFAULT_CHUNK, progress)
+        .map_err(|e| map_verify_error(e, format))?;
+    log::info!(target: "bonk::write", bytes = report.bytes; "verification passed");
+    warn_if_cache_kept(&report);
+    Ok(report)
 }
 
 #[cfg(test)]
