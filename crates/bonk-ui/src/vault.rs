@@ -230,27 +230,29 @@ impl Model {
             VaultMessage::Browse if matches!(self.vault, VaultState::Ready { .. }) => {
                 vec![Effect::PickVaultIso]
             }
-            VaultMessage::Picked(Some(path)) => match &self.vault {
-                VaultState::Ready { disk_id, .. } if !writing => {
-                    let disk_id = disk_id.clone();
-                    let iso = path.display().to_string();
-                    self.run_vault(disk_id, VaultAction::Add, Some(&iso))
-                }
-                _ => Vec::new(),
-            },
-            VaultMessage::Update => match &self.vault {
-                VaultState::Ready { disk_id, .. } if !writing => {
-                    let disk_id = disk_id.clone();
-                    self.run_vault(disk_id, VaultAction::Update, None)
-                }
-                _ => Vec::new(),
-            },
+            VaultMessage::Picked(Some(path)) => {
+                self.on_ready_vault(VaultAction::Add, Some(&path.display().to_string()))
+            }
+            VaultMessage::Update => self.on_ready_vault(VaultAction::Update, None),
             VaultMessage::Cancel => match &self.vault {
                 VaultState::Busy { pid: Some(pid), .. } => vec![Effect::CancelWrite(*pid)],
                 _ => Vec::new(),
             },
             VaultMessage::Event(event) => self.on_vault_event(event),
             VaultMessage::Close | VaultMessage::Browse | VaultMessage::Picked(None) => Vec::new(),
+        }
+    }
+
+    /// Only on a read vault, and never while a write runs.
+    fn on_ready_vault(&mut self, action: VaultAction, iso: Option<&str>) -> Effects {
+        match &self.vault {
+            VaultState::Ready { disk_id, .. }
+                if !matches!(self.write, WriteState::Running { .. }) =>
+            {
+                let disk_id = disk_id.clone();
+                self.run_vault(disk_id, action, iso)
+            }
+            _ => Vec::new(),
         }
     }
 

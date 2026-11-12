@@ -254,44 +254,52 @@ pub fn ui_event(message: &Message) -> Option<(&'static str, String)> {
         Message::DismissWrite => ("click_close_write", String::new()),
         Message::ConfirmInternal => ("click_confirm_internal", String::new()),
         Message::CloseInternal => ("click_close_internal", String::new()),
-        Message::Vault(message) => match message {
-            crate::vault::VaultMessage::Open => ("click_vault", String::new()),
-            crate::vault::VaultMessage::Close => ("click_close_vault", String::new()),
-            crate::vault::VaultMessage::Prepare => ("click_prepare_vault", String::new()),
-            crate::vault::VaultMessage::ConfirmPrepare => ("click_confirm_vault", String::new()),
-            crate::vault::VaultMessage::Browse => ("click_add_iso", String::new()),
-            // As for the image, the event detail does not carry the chosen path.
-            crate::vault::VaultMessage::Picked(path) => ("iso_picked", path.is_some().to_string()),
-            crate::vault::VaultMessage::Update => ("click_update_vault", String::new()),
-            crate::vault::VaultMessage::Cancel => ("click_cancel_vault", String::new()),
-            crate::vault::VaultMessage::Event(_) => return None,
-        },
-        Message::Settings(message) => match message {
-            crate::settings::SettingsMessage::Open => ("click_settings", String::new()),
-            crate::settings::SettingsMessage::Close => ("click_close_settings", String::new()),
-            crate::settings::SettingsMessage::Language(choice) => {
-                ("choose_language", choice.config_value().to_owned())
-            }
-            crate::settings::SettingsMessage::Theme(choice) => {
-                ("choose_theme", choice.config_value().to_owned())
-            }
-            crate::settings::SettingsMessage::SystemDark(_) => return None,
-        },
-        Message::Library(message) => match message {
-            crate::library::LibraryMessage::Open => ("click_library", String::new()),
-            crate::library::LibraryMessage::Close => ("click_close_library", String::new()),
-            crate::library::LibraryMessage::Remove(sha256) => ("click_remove_kept", sha256.clone()),
-            crate::library::LibraryMessage::Write(sha256) => ("click_write_kept", sha256.clone()),
-            crate::library::LibraryMessage::Listed(_)
-            | crate::library::LibraryMessage::Removed(_) => {
-                return None;
-            }
-        },
+        Message::Vault(message) => return vault_event(message),
+        Message::Settings(message) => return settings_event(*message),
+        Message::Library(message) => return library_event(message),
         Message::Tick
         | Message::Clock
         | Message::Loaded(_)
         | Message::Write(_)
         | Message::CatalogLoaded(_) => return None,
+    })
+}
+
+fn vault_event(message: &crate::vault::VaultMessage) -> Option<(&'static str, String)> {
+    use crate::vault::VaultMessage;
+    Some(match message {
+        VaultMessage::Open => ("click_vault", String::new()),
+        VaultMessage::Close => ("click_close_vault", String::new()),
+        VaultMessage::Prepare => ("click_prepare_vault", String::new()),
+        VaultMessage::ConfirmPrepare => ("click_confirm_vault", String::new()),
+        VaultMessage::Browse => ("click_add_iso", String::new()),
+        // As for the image, the event detail does not carry the chosen path.
+        VaultMessage::Picked(path) => ("iso_picked", path.is_some().to_string()),
+        VaultMessage::Update => ("click_update_vault", String::new()),
+        VaultMessage::Cancel => ("click_cancel_vault", String::new()),
+        VaultMessage::Event(_) => return None,
+    })
+}
+
+fn settings_event(message: crate::settings::SettingsMessage) -> Option<(&'static str, String)> {
+    use crate::settings::SettingsMessage;
+    Some(match message {
+        SettingsMessage::Open => ("click_settings", String::new()),
+        SettingsMessage::Close => ("click_close_settings", String::new()),
+        SettingsMessage::Language(choice) => ("choose_language", choice.config_value().to_owned()),
+        SettingsMessage::Theme(choice) => ("choose_theme", choice.config_value().to_owned()),
+        SettingsMessage::SystemDark(_) => return None,
+    })
+}
+
+fn library_event(message: &crate::library::LibraryMessage) -> Option<(&'static str, String)> {
+    use crate::library::LibraryMessage;
+    Some(match message {
+        LibraryMessage::Open => ("click_library", String::new()),
+        LibraryMessage::Close => ("click_close_library", String::new()),
+        LibraryMessage::Remove(sha256) => ("click_remove_kept", sha256.clone()),
+        LibraryMessage::Write(sha256) => ("click_write_kept", sha256.clone()),
+        LibraryMessage::Listed(_) | LibraryMessage::Removed(_) => return None,
     })
 }
 

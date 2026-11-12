@@ -11,8 +11,6 @@ use crate::model::{Effect, Effects, Focus, Message, Model, WRITE_DELAY, WriteSta
 use crate::source::ImageSource;
 
 impl Model {
-    // A flat dispatch, one arm per message: splitting it would make it harder to follow.
-    #[allow(clippy::too_many_lines)]
     pub fn apply(&mut self, message: Message) -> Effects {
         match message {
             Message::Tick => {
@@ -21,6 +19,47 @@ impl Model {
             }
             Message::Loaded(Ok(disks)) => self.on_disks_loaded(disks),
             Message::Loaded(Err(erreur)) => self.on_detection_failed(erreur),
+            Message::Nav(nav) => self.navigate(nav),
+            Message::Copy => {
+                self.focus = Some(Focus::Copy);
+                vec![Effect::Copy(self.equivalents().join("\n"))]
+            }
+            Message::Settings(message) => self.apply_settings(message),
+            Message::Vault(message) => self.apply_vault(message),
+            Message::Library(message) => self.apply_library(message),
+            message @ (Message::ToggleInternal(_)
+            | Message::ToggleVirtual(_)
+            | Message::ToggleAll(_)
+            | Message::ToggleDetails
+            | Message::Select(_)) => self.apply_view(message),
+            message @ (Message::ImageInput(_)
+            | Message::HashInput(_)
+            | Message::ToggleRaw(_)
+            | Message::ToggleMbr(_)
+            | Message::BrowseImage
+            | Message::ImagePicked(_)
+            | Message::TorDetected(_)
+            | Message::ToggleTor(_)
+            | Message::ToggleAdvanced) => self.apply_draft(message),
+            message @ (Message::RequestImage(_)
+            | Message::ToggleMenu
+            | Message::MenuCategory(_)
+            | Message::MenuSystem(_)
+            | Message::CatalogLoaded(_)
+            | Message::MenuChose(_)) => self.apply_menu(message),
+            message @ (Message::Clock
+            | Message::StartWrite
+            | Message::ConfirmInternal
+            | Message::CloseInternal
+            | Message::CancelWrite
+            | Message::DismissWrite
+            | Message::Write(_)) => self.apply_write(message),
+        }
+    }
+
+    /// Which disks show, and which one is chosen. [`Self::apply`] sends no other message here.
+    fn apply_view(&mut self, message: Message) -> Effects {
+        match message {
             Message::ToggleInternal(on) => {
                 self.show_internal = on;
                 self.after_view_option(Focus::Internal, "view.show_internal", on)
@@ -49,66 +88,63 @@ impl Model {
                 self.sync_write();
                 self.load_menu()
             }
-            Message::Nav(nav) => self.navigate(nav),
-            Message::Copy => {
-                self.focus = Some(Focus::Copy);
-                vec![Effect::Copy(self.equivalents().join("\n"))]
-            }
-            Message::ImageInput(text) => {
-                if let WriteState::Draft { image, .. } = &mut self.write {
-                    *image = text;
-                    self.focus = Some(Focus::Image);
-                    self.requested = None;
-                }
-                Vec::new()
-            }
-            Message::HashInput(text) => {
-                if let WriteState::Draft { hash, .. } = &mut self.write {
-                    *hash = text;
-                    self.focus = Some(Focus::Hash);
-                }
-                Vec::new()
-            }
-            Message::ToggleRaw(on) => {
-                if let WriteState::Draft { raw, .. } = &mut self.write {
-                    *raw = on;
-                    self.focus = Some(Focus::Raw);
-                }
-                Vec::new()
-            }
-            Message::ToggleMbr(on) => {
-                if let WriteState::Draft { mbr, .. } = &mut self.write {
-                    *mbr = on;
-                    self.focus = Some(Focus::Mbr);
-                }
-                Vec::new()
-            }
-            Message::BrowseImage => {
-                self.focus = Some(Focus::Browse);
-                vec![Effect::PickImage]
-            }
-            Message::ImagePicked(Some(path)) => {
-                if matches!(self.write, WriteState::Draft { .. }) {
-                    self.fill_draft(&ImageSource::File(path));
-                    self.requested = None;
-                }
-                Vec::new()
-            }
-            Message::ImagePicked(None) => Vec::new(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// The fields of the write panel. [`Self::apply`] sends no other message here.
+    fn apply_draft(&mut self, message: Message) -> Effects {
+        let focus = match &message {
+            Message::ImageInput(_) => Focus::Image,
+            Message::HashInput(_) => Focus::Hash,
+            Message::ToggleRaw(_) => Focus::Raw,
+            Message::ToggleMbr(_) => Focus::Mbr,
+            Message::BrowseImage => Focus::Browse,
+            Message::ToggleTor(_) => Focus::Tor,
+            Message::ToggleAdvanced => Focus::Advanced,
+            Message::ImagePicked(path) => return self.on_image_picked(path.clone()),
             Message::TorDetected(address) => {
-                self.tor = address;
-                Vec::new()
+                self.tor.clone_from(address);
+                return Vec::new();
             }
-            Message::ToggleTor(on) => {
-                self.use_tor = on && self.tor.is_some();
-                self.focus = Some(Focus::Tor);
-                Vec::new()
+            _ => return Vec::new(),
+        };
+        self.focus = Some(focus);
+        match (message, &mut self.write) {
+            (Message::ImageInput(text), WriteState::Draft { image, .. }) => {
+                *image = text;
+                self.requested = None;
             }
-            Message::RequestImage(id) => self.request_image(id),
+            (Message::HashInput(text), WriteState::Draft { hash, .. }) => *hash = text,
+            (Message::ToggleRaw(on), WriteState::Draft { raw, .. }) => *raw = on,
+            (Message::ToggleMbr(on), WriteState::Draft { mbr, .. }) => *mbr = on,
+            (Message::BrowseImage, _) => return vec![Effect::PickImage],
+            (Message::ToggleTor(on), _) => self.use_tor = on && self.tor.is_some(),
+            (Message::ToggleAdvanced, _) => self.advanced = !self.advanced,
+            _ => {}
+        }
+        Vec::new()
+    }
+
+    fn on_image_picked(&mut self, path: Option<std::path::PathBuf>) -> Effects {
+        if let Some(path) = path
+            && matches!(self.write, WriteState::Draft { .. })
+        {
+            self.fill_draft(&ImageSource::File(path));
+            self.requested = None;
+        }
+        Vec::new()
+    }
+
+    /// The catalog menu. [`Self::apply`] sends no other message here.
+    fn apply_menu(&mut self, message: Message) -> Effects {
+        match message {
+            Message::RequestImage(id) => return self.request_image(id),
+            Message::CatalogLoaded(result) => return self.on_catalog_loaded(result),
+            Message::MenuChose(choice) => return self.on_menu_chosen(choice),
             Message::ToggleMenu => {
                 self.focus = Some(Focus::Menu);
                 self.menu_open = !self.menu_open;
-                Vec::new()
             }
             Message::MenuCategory(category) => {
                 self.menu_filter = catalog::MenuFilter {
@@ -116,30 +152,27 @@ impl Model {
                     system: None,
                 };
                 self.menu_index = 0;
-                Vec::new()
             }
             Message::MenuSystem(system) => {
                 self.menu_filter.system = system;
                 self.menu_index = 0;
-                Vec::new()
             }
-            Message::CatalogLoaded(result) => self.on_catalog_loaded(result),
-            Message::MenuChose(choice) => self.on_menu_chosen(choice),
-            Message::ToggleAdvanced => {
-                self.advanced = !self.advanced;
-                self.focus = Some(Focus::Advanced);
-                Vec::new()
-            }
-            Message::Clock => Vec::new(),
-            Message::StartWrite => self.start_write(false),
+            _ => {}
+        }
+        Vec::new()
+    }
+
+    /// Starting, following and closing a write. [`Self::apply`] sends no other message here.
+    fn apply_write(&mut self, message: Message) -> Effects {
+        match message {
+            Message::StartWrite => return self.start_write(false),
             Message::ConfirmInternal => {
                 self.confirming_internal = false;
-                self.start_write(true)
+                return self.start_write(true);
             }
             Message::CloseInternal => {
                 self.confirming_internal = false;
                 self.focus = Some(Focus::Action);
-                Vec::new()
             }
             Message::CancelWrite => {
                 self.focus = Some(Focus::Action);
@@ -147,23 +180,17 @@ impl Model {
                     log::info!(target: "bonk::gui", pid = *pid; "cancelling the write");
                     return vec![Effect::CancelWrite(*pid)];
                 }
-                Vec::new()
             }
             Message::DismissWrite => {
                 self.write = WriteState::Idle;
                 self.selected = None;
                 self.requested = None;
                 self.fix_focus();
-                Vec::new()
             }
-            Message::Write(event) => {
-                self.on_write_event(event);
-                Vec::new()
-            }
-            Message::Settings(message) => self.apply_settings(message),
-            Message::Vault(message) => self.apply_vault(message),
-            Message::Library(message) => self.apply_library(message),
+            Message::Write(event) => self.on_write_event(event),
+            _ => {}
         }
+        Vec::new()
     }
 
     /// One at a time: the timer does not stack them if one is slow.
