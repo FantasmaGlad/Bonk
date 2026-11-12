@@ -141,7 +141,7 @@ jobs:
             exit 0
           fi
           motif='^(crates/bonk-hal/|crates/bonk-ops/|crates/bonk/|Cargo\.lock$|rust-toolchain\.toml$|\.github/scripts/essai-disque-virtuel\.|\.github/workflows/ci\.yml$)'
-          if gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename' | grep -qE "$motif"; then
+          if gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename' | grep -E "$motif" > /dev/null; then
             echo 'systemes=["windows-latest","macos-latest"]' >> "$GITHUB_OUTPUT"
           else
             echo 'systemes=[]' >> "$GITHUB_OUTPUT"
