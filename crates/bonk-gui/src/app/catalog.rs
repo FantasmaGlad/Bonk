@@ -135,6 +135,41 @@ fn menu_filters<'a>(systems: &[System], filter: &MenuFilter, lang: Lang) -> Elem
     .into()
 }
 
+/// A writable version is a button; the others say why they cannot be written.
+fn menu_row<'a>(
+    system: &'a System,
+    choice: &'a Choice,
+    highlighted: bool,
+    lang: Lang,
+) -> Element<'a, Message> {
+    let title = format!("{} {}", choice.name, choice.title(lang));
+    let line = row![logo(system.icon.as_ref()), text(title).size(14)]
+        .spacing(8)
+        .align_y(iced::Center);
+    let line = match &choice.note {
+        Some(note) => Element::from(column![
+            line,
+            text(note.as_str()).size(12).color(theme::muted())
+        ]),
+        None => line.into(),
+    };
+    match &choice.source {
+        ChoiceSource::Download { .. } => button(line)
+            .on_press(Message::MenuChose(choice.clone()))
+            .width(Length::Fill)
+            .padding([4, 8])
+            .style(theme::card_button(highlighted))
+            .into(),
+        ChoiceSource::OfficialPage(page) => {
+            let note = text(official_page_note(page, lang))
+                .size(12)
+                .color(theme::muted());
+            container(column![line, note]).padding([4, 8]).into()
+        }
+        ChoiceSource::NotForUsb => container(line).padding([4, 8]).into(),
+    }
+}
+
 /// The filters, then one row per version with its system logo.
 pub(crate) fn menu_list<'a>(
     systems: &'a [System],
@@ -142,41 +177,19 @@ pub(crate) fn menu_list<'a>(
     highlighted: usize,
     lang: Lang,
 ) -> Element<'a, Message> {
+    // Only the writable rows count for the keyboard highlight.
     let mut index = 0;
     let mut lines = column![].spacing(2);
     for system in filter.apply(systems) {
         for choice in &system.choices {
-            let title = format!("{} {}", choice.name, choice.title(lang));
-            let line = row![logo(system.icon.as_ref()), text(title).size(14)]
-                .spacing(8)
-                .align_y(iced::Center);
-            let line = match &choice.note {
-                Some(note) => Element::from(column![
-                    line,
-                    text(note.as_str()).size(12).color(theme::muted())
-                ]),
-                None => line.into(),
-            };
-            lines = lines.push(match &choice.source {
-                ChoiceSource::Download { .. } => {
-                    let selected = index == highlighted;
-                    index += 1;
-                    Element::from(
-                        button(line)
-                            .on_press(Message::MenuChose(choice.clone()))
-                            .width(Length::Fill)
-                            .padding([4, 8])
-                            .style(theme::card_button(selected)),
-                    )
-                }
-                ChoiceSource::OfficialPage(page) => {
-                    let note = text(official_page_note(page, lang))
-                        .size(12)
-                        .color(theme::muted());
-                    container(column![line, note]).padding([4, 8]).into()
-                }
-                ChoiceSource::NotForUsb => container(line).padding([4, 8]).into(),
-            });
+            let writable = matches!(choice.source, ChoiceSource::Download { .. });
+            lines = lines.push(menu_row(
+                system,
+                choice,
+                writable && index == highlighted,
+                lang,
+            ));
+            index += usize::from(writable);
         }
     }
     // Right margin: the scrollbar must not cover a row's text.

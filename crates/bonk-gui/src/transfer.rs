@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 #[cfg(test)]
 use bonk_ui::event::write_args;
 pub(crate) use bonk_ui::event::{Event, Outcome, parse_failure, parse_line};
-use iced::futures::channel::mpsc::{UnboundedReceiver, unbounded};
+use iced::futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 
 /// Returns the stream of its events. Reads happen on threads: the window never blocks.
 pub(crate) fn spawn(program: &Path, args: &[String]) -> UnboundedReceiver<Event> {
@@ -41,18 +41,10 @@ pub(crate) fn spawn(program: &Path, args: &[String]) -> UnboundedReceiver<Event>
                 text
             })
         });
-        let mut result = None;
-        if let Some(stdout) = child.stdout.take() {
-            for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-                match parse_line(&line) {
-                    Some(Event::Finished(outcome)) => result = Some(outcome),
-                    Some(event) => {
-                        let _ = sender.unbounded_send(event);
-                    }
-                    None => {}
-                }
-            }
-        }
+        let result = child
+            .stdout
+            .take()
+            .and_then(|stdout| relay(stdout, &sender));
         let status = child.wait();
         let stderr = stderr_reader
             .and_then(|t| t.join().ok())
@@ -65,6 +57,21 @@ pub(crate) fn spawn(program: &Path, args: &[String]) -> UnboundedReceiver<Event>
         let _ = sender.unbounded_send(Event::Finished(outcome));
     });
     receiver
+}
+
+/// Sends each progress event as it comes; keeps the result for after the process has exited.
+fn relay(stdout: impl Read, sender: &UnboundedSender<Event>) -> Option<Outcome> {
+    let mut result = None;
+    for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+        match parse_line(&line) {
+            Some(Event::Finished(outcome)) => result = Some(outcome),
+            Some(event) => {
+                let _ = sender.unbounded_send(event);
+            }
+            None => {}
+        }
+    }
+    result
 }
 
 /// Clean stop: it stops between two blocks.
