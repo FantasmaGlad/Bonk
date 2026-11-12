@@ -1,6 +1,8 @@
 use std::io::{self, Write};
 
-use bonk_hal::{Disk, FilterOptions, bus_label, evaluate, format_size, kind_label, state_label};
+use bonk_hal::{
+    Disk, Eligibility, FilterOptions, bus_label, evaluate, format_size, kind_label, state_label,
+};
 use clap::Args;
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -95,8 +97,31 @@ pub(crate) fn run(
         writeln!(out)?;
         return Ok(true);
     }
+    print_text(disk, &eligibility, out)?;
+    Ok(true)
+}
 
-    let rows = [
+fn print_text(disk: &Disk, eligibility: &Eligibility, out: &mut dyn Write) -> io::Result<()> {
+    let rows = rows(disk, eligibility);
+    let width = rows
+        .iter()
+        .map(|(label, _)| label.chars().count())
+        .max()
+        .unwrap_or(0);
+    for (label, value) in rows {
+        writeln!(out, "{label:<width$}  {value}")?;
+    }
+    if let Some(signature) = &disk.fs_type {
+        writeln!(out, "{:<width$}  {signature}", "Disk signature")?;
+    }
+    if !disk.holders.is_empty() {
+        writeln!(out, "{:<width$}  {}", "Used by", disk.holders.join(", "))?;
+    }
+    print_partitions(disk, out)
+}
+
+fn rows(disk: &Disk, eligibility: &Eligibility) -> [(&'static str, String); 9] {
+    [
         ("Model", disk.model.clone()),
         ("Identifier", disk.id.clone()),
         ("Path", disk.path.clone()),
@@ -118,22 +143,11 @@ pub(crate) fn run(
             "System removable flag",
             if disk.removable_flag { "yes" } else { "no" }.to_owned(),
         ),
-        ("State", state_label(&eligibility, bonk_hal::Lang::En)),
-    ];
-    let width = rows
-        .iter()
-        .map(|(label, _)| label.chars().count())
-        .max()
-        .unwrap_or(0);
-    for (label, value) in rows {
-        writeln!(out, "{label:<width$}  {value}")?;
-    }
-    if let Some(signature) = &disk.fs_type {
-        writeln!(out, "{:<width$}  {signature}", "Disk signature")?;
-    }
-    if !disk.holders.is_empty() {
-        writeln!(out, "{:<width$}  {}", "Used by", disk.holders.join(", "))?;
-    }
+        ("State", state_label(eligibility, bonk_hal::Lang::En)),
+    ]
+}
+
+fn print_partitions(disk: &Disk, out: &mut dyn Write) -> io::Result<()> {
     if disk.partitions.is_empty() {
         writeln!(out, "No partition detected.")?;
     } else {
@@ -154,5 +168,5 @@ pub(crate) fn run(
             )?;
         }
     }
-    Ok(true)
+    Ok(())
 }

@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use bonk_core::partition::{Layout, Severity, inspect};
+use bonk_core::partition::{Gpt, Layout, Mbr, Severity, inspect};
 use bonk_core::{BlockDevice, DEFAULT_BLOCK_SIZE};
 use bonk_hal::{Access, Elevation, FileDevice};
 use schemars::JsonSchema;
@@ -118,8 +118,11 @@ pub(crate) fn layout(args: &LayoutArgs, out: &mut dyn Write) -> io::Result<Outco
     Ok(Outcome::Done)
 }
 
+fn yes_no(b: bool) -> &'static str {
+    if b { "yes" } else { "NO" }
+}
+
 pub(super) fn write_layout(layout: &Layout, image: &Path, out: &mut dyn Write) -> io::Result<()> {
-    let yes_no = |b: bool| if b { "yes" } else { "NO" };
     writeln!(
         out,
         "Image: {} ({} bytes, logical sector of {} bytes)",
@@ -129,67 +132,11 @@ pub(super) fn write_layout(layout: &Layout, image: &Path, out: &mut dyn Write) -
     )?;
     match &layout.mbr {
         None => writeln!(out, "MBR: none")?,
-        Some(mbr) => {
-            writeln!(
-                out,
-                "MBR: 55 AA signature {}, GPT protection: {}",
-                yes_no(mbr.signature_valid),
-                if mbr.protective { "yes" } else { "no" }
-            )?;
-            for e in &mbr.entries {
-                writeln!(
-                    out,
-                    "  entry {}: type 0x{:02X}{}  start {}  {} sectors",
-                    e.index + 1,
-                    e.kind,
-                    if e.bootable { " (bootable)" } else { "" },
-                    e.start_lba,
-                    e.sectors
-                )?;
-            }
-        }
+        Some(mbr) => write_mbr(mbr, out)?,
     }
     match &layout.gpt {
         None => writeln!(out, "GPT: none")?,
-        Some(gpt) => {
-            for (name, header) in [("primary", &gpt.primary), ("backup", &gpt.backup)] {
-                match header {
-                    None => writeln!(out, "GPT {name}: missing")?,
-                    Some(h) => writeln!(
-                        out,
-                        "GPT {name}: sector {}, revision 0x{:08X}, header {} bytes, header checksum {}, \
-                         table checksum {}, usable {} to {}, table at sector {} ({} entries of {} bytes), \
-                         disk GUID {}",
-                        h.read_at_lba,
-                        h.revision,
-                        h.header_size,
-                        yes_no(h.header_crc_ok),
-                        yes_no(h.entries_crc_ok),
-                        h.first_usable_lba,
-                        h.last_usable_lba,
-                        h.entries_lba,
-                        h.entry_count,
-                        h.entry_size,
-                        h.disk_guid
-                    )?,
-                }
-            }
-            for e in &gpt.entries {
-                let bytes = (e.last_lba.saturating_sub(e.first_lba) + 1)
-                    * u64::from(layout.logical_block_size);
-                writeln!(
-                    out,
-                    "  partition {}: sectors {} to {} ({}), type {}, GUID {}, name '{}'",
-                    e.index + 1,
-                    e.first_lba,
-                    e.last_lba,
-                    bonk_hal::format_size(bytes, bonk_hal::Lang::En),
-                    e.type_guid,
-                    e.unique_guid,
-                    e.name
-                )?;
-            }
-        }
+        Some(gpt) => write_gpt(gpt, layout.logical_block_size, out)?,
     }
     if layout.findings.is_empty() {
         writeln!(out, "Findings: none")?;
@@ -203,6 +150,67 @@ pub(super) fn write_layout(layout: &Layout, image: &Path, out: &mut dyn Write) -
             };
             writeln!(out, "  [{level}] {}: {}", f.code, f.message)?;
         }
+    }
+    Ok(())
+}
+
+fn write_mbr(mbr: &Mbr, out: &mut dyn Write) -> io::Result<()> {
+    writeln!(
+        out,
+        "MBR: 55 AA signature {}, GPT protection: {}",
+        yes_no(mbr.signature_valid),
+        if mbr.protective { "yes" } else { "no" }
+    )?;
+    for e in &mbr.entries {
+        writeln!(
+            out,
+            "  entry {}: type 0x{:02X}{}  start {}  {} sectors",
+            e.index + 1,
+            e.kind,
+            if e.bootable { " (bootable)" } else { "" },
+            e.start_lba,
+            e.sectors
+        )?;
+    }
+    Ok(())
+}
+
+fn write_gpt(gpt: &Gpt, block_size: u32, out: &mut dyn Write) -> io::Result<()> {
+    for (name, header) in [("primary", &gpt.primary), ("backup", &gpt.backup)] {
+        match header {
+            None => writeln!(out, "GPT {name}: missing")?,
+            Some(h) => writeln!(
+                out,
+                "GPT {name}: sector {}, revision 0x{:08X}, header {} bytes, header checksum {}, \
+                 table checksum {}, usable {} to {}, table at sector {} ({} entries of {} bytes), \
+                 disk GUID {}",
+                h.read_at_lba,
+                h.revision,
+                h.header_size,
+                yes_no(h.header_crc_ok),
+                yes_no(h.entries_crc_ok),
+                h.first_usable_lba,
+                h.last_usable_lba,
+                h.entries_lba,
+                h.entry_count,
+                h.entry_size,
+                h.disk_guid
+            )?,
+        }
+    }
+    for e in &gpt.entries {
+        let bytes = (e.last_lba.saturating_sub(e.first_lba) + 1) * u64::from(block_size);
+        writeln!(
+            out,
+            "  partition {}: sectors {} to {} ({}), type {}, GUID {}, name '{}'",
+            e.index + 1,
+            e.first_lba,
+            e.last_lba,
+            bonk_hal::format_size(bytes, bonk_hal::Lang::En),
+            e.type_guid,
+            e.unique_guid,
+            e.name
+        )?;
     }
     Ok(())
 }

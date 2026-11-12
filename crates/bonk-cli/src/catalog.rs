@@ -197,6 +197,30 @@ pub(crate) fn image_source(
     resolve_image(&loaded.catalog, id)
 }
 
+fn family_category<'a>(catalog: &'a Catalog, image: &Image) -> Option<&'a str> {
+    catalog
+        .families
+        .iter()
+        .find(|f| f.id == image.family)
+        .and_then(|f| f.category.as_deref())
+}
+
+fn selected(catalog: &Catalog, query: &Query, image: &Image) -> bool {
+    query
+        .family
+        .as_ref()
+        .is_none_or(|wanted| &image.family == wanted)
+        && query
+            .category
+            .as_deref()
+            .is_none_or(|wanted| family_category(catalog, image) == Some(wanted))
+        && query
+            .arch
+            .as_ref()
+            .is_none_or(|wanted| &image.arch == wanted)
+        && query.channel.is_none_or(|wanted| image.channel == wanted)
+}
+
 /// By default systems in catalog order, newest version first.
 pub(crate) fn sorted<'a>(catalog: &'a Catalog, query: &Query) -> Vec<&'a Image> {
     let rank = |image: &Image| {
@@ -206,13 +230,6 @@ pub(crate) fn sorted<'a>(catalog: &'a Catalog, query: &Query) -> Vec<&'a Image> 
             .position(|f| f.id == image.family)
             .unwrap_or(usize::MAX)
     };
-    let category = |image: &Image| {
-        catalog
-            .families
-            .iter()
-            .find(|f| f.id == image.family)
-            .and_then(|f| f.category.as_deref())
-    };
     let size = |image: &Image| match image.source {
         ImageSource::Download { size_bytes, .. } => size_bytes,
         ImageSource::OfficialPage { .. } => u64::MAX,
@@ -220,25 +237,7 @@ pub(crate) fn sorted<'a>(catalog: &'a Catalog, query: &Query) -> Vec<&'a Image> 
     let mut images: Vec<&Image> = catalog
         .images
         .iter()
-        .filter(|image| {
-            query
-                .family
-                .as_ref()
-                .is_none_or(|wanted| &image.family == wanted)
-        })
-        .filter(|image| {
-            query
-                .category
-                .as_deref()
-                .is_none_or(|wanted| category(image) == Some(wanted))
-        })
-        .filter(|image| {
-            query
-                .arch
-                .as_ref()
-                .is_none_or(|wanted| &image.arch == wanted)
-        })
-        .filter(|image| query.channel.is_none_or(|wanted| image.channel == wanted))
+        .filter(|image| selected(catalog, query, image))
         .collect();
     images.sort_by(|a, b| {
         let newest =

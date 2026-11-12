@@ -85,20 +85,7 @@ fn resolve(
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<Option<Downloaded>, JobError> {
     let source = request.source.to_str().filter(|s| bonk_catalog::is_url(s));
-    let name = match source {
-        Some(url) => bonk_catalog::file_name(url)
-            .ok_or_else(|| {
-                error(
-                    Code::InvalidArgument,
-                    format!("{url}: no readable file name in the address"),
-                )
-            })?
-            .to_owned(),
-        None => request
-            .source
-            .file_name()
-            .map_or_else(String::new, |name| name.to_string_lossy().into_owned()),
-    };
+    let name = source_name(request.source, source)?;
     if let Some(expected) = &job.expected_sha256 {
         job::normalize_sha256(expected)?;
     }
@@ -119,21 +106,49 @@ fn resolve(
         job.expected_sha256 = Some(sha256_from_file(location, &name)?);
     }
     let sha256 = job::normalize_sha256(job.expected_sha256.as_deref().unwrap_or_default())?;
-    let cache = crate::cache::directory(request.cache_dir).ok_or_else(|| {
+    let dest = cached_download(url, request.cache_dir, &sha256, &name, deps, progress)?;
+    job.source.clone_from(&dest);
+    job.expected_sha256 = Some(sha256);
+    Ok(Some(Downloaded(dest)))
+}
+
+fn source_name(path: &Path, url: Option<&str>) -> Result<String, JobError> {
+    let Some(url) = url else {
+        return Ok(path
+            .file_name()
+            .map_or_else(String::new, |name| name.to_string_lossy().into_owned()));
+    };
+    bonk_catalog::file_name(url)
+        .map(str::to_owned)
+        .ok_or_else(|| {
+            error(
+                Code::InvalidArgument,
+                format!("{url}: no readable file name in the address"),
+            )
+        })
+}
+
+fn cached_download(
+    url: &str,
+    cache_dir: Option<&Path>,
+    sha256: &str,
+    name: &str,
+    deps: &Deps<'_>,
+    progress: &mut dyn FnMut(&Progress) -> Control,
+) -> Result<PathBuf, JobError> {
+    let cache = crate::cache::directory(cache_dir).ok_or_else(|| {
         error(
             Code::DownloadFailed,
             "no known cache directory: give it with --cache-dir",
         )
     })?;
-    let dest = crate::cache::image_path(&cache, &sha256, &name);
+    let dest = crate::cache::image_path(&cache, sha256, name);
     if dest.exists() {
         log::info!(target: "bonk::catalog", path = dest.display().to_string().as_str(); "image already downloaded");
     } else {
         fetch_to(url, &dest, deps, progress)?;
     }
-    job.source.clone_from(&dest);
-    job.expected_sha256 = Some(sha256);
-    Ok(Some(Downloaded(dest)))
+    Ok(dest)
 }
 
 fn fetch_to(

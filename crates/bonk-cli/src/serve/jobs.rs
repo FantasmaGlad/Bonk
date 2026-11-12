@@ -4,9 +4,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+use bonk_core::format::Filesystem;
 use bonk_core::format::table::TableKind;
 use bonk_core::write::{Control, Progress};
-use bonk_hal::FilterOptions;
+use bonk_hal::{Elevation, FilterOptions};
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -14,8 +15,8 @@ use crate::errors::Code;
 use crate::fetch;
 use crate::list;
 use bonk_ops::job::{
-    self, Deps, FormatJob, RepairJob, VaultAddJob, VaultInitJob, VaultListJob, VaultRemoveJob,
-    VaultUpdateJob, VerifyJob, WriteJob,
+    self, Deps, FormatJob, RepairJob, Target, TraceIo, VaultAddJob, VaultInitJob, VaultListJob,
+    VaultRemoveJob, VaultUpdateJob, VerifyJob, WriteJob, WriteMode,
 };
 
 use super::params::{TransferParams, WatchParams};
@@ -93,88 +94,110 @@ pub(super) fn prepare(kind: Kind, params: &Value, cfg: &Config) -> Result<Task, 
     }
 }
 
-fn prepare_disk(kind: DiskKind, p: TransferParams, cfg: &Config) -> Result<Task, Failure> {
+/// Every parameter is parsed whatever the operation, so a malformed one is always refused.
+struct DiskArgs {
+    options: FilterOptions,
+    target: Target,
+    trace: Option<TraceIo>,
+    mode: WriteMode,
+    elevation: Elevation,
+    filesystem: Option<Filesystem>,
+    table: TableKind,
+}
+
+fn disk_args(kind: DiskKind, p: &TransferParams, cfg: &Config) -> Result<DiskArgs, Failure> {
     let options = match kind {
         DiskKind::Verify => p.options(&cfg.view),
         DiskKind::Write | DiskKind::Repair | DiskKind::Format => p.write_options(),
     };
-    let (target, trace) = (p.target()?, p.trace()?);
-    let mode = p.mode()?;
-    let elevation = p.elevation()?;
-    let filesystem = p.filesystem()?;
-    let table = p.table(if matches!(kind, DiskKind::Format) {
-        TableKind::FORMAT_DEFAULT
-    } else {
-        TableKind::WINDOWS_DEFAULT
-    })?;
-    let mut sha256 = p.sha256.clone();
-    let source = match (kind, &p.image) {
-        (DiskKind::Repair | DiskKind::Format, _) => PathBuf::new(),
-        (DiskKind::Write, Some(id)) => {
-            // The catalog hash is signed: no client-supplied hash may replace it, as on the command line.
-            if p.sha256.is_some() || p.sha256_file.is_some() {
-                return Err(failure(
-                    Code::InvalidArgument,
-                    "image takes its hash from the signed catalog: sha256 and sha256_file are refused",
-                ));
-            }
-            let (source, hash) =
-                crate::catalog::image_source(id, p.catalog_url.as_deref(), p.cache_dir.as_deref())
-                    .map_err(|e| failure(e.code, e.message))?;
-            sha256 = Some(hash);
-            source
-        }
-        _ => p.source()?,
+    let default_table = match kind {
+        DiskKind::Format => TableKind::FORMAT_DEFAULT,
+        DiskKind::Write | DiskKind::Verify | DiskKind::Repair => TableKind::WINDOWS_DEFAULT,
     };
+    Ok(DiskArgs {
+        options,
+        target: p.target()?,
+        trace: p.trace()?,
+        mode: p.mode()?,
+        elevation: p.elevation()?,
+        filesystem: p.filesystem()?,
+        table: p.table(default_table)?,
+    })
+}
+
+fn prepare_disk(kind: DiskKind, p: TransferParams, cfg: &Config) -> Result<Task, Failure> {
+    let a = disk_args(kind, &p, cfg)?;
     Ok(match kind {
-        DiskKind::Write => Task::Write(
-            Box::new(WriteJob {
-                target,
-                source,
-                options,
-                verify: !p.no_verify,
-                repair_gpt: !p.no_repair_gpt,
-                trace_io: trace,
-                dry_run: p.dry_run,
-                yes: p.yes,
-                expected_sha256: sha256,
-                mode,
-                table,
-                elevation,
-                force: p.force,
-            }),
-            p.sha256_file,
-            p.cache_dir,
-        ),
+        DiskKind::Write => write_task(a, p)?,
         DiskKind::Verify => Task::Verify(VerifyJob {
-            target,
-            source,
-            options,
-            trace_io: trace,
-            elevation,
+            target: a.target,
+            source: p.source()?,
+            options: a.options,
+            trace_io: a.trace,
+            elevation: a.elevation,
         }),
         DiskKind::Repair => Task::Repair(RepairJob {
-            target,
-            options,
-            trace_io: trace,
+            target: a.target,
+            options: a.options,
+            trace_io: a.trace,
             dry_run: p.dry_run,
             yes: p.yes,
-            elevation,
+            elevation: a.elevation,
             force: p.force,
         }),
         DiskKind::Format => Task::Format(FormatJob {
-            target,
-            filesystem,
-            table,
+            target: a.target,
+            filesystem: a.filesystem,
+            table: a.table,
             label: p.label,
-            options,
-            trace_io: trace,
+            options: a.options,
+            trace_io: a.trace,
             dry_run: p.dry_run,
             yes: p.yes,
             force: p.force,
-            elevation,
+            elevation: a.elevation,
         }),
     })
+}
+
+/// A catalog image takes its hash from the signed catalog; no client hash may replace it.
+fn write_source(p: &TransferParams) -> Result<(PathBuf, Option<String>), Failure> {
+    let Some(id) = &p.image else {
+        return Ok((p.source()?, p.sha256.clone()));
+    };
+    if p.sha256.is_some() || p.sha256_file.is_some() {
+        return Err(failure(
+            Code::InvalidArgument,
+            "image takes its hash from the signed catalog: sha256 and sha256_file are refused",
+        ));
+    }
+    let (source, hash) =
+        crate::catalog::image_source(id, p.catalog_url.as_deref(), p.cache_dir.as_deref())
+            .map_err(|e| failure(e.code, e.message))?;
+    Ok((source, Some(hash)))
+}
+
+fn write_task(a: DiskArgs, p: TransferParams) -> Result<Task, Failure> {
+    let (source, expected_sha256) = write_source(&p)?;
+    Ok(Task::Write(
+        Box::new(WriteJob {
+            target: a.target,
+            source,
+            options: a.options,
+            verify: !p.no_verify,
+            repair_gpt: !p.no_repair_gpt,
+            trace_io: a.trace,
+            dry_run: p.dry_run,
+            yes: p.yes,
+            expected_sha256,
+            mode: a.mode,
+            table: a.table,
+            elevation: a.elevation,
+            force: p.force,
+        }),
+        p.sha256_file,
+        p.cache_dir,
+    ))
 }
 
 pub(super) fn start_job(
@@ -342,27 +365,7 @@ fn prepare_vault(kind: VaultKind, p: &TransferParams, cfg: &Config) -> Result<Ta
             trace_io,
             elevation,
         }),
-        VaultKind::Init => {
-            // A plan or a refusal for want of confirmation writes nothing: no GRUB needed.
-            let (boot, grub) = if p.dry_run || !(p.yes || p.force) {
-                (Vec::new(), None)
-            } else {
-                let (boot, grub) = vault_grub(p, cfg)?;
-                (boot, Some(grub))
-            };
-            Task::VaultInit(Box::new(VaultInitJob {
-                target,
-                boot,
-                grub,
-                table: p.table(TableKind::VAULT_DEFAULT)?,
-                options: p.write_options(),
-                trace_io,
-                dry_run: p.dry_run,
-                yes: p.yes,
-                force: p.force,
-                elevation,
-            }))
-        }
+        VaultKind::Init => vault_init_task(target, trace_io, elevation, p, cfg)?,
         VaultKind::Add => Task::VaultAdd(VaultAddJob {
             target,
             source: required(p.iso.clone(), "iso")?,
@@ -394,6 +397,34 @@ fn prepare_vault(kind: VaultKind, p: &TransferParams, cfg: &Config) -> Result<Ta
             }))
         }
     })
+}
+
+fn vault_init_task(
+    target: Target,
+    trace_io: Option<TraceIo>,
+    elevation: Elevation,
+    p: &TransferParams,
+    cfg: &Config,
+) -> Result<Task, Failure> {
+    // A plan or a refusal for want of confirmation writes nothing: no GRUB needed.
+    let (boot, grub) = if p.dry_run || !(p.yes || p.force) {
+        (Vec::new(), None)
+    } else {
+        let (boot, grub) = vault_grub(p, cfg)?;
+        (boot, Some(grub))
+    };
+    Ok(Task::VaultInit(Box::new(VaultInitJob {
+        target,
+        boot,
+        grub,
+        table: p.table(TableKind::VAULT_DEFAULT)?,
+        options: p.write_options(),
+        trace_io,
+        dry_run: p.dry_run,
+        yes: p.yes,
+        force: p.force,
+        elevation,
+    })))
 }
 
 fn required<T>(value: Option<T>, name: &str) -> Result<T, Failure> {

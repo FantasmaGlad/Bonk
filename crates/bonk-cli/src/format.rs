@@ -118,48 +118,47 @@ pub(crate) fn run_format(
         elevation: args.common.elevate.into(),
     };
     let result = job::format(&job, deps);
-    finish(result, &args.common, out, err, |done, out| {
+    finish(result, &args.common, out, err, format_lines)
+}
+
+fn format_lines(done: &FormatDone, out: &mut dyn Write) -> std::io::Result<()> {
+    let head = if done.dry_run {
+        "Plan (nothing is written):"
+    } else {
+        "Format finished:"
+    };
+    let size = done
+        .target
+        .size_bytes
+        .map_or_else(String::new, |s| format_size(s, bonk_hal::Lang::En));
+    writeln!(out, "{head} {}: {size}", target_line(&done.target))?;
+    let defaulted = if done.filesystem_defaulted {
+        " (default)"
+    } else {
+        ""
+    };
+    writeln!(
+        out,
+        "  Table: {}, filesystem: {}{defaulted}",
+        done.table.name(),
+        done.filesystem
+    )?;
+    if done.file_size_limit_bytes.is_some() {
         writeln!(
             out,
-            "{} {}: {}",
-            if done.dry_run {
-                "Plan (nothing is written):"
-            } else {
-                "Format finished:"
-            },
-            target_line(&done.target),
-            done.target
-                .size_bytes
-                .map_or_else(String::new, |s| format_size(s, bonk_hal::Lang::En)),
+            "  Limit: a file of 4 GiB or more does not fit; to store one, --fs exfat"
         )?;
-        writeln!(
-            out,
-            "  Table: {}, filesystem: {}{}",
-            done.table.name(),
-            done.filesystem,
-            if done.filesystem_defaulted {
-                " (default)"
-            } else {
-                ""
-            }
-        )?;
-        if done.file_size_limit_bytes.is_some() {
-            writeln!(
-                out,
-                "  Limit: a file of 4 GiB or more does not fit; to store one, --fs exfat"
-            )?;
-        }
-        if let Some(label) = &done.label {
-            writeln!(out, "  Label: {label}")?;
-        }
-        if !done.unmounted.is_empty() {
-            writeln!(out, "  Unmount: {}", done.unmounted.join(", "))?;
-        }
-        if done.verified {
-            writeln!(out, "  Read-back: matches")?;
-        }
-        Ok(())
-    })
+    }
+    if let Some(label) = &done.label {
+        writeln!(out, "  Label: {label}")?;
+    }
+    if !done.unmounted.is_empty() {
+        writeln!(out, "  Unmount: {}", done.unmounted.join(", "))?;
+    }
+    if done.verified {
+        writeln!(out, "  Read-back: matches")?;
+    }
+    Ok(())
 }
 
 /// What this host allows, and why not the rest

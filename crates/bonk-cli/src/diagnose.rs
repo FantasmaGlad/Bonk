@@ -171,13 +171,7 @@ pub(crate) fn build_with_capture(
         enumeration: Enumeration {
             ok,
             error,
-            disks: disks
-                .iter()
-                .map(|disk| Entry {
-                    disk,
-                    eligibility: evaluate(disk, FilterOptions::default()),
-                })
-                .collect(),
+            disks: entries(disks),
         },
         capture: reads.map(|reads| Capture {
             schema_version: 1,
@@ -187,17 +181,30 @@ pub(crate) fn build_with_capture(
     };
     let mut value = serde_json::to_value(&report)?;
     if !args.include_serials {
-        // The reads too: a failed enumeration returns no disk, but its reads stay in the report, with the
-        // serials in the `by-id` links.
-        let serials: Vec<&str> = disks
-            .iter()
-            .filter_map(|disk| disk.serial.as_deref())
-            .chain(reads.unwrap_or_default().iter().flat_map(serials_read))
-            .filter(|serial| serial.chars().count() >= 4)
-            .collect();
-        redact(&mut value, &serials, env.user.as_deref());
+        redact(&mut value, &serials(disks, reads), env.user.as_deref());
     }
     Ok(value)
+}
+
+fn entries(disks: &[Disk]) -> Vec<Entry<'_>> {
+    disks
+        .iter()
+        .map(|disk| Entry {
+            disk,
+            eligibility: evaluate(disk, FilterOptions::default()),
+        })
+        .collect()
+}
+
+/// The reads count too: a failed enumeration returns no disk, but its reads keep the serials in
+/// their `by-id` links.
+fn serials<'a>(disks: &'a [Disk], reads: Option<&'a [SourceRead]>) -> Vec<&'a str> {
+    disks
+        .iter()
+        .filter_map(|disk| disk.serial.as_deref())
+        .chain(reads.unwrap_or_default().iter().flat_map(serials_read))
+        .filter(|serial| serial.chars().count() >= 4)
+        .collect()
 }
 
 /// udev keys that identify a hardware unit or a user: never in a capture.

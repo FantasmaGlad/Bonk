@@ -1,4 +1,5 @@
 use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 
 use bonk_core::format::table::TableKind;
 use bonk_core::write::VerifyReport;
@@ -17,35 +18,17 @@ pub(crate) fn run_write(
 ) -> u8 {
     bonk_hal::interrupt::install();
     let (source, expected_sha256) = match &args.image {
-        Some(id) => {
-            match crate::catalog::image_source(
-                id,
-                args.catalog_url.as_deref(),
-                args.cache_dir.as_deref(),
-            ) {
-                Ok((source, sha256)) => (source, Some(sha256)),
-                Err(error) => {
-                    return finish::<()>(Err(error), &args.common, out, err, |_, _| Ok(()));
-                }
-            }
-        }
+        Some(id) => match crate::catalog::image_source(
+            id,
+            args.catalog_url.as_deref(),
+            args.cache_dir.as_deref(),
+        ) {
+            Ok((source, sha256)) => (source, Some(sha256)),
+            Err(error) => return finish::<()>(Err(error), &args.common, out, err, |_, _| Ok(())),
+        },
         None => (args.source.clone().unwrap_or_default(), args.sha256.clone()),
     };
-    let mut job = WriteJob {
-        target: args.common.target(),
-        source: source.clone(),
-        options: args.common.write_options(),
-        verify: !args.no_verify,
-        repair_gpt: !args.no_repair_gpt,
-        trace_io: args.common.trace_io.map(TraceIo::from),
-        dry_run: args.dry_run,
-        yes: args.yes,
-        expected_sha256,
-        mode: args.mode.into(),
-        table: args.table.into(),
-        elevation: args.common.elevate.into(),
-        force: args.force,
-    };
+    let mut job = write_job(args, source.clone(), expected_sha256);
     log::debug!(target: "bonk::cli", target_kind = if args.common.simulate { "image" } else { "disk" }, dry_run = args.dry_run; "command write");
     let result = {
         let mut progress = sink(
@@ -72,11 +55,35 @@ pub(crate) fn run_write(
             WriteOutcome::Done(done) => done_lines(done, no_repair_gpt, out),
         },
     );
-    // The download may have grown the cache: say so, only to text readers.
+    if code == 0 {
+        cache_note(args, &source, out);
+    }
+    code
+}
+
+fn write_job(args: &WriteArgs, source: PathBuf, expected_sha256: Option<String>) -> WriteJob {
+    WriteJob {
+        target: args.common.target(),
+        source,
+        options: args.common.write_options(),
+        verify: !args.no_verify,
+        repair_gpt: !args.no_repair_gpt,
+        trace_io: args.common.trace_io.map(TraceIo::from),
+        dry_run: args.dry_run,
+        yes: args.yes,
+        expected_sha256,
+        mode: args.mode.into(),
+        table: args.table.into(),
+        elevation: args.common.elevate.into(),
+        force: args.force,
+    }
+}
+
+/// A download may have grown the cache: text readers are told its size.
+fn cache_note(args: &WriteArgs, source: &Path, out: &mut dyn Write) {
     let text = !args.common.json && args.common.progress != ProgressMode::Json;
     let downloaded = source.to_str().is_some_and(bonk_catalog::is_url);
-    if code == 0
-        && text
+    if text
         && downloaded
         && let Some(bytes) = crate::cache::directory(args.cache_dir.as_deref())
             .and_then(|dir| crate::cache::total_bytes(&dir).ok())
@@ -87,7 +94,6 @@ pub(crate) fn run_write(
             format_size(bytes, bonk_hal::Lang::En)
         );
     }
-    code
 }
 
 fn plan_lines(plan: &job::Plan, out: &mut dyn Write) -> io::Result<()> {

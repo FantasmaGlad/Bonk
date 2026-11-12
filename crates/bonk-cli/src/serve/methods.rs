@@ -18,91 +18,18 @@ pub(super) fn enumerate(cfg: &Config) -> Result<Vec<Disk>, Failure> {
 pub(super) fn quick(method: Method, params: &Value, cfg: &Config) -> Result<Value, Failure> {
     match method {
         Method::Ping => Ok(json!({"pong": true})),
-        Method::Version => Ok(json!({
-            "version": env!("CARGO_PKG_VERSION"),
-            "protocol": PROTOCOL,
-            "os": std::env::consts::OS,
-            "arch": std::env::consts::ARCH,
-        })),
-        Method::Methods => Ok(Value::Array(
-            Method::ALL
-                .iter()
-                .map(|m| json!({"method": m.name(), "about": m.about()}))
-                .collect(),
-        )),
-        Method::CatalogList => {
-            let p: CatalogParams = parse(params)?;
-            crate::catalog::report_value(
-                p.catalog_url.as_deref(),
-                p.cache_dir.as_deref(),
-                &crate::catalog::Query {
-                    family: p.family,
-                    category: p.category,
-                    arch: p.arch,
-                    channel: p.channel,
-                    sort: p.sort,
-                },
-            )
-            .map_err(|e| failure(e.code, e.message))
-        }
-        Method::DiskList => {
-            let p: ViewParams = parse(params)?;
-            let options = cfg.view.widen(FilterOptions {
-                show_internal: p.show_internal,
-                allow_virtual: p.allow_virtual,
-            });
-            list::report_value(options, p.all || cfg.view.show_all, &enumerate(cfg)?)
-                .map_err(json_error)
-        }
-        Method::DiskInfo => {
-            let p: TargetParams = parse(params)?;
-            let options = cfg.view.widen(FilterOptions {
-                show_internal: p.show_internal,
-                allow_virtual: p.allow_virtual,
-            });
-            info::report_value(&p.target, options, &enumerate(cfg)?)
-                .ok_or_else(|| disk_not_found(&p.target))?
-                .map_err(json_error)
-        }
-        Method::DebugFilter => {
-            let p: TargetParams = parse(params)?;
-            let options = FilterOptions {
-                show_internal: p.show_internal,
-                allow_virtual: p.allow_virtual,
-            };
-            debug::filter_value(&p.target, options, &enumerate(cfg)?)
-                .ok_or_else(|| disk_not_found(&p.target))?
-                .map_err(json_error)
-        }
-        Method::Diagnose => {
-            let p: DiagnoseParams = parse(params)?;
-            diagnose::report_value(
-                p.include_serials,
-                &diagnose::Environment::system(),
-                &(cfg.enumerate)(),
-            )
-            .map_err(json_error)
-        }
-        Method::Explain => {
-            let p: NameParams = parse(params)?;
-            errors::explain_value(p.code.as_deref()).ok_or_else(|| {
-                failure(
-                    Code::InvalidArgument,
-                    errors::unknown_code_message(p.code.as_deref().unwrap_or_default()),
-                )
-            })
-        }
-        Method::Schema => {
-            let p: NameParams = parse(params)?;
-            match p.name {
-                None => Ok(json!({"schemas": schema::names()})),
-                Some(name) => schema::value(&name)
-                    .ok_or_else(|| failure(Code::InvalidArgument, schema::unknown_message(&name))),
-            }
-        }
+        Method::Version => Ok(version()),
+        Method::Methods => Ok(methods()),
+        Method::Explain => explain(params),
+        Method::Schema => schema_of(params),
         Method::Capabilities => {
             format::report_value(bonk_hal::platform::current().capabilities()).map_err(json_error)
         }
+        Method::DiskList => disk_list(params, cfg),
+        Method::DiskInfo => disk_info(params, cfg),
+        Method::DebugFilter => debug_filter(params, cfg),
+        Method::CatalogList => catalog_list(params),
+        Method::Diagnose => diagnose_report(params, cfg),
         Method::ConfigList | Method::ConfigGet | Method::ConfigSet | Method::ConfigReset => {
             config_method(method, params, cfg)
         }
@@ -119,6 +46,104 @@ pub(super) fn quick(method: Method, params: &Value, cfg: &Config) -> Result<Valu
         | Method::VaultRemove
         | Method::VaultUpdate => unreachable!("handled by `handle`"),
     }
+}
+
+fn version() -> Value {
+    json!({
+        "version": env!("CARGO_PKG_VERSION"),
+        "protocol": PROTOCOL,
+        "os": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+    })
+}
+
+fn methods() -> Value {
+    Value::Array(
+        Method::ALL
+            .iter()
+            .map(|m| json!({"method": m.name(), "about": m.about()}))
+            .collect(),
+    )
+}
+
+fn explain(params: &Value) -> Result<Value, Failure> {
+    let p: NameParams = parse(params)?;
+    errors::explain_value(p.code.as_deref()).ok_or_else(|| {
+        failure(
+            Code::InvalidArgument,
+            errors::unknown_code_message(p.code.as_deref().unwrap_or_default()),
+        )
+    })
+}
+
+fn schema_of(params: &Value) -> Result<Value, Failure> {
+    let p: NameParams = parse(params)?;
+    match p.name {
+        None => Ok(json!({"schemas": schema::names()})),
+        Some(name) => schema::value(&name)
+            .ok_or_else(|| failure(Code::InvalidArgument, schema::unknown_message(&name))),
+    }
+}
+
+fn disk_list(params: &Value, cfg: &Config) -> Result<Value, Failure> {
+    let p: ViewParams = parse(params)?;
+    let options = cfg.view.widen(FilterOptions {
+        show_internal: p.show_internal,
+        allow_virtual: p.allow_virtual,
+    });
+    list::report_value(options, p.all || cfg.view.show_all, &enumerate(cfg)?).map_err(json_error)
+}
+
+fn asked_options(p: &TargetParams) -> FilterOptions {
+    FilterOptions {
+        show_internal: p.show_internal,
+        allow_virtual: p.allow_virtual,
+    }
+}
+
+fn disk_info(params: &Value, cfg: &Config) -> Result<Value, Failure> {
+    let p: TargetParams = parse(params)?;
+    info::report_value(
+        &p.target,
+        cfg.view.widen(asked_options(&p)),
+        &enumerate(cfg)?,
+    )
+    .ok_or_else(|| disk_not_found(&p.target))?
+    .map_err(json_error)
+}
+
+// The saved view options are not applied: the diagnosis shows the raw verdict.
+fn debug_filter(params: &Value, cfg: &Config) -> Result<Value, Failure> {
+    let p: TargetParams = parse(params)?;
+    debug::filter_value(&p.target, asked_options(&p), &enumerate(cfg)?)
+        .ok_or_else(|| disk_not_found(&p.target))?
+        .map_err(json_error)
+}
+
+fn catalog_list(params: &Value) -> Result<Value, Failure> {
+    let p: CatalogParams = parse(params)?;
+    crate::catalog::report_value(
+        p.catalog_url.as_deref(),
+        p.cache_dir.as_deref(),
+        &crate::catalog::Query {
+            family: p.family,
+            category: p.category,
+            arch: p.arch,
+            channel: p.channel,
+            sort: p.sort,
+        },
+    )
+    .map_err(|e| failure(e.code, e.message))
+}
+
+fn diagnose_report(params: &Value, cfg: &Config) -> Result<Value, Failure> {
+    let p: DiagnoseParams = parse(params)?;
+    diagnose::report_value(
+        p.include_serials,
+        &diagnose::Environment::system(),
+        &(cfg.enumerate)(),
+    )
+    .map_err(json_error)
 }
 
 pub(super) fn config_method(
