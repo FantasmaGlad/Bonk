@@ -30,6 +30,44 @@ class WriteService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val notification = notification()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        } else {
+            startForeground(NOTIFICATION, notification)
+        }
+        holdWakeLock()
+        // Foreground first: Android refuses to stop a service that is not there yet.
+        val request = intent?.getStringExtra(REQUEST)?.let(Protocol::decodeTask)
+        if (request == null || !writing.compareAndSet(false, true)) {
+            if (!writing.get()) stopSelf(startId)
+            return START_NOT_STICKY
+        }
+        thread { run(request, startId) }
+        return START_NOT_STICKY
+    }
+
+    // stopSelf(startId) leaves the service running when a later start already arrived.
+    private fun run(request: Effect, startId: Int) {
+        val actions = Actions(this, Bridge::send) { _, _ -> }
+        try {
+            when (request) {
+                is Write -> actions.runWrite(request)
+                is VaultRun -> actions.runVault(request)
+                else -> {}
+            }
+        } finally {
+            when (request) {
+                is Write -> request.device
+                is VaultRun -> request.device
+                else -> null
+            }?.let(Bridge.written::add)
+            writing.set(false)
+            stopSelf(startId)
+        }
+    }
+
+    private fun notification(): Notification {
         val manager = getSystemService(NotificationManager::class.java)
         val title = inLanguage(Bridge.language).getString(R.string.writing_notification)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, title, NotificationManager.IMPORTANCE_LOW))
@@ -41,49 +79,21 @@ class WriteService : Service() {
                 Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 PendingIntent.FLAG_IMMUTABLE,
             )
-        val notification =
-            Notification.Builder(this, CHANNEL)
-                .setContentTitle(title)
-                .setSmallIcon(android.R.drawable.stat_sys_upload)
-                .setContentIntent(open)
-                .setOngoing(true)
-                .build()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
-        } else {
-            startForeground(NOTIFICATION, notification)
-        }
+        return Notification.Builder(this, CHANNEL)
+            .setContentTitle(title)
+            .setSmallIcon(android.R.drawable.stat_sys_upload)
+            .setContentIntent(open)
+            .setOngoing(true)
+            .build()
+    }
+
+    private fun holdWakeLock() {
         if (wakeLock == null) {
             wakeLock =
                 getSystemService(PowerManager::class.java)
                     .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "bonk:write")
                     .apply { acquire(WAKE_LOCK_MS) }
         }
-        // Foreground first: Android refuses to stop a service that is not there yet.
-        val request = intent?.getStringExtra(REQUEST)?.let(Protocol::decodeTask)
-        if (request == null || !writing.compareAndSet(false, true)) {
-            if (!writing.get()) stopSelf()
-            return START_NOT_STICKY
-        }
-        thread {
-            val actions = Actions(this, Bridge::send) { _, _ -> }
-            try {
-                when (request) {
-                    is Write -> actions.runWrite(request)
-                    is VaultRun -> actions.runVault(request)
-                    else -> {}
-                }
-            } finally {
-                when (request) {
-                    is Write -> request.device
-                    is VaultRun -> request.device
-                    else -> null
-                }?.let(Bridge.written::add)
-                writing.set(false)
-                stopSelf()
-            }
-        }
-        return START_NOT_STICKY
     }
 
     override fun onDestroy() {
