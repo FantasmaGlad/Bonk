@@ -85,48 +85,53 @@ pub(crate) fn sink<'a>(
     let tty = io::stderr().is_terminal();
     let mut last = Instant::now() - Duration::from_secs(1);
     move |p| {
-        let boundary = matches!(p.phase, Phase::Flush) || p.bytes_done == 0;
         match mode {
-            ProgressMode::None => {}
-            ProgressMode::Json => {
-                // Every event goes out as is: a tool reading the stream wants every step.
-                let event = ProgressEvent {
-                    schema_version: job::SCHEMA_VERSION,
-                    event: "progress",
-                    progress: p,
-                };
-                if let Ok(line) = serde_json::to_string(&event) {
-                    let _ = writeln!(out, "{line}");
-                    let _ = out.flush();
-                }
-            }
+            ProgressMode::Json => json_progress(p, out),
             ProgressMode::Auto if tty => {
+                let boundary = matches!(p.phase, Phase::Flush) || p.bytes_done == 0;
                 if boundary || last.elapsed() >= Duration::from_millis(250) {
                     last = Instant::now();
-                    let step = match p.phase {
-                        Phase::Download => "download",
-                        Phase::Authorize => "system authorization",
-                        Phase::Source => "hash check",
-                        Phase::Write => "write",
-                        Phase::Flush => "flushing buffers",
-                        Phase::Verify => "verification",
-                    };
-                    let total = p.bytes_total.map_or_else(String::new, |t| {
-                        format!(" / {}", format_size(t, bonk_hal::Lang::En))
-                    });
-                    let _ = write!(
-                        err,
-                        "\r{step}: {}{total} ({}/s)   ",
-                        format_size(p.bytes_done, bonk_hal::Lang::En),
-                        format_size(p.bytes_per_second as u64, bonk_hal::Lang::En)
-                    );
-                    let _ = err.flush();
+                    tty_progress(p, err);
                 }
             }
-            ProgressMode::Auto => {}
+            ProgressMode::None | ProgressMode::Auto => {}
         }
         Control::Continue
     }
+}
+
+/// Every event goes out unthrottled: a tool reading the stream wants every step.
+fn json_progress(p: &Progress, out: &mut dyn Write) {
+    let event = ProgressEvent {
+        schema_version: job::SCHEMA_VERSION,
+        event: "progress",
+        progress: p,
+    };
+    if let Ok(line) = serde_json::to_string(&event) {
+        let _ = writeln!(out, "{line}");
+        let _ = out.flush();
+    }
+}
+
+fn tty_progress(p: &Progress, err: &mut dyn Write) {
+    let step = match p.phase {
+        Phase::Download => "download",
+        Phase::Authorize => "system authorization",
+        Phase::Source => "hash check",
+        Phase::Write => "write",
+        Phase::Flush => "flushing buffers",
+        Phase::Verify => "verification",
+    };
+    let total = p.bytes_total.map_or_else(String::new, |t| {
+        format!(" / {}", format_size(t, bonk_hal::Lang::En))
+    });
+    let _ = write!(
+        err,
+        "\r{step}: {}{total} ({}/s)   ",
+        format_size(p.bytes_done, bonk_hal::Lang::En),
+        format_size(p.bytes_per_second as u64, bonk_hal::Lang::En)
+    );
+    let _ = err.flush();
 }
 
 pub(super) fn end_progress_line(mode: ProgressMode, err: &mut dyn Write) {

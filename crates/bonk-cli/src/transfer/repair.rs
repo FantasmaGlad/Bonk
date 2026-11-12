@@ -20,38 +20,33 @@ pub(crate) fn run_repair(
         force: args.force,
     };
     let result = job::repair(&job, deps);
-    finish(result, &args.common, out, err, |done, out| {
+    finish(result, &args.common, out, err, repair_lines)
+}
+
+fn repair_lines(done: &job::RepairDone, out: &mut dyn Write) -> std::io::Result<()> {
+    let state = if done.needs_repair {
+        "GPT needs repair"
+    } else {
+        "GPT in order"
+    };
+    writeln!(out, "{}: {state}", target_line(&done.target))?;
+    if !done.findings_before.is_empty() {
         writeln!(
             out,
-            "{}: {}",
-            target_line(&done.target),
-            if done.needs_repair {
-                "GPT needs repair"
-            } else {
-                "GPT in order"
-            }
+            "  Findings before: {}",
+            done.findings_before.join(", ")
         )?;
-        if !done.findings_before.is_empty() {
-            writeln!(
-                out,
-                "  Findings before: {}",
-                done.findings_before.join(", ")
-            )?;
-        }
-        if let Some(r) = &done.repair {
-            writeln!(out, "  Repaired: {}", r.actions.join(", "))?;
-        }
-        if let Some(after) = &done.findings_after {
-            writeln!(
-                out,
-                "  Findings after: {}",
-                if after.is_empty() {
-                    "none".to_owned()
-                } else {
-                    after.join(", ")
-                }
-            )?;
-        }
-        Ok(())
-    })
+    }
+    if let Some(r) = &done.repair {
+        writeln!(out, "  Repaired: {}", r.actions.join(", "))?;
+    }
+    if let Some(after) = &done.findings_after {
+        let after = if after.is_empty() {
+            "none".to_owned()
+        } else {
+            after.join(", ")
+        };
+        writeln!(out, "  Findings after: {after}")?;
+    }
+    Ok(())
 }

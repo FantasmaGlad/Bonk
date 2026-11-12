@@ -439,18 +439,7 @@ where
         arch = std::env::consts::ARCH;
         "start"
     );
-    // Replayed capture: the enumeration comes from the file, and nothing can write to a real disk.
-    let fixture_reads = cli
-        .global
-        .path()
-        .map(fixture::load)
-        .transpose()
-        .map_err(|erreur| report(err, Code::FixtureInvalid, erreur))?;
-    if fixture_reads.is_some()
-        && let Some(raison) = fixture_conflict(&cli.command)
-    {
-        return Err(report(err, Code::FixtureInvalid, raison));
-    }
+    let fixture_reads = fixture_reads(&cli, err)?;
     Ok(Prepared {
         quiet: cli.log.quiet(),
         no_gui: cli.no_gui,
@@ -458,6 +447,25 @@ where
         view,
         fixture_reads,
     })
+}
+
+/// A replayed capture supplies the enumeration, and no command may then reach a real disk.
+fn fixture_reads<E: Write>(
+    cli: &Cli,
+    err: &mut E,
+) -> Result<Option<Vec<bonk_hal::SourceRead>>, u8> {
+    let reads = cli
+        .global
+        .path()
+        .map(fixture::load)
+        .transpose()
+        .map_err(|erreur| report(err, Code::FixtureInvalid, erreur))?;
+    if reads.is_some()
+        && let Some(raison) = fixture_conflict(&cli.command)
+    {
+        return Err(report(err, Code::FixtureInvalid, raison));
+    }
+    Ok(reads)
 }
 
 fn execute<I, T, O, E, L, F, G>(

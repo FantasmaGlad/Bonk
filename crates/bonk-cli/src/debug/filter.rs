@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use bonk_hal::{Disk, FilterOptions, evaluate_traced, state_label};
+use bonk_hal::{Disk, Eligibility, FilterOptions, RuleTrace, evaluate_traced, state_label};
 use schemars::JsonSchema;
 use serde::Serialize;
 
@@ -68,6 +68,17 @@ pub(crate) fn filter(
         writeln!(out)?;
         return Ok(Outcome::Done);
     }
+    print_trace(disk, options, &verdict, &rules, out)?;
+    Ok(Outcome::Done)
+}
+
+fn print_trace(
+    disk: &Disk,
+    options: FilterOptions,
+    verdict: &Eligibility,
+    rules: &[RuleTrace],
+    out: &mut dyn Write,
+) -> io::Result<()> {
     writeln!(out, "Disk {} ({})", disk.id, disk.path)?;
     writeln!(
         out,
@@ -89,7 +100,7 @@ pub(crate) fn filter(
         .max()
         .unwrap_or(0);
     let rule_width = rules.iter().map(|r| r.rule.len()).max().unwrap_or(0);
-    for rule in &rules {
+    for rule in rules {
         // The bus rule refuses nothing: when it fires, it decides the offer.
         let mark = match (rule.rule, rule.fired) {
             ("bus", true) => "VERDICT  ",
@@ -102,12 +113,7 @@ pub(crate) fn filter(
             rule.rule, rule.subject, rule.facts
         )?;
     }
-    writeln!(
-        out,
-        "Verdict: {}",
-        state_label(&verdict, bonk_hal::Lang::En)
-    )?;
-    Ok(Outcome::Done)
+    writeln!(out, "Verdict: {}", state_label(verdict, bonk_hal::Lang::En))
 }
 
 pub(crate) fn schema_filter() -> serde_json::Value {

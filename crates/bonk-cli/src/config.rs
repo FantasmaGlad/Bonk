@@ -276,6 +276,26 @@ pub(crate) fn schema() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(ListReport)).unwrap_or_default()
 }
 
+fn invalid(message: String) -> ConfigError {
+    ConfigError::Invalid(message)
+}
+
+fn key_of(name: &str) -> Result<&'static Key, ConfigError> {
+    find_key(name).ok_or_else(|| {
+        let names: Vec<&str> = KEYS.iter().map(|k| k.name).collect();
+        invalid(format!(
+            "unknown setting: '{name}' (settings: {})",
+            names.join(", ")
+        ))
+    })
+}
+
+fn need_path(path: Option<&Path>) -> Result<&Path, ConfigError> {
+    path.ok_or_else(|| {
+        invalid("configuration directory not found (BONK_CONFIG variable?)".to_owned())
+    })
+}
+
 /// Error text to print, or nothing.
 pub(crate) fn run(
     action: &ConfigAction,
@@ -283,49 +303,12 @@ pub(crate) fn run(
     vars: &[(String, String)],
     out: &mut dyn Write,
 ) -> Result<(), ConfigError> {
-    let invalid = |message: String| ConfigError::Invalid(message);
-    let key_of = |name: &str| {
-        find_key(name).ok_or_else(|| {
-            let names: Vec<&str> = KEYS.iter().map(|k| k.name).collect();
-            invalid(format!(
-                "unknown setting: '{name}' (settings: {})",
-                names.join(", ")
-            ))
-        })
-    };
-    let need_path = || {
-        path.ok_or_else(|| {
-            invalid("configuration directory not found (BONK_CONFIG variable?)".to_owned())
-        })
-    };
-    let stored = match path {
+    let mut stored = match path {
         Some(p) => load(p).map_err(invalid)?,
         None => Stored::default(),
     };
     match action {
-        ConfigAction::List { json } => {
-            let settings = effective(&stored, vars);
-            if *json {
-                let report = ListReport {
-                    schema_version: 1,
-                    file: path.map(|p| p.display().to_string()),
-                    settings,
-                };
-                serde_json::to_writer_pretty(&mut *out, &report).map_err(io::Error::from)?;
-                writeln!(out)?;
-            } else {
-                let width = settings.iter().map(|e| e.key.len()).max().unwrap_or(0);
-                for e in &settings {
-                    let origin = match (e.origin, &e.variable) {
-                        (Origin::Default, _) => "default".to_owned(),
-                        (Origin::File, _) => "file".to_owned(),
-                        (Origin::Environment, Some(v)) => format!("variable {v}"),
-                        (Origin::Environment, None) => "variable".to_owned(),
-                    };
-                    writeln!(out, "{:<width$}  {}  ({origin})", e.key, e.value)?;
-                }
-            }
-        }
+        ConfigAction::List { json } => list(effective(&stored, vars), path, *json, out),
         ConfigAction::Get { key } => {
             let key = key_of(key)?;
             let settings = effective(&stored, vars);
@@ -334,27 +317,55 @@ pub(crate) fn run(
                 "{}",
                 value_of(&settings, key.name).unwrap_or(key.default)
             )?;
+            Ok(())
         }
         ConfigAction::Set { key, value } => {
             let key = key_of(key)?;
             let value = normalize(key, value).map_err(invalid)?;
-            let mut stored = stored;
             stored.values.insert(key.name.to_owned(), value.clone());
-            save(need_path()?, &stored)?;
+            save(need_path(path)?, &stored)?;
             writeln!(out, "{} = {value}", key.name)?;
+            Ok(())
         }
         ConfigAction::Reset { key } => {
-            let mut stored = stored;
             match key {
                 Some(name) => {
-                    let key = key_of(name)?;
-                    stored.values.remove(key.name);
+                    stored.values.remove(key_of(name)?.name);
                 }
                 None => stored.values.clear(),
             }
-            save(need_path()?, &stored)?;
+            save(need_path(path)?, &stored)?;
             writeln!(out, "Settings restored to their default values.")?;
+            Ok(())
         }
+    }
+}
+
+fn list(
+    settings: Vec<Effective>,
+    path: Option<&Path>,
+    json: bool,
+    out: &mut dyn Write,
+) -> Result<(), ConfigError> {
+    if json {
+        let report = ListReport {
+            schema_version: 1,
+            file: path.map(|p| p.display().to_string()),
+            settings,
+        };
+        serde_json::to_writer_pretty(&mut *out, &report).map_err(io::Error::from)?;
+        writeln!(out)?;
+        return Ok(());
+    }
+    let width = settings.iter().map(|e| e.key.len()).max().unwrap_or(0);
+    for e in &settings {
+        let origin = match (e.origin, &e.variable) {
+            (Origin::Default, _) => "default".to_owned(),
+            (Origin::File, _) => "file".to_owned(),
+            (Origin::Environment, Some(v)) => format!("variable {v}"),
+            (Origin::Environment, None) => "variable".to_owned(),
+        };
+        writeln!(out, "{:<width$}  {}  ({origin})", e.key, e.value)?;
     }
     Ok(())
 }

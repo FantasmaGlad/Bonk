@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use bonk_catalog::manifest;
@@ -278,45 +278,43 @@ fn run_init(
         &args.common,
         out,
         err,
-        |done, out| {
-            writeln!(
-                out,
-                "{} {}",
-                if done.dry_run {
-                    "Plan (nothing is written):"
-                } else {
-                    "Vault ready:"
-                },
-                target_line(&done.target),
-            )?;
-            writeln!(out, "  Table: {}", done.layout.table.name())?;
-            writeln!(
-                out,
-                "  Partition 1: {}, exFAT, {}: copy the ISO images here",
-                done.vault_label,
-                size(done.layout.vault, done.block_size)
-            )?;
-            writeln!(
-                out,
-                "  Partition 2: {}, FAT32, EFI system partition, {}",
-                done.efi_label,
-                size(done.layout.efi, done.block_size)
-            )?;
-            if let Some(grub) = &done.grub {
-                writeln!(out, "  GRUB {}, build {}", grub.version, grub.build)?;
-                for (arch, sha256) in &grub.efi {
-                    writeln!(out, "    {arch}: sha256 {sha256}")?;
-                }
-            }
-            if !done.unmounted.is_empty() {
-                writeln!(out, "  Unmount: {}", done.unmounted.join(", "))?;
-            }
-            if done.verified {
-                writeln!(out, "  Read-back: matches")?;
-            }
-            Ok(())
-        },
+        init_lines,
     )
+}
+
+fn init_lines(done: &VaultInitDone, out: &mut dyn Write) -> io::Result<()> {
+    let head = if done.dry_run {
+        "Plan (nothing is written):"
+    } else {
+        "Vault ready:"
+    };
+    writeln!(out, "{head} {}", target_line(&done.target))?;
+    writeln!(out, "  Table: {}", done.layout.table.name())?;
+    writeln!(
+        out,
+        "  Partition 1: {}, exFAT, {}: copy the ISO images here",
+        done.vault_label,
+        size(done.layout.vault, done.block_size)
+    )?;
+    writeln!(
+        out,
+        "  Partition 2: {}, FAT32, EFI system partition, {}",
+        done.efi_label,
+        size(done.layout.efi, done.block_size)
+    )?;
+    if let Some(grub) = &done.grub {
+        writeln!(out, "  GRUB {}, build {}", grub.version, grub.build)?;
+        for (arch, sha256) in &grub.efi {
+            writeln!(out, "    {arch}: sha256 {sha256}")?;
+        }
+    }
+    if !done.unmounted.is_empty() {
+        writeln!(out, "  Unmount: {}", done.unmounted.join(", "))?;
+    }
+    if done.verified {
+        writeln!(out, "  Read-back: matches")?;
+    }
+    Ok(())
 }
 
 fn run_list(
