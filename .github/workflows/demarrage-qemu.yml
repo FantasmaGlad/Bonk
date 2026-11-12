@@ -124,7 +124,7 @@ jobs:
           MOTIF: ${{ matrix.motif }}
           SOMMES: ${{ matrix.sommes || 'SHA256SUMS' }}
         run: |
-          iso=$(curl --fail --silent --show-error --location "$BASE/$SOMMES" | grep -o "$MOTIF" | head -n 1)
+          iso=$(curl --fail --silent --show-error --location --connect-timeout 30 --retry 5 --retry-all-errors "$BASE/$SOMMES" | grep -o "$MOTIF" | head -n 1)
           test -n "$iso"
           echo "URL=$BASE/$iso" >> "$GITHUB_ENV"
           echo "SHA256_FILE=$BASE/$SOMMES" >> "$GITHUB_ENV"
@@ -216,7 +216,7 @@ jobs:
           MOTIF: ${{ matrix.motif }}
           SOMMES: ${{ matrix.sommes || 'SHA256SUMS' }}
         run: |
-          iso=$(curl --fail --silent --show-error --location "$BASE/$SOMMES" | grep -o "$MOTIF" | head -n 1)
+          iso=$(curl --fail --silent --show-error --location --connect-timeout 30 --retry 5 --retry-all-errors "$BASE/$SOMMES" | grep -o "$MOTIF" | head -n 1)
           test -n "$iso"
           echo "URL=$BASE/$iso" >> "$GITHUB_ENV"
           echo "SHA256_FILE=$BASE/$SOMMES" >> "$GITHUB_ENV"

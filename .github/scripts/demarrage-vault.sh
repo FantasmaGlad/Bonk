@@ -15,9 +15,9 @@ cle="$travail/cle.img"
 
 "$bonk" vault init --simulate "$cle" --size "${VAULT_SIZE:-$((3 << 30))}" --yes --progress none --cache-dir "$travail/cache"
 
-curl --fail --silent --show-error --location --retry 5 --retry-all-errors --continue-at - --output "$travail/$nom" "$source"
+curl --fail --silent --show-error --location --connect-timeout 30 --retry 5 --retry-all-errors --continue-at - --output "$travail/$nom" "$source"
 # GNU lines (`sum  name`) or BSD lines (`SHA256 (name) = sum`, Fedora).
-attendu=$(curl --fail --silent --show-error --location "$sommes" | awk -v n="$nom" '
+attendu=$(curl --fail --silent --show-error --location --connect-timeout 30 --retry 5 --retry-all-errors "$sommes" | awk -v n="$nom" '
   $2 == n || $2 == "*" n {print $1}
   $1 == "SHA256" && $2 == "(" n ")" {print $4}')
 test -n "$attendu"
