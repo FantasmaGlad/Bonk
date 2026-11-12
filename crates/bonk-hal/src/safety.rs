@@ -145,8 +145,40 @@ impl Tracer<'_> {
 }
 
 fn decide(disk: &Disk, options: FilterOptions, tracer: &mut Tracer<'_>) -> Eligibility {
-    let mut reasons = Vec::new();
+    let reasons = exclusions(disk, options, tracer);
+    let no_medium = disk.size_bytes == 0;
+    tracer.note(
+        "no_medium",
+        &disk.path,
+        no_medium && reasons.is_empty(),
+        || format!("size_bytes={}", disk.size_bytes),
+    );
+    let verdict = if reasons.is_empty() {
+        bus_verdict(disk, options, no_medium)
+    } else {
+        Eligibility::Excluded { reasons }
+    };
+    // The bus rule only applies to a disk no exclusion removed.
+    let excluded = matches!(verdict, Eligibility::Excluded { .. });
+    tracer.note("bus", &disk.path, !excluded, || {
+        format!(
+            "bus={:?} removable_bus={} show_internal={} allow_virtual={} -> {}",
+            disk.bus,
+            disk.bus.is_removable(),
+            options.show_internal,
+            options.allow_virtual,
+            if excluded {
+                "not reached (excluded above)"
+            } else {
+                crate::describe::verdict_badge(&verdict, crate::describe::Lang::En)
+            }
+        )
+    });
+    verdict
+}
 
+fn exclusions(disk: &Disk, options: FilterOptions, tracer: &mut Tracer<'_>) -> Vec<Exclusion> {
+    let mut reasons = Vec::new();
     let virtual_disk = disk.kind != DiskKind::Physical && !options.allow_virtual;
     tracer.note("virtual_disk", &disk.path, virtual_disk, || {
         format!(
@@ -180,17 +212,12 @@ fn decide(disk: &Disk, options: FilterOptions, tracer: &mut Tracer<'_>) -> Eligi
     for partition in &disk.partitions {
         push_partition_exclusions(&mut reasons, tracer, disk.bus, partition);
     }
+    reasons
+}
 
-    let no_medium = disk.size_bytes == 0;
-    tracer.note(
-        "no_medium",
-        &disk.path,
-        no_medium && reasons.is_empty(),
-        || format!("size_bytes={}", disk.size_bytes),
-    );
-    let verdict = if !reasons.is_empty() {
-        Eligibility::Excluded { reasons }
-    } else if no_medium {
+/// Verdict of a disk no rule excluded.
+fn bus_verdict(disk: &Disk, options: FilterOptions, no_medium: bool) -> Eligibility {
+    if no_medium {
         Eligibility::Hidden {
             reason: HiddenReason::NoMedium,
         }
@@ -210,24 +237,7 @@ fn decide(disk: &Disk, options: FilterOptions, tracer: &mut Tracer<'_>) -> Eligi
         Eligibility::Hidden {
             reason: HiddenReason::InternalBus,
         }
-    };
-    // The bus rule only applies to a disk no exclusion removed.
-    let excluded = matches!(verdict, Eligibility::Excluded { .. });
-    tracer.note("bus", &disk.path, !excluded, || {
-        format!(
-            "bus={:?} removable_bus={} show_internal={} allow_virtual={} -> {}",
-            disk.bus,
-            disk.bus.is_removable(),
-            options.show_internal,
-            options.allow_virtual,
-            if excluded {
-                "not reached (excluded above)"
-            } else {
-                crate::describe::verdict_badge(&verdict, crate::describe::Lang::En)
-            }
-        )
-    });
-    verdict
+    }
 }
 
 /// Rules shared by the whole disk and its partitions.
@@ -301,6 +311,16 @@ fn push_partition_exclusions(
         partition.fs_type.as_deref(),
         &partition.holders,
     );
+    push_mount_exclusions(reasons, tracer, bus, partition);
+}
+
+fn push_mount_exclusions(
+    reasons: &mut Vec<Exclusion>,
+    tracer: &mut Tracer<'_>,
+    bus: Bus,
+    partition: &Partition,
+) {
+    let path = partition.path.as_str();
     if partition.mount_points.is_empty() {
         tracer.note("mounted_outside_user_paths", path, false, || {
             "not mounted".to_owned()

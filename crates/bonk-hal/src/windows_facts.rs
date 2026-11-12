@@ -155,85 +155,109 @@ pub fn normalize(facts: &WindowsFacts) -> Result<Vec<Disk>, EnumerateError> {
         .as_deref()
         .filter(|d| !d.is_empty())
         .ok_or_else(|| malformed("system drive unknown"))?;
-    let is_system = |volume: &RawVolume| volume.mount_points.iter().any(|m| is_on_drive(m, drive));
-    if !facts.volumes.iter().filter(|v| is_system(v)).any(|v| {
+    let host = Host { facts, drive };
+    if !facts.volumes.iter().filter(|v| host.is_system(v)).any(|v| {
         v.extents
             .iter()
             .any(|e| facts.disks.iter().any(|d| d.number == e.disk))
     }) {
         return Err(malformed("no enumerated disk holds the system volume"));
     }
-
-    let mut disks: Vec<Disk> = facts
-        .disks
-        .iter()
-        .map(|raw| {
-            let (bus, kind) = bus_of(raw.bus_type);
-            let hosts_system = facts
-                .volumes
-                .iter()
-                .any(|v| is_system(v) && v.extents.iter().any(|e| e.disk == raw.number));
-            let path = format!(r"\\.\PhysicalDrive{}", raw.number);
-            // A volume in several extents, or starting on no known partition, is stacked on the disk: neither
-            // the partition nor the disk is free.
-            let holders = facts
-                .volumes
-                .iter()
-                .filter(|v| {
-                    v.extents.iter().any(|e| e.disk == raw.number)
-                        && (v.extents.len() > 1
-                            || !v.extents.iter().any(|e| {
-                                raw.partitions.iter().any(|p| p.offset == e.offset)
-                            }))
-                })
-                .map(|v| v.name.clone())
-                .collect();
-            let partitions = raw
-                .partitions
-                .iter()
-                .map(|partition| {
-                    let volume = facts.volumes.iter().find(|v| {
-                        matches!(v.extents.as_slice(), [e] if e.disk == raw.number && e.offset == partition.offset)
-                    });
-                    let file_system = volume
-                        .and_then(|v| v.file_system.as_deref())
-                        .map(file_system_name);
-                    Partition {
-                        path: format!(r"{path}\Partition{}", partition.number),
-                        label: volume.and_then(|v| v.label.clone()),
-                        fs_type: signature_of(partition).map(str::to_owned).or(file_system),
-                        size_bytes: partition.size_bytes,
-                        mount_points: volume.map(|v| v.mount_points.clone()).unwrap_or_default(),
-                        holders: Vec::new(),
-                        is_system_volume: volume.is_some_and(is_system),
-                        is_active_esp: hosts_system && is_esp(partition),
-                    }
-                })
-                .collect();
-            let model = [raw.vendor.as_deref(), raw.product.as_deref()]
-                .into_iter()
-                .flatten()
-                .collect::<Vec<_>>()
-                .join(" ");
-            Disk {
-                id: stable_id(raw, bus),
-                path,
-                model,
-                serial: raw.serial.clone(),
-                size_bytes: raw.size_bytes,
-                bus,
-                kind,
-                removable_flag: raw.removable,
-                logical_block_size: raw.block_size,
-                location: raw.instance.clone(),
-                fs_type: None,
-                holders,
-                partitions,
-            }
-        })
-        .collect();
+    let mut disks: Vec<Disk> = facts.disks.iter().map(|raw| host.disk(raw)).collect();
     disambiguate(&mut disks);
     Ok(disks)
+}
+
+struct Host<'a> {
+    facts: &'a WindowsFacts,
+    drive: &'a str,
+}
+
+impl Host<'_> {
+    fn is_system(&self, volume: &RawVolume) -> bool {
+        volume
+            .mount_points
+            .iter()
+            .any(|m| is_on_drive(m, self.drive))
+    }
+
+    fn disk(&self, raw: &RawDisk) -> Disk {
+        let (bus, kind) = bus_of(raw.bus_type);
+        let hosts_system = self
+            .facts
+            .volumes
+            .iter()
+            .any(|v| self.is_system(v) && v.extents.iter().any(|e| e.disk == raw.number));
+        let path = format!(r"\\.\PhysicalDrive{}", raw.number);
+        let partitions = raw
+            .partitions
+            .iter()
+            .map(|partition| self.partition(raw, &path, partition, hosts_system))
+            .collect();
+        let model = [raw.vendor.as_deref(), raw.product.as_deref()]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" ");
+        Disk {
+            id: stable_id(raw, bus),
+            path,
+            model,
+            serial: raw.serial.clone(),
+            size_bytes: raw.size_bytes,
+            bus,
+            kind,
+            removable_flag: raw.removable,
+            logical_block_size: raw.block_size,
+            location: raw.instance.clone(),
+            fs_type: None,
+            holders: self.holders(raw),
+            partitions,
+        }
+    }
+
+    /// A volume in several extents, or starting on no known partition, is stacked on the disk: neither the
+    /// partition nor the disk is free.
+    fn holders(&self, raw: &RawDisk) -> Vec<String> {
+        self.facts
+            .volumes
+            .iter()
+            .filter(|v| {
+                v.extents.iter().any(|e| e.disk == raw.number)
+                    && (v.extents.len() > 1
+                        || !v
+                            .extents
+                            .iter()
+                            .any(|e| raw.partitions.iter().any(|p| p.offset == e.offset)))
+            })
+            .map(|v| v.name.clone())
+            .collect()
+    }
+
+    fn partition(
+        &self,
+        raw: &RawDisk,
+        path: &str,
+        partition: &RawPartition,
+        hosts_system: bool,
+    ) -> Partition {
+        let volume = self.facts.volumes.iter().find(|v| {
+            matches!(v.extents.as_slice(), [e] if e.disk == raw.number && e.offset == partition.offset)
+        });
+        let file_system = volume
+            .and_then(|v| v.file_system.as_deref())
+            .map(file_system_name);
+        Partition {
+            path: format!(r"{path}\Partition{}", partition.number),
+            label: volume.and_then(|v| v.label.clone()),
+            fs_type: signature_of(partition).map(str::to_owned).or(file_system),
+            size_bytes: partition.size_bytes,
+            mount_points: volume.map(|v| v.mount_points.clone()).unwrap_or_default(),
+            holders: Vec::new(),
+            is_system_volume: volume.is_some_and(|v| self.is_system(v)),
+            is_active_esp: hosts_system && is_esp(partition),
+        }
+    }
 }
 
 /// Some USB bridges give all their units the same serial: an ambiguous id could name the wrong disk.
