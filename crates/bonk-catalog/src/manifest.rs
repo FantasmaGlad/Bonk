@@ -368,17 +368,7 @@ pub fn verify(
     if !signed {
         return Err(CatalogError::BadSignature);
     }
-    // Version first: a newer format may not parse as this one.
-    #[derive(Deserialize)]
-    struct Header {
-        schema_version: u32,
-    }
-    let unreadable = |e: serde_json::Error| CatalogError::Unreadable(e.to_string());
-    let header: Header = serde_json::from_slice(manifest).map_err(unreadable)?;
-    if header.schema_version != SCHEMA_VERSION {
-        return Err(CatalogError::UnsupportedVersion(header.schema_version));
-    }
-    let catalog: Catalog = serde_json::from_slice(manifest).map_err(unreadable)?;
+    let catalog = parse(manifest)?;
     if catalog.expires_unix <= trust.now_unix {
         return Err(CatalogError::Expired {
             expires_unix: catalog.expires_unix,
@@ -390,42 +380,54 @@ pub fn verify(
             seen: trust.seen_sequence,
         });
     }
+    check_entries(&catalog)?;
+    if let Some(grub) = &catalog.grub {
+        check_grub(grub).map_err(CatalogError::InvalidGrub)?;
+    }
+    Ok(catalog)
+}
+
+/// Version first: a newer format may not parse as this one.
+fn parse(manifest: &[u8]) -> Result<Catalog, CatalogError> {
+    #[derive(Deserialize)]
+    struct Header {
+        schema_version: u32,
+    }
+    let unreadable = |e: serde_json::Error| CatalogError::Unreadable(e.to_string());
+    let header: Header = serde_json::from_slice(manifest).map_err(unreadable)?;
+    if header.schema_version != SCHEMA_VERSION {
+        return Err(CatalogError::UnsupportedVersion(header.schema_version));
+    }
+    serde_json::from_slice(manifest).map_err(unreadable)
+}
+
+fn invalid(id: &str, reason: &'static str) -> CatalogError {
+    CatalogError::InvalidImage {
+        id: id.to_owned(),
+        reason,
+    }
+}
+
+/// Unique, valid families, and images that are unique, valid and of a known family.
+fn check_entries(catalog: &Catalog) -> Result<(), CatalogError> {
     let mut families = HashSet::new();
     for family in &catalog.families {
-        check_family(family).map_err(|reason| CatalogError::InvalidImage {
-            id: family.id.clone(),
-            reason,
-        })?;
+        check_family(family).map_err(|reason| invalid(&family.id, reason))?;
         if !families.insert(family.id.as_str()) {
-            return Err(CatalogError::InvalidImage {
-                id: family.id.clone(),
-                reason: "duplicate identifier",
-            });
+            return Err(invalid(&family.id, "duplicate identifier"));
         }
     }
     let mut ids = HashSet::new();
     for image in &catalog.images {
         if !families.contains(image.family.as_str()) {
-            return Err(CatalogError::InvalidImage {
-                id: image.id.clone(),
-                reason: "unknown family",
-            });
+            return Err(invalid(&image.id, "unknown family"));
         }
-        check_image(image).map_err(|reason| CatalogError::InvalidImage {
-            id: image.id.clone(),
-            reason,
-        })?;
+        check_image(image).map_err(|reason| invalid(&image.id, reason))?;
         if !ids.insert(image.id.as_str()) {
-            return Err(CatalogError::InvalidImage {
-                id: image.id.clone(),
-                reason: "duplicate identifier",
-            });
+            return Err(invalid(&image.id, "duplicate identifier"));
         }
     }
-    if let Some(grub) = &catalog.grub {
-        check_grub(grub).map_err(CatalogError::InvalidGrub)?;
-    }
-    Ok(catalog)
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

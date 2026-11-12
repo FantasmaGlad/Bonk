@@ -401,12 +401,26 @@ fn attempt(
             return Ok(Attempt::Retry(format!("{url}: response lost")));
         }
     };
-    let total = match head.status {
+    match accept(head, url, partial)? {
+        Accepted::Body(total) => receive(&events, url, total, partial, hooks),
+        Accepted::Done(attempt) => Ok(attempt),
+    }
+}
+
+enum Accepted {
+    /// The body follows; its total length when known.
+    Body(Option<u64>),
+    Done(Attempt),
+}
+
+fn accept(head: Head, url: &str, partial: &mut Partial) -> Result<Accepted, DownloadError> {
+    let from = partial.done;
+    match head.status {
         200 => {
             // Resume refused or file changed: start over.
             partial.restart()?;
             partial.remember(head.validator)?;
-            head.content_length
+            Ok(Accepted::Body(head.content_length))
         }
         206 => {
             let range = head.content_range.as_deref().and_then(parse_content_range);
@@ -419,32 +433,37 @@ fn attempt(
             if partial.validator.is_none() {
                 partial.remember(head.validator)?;
             }
-            total
+            Ok(Accepted::Body(total))
         }
         416 => {
             let total = head.content_range.as_deref().and_then(unsatisfied_total);
             if total == Some(from) {
-                return Ok(Attempt::Complete);
+                return Ok(Accepted::Done(Attempt::Complete));
             }
             partial.restart()?;
-            return Ok(Attempt::Retry(format!(
+            Ok(Accepted::Done(Attempt::Retry(format!(
                 "{url}: partial file longer than the original"
-            )));
+            ))))
         }
-        status if status >= 500 || status == 408 || status == 429 => {
-            return Ok(Attempt::Retry(format!(
-                "{url}: the server answers {status}"
-            )));
-        }
-        status => {
-            return Err(DownloadError::Refused {
-                url: url.to_owned(),
-                status,
-            });
-        }
-    };
+        status if status >= 500 || status == 408 || status == 429 => Ok(Accepted::Done(
+            Attempt::Retry(format!("{url}: the server answers {status}")),
+        )),
+        status => Err(DownloadError::Refused {
+            url: url.to_owned(),
+            status,
+        }),
+    }
+}
+
+fn receive(
+    events: &Receiver<Event>,
+    url: &str,
+    total: Option<u64>,
+    partial: &mut Partial,
+    hooks: &mut Hooks<'_>,
+) -> Result<Attempt, DownloadError> {
     loop {
-        match next_event(&events, hooks)? {
+        match next_event(events, hooks)? {
             Next::Event(Event::Chunk(chunk)) => {
                 partial.file.write_all(&chunk)?;
                 partial.done += chunk.len() as u64;
