@@ -46,3 +46,14 @@ updates:
     groups:
       fuzz:
         patterns: ["*"]
+  - package-ecosystem: gradle
+    directory: /android
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 1
+    groups:
+      gradle:
+        patterns: ["*"]
