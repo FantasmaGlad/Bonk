@@ -93,6 +93,14 @@ impl App {
 
     pub(crate) fn update(&mut self, message: Message) -> Task<Message> {
         let effects = self.model.update(message);
+        #[cfg(target_os = "macos")]
+        let effects = {
+            let mut effects = effects;
+            for id in crate::link_macos::take() {
+                effects.extend(self.model.update(Message::RequestImage(id)));
+            }
+            effects
+        };
         self.draw_theme();
         self.run(effects)
     }

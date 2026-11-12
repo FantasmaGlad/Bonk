@@ -1,4 +1,6 @@
 mod app;
+#[cfg(target_os = "macos")]
+mod link_macos;
 pub use bonk_ui::french_title;
 mod locale;
 mod theme;
@@ -92,6 +94,8 @@ fn window_icon() -> Option<iced::window::Icon> {
 }
 
 fn launch(start: Start) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    link_macos::listen();
     iced::application(move || App::new(start.clone()), App::update, App::view)
         .title("Bonk")
         // Shipped in the binary (SIL OFL 1.1, assets/fonts/OFL.txt): nothing is read from the system or the

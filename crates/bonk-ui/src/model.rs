@@ -83,6 +83,8 @@ pub enum Message {
     Write(Event),
     Vault(crate::vault::VaultMessage),
     Settings(crate::settings::SettingsMessage),
+    /// A `bonk://install/` link opened while the window runs (macOS sends it to the running process).
+    RequestImage(String),
 }
 
 /// Each has the same effect as a click.
@@ -229,6 +231,7 @@ pub fn ui_event(message: &Message) -> Option<(&'static str, String)> {
             if path.is_some() { "choisie" } else { "aucune" }.to_owned(),
         ),
         Message::ToggleMenu => ("click_menu", String::new()),
+        Message::RequestImage(id) => ("open_link", id.clone()),
         Message::MenuCategory(value) | Message::MenuSystem(value) => {
             ("menu_filter", value.clone().unwrap_or_default())
         }

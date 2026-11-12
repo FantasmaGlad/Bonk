@@ -145,3 +145,15 @@ fn un_catalogue_illisible_est_dit_pour_l_image_demandee() {
         "Le catalogue n'a pas pu être lu : ubuntu-26.04-desktop-x86_64 n'est pas choisi."
     ));
 }
+
+#[test]
+fn un_lien_recu_pendant_que_la_fenetre_tourne_choisit_l_image() {
+    let mut app = app_avec_panneau();
+    catalogue_lu(&mut app);
+    let _ = app.update(Message::RequestImage(UBUNTU.to_owned()));
+    assert_eq!(app.requested.as_deref(), Some(UBUNTU));
+    assert_eq!(
+        brouillon(&app),
+        Some(("https://u/26.iso", "a".repeat(64).as_str()))
+    );
+}
