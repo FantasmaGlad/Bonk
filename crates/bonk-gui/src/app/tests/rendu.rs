@@ -114,13 +114,13 @@ type Capture = Result<(), Box<dyn std::error::Error>>;
 
 /// In the theme chosen now: [`crate::theme::choose`] is global to the process.
 fn capture(app: &App, height: f32, dossier: &std::path::Path, nom: &str) -> Capture {
-    Simulator::with_size(
-        iced::Settings::default(),
-        Size::new(960.0, height),
-        app.view(),
-    )
-    .snapshot(&crate::theme::bonk())?
-    .matches_image(dossier.join(nom))?;
+    capture_a(app, Size::new(960.0, height), dossier, nom)
+}
+
+fn capture_a(app: &App, size: Size, dossier: &std::path::Path, nom: &str) -> Capture {
+    Simulator::with_size(iced::Settings::default(), size, app.view())
+        .snapshot(&crate::theme::bonk())?
+        .matches_image(dossier.join(nom))?;
     Ok(())
 }
 
@@ -159,6 +159,12 @@ fn captures_ecriture(dossier: &std::path::Path) -> Capture {
     let _ = ecriture.update(Message::ImageInput(
         "/home/alice/images/debian-12.iso".to_owned(),
     ));
+    capture_a(
+        &ecriture,
+        Size::new(640.0, 900.0),
+        dossier,
+        "fenetre-ecriture-etroite",
+    )?;
     vieillir_le_panneau(&mut ecriture);
     ecriture.focus = Some(Focus::Action);
     capture(&ecriture, 760.0, dossier, "fenetre-ecriture")?;

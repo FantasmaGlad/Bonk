@@ -106,6 +106,8 @@ fn launch(start: Start) -> Result<(), String> {
         .subscription(App::subscription)
         .window(iced::window::Settings {
             icon: window_icon(),
+            // Below this the write panel's buttons no longer fit on one line.
+            min_size: Some(Size::new(480.0, 480.0)),
             ..iced::window::Settings::default()
         })
         .window_size(Size::new(960.0, 640.0))
