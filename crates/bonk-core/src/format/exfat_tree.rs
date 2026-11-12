@@ -140,6 +140,8 @@ fn narrow(value: u64) -> Result<u32, FormatError> {
     u32::try_from(value).map_err(|_| FormatError::TooLarge(format!("{value}: too large for exFAT")))
 }
 
+type Names = BTreeMap<Vec<String>, Vec<Vec<u16>>>;
+
 /// # Errors
 /// Volume too small, refused name, names equal once upper-cased, or directory over 256 MiB.
 pub fn layout(
@@ -151,49 +153,9 @@ pub fn layout(
     let geo = geometry(volume.sectors, block)?;
     let upcase = upcase_map();
     let children: Children = collect_children(files, extra_directories, u64::MAX, "exFAT")?;
-
-    let mut names: BTreeMap<Vec<String>, Vec<Vec<u16>>> = BTreeMap::new();
-    for (path, list) in &children {
-        let mut seen = BTreeSet::new();
-        let mut units_of = Vec::with_capacity(list.len());
-        for child in list {
-            let units = name_units(&child.name)?;
-            let key: Vec<u16> = units.iter().map(|u| upcase[usize::from(*u)]).collect();
-            if !seen.insert(key) {
-                return Err(FormatError::Name(format!(
-                    "{}: two names exFAT cannot tell apart",
-                    child.name
-                )));
-            }
-            units_of.push(units);
-        }
-        names.insert(path.clone(), units_of);
-    }
-
+    let names = name_units_by_directory(&children, &upcase)?;
     let mut next = u64::from(geo.root_cluster());
-    let mut placed_dirs: BTreeMap<Vec<String>, Placed> = BTreeMap::new();
-    for (path, units_of) in &names {
-        let mut entries: usize = units_of.iter().map(|u| entries_for(u)).sum();
-        if path.is_empty() {
-            entries += if volume.label.is_some() { 3 } else { 2 };
-        }
-        let bytes = (entries * ENTRY) as u64;
-        if bytes > MAX_DIRECTORY_BYTES {
-            return Err(FormatError::TooLarge(format!(
-                "/{}: directory larger than exFAT allows",
-                path.join("/")
-            )));
-        }
-        let clusters = geo.clusters_for(bytes);
-        placed_dirs.insert(
-            path.clone(),
-            Placed {
-                first_cluster: narrow(next)?,
-                clusters: narrow(clusters)?,
-            },
-        );
-        next += clusters;
-    }
+    let placed_dirs = place_directories(&names, &geo, volume.label.is_some(), &mut next)?;
     let mut placed_files = Vec::with_capacity(files.len());
     for file in files {
         let clusters = file.size.div_ceil(u64::from(geo.cluster_bytes));
@@ -211,40 +173,19 @@ pub fn layout(
             u64::from(geo.clusters) * u64::from(geo.cluster_bytes)
         )));
     }
-
-    let cluster_bytes = u64::from(geo.cluster_bytes);
-    let mut directories = Vec::with_capacity(names.len());
-    for (path, units_of) in &names {
-        let placed = placed_dirs[path];
-        let mut bytes = if path.is_empty() {
-            system_entries(&geo, volume.label)
-        } else {
-            Vec::new()
-        };
-        for (child, units) in children[path].iter().zip(units_of) {
-            bytes.extend(match &child.kind {
-                ChildKind::File(index) => entry_set(
-                    units,
-                    &upcase,
-                    false,
-                    placed_files[*index],
-                    files[*index].size,
-                ),
-                ChildKind::Directory(sub) => {
-                    let dir = placed_dirs[sub];
-                    entry_set(
-                        units,
-                        &upcase,
-                        true,
-                        dir,
-                        u64::from(dir.clusters) * cluster_bytes,
-                    )
-                }
-            });
-        }
-        bytes.resize((u64::from(placed.clusters) * cluster_bytes) as usize, 0);
-        directories.push((placed, bytes));
-    }
+    let tree = Tree {
+        geo: &geo,
+        label: volume.label,
+        upcase: &upcase,
+        children: &children,
+        files,
+        placed_dirs: &placed_dirs,
+        placed_files: &placed_files,
+    };
+    let mut directories: Vec<(Placed, Vec<u8>)> = names
+        .iter()
+        .map(|(path, units_of)| (placed_dirs[path], tree.directory(path, units_of)))
+        .collect();
     // Root first: only it is chained in the FAT.
     directories.sort_by_key(|(placed, _)| placed.first_cluster);
     Ok(Layout {
@@ -257,6 +198,104 @@ pub fn layout(
         sizes: files.iter().map(|file| file.size).collect(),
         used_clusters: narrow(used)?,
     })
+}
+
+fn name_units_by_directory(children: &Children, upcase: &[u16]) -> Result<Names, FormatError> {
+    let mut names = Names::new();
+    for (path, list) in children {
+        let mut seen = BTreeSet::new();
+        let mut units_of = Vec::with_capacity(list.len());
+        for child in list {
+            let units = name_units(&child.name)?;
+            let key: Vec<u16> = units.iter().map(|u| upcase[usize::from(*u)]).collect();
+            if !seen.insert(key) {
+                return Err(FormatError::Name(format!(
+                    "{}: two names exFAT cannot tell apart",
+                    child.name
+                )));
+            }
+            units_of.push(units);
+        }
+        names.insert(path.clone(), units_of);
+    }
+    Ok(names)
+}
+
+fn place_directories(
+    names: &Names,
+    geo: &Geometry,
+    labelled: bool,
+    next: &mut u64,
+) -> Result<BTreeMap<Vec<String>, Placed>, FormatError> {
+    let mut placed = BTreeMap::new();
+    for (path, units_of) in names {
+        let mut entries: usize = units_of.iter().map(|u| entries_for(u)).sum();
+        if path.is_empty() {
+            entries += if labelled { 3 } else { 2 };
+        }
+        let bytes = (entries * ENTRY) as u64;
+        if bytes > MAX_DIRECTORY_BYTES {
+            return Err(FormatError::TooLarge(format!(
+                "/{}: directory larger than exFAT allows",
+                path.join("/")
+            )));
+        }
+        let clusters = geo.clusters_for(bytes);
+        placed.insert(
+            path.clone(),
+            Placed {
+                first_cluster: narrow(*next)?,
+                clusters: narrow(clusters)?,
+            },
+        );
+        *next += clusters;
+    }
+    Ok(placed)
+}
+
+struct Tree<'a> {
+    geo: &'a Geometry,
+    label: Option<&'a str>,
+    upcase: &'a [u16],
+    children: &'a Children,
+    files: &'a [NewFile],
+    placed_dirs: &'a BTreeMap<Vec<String>, Placed>,
+    placed_files: &'a [Placed],
+}
+
+impl Tree<'_> {
+    fn directory(&self, path: &Vec<String>, units_of: &[Vec<u16>]) -> Vec<u8> {
+        let cluster_bytes = u64::from(self.geo.cluster_bytes);
+        let mut bytes = if path.is_empty() {
+            system_entries(self.geo, self.label)
+        } else {
+            Vec::new()
+        };
+        for (child, units) in self.children[path].iter().zip(units_of) {
+            bytes.extend(match &child.kind {
+                ChildKind::File(index) => entry_set(
+                    units,
+                    self.upcase,
+                    false,
+                    self.placed_files[*index],
+                    self.files[*index].size,
+                ),
+                ChildKind::Directory(sub) => {
+                    let dir = self.placed_dirs[sub];
+                    entry_set(
+                        units,
+                        self.upcase,
+                        true,
+                        dir,
+                        u64::from(dir.clusters) * cluster_bytes,
+                    )
+                }
+            });
+        }
+        let placed = self.placed_dirs[path];
+        bytes.resize((u64::from(placed.clusters) * cluster_bytes) as usize, 0);
+        bytes
+    }
 }
 
 impl Layout {
