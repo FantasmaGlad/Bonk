@@ -166,7 +166,6 @@ fn le_journal_va_sur_stderr_et_la_sortie_reste_du_json() -> Resultat {
     let journal = String::from_utf8(sortie.stderr)?;
     let lignes: Vec<&str> = journal.lines().collect();
     assert!(!lignes.is_empty());
-    // One line per event, each a complete JSON object.
     for ligne in &lignes {
         assert!(
             ligne.starts_with("{\"component\"") && ligne.ends_with('}'),
@@ -329,7 +328,6 @@ fn une_capture_rejouee_donne_les_memes_verdicts() -> Resultat {
         .args(["debug", "sources"])
         .output()?;
     common::assert_code(&sources, 2);
-    // A file that is not a capture is refused clearly.
     let faux = dossier.join("faux.json");
     std::fs::write(&faux, "{}")?;
     let invalide = bonk().arg("--fixture").arg(&faux).arg("list").output()?;

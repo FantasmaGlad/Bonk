@@ -83,7 +83,6 @@ fn le_service_repond_et_s_arrete_a_la_fermeture_de_l_entree() -> Resultat {
             .as_array()
             .is_some_and(|m| m.len() >= 19)
     );
-    // Errors carry their code; the service goes on.
     let inconnu = client.call(3, "inexistante", &json!({}))?;
     assert_eq!(inconnu.last().ok_or("réponse")?["error"]["code"], "E6001");
     let toujours = client.call(4, "ping", &json!({}))?;
@@ -120,7 +119,6 @@ fn ecriture_simulee_par_le_service() -> Resultat {
     );
     assert_eq!(&fs::read(&cible)?[..data.len()], data.as_slice());
 
-    // Verification, then a changed byte detected, by the same service.
     let ok = client.call(11, "disk.verify", &json!({"target": cible.display().to_string(), "simulate": true, "source": source.display().to_string()}))?;
     assert_eq!(ok.last().ok_or("réponse")?["result"]["event"], "result");
     let mut abime = fs::read(&cible)?;

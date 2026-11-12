@@ -408,7 +408,6 @@ mod tests {
             total: Some(4 << 20),
             rate: 2_000_000.0,
         }));
-        // The rate shown is the engine's, not a zero.
         assert!(
             matches!(model.vault, VaultState::Busy { rate, .. } if (rate - 2_000_000.0).abs() < f64::EPSILON)
         );
@@ -449,7 +448,6 @@ mod tests {
                 changed: true
             })))
         );
-        // A write result keeps its own reading.
         assert!(matches!(
             parse_line(r#"{"event":"result","write":{"bytes":5},"verify":{}}"#),
             Some(Event::Finished(Outcome::Done { bytes: 5, .. }))

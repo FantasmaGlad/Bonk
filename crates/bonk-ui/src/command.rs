@@ -176,7 +176,6 @@ mod tests_write {
                 "bonk write usb-a '/home/u/Mes images/debian.iso' --yes --show-internal",
             ]
         );
-        // No disk selected, or empty input: no write command.
         assert_eq!(
             equivalent_commands(
                 ViewOptions::default(),

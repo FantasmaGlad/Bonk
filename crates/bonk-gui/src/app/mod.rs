@@ -210,7 +210,6 @@ impl App {
                 _ => None,
             }),
         ];
-        // The countdown before Write is enabled refreshes while the panel is open.
         if matches!(self.write, WriteState::Draft { .. }) {
             subscriptions
                 .push(iced::time::every(Duration::from_millis(500)).map(|_| Message::Clock));

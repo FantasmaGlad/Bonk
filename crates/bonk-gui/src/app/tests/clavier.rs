@@ -54,7 +54,6 @@ fn maj_tab_remonte_et_commence_par_le_dernier() {
 #[test]
 fn espace_a_le_meme_effet_qu_un_clic() {
     let mut app = loaded(sample());
-    // The expert boxes live on the settings page.
     let _ = app.update(Message::Settings(SettingsMessage::Open));
     app.focus = Some(Focus::Internal);
     nav(&mut app, Nav::Activate);
@@ -76,7 +75,6 @@ fn espace_a_le_meme_effet_qu_un_clic() {
     app.focus = Some(Focus::Settings);
     nav(&mut app, Nav::Activate);
     assert_eq!(app.screen, bonk_ui::settings::Screen::Settings);
-    // Escape goes back.
     nav(&mut app, Nav::Escape);
     assert_eq!(app.screen, bonk_ui::settings::Screen::Main);
     assert_eq!(app.focus, Some(Focus::Settings));

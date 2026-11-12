@@ -142,7 +142,6 @@ fn un_seul_disque_propose_se_selectionne_une_fois() {
     let _ = app.update(Message::Select("usb-cle".to_owned()));
     let _ = app.update(Message::Loaded(Ok(sample())));
     assert_eq!(app.selected, None);
-    // Two disks: no choice made for the user.
     let mut deux = App {
         model: Model {
             auto_select: true,
@@ -176,7 +175,6 @@ fn la_langue_se_choisit_dans_les_parametres_et_relance() {
     assert!(app.status_line(1).contains("disque(s)"));
     let _ = app.update(Message::Settings(SettingsMessage::Open));
     let _ = app.update(Message::Settings(SettingsMessage::Language(LangChoice::En)));
-    // The window keeps its language until the relaunch.
     assert_eq!(app.lang, bonk_hal::Lang::Fr);
     assert_eq!(app.lang_choice, LangChoice::En);
     assert_eq!(app.focus, Some(Focus::Language(LangChoice::En)));

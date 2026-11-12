@@ -161,7 +161,6 @@ impl Model {
         self.library.listing = Listing::Loading;
         self.library.error = None;
         let mut effects = vec![Effect::ListKept];
-        // The catalog names the kept images.
         if matches!(
             self.catalog,
             CatalogState::NotLoaded | CatalogState::Failed(_)

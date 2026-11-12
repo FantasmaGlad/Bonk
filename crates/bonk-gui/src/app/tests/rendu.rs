@@ -228,7 +228,6 @@ fn le_coffre_s_affiche_sous_son_disque() {
         disk_id: "usb-cle".to_owned(),
     };
     assert!(contient(&app, "Effacer et préparer") || contient(&app, "Erase and prepare"));
-    // On another disk, nothing.
     app.vault = VaultState::NotVault {
         disk_id: "ailleurs".to_owned(),
     };

@@ -110,7 +110,6 @@ impl Model {
             }
             _ => {}
         }
-        // Menu open: arrows move in it, Escape closes it.
         if !self.menu_open {
             return None;
         }
