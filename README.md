@@ -30,14 +30,14 @@
 
 | Platform | Download | Status |
 | :--- | :--- | :--- |
-| <img src="docs/icons/debian.svg" width="20" height="20" valign="middle" alt="debian">&nbsp;**Debian,&nbsp;Ubuntu** | [x86_64&nbsp;.deb](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk_0.0.5-1_amd64.deb)&nbsp;·&nbsp;[ARM64&nbsp;.deb](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk_0.0.5-1_arm64.deb) | Writes USB drives |
-| <img src="docs/icons/fedora.svg" width="20" height="20" valign="middle" alt="fedora">&nbsp;**Fedora,&nbsp;RHEL** | [x86_64&nbsp;.rpm](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-0.0.5-1.x86_64.rpm)&nbsp;·&nbsp;[ARM64&nbsp;.rpm](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-0.0.5-1.aarch64.rpm) | Writes USB drives |
-| <img src="docs/icons/opensuse.svg" width="20" height="20" valign="middle" alt="opensuse">&nbsp;**openSUSE,&nbsp;SLES** | [x86_64&nbsp;.rpm](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-0.0.5-1.x86_64.rpm)&nbsp;·&nbsp;[ARM64&nbsp;.rpm](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-0.0.5-1.aarch64.rpm) | Writes USB drives |
-| <img src="docs/icons/arch.svg" width="20" height="20" valign="middle" alt="arch">&nbsp;**Arch&nbsp;Linux** | [x86_64&nbsp;.pkg.tar.zst](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-0.0.5-1-x86_64.pkg.tar.zst) | Writes USB drives |
-| <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="linux">&nbsp;**Any&nbsp;Linux** | [x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-0.0.5-linux-x86_64.tar.gz)&nbsp;·&nbsp;[ARM64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-0.0.5-linux-aarch64.tar.gz)&nbsp;·&nbsp;[x86](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-0.0.5-linux-i686.tar.gz) | Writes USB drives; x86 untested |
-| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Windows&nbsp;10+** | [x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-0.0.5-windows-x86_64-setup.exe)&nbsp;·&nbsp;[ARM64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-0.0.5-windows-aarch64-setup.exe)&nbsp;·&nbsp;[x86](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-0.0.5-windows-i686-setup.exe) | Writes USB drives |
-| <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [Universal&nbsp;.dmg](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-0.0.5-macos-universal.dmg) | CI only, no real drive yet |
-| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Android&nbsp;8+** | [ARM64&nbsp;.apk](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-0.0.5-android-arm64.apk) | Beta, one phone tested |
+| <img src="docs/icons/debian.svg" width="20" height="20" valign="middle" alt="debian">&nbsp;**Debian,&nbsp;Ubuntu** | [x86_64&nbsp;.deb](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk_0.0.6-1_amd64.deb)&nbsp;·&nbsp;[ARM64&nbsp;.deb](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk_0.0.6-1_arm64.deb) | Writes USB drives |
+| <img src="docs/icons/fedora.svg" width="20" height="20" valign="middle" alt="fedora">&nbsp;**Fedora,&nbsp;RHEL** | [x86_64&nbsp;.rpm](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-0.0.6-1.x86_64.rpm)&nbsp;·&nbsp;[ARM64&nbsp;.rpm](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-0.0.6-1.aarch64.rpm) | Writes USB drives |
+| <img src="docs/icons/opensuse.svg" width="20" height="20" valign="middle" alt="opensuse">&nbsp;**openSUSE,&nbsp;SLES** | [x86_64&nbsp;.rpm](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-0.0.6-1.x86_64.rpm)&nbsp;·&nbsp;[ARM64&nbsp;.rpm](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-0.0.6-1.aarch64.rpm) | Writes USB drives |
+| <img src="docs/icons/arch.svg" width="20" height="20" valign="middle" alt="arch">&nbsp;**Arch&nbsp;Linux** | [x86_64&nbsp;.pkg.tar.zst](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-0.0.6-1-x86_64.pkg.tar.zst) | Writes USB drives |
+| <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="linux">&nbsp;**Any&nbsp;Linux** | [x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-0.0.6-linux-x86_64.tar.gz)&nbsp;·&nbsp;[ARM64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-0.0.6-linux-aarch64.tar.gz)&nbsp;·&nbsp;[x86](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-0.0.6-linux-i686.tar.gz) | Writes USB drives; x86 untested |
+| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Windows&nbsp;10+** | [x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-0.0.6-windows-x86_64-setup.exe)&nbsp;·&nbsp;[ARM64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-0.0.6-windows-aarch64-setup.exe)&nbsp;·&nbsp;[x86](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-0.0.6-windows-i686-setup.exe) | Writes USB drives |
+| <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [Universal&nbsp;.dmg](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-0.0.6-macos-universal.dmg) | CI only, no real drive yet |
+| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Android&nbsp;8+** | [ARM64&nbsp;.apk](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-0.0.6-android-arm64.apk)&nbsp;·&nbsp;[x86_64&nbsp;.apk](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-0.0.6-android-x86_64.apk) | Beta, one phone tested |
 
 Same packages on derivatives: <img src="docs/icons/linuxmint.svg" width="16" height="16" valign="middle" alt="linuxmint" title="Linux Mint"> Linux Mint · <img src="docs/icons/popos.svg" width="16" height="16" valign="middle" alt="popos" title="Pop!_OS"> Pop!_OS · <img src="docs/icons/zorin.svg" width="16" height="16" valign="middle" alt="zorin" title="Zorin OS"> Zorin OS · <img src="docs/icons/raspberrypi.svg" width="16" height="16" valign="middle" alt="raspberrypi" title="Raspberry Pi OS"> Raspberry Pi OS · <img src="docs/icons/rockylinux.svg" width="16" height="16" valign="middle" alt="rockylinux" title="Rocky Linux"> Rocky Linux · <img src="docs/icons/almalinux.svg" width="16" height="16" valign="middle" alt="almalinux" title="AlmaLinux"> AlmaLinux · <img src="docs/icons/manjaro.svg" width="16" height="16" valign="middle" alt="manjaro" title="Manjaro"> Manjaro · <img src="docs/icons/endeavouros.svg" width="16" height="16" valign="middle" alt="endeavouros" title="EndeavourOS"> EndeavourOS · <img src="docs/icons/cachyos.svg" width="16" height="16" valign="middle" alt="cachyos" title="CachyOS"> CachyOS
 
@@ -45,7 +45,7 @@ Chromebook: in the Linux development environment (Crostini, Debian), the Debian 
 
 Portable `.exe`, `.zip` and `.tar.gz` files: [latest release](https://github.com/FantasmaGlad/Bonk/releases/latest).
 
-Checksums: [`SHA256SUMS`](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/SHA256SUMS). Provenance: `gh attestation verify <file> --repo FantasmaGlad/Bonk`.
+Checksums: [`SHA256SUMS`](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/SHA256SUMS). Provenance: `gh attestation verify <file> --repo FantasmaGlad/Bonk`.
 
 ## Command line only
 
@@ -57,6 +57,13 @@ curl -fsSL https://packages.bonk-os.app/install.sh | sh
 
 ```powershell
 irm https://packages.bonk-os.app/install.ps1 | iex
+```
+
+Termux on Android, without root: the Termux:API app from the same source as Termux (F-Droid or GitHub), then
+
+```bash
+pkg install termux-api
+curl -fsSL https://packages.bonk-os.app/install.sh | sh
 ```
 
 Every package manager also offers it as `bonk-cli`, from the [same repositories](https://bonk-os.app/install/) as `bonk`.
@@ -76,6 +83,7 @@ With APT, DNF, Zypper and pacman, installing `bonk-cli` replaces `bonk` (Zypper 
 
 | Platform | Download | Status |
 | :--- | :--- | :--- |
-| <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="linux">&nbsp;**Any&nbsp;Linux** | [x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-cli-0.0.5-linux-x86_64.tar.gz)&nbsp;·&nbsp;[ARM64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-cli-0.0.5-linux-aarch64.tar.gz) | Writes USB drives |
-| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Windows&nbsp;10+** | [x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-cli-0.0.5-windows-x86_64.zip)&nbsp;·&nbsp;[ARM64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-cli-0.0.5-windows-aarch64.zip)&nbsp;·&nbsp;[x86](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-cli-0.0.5-windows-i686.zip) | Writes USB drives |
-| <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-cli-0.0.5-macos-x86_64.tar.gz)&nbsp;·&nbsp;[ARM64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.5/bonk-cli-0.0.5-macos-aarch64.tar.gz) | CI only, no real drive yet |
+| <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="linux">&nbsp;**Any&nbsp;Linux** | [x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-cli-0.0.6-linux-x86_64.tar.gz)&nbsp;·&nbsp;[ARM64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-cli-0.0.6-linux-aarch64.tar.gz)&nbsp;·&nbsp;[x86](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-cli-0.0.6-linux-i686.tar.gz) | Writes USB drives |
+| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Windows&nbsp;10+** | [x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-cli-0.0.6-windows-x86_64.zip)&nbsp;·&nbsp;[ARM64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-cli-0.0.6-windows-aarch64.zip)&nbsp;·&nbsp;[x86](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-cli-0.0.6-windows-i686.zip) | Writes USB drives |
+| <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-cli-0.0.6-macos-x86_64.tar.gz)&nbsp;·&nbsp;[ARM64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-cli-0.0.6-macos-aarch64.tar.gz)&nbsp;·&nbsp;[Universal](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-cli-0.0.6-macos-universal.tar.gz) | CI only, no real drive yet |
+| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Termux** | [ARM64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-cli-0.0.6-android-aarch64.tar.gz)&nbsp;·&nbsp;[x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.6/bonk-cli-0.0.6-android-x86_64.tar.gz) | CI only, not tried on a phone |
