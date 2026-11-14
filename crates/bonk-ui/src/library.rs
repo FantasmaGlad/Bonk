@@ -161,10 +161,12 @@ impl Model {
         self.library.listing = Listing::Loading;
         self.library.error = None;
         let mut effects = vec![Effect::ListKept];
-        if matches!(
-            self.catalog,
-            CatalogState::NotLoaded | CatalogState::Failed(_)
-        ) {
+        if !self.offline
+            && matches!(
+                self.catalog,
+                CatalogState::NotLoaded | CatalogState::Failed(_)
+            )
+        {
             self.catalog = CatalogState::Loading;
             effects.push(Effect::LoadCatalog);
         }

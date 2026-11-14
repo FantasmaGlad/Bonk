@@ -336,6 +336,13 @@ fn disks_state(model: &Model) -> Vec<Value> {
 
 fn menu_state(model: &Model) -> Value {
     let lang = model.lang;
+    if model.offline {
+        let line = lang.pick(
+            "Offline mode: choose an image file on this device.",
+            "Mode hors ligne : choisissez une image présente sur cet appareil.",
+        );
+        return json!({"ready": false, "line": line});
+    }
     let CatalogState::Ready(systems) = &model.catalog else {
         let line = match &model.catalog {
             CatalogState::Failed(error) => error.clone(),
@@ -962,6 +969,7 @@ mod tests {
             json!({"type": "settings", "action": "close"}),
             json!({"type": "settings", "action": "language", "value": "fr"}),
             json!({"type": "settings", "action": "theme", "value": "dark"}),
+            json!({"type": "settings", "action": "offline", "value": "true"}),
             json!({"type": "menu"}),
             json!({"type": "category", "value": "Servers"}),
             json!({"type": "category"}),

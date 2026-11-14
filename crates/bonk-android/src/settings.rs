@@ -21,6 +21,7 @@ pub(crate) fn message_of(input: &Value) -> Option<Message> {
                 .into_iter()
                 .find(|choice| Some(choice.config_value()) == value)?,
         ),
+        "offline" => SettingsMessage::Offline(value? == "true"),
         _ => return None,
     };
     Some(Message::Settings(settings))
@@ -78,11 +79,18 @@ pub(crate) fn state(model: &Model) -> Value {
         "disks_title": lang.pick("Disks", "Disques"),
         "show_all": model.show_all,
         "show_all_label": lang.pick("Also show excluded disks", "Afficher aussi les disques écartés"),
+        "network_title": lang.pick("Network", "Réseau"),
+        "offline": model.offline,
+        "offline_label": lang.pick("Offline mode", "Mode hors ligne"),
+        "offline_note": lang.pick(
+            "Never connect to the Internet: the catalog is hidden and only image files on this device can be written.",
+            "Ne jamais se connecter à Internet : le catalogue est masqué, seules les images présentes sur cet appareil s'écrivent.",
+        ),
     })
 }
 
 /// What the app read in its preferences and from the system, at each start.
-pub fn start(lang: &str, theme: &str, system_french: bool, show_all: bool) {
+pub fn start(lang: &str, theme: &str, system_french: bool, show_all: bool, offline: bool) {
     let mut model = lock(&MODEL);
     model.lang_choice = LangChoice::ALL
         .into_iter()
@@ -96,6 +104,8 @@ pub fn start(lang: &str, theme: &str, system_french: bool, show_all: bool) {
     };
     model.theme_choice = ThemeChoice::from_config(Some(theme));
     model.show_all = show_all;
+    model.offline = offline;
+    model.advanced |= offline;
 }
 
 #[cfg(test)]

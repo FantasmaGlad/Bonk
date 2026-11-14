@@ -154,6 +154,7 @@ impl Model {
             Some(Focus::Internal) => Message::ToggleInternal(!self.show_internal),
             Some(Focus::Virtual) => Message::ToggleVirtual(!self.allow_virtual),
             Some(Focus::All) => Message::ToggleAll(!self.show_all),
+            Some(Focus::Offline) => Message::Settings(SettingsMessage::Offline(!self.offline)),
             Some(Focus::Disk(id)) => Message::Select(id),
             Some(Focus::Details) => Message::ToggleDetails,
             Some(Focus::Copy) => Message::Copy,

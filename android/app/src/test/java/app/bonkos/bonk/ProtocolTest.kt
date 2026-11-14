@@ -60,6 +60,7 @@ class ProtocolTest {
                 SettingsAction("close"),
                 SettingsAction("language", "fr"),
                 SettingsAction("theme", "dark"),
+                SettingsAction("offline", "true"),
                 ToggleMenu,
                 CategoryFilter("Servers"),
                 CategoryFilter(),
