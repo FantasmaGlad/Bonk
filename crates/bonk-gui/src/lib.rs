@@ -50,10 +50,12 @@ fn run_with_fallback(
     match catching_panics(open) {
         Ok(result) => result,
         Err(message) if can_fall_back => {
+            // A driver's refusal can run to pages of shader source: the first line names it.
             log::warn!(
-                target: "bonk::gui", reason = message.as_str();
+                target: "bonk::gui", reason = message.lines().next().unwrap_or_default();
                 "window panicked, restarting with the software renderer"
             );
+            log::debug!(target: "bonk::gui", reason = message.as_str(); "window panic in full");
             relaunch()
         }
         Err(message) => Err(message),
