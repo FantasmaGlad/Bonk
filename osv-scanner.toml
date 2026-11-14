@@ -1,0 +1,15 @@
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0253"
+reason = "lru unsound dans LruCache::pop si le Drop d'une clé panique ; cryoglyph 0.1.0 (Iced 0.14) exige lru 0.16, corrigé en 0.18.2, et n'appelle que pop_lru avec une clé Copy, donc sans Drop. Retrait : une version de cryoglyph qui tire lru 0.18.2 ou plus"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0436"
+reason = "paste non maintenu ; dépendance de metal, via wgpu-hal (Iced 0.14). Retrait : une version d'Iced ou de wgpu qui ne tire plus paste"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0192"
+reason = "ttf-parser non maintenu ; dépendance de la pile de texte d'Iced 0.14. Retrait : une version d'Iced ou de cosmic-text qui ne tire plus ttf-parser"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0441"
+reason = "pin-utils non maintenu ; dépendance de wasmtimer, tiré par iced_futures pour la seule cible wasm32, qu'aucun binaire de Bonk ne vise. Retrait : une version d'Iced qui ne tire plus wasmtimer ou pin-utils"
