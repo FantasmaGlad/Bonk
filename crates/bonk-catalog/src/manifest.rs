@@ -271,7 +271,6 @@ impl fmt::Display for CatalogError {
 
 impl std::error::Error for CatalogError {}
 
-/// Allowed keys, the time, the highest sequence already seen.
 #[derive(Debug, Clone, Copy)]
 pub struct Trust<'a> {
     /// Ed25519 public keys: current and backup, to survive a lost key.

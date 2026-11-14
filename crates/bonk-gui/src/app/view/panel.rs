@@ -17,7 +17,6 @@ use super::super::{App, Focus, Message, VaultMessage, WRITE_DELAY, WriteState};
 use super::{boxed, ring};
 
 impl App {
-    /// Summary, image input, a button disabled for 3 seconds, progress, cancel, result.
     pub(super) fn write_panel<'a>(&'a self, disk: &'a Disk) -> Option<Element<'a, Message>> {
         let WriteState::Draft {
             disk_id,

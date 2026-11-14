@@ -351,7 +351,6 @@ fn hand_over_to_host(
     Ok(())
 }
 
-/// Choices fixed before anything is written.
 struct Settled {
     size: u64,
     filesystem: Filesystem,

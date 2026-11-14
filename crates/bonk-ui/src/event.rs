@@ -33,7 +33,6 @@ pub enum Outcome {
         code: Option<String>,
         message: String,
     },
-    /// A `bonk vault` command that succeeded.
     Vault(VaultDone),
 }
 

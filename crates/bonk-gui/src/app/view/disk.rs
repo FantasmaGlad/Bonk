@@ -8,7 +8,6 @@ use crate::theme;
 use super::super::{App, Focus, Message};
 use super::ring;
 
-/// Before erasing an internal disk.
 pub(in super::super) fn internal_dialog(disk: &Disk, lang: Lang) -> Element<'_, Message> {
     container(
         column![

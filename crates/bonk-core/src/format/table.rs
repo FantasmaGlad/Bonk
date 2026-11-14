@@ -117,7 +117,6 @@ pub fn plan(size: u64, block: u32, kind: TableKind) -> Result<PartitionPlan, For
     }
 }
 
-/// One partition of the table being written.
 pub(crate) struct Slot<'a> {
     pub(crate) part: PartitionPlan,
     pub(crate) gpt_type: [u8; 16],

@@ -106,7 +106,6 @@ impl Resource {
     };
 }
 
-/// Where to read the resource table and the XML.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Header {
     pub lookup_offset: u64,

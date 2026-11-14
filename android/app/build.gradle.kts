@@ -106,7 +106,6 @@ val generateTokens by tasks.registering {
         val dark = tokens["dark"] as Map<String, String>
         val text = tokens["text"] as Map<String, Int>
         val spacing = tokens["spacing"] as Map<String, Int>
-        // accent_soft becomes accentSoft.
         fun property(name: String) = name.split("_").let { parts ->
             parts.first() + parts.drop(1).joinToString("") { it.replaceFirstChar(Char::uppercase) }
         }

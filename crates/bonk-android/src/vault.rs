@@ -24,7 +24,6 @@ pub(crate) fn set_grub(base: &str, grub: Option<Grub>) {
     *lock(&GRUB) = grub.map(|grub| (base.to_owned(), grub));
 }
 
-/// One GRUB image to download: its processor, address and signed size.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Download {
     pub(crate) arch: String,

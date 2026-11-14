@@ -54,7 +54,6 @@ pub enum Message {
     ToggleAll(bool),
     /// Selects or deselects a disk, by id.
     Select(String),
-    /// Shows or hides the technical details of the selected disk.
     ToggleDetails,
     Nav(Nav),
     Copy,
@@ -105,10 +104,8 @@ pub enum Nav {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Focus {
-    /// Opens the settings page.
     Settings,
     CloseSettings,
-    /// Opens the library page.
     Library,
     CloseLibrary,
     /// Write or remove the kept image with this hash.

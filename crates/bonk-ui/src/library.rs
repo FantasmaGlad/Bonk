@@ -5,7 +5,6 @@ use crate::model::{Effect, Effects, Focus, Model, WriteState};
 use crate::settings::Screen;
 use crate::source::ImageSource;
 
-/// An image kept in the download cache.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Kept {
     pub name: String,
@@ -96,7 +95,6 @@ pub fn remove_args(sha256: &str) -> Vec<String> {
 }
 
 impl Model {
-    /// The kept images, once listed.
     #[must_use]
     pub fn kept(&self) -> &[Kept] {
         match &self.library.listing {
@@ -198,7 +196,6 @@ impl Model {
         Vec::new()
     }
 
-    /// Tab order of the library page.
     #[must_use]
     pub fn library_focus_order(&self) -> Vec<Focus> {
         let mut order = vec![Focus::CloseLibrary];

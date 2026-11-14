@@ -152,7 +152,6 @@ fn menu_filters<'a>(
     .into()
 }
 
-/// A writable version is a button; the others say why they cannot be written.
 fn menu_row<'a>(
     system: &'a System,
     choice: &'a Choice,
@@ -187,7 +186,6 @@ fn menu_row<'a>(
     }
 }
 
-/// The filters, then one row per version with its system logo.
 pub(crate) fn menu_list<'a>(
     systems: &'a [System],
     filter: &MenuFilter,

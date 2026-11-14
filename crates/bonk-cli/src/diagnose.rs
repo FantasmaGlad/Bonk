@@ -335,7 +335,6 @@ pub(crate) fn report_value(
     build_with_capture(&args, env, enumeration, None)
 }
 
-/// To `out` or to the requested file. Returns the message to print, if any.
 pub(crate) fn run(
     args: &DiagnoseArgs,
     env: &Environment,

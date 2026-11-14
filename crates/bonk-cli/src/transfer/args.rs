@@ -205,7 +205,6 @@ pub(crate) struct WriteArgs {
 }
 
 impl WriteArgs {
-    /// `--dry-run` and `--simulate` do not.
     pub(crate) fn touches_real_disk(&self) -> bool {
         !self.common.simulate && !self.dry_run
     }

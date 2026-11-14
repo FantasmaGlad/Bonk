@@ -7,7 +7,6 @@ pub fn en_ci() -> bool {
     std::env::var_os("CI").is_some()
 }
 
-/// `command -v`: is the tool in the `PATH`?
 fn installe(nom: &str) -> bool {
     Command::new("sh")
         .args(["-c", &format!("command -v {nom}")])
@@ -57,7 +56,6 @@ pub fn diagnostic(sortie: &std::process::Output) -> String {
     )
 }
 
-/// On failure, prints the full diagnostic.
 #[track_caller]
 pub fn assert_code(sortie: &std::process::Output, attendu: i32) {
     assert_eq!(

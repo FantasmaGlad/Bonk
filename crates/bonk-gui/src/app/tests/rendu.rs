@@ -10,7 +10,6 @@ fn la_fenetre_affiche_la_cle_et_pas_le_disque_systeme() {
     assert!(contient(&app, "Cle de test"));
     assert!(contient(&app, "PROPOSÉ"));
     assert!(!contient(&app, "Disque systeme"));
-    // No write button: the window is read-only.
     assert!(!contient(&app, "Écrire"));
 }
 

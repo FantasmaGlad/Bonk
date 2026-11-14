@@ -257,7 +257,6 @@ data class DraftPanel(
     val title: String,
     /** The erased disk, in the recap; absent if it just left the list. */
     val summary: String? = null,
-    /** The image, in the recap. */
     @SerialName("image_line") val imageLine: String = "",
     val warning: String,
     val menu: MenuView,

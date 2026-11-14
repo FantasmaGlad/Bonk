@@ -500,7 +500,6 @@ pub fn write(
     write_raw(job, chosen, source, checked, deps, progress)
 }
 
-/// What the checks before any write established.
 struct Checked {
     source_info: SourceInfo,
     image: ImageReport,

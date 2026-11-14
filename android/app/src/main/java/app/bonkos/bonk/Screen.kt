@@ -249,7 +249,6 @@ private fun Draft(panel: DraftPanel, send: (ToRust) -> Unit) {
                 Small(panel.mbrLabel, LocalPalette.current.ink)
             }
         }
-        // Read just before the action: the image, the disk it erases, the warning.
         OneLine(panel.imageLine)
         panel.summary?.let { Body(it) }
         Text(
