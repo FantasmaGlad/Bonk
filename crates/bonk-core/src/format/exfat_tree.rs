@@ -548,14 +548,8 @@ mod tests {
             sum = (if sum & 1 == 1 { 0x8000 } else { 0 }) + (sum >> 1) + u16::from(*byte);
         }
         assert_eq!(u16::from_le_bytes([set[2], set[3]]), sum);
-        let upper: Vec<u8> = "DEBIAN-13.ISO"
-            .encode_utf16()
-            .flat_map(u16::to_le_bytes)
-            .collect();
-        assert_eq!(
-            u16::from_le_bytes([set[36], set[37]]),
-            checksum16(&upper, &[])
-        );
+        // Name hash of `DEBIAN-13.ISO`, computed apart from this code.
+        assert_eq!(u16::from_le_bytes([set[36], set[37]]), 0x0205);
     }
 
     #[test]
