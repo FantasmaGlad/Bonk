@@ -51,7 +51,8 @@ mod tests {
         let b = [1, 2, 3, 4, 5, 6, 7, 8];
         assert_eq!(get_u16(&b, 6), Some(0x0807));
         assert_eq!(get_u32(&b, 5), None);
-        assert_eq!(get_u64(&b, 0), Some(u64_le(&b, 0)));
+        assert_eq!(get_u64(&b, 0), Some(0x0807_0605_0403_0201));
+        assert_eq!(u64_le(&b, 0), 0x0807_0605_0403_0201);
         assert_eq!(get_u32(&b, usize::MAX), None);
         assert_eq!(u32_le(&b, 1), 0x0504_0302);
     }

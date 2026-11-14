@@ -111,6 +111,22 @@ impl Model {
         !matches!(self.write, WriteState::Running { .. }) && !self.vault.is_busy()
     }
 
+    /// Why a language or theme choice is refused now, or what it does.
+    #[must_use]
+    pub fn relaunch_note(&self) -> &'static str {
+        if self.can_relaunch() {
+            self.lang.pick(
+                "Bonk restarts at once to apply it.",
+                "Bonk redémarre aussitôt pour l'appliquer.",
+            )
+        } else {
+            self.lang.pick(
+                "Unavailable while a drive is being written.",
+                "Indisponible pendant l'écriture d'une clé.",
+            )
+        }
+    }
+
     /// Dark or light as drawn now; `None` while the system has not answered.
     #[must_use]
     pub fn dark(&self) -> Option<bool> {

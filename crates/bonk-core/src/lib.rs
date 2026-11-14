@@ -3,6 +3,7 @@ pub mod block;
 pub mod boot;
 mod bytes;
 pub mod codec;
+pub mod date;
 pub mod format;
 pub mod iso9660;
 pub mod msc;
