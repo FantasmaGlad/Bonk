@@ -3,7 +3,8 @@ use super::*;
 pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
     vec![catalog::System {
         name: "Ubuntu".to_owned(),
-        uses: vec!["desktop".to_owned(), "server".to_owned()],
+        uses: vec!["office".to_owned(), "server".to_owned()],
+        base: Some("ubuntu".to_owned()),
         icon: None,
         choices: vec![
             catalog::Choice {
@@ -40,9 +41,16 @@ pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
     }]
 }
 
+pub(super) fn etagere() -> catalog::Shelf {
+    catalog::Shelf {
+        systems: versions_du_catalogue(),
+        terms: bonk_ui::terms::Terms::default(),
+    }
+}
+
 pub(super) fn app_avec_menu() -> App {
     let mut app = app_avec_panneau();
-    let _ = app.update(Message::CatalogLoaded(Ok(versions_du_catalogue())));
+    let _ = app.update(Message::CatalogLoaded(Ok(etagere())));
     app
 }
 
@@ -83,6 +91,22 @@ fn le_menu_s_ouvre_nomme_les_versions_et_un_choix_regle_tout() {
         &app,
         "Lien officiel et empreinte du catalogue signé : rien à régler."
     ));
+}
+
+#[test]
+fn le_menu_filtre_par_usage_et_par_base() {
+    let mut app = app_avec_menu();
+    let _ = app.update(Message::ToggleMenu);
+    let _ = app.update(Message::MenuBase(Some("debian".to_owned())));
+    assert!(!contient(&app, "Ubuntu 26.04.1 desktop LTS"));
+    let _ = app.update(Message::MenuBase(Some("ubuntu".to_owned())));
+    let _ = app.update(Message::MenuCategory(Some("office".to_owned())));
+    assert!(contient(&app, "Ubuntu 26.04.1 desktop LTS"));
+    assert_eq!(
+        app.menu_filter.base.as_deref(),
+        Some("ubuntu"),
+        "changer d'usage garde la base"
+    );
 }
 
 #[test]

@@ -74,7 +74,13 @@ impl App {
         ]
         .spacing(8);
         if let (CatalogState::Ready(systems), true) = (&self.catalog, self.menu_open) {
-            panel = panel.push(menu_list(systems, &self.menu_filter, self.menu_index, lang));
+            panel = panel.push(menu_list(
+                systems,
+                &self.menu_filter,
+                &self.terms,
+                self.menu_index,
+                lang,
+            ));
         }
         panel = panel.extend(self.catalog_note(image));
         panel = panel.push(self.advanced_button());

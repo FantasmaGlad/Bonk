@@ -44,6 +44,7 @@ impl Model {
             message @ (Message::RequestImage(_)
             | Message::ToggleMenu
             | Message::MenuCategory(_)
+            | Message::MenuBase(_)
             | Message::MenuSystem(_)
             | Message::CatalogLoaded(_)
             | Message::MenuChose(_)) => self.apply_menu(message),
@@ -147,10 +148,13 @@ impl Model {
                 self.menu_open = !self.menu_open;
             }
             Message::MenuCategory(category) => {
-                self.menu_filter = catalog::MenuFilter {
-                    category,
-                    system: None,
-                };
+                self.menu_filter.category = category;
+                self.menu_filter.system = None;
+                self.menu_index = 0;
+            }
+            Message::MenuBase(base) => {
+                self.menu_filter.base = base;
+                self.menu_filter.system = None;
                 self.menu_index = 0;
             }
             Message::MenuSystem(system) => {
@@ -265,9 +269,12 @@ impl Model {
         }]
     }
 
-    fn on_catalog_loaded(&mut self, result: Result<Vec<catalog::System>, String>) -> Effects {
+    fn on_catalog_loaded(&mut self, result: Result<catalog::Shelf, String>) -> Effects {
         self.catalog = match result {
-            Ok(systems) => CatalogState::Ready(systems),
+            Ok(shelf) => {
+                self.terms = shelf.terms;
+                CatalogState::Ready(shelf.systems)
+            }
             Err(error) => {
                 log::warn!(target: "bonk::gui", reason = error.as_str(); "catalog unavailable");
                 // Without a list the manual way is the only one: it shows itself.

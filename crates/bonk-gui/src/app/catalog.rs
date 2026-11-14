@@ -6,17 +6,17 @@ use iced::{Element, Length};
 
 pub(crate) use bonk_ui::catalog::*;
 
-use bonk_ui::uses;
+use bonk_ui::terms::Terms;
 
 use crate::theme;
 
 use super::Message;
 
 /// In a separate process. The last error line says why it failed.
-pub(crate) fn read(program: PathBuf) -> Result<Vec<System>, String> {
+pub(crate) fn read(program: PathBuf) -> Result<Shelf, String> {
     let output = run_json(&program, &["catalog", "list", "--json"])?;
     serde_json::from_slice(&output)
-        .map(|report| bonk_ui::catalog::systems(&report))
+        .map(|report| bonk_ui::catalog::shelf(&report))
         .map_err(|e| e.to_string())
 }
 
@@ -110,20 +110,37 @@ fn with_all(mut values: Vec<String>, all: &str) -> Vec<String> {
     values
 }
 
-/// A category, or a single system and its versions.
-fn menu_filters<'a>(systems: &[System], filter: &MenuFilter, lang: Lang) -> Element<'a, Message> {
-    let (all_cat, all_sys) = (all_categories(lang), all_systems(lang));
-    let (categories, names) = filter.lists(systems);
-    let labels = categories.iter().map(|id| uses::label(id, lang)).collect();
-    let (categories, names) = (with_all(labels, all_cat), with_all(names, all_sys));
-    let category = filter
-        .category
-        .as_deref()
-        .map_or_else(|| all_cat.to_owned(), |id| uses::label(id, lang));
+/// A category, a base, or a single system and its versions.
+fn menu_filters<'a>(
+    systems: &[System],
+    filter: &MenuFilter,
+    terms: &Terms,
+    lang: Lang,
+) -> Element<'a, Message> {
+    let (all_cat, all_base, all_sys) = (all_categories(lang), all_bases(lang), all_systems(lang));
+    let lists = filter.lists(systems, terms);
+    let (uses, bases) = (terms.uses(), terms.bases());
+    let labels = |ids: &[String], list: bonk_ui::terms::List<'_>, all: &str| {
+        with_all(ids.iter().map(|id| list.label(id, lang)).collect(), all)
+    };
+    let shown = |id: Option<&str>, list: bonk_ui::terms::List<'_>, all: &str| {
+        id.map_or_else(|| all.to_owned(), |id| list.label(id, lang))
+    };
+    let categories = labels(&lists.categories, uses, all_cat);
+    let base_names = labels(&lists.bases, bases, all_base);
+    let category = shown(filter.category.as_deref(), uses, all_cat);
+    let base = shown(filter.base.as_deref(), bases, all_base);
+    let names = with_all(lists.systems, all_sys);
     let system = filter.system.clone().unwrap_or_else(|| all_sys.to_owned());
+    // The lists outlive this borrow of the window state: each choice keeps its own copy of the labels.
+    let (for_uses, for_bases) = (terms.clone(), terms.clone());
     row![
         pick_list(categories, Some(category), move |value: String| {
-            Message::MenuCategory(uses::id_of(&value, lang))
+            Message::MenuCategory(for_uses.uses().id_of(&value, lang))
+        })
+        .text_size(13),
+        pick_list(base_names, Some(base), move |value: String| {
+            Message::MenuBase(for_bases.bases().id_of(&value, lang))
         })
         .text_size(13),
         pick_list(names, Some(system), move |value: String| {
@@ -174,6 +191,7 @@ fn menu_row<'a>(
 pub(crate) fn menu_list<'a>(
     systems: &'a [System],
     filter: &MenuFilter,
+    terms: &Terms,
     highlighted: usize,
     lang: Lang,
 ) -> Element<'a, Message> {
@@ -194,7 +212,7 @@ pub(crate) fn menu_list<'a>(
     }
     // Right margin: the scrollbar must not cover a row's text.
     column![
-        menu_filters(systems, filter, lang),
+        menu_filters(systems, filter, terms, lang),
         scrollable(lines.padding(iced::Padding::ZERO.right(16)))
             .id(MENU)
             .height(Length::Fixed(260.0)),

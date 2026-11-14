@@ -116,6 +116,10 @@
       "type": "category"
     },
     {
+      "type": "base",
+      "value": "Debian"
+    },
+    {
       "type": "system",
       "value": "debian"
     },
@@ -258,11 +262,16 @@
         "mbr": true,
         "mbr_label": "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
         "menu": {
+          "all_bases": "Toutes les bases",
           "all_categories": "Toutes les catégories",
           "all_systems": "Tous les systèmes",
+          "base": null,
+          "bases": [
+            "Debian"
+          ],
           "button": "Choisir un système...",
           "categories": [
-            "Ordinateur de tous les jours",
+            "Bureautique",
             "Serveurs"
           ],
           "category": null,
@@ -387,11 +396,16 @@
         "mbr": true,
         "mbr_label": "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
         "menu": {
+          "all_bases": "Toutes les bases",
           "all_categories": "Toutes les catégories",
           "all_systems": "Tous les systèmes",
+          "base": null,
+          "bases": [
+            "Debian"
+          ],
           "button": "Choisir un système...",
           "categories": [
-            "Ordinateur de tous les jours",
+            "Bureautique",
             "Serveurs"
           ],
           "category": null,
@@ -487,11 +501,16 @@
         "mbr": true,
         "mbr_label": "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
         "menu": {
+          "all_bases": "Toutes les bases",
           "all_categories": "Toutes les catégories",
           "all_systems": "Tous les systèmes",
+          "base": null,
+          "bases": [
+            "Debian"
+          ],
           "button": "Choisir un système...",
           "categories": [
-            "Ordinateur de tous les jours",
+            "Bureautique",
             "Serveurs"
           ],
           "category": null,

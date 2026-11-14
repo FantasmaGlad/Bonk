@@ -46,17 +46,36 @@ pub enum ChoiceSource {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct System {
     pub name: String,
-    /// Usage categories of the catalog: `desktop`, `server`.
+    /// Usage categories of the catalog: `office`, `server`.
     pub uses: Vec<String>,
+    /// Technical base: `debian`.
+    pub base: Option<String>,
     pub icon: Option<PathBuf>,
     pub choices: Vec<Choice>,
 }
 
-/// A usage category, or a single system and its versions. Empty: everything.
+/// The catalog as the window shows it: its systems and the labels of its menus.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Shelf {
+    pub systems: Vec<System>,
+    pub terms: crate::terms::Terms,
+}
+
+/// A usage category, a base, or a single system and its versions. Empty: everything.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct MenuFilter {
     pub category: Option<String>,
+    pub base: Option<String>,
     pub system: Option<String>,
+}
+
+/// What the menu lists offer, in their order and without doubles.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct MenuLists {
+    pub categories: Vec<String>,
+    pub bases: Vec<String>,
+    /// The systems of the chosen category and base, sorted by name.
+    pub systems: Vec<String>,
 }
 
 impl MenuFilter {
@@ -64,33 +83,31 @@ impl MenuFilter {
         systems
             .iter()
             .filter(|s| self.category.as_ref().is_none_or(|c| s.uses.contains(c)))
+            .filter(|s| self.base.is_none() || s.base == self.base)
             .filter(|s| self.system.as_ref().is_none_or(|n| &s.name == n))
             .collect()
     }
 
-    /// The two menu lists, without doubles: the usage categories in their fixed order, and the systems of the
-    /// chosen one sorted by name.
     #[must_use]
-    pub fn lists(&self, systems: &[System]) -> (Vec<String>, Vec<String>) {
-        let sorted = |mut values: Vec<String>| {
-            values.sort();
-            values.dedup();
-            values
-        };
-        let in_category = MenuFilter {
-            category: self.category.clone(),
+    pub fn lists(&self, systems: &[System], terms: &crate::terms::Terms) -> MenuLists {
+        let narrowed = MenuFilter {
             system: None,
+            ..self.clone()
         };
-        (
-            crate::uses::ordered(systems.iter().flat_map(|s| &s.uses)),
-            sorted(
-                in_category
-                    .apply(systems)
-                    .iter()
-                    .map(|s| s.name.clone())
-                    .collect(),
-            ),
-        )
+        let mut names: Vec<String> = narrowed
+            .apply(systems)
+            .iter()
+            .map(|s| s.name.clone())
+            .collect();
+        names.sort();
+        names.dedup();
+        MenuLists {
+            categories: terms.uses().ordered(systems.iter().flat_map(|s| &s.uses)),
+            bases: terms
+                .bases()
+                .ordered(systems.iter().filter_map(|s| s.base.as_ref())),
+            systems: names,
+        }
     }
 }
 
@@ -168,11 +185,20 @@ pub fn systems(report: &CatalogReport) -> Vec<System> {
             (!choices.is_empty()).then(|| System {
                 name: family.name.clone(),
                 uses: family.uses.clone(),
+                base: family.category.clone(),
                 icon: family.icon_path.clone(),
                 choices,
             })
         })
         .collect()
+}
+
+#[must_use]
+pub fn shelf(report: &CatalogReport) -> Shelf {
+    Shelf {
+        systems: systems(report),
+        terms: crate::terms::Terms::from_catalog(report.taxonomy.as_ref()),
+    }
 }
 
 /// In menu order: the keyboard index refers to it.
@@ -216,6 +242,11 @@ pub fn find_id<'a>(systems: &'a [System], id: &str) -> Option<(&'a System, &'a C
 #[must_use]
 pub fn all_categories(lang: Lang) -> &'static str {
     lang.pick("All categories", "Toutes les catégories")
+}
+
+#[must_use]
+pub fn all_bases(lang: Lang) -> &'static str {
+    lang.pick("All bases", "Toutes les bases")
 }
 
 #[must_use]
@@ -283,25 +314,49 @@ mod tests {
 
     #[test]
     fn listes_du_menu_triees_sans_doublons() {
-        let system = |name: &str, used: &str| System {
+        let system = |name: &str, used: &str, base: &str| System {
             name: name.to_owned(),
             uses: vec![used.to_owned()],
+            base: Some(base.to_owned()),
             icon: None,
             choices: Vec::new(),
         };
         let systems = [
-            system("Ubuntu", "server"),
-            system("Windows", "windows"),
-            system("Debian", "desktop"),
+            system("Ubuntu", "server", "ubuntu"),
+            system("Windows", "windows", "windows"),
+            system("Debian", "office", "debian"),
+            system("Kali", "security", "debian"),
         ];
-        let tout = MenuFilter::default().lists(&systems);
-        assert_eq!(tout.0, ["desktop", "server", "windows"]);
-        assert_eq!(tout.1, ["Debian", "Ubuntu", "Windows"]);
-        let desktop = MenuFilter {
-            category: Some("desktop".to_owned()),
-            system: Some("Debian".to_owned()),
+        let terms = crate::terms::Terms::default();
+        let tout = MenuFilter::default().lists(&systems, &terms);
+        assert_eq!(tout.categories, ["office", "security", "server", "windows"]);
+        assert_eq!(tout.bases, ["debian", "ubuntu", "windows"]);
+        assert_eq!(tout.systems, ["Debian", "Kali", "Ubuntu", "Windows"]);
+        let debian = MenuFilter {
+            base: Some("debian".to_owned()),
+            ..MenuFilter::default()
         };
-        assert_eq!(desktop.lists(&systems).1, ["Debian"]);
+        assert_eq!(debian.lists(&systems, &terms).systems, ["Debian", "Kali"]);
+        let securite = MenuFilter {
+            category: Some("security".to_owned()),
+            system: Some("Kali".to_owned()),
+            ..debian
+        };
+        assert_eq!(securite.lists(&systems, &terms).systems, ["Kali"]);
+        assert_eq!(securite.apply(&systems).len(), 1);
+    }
+
+    #[test]
+    fn la_taxonomie_du_rapport_donne_les_libelles() {
+        let mut report = report();
+        report["taxonomy"] =
+            json!({"uses": [{"id": "server", "en": "Servers", "fr": "Serveurs pro"}]});
+        let shelf = serde_json::from_value(report)
+            .map(|report| shelf(&report))
+            .unwrap_or_default();
+        assert_eq!(shelf.systems.len(), 2);
+        assert_eq!(shelf.terms.uses().label("server", Lang::Fr), "Serveurs pro");
+        assert_eq!(shelf.terms.bases().label("ubuntu", Lang::Fr), "Ubuntu");
     }
 
     #[test]
@@ -343,12 +398,12 @@ mod tests {
         assert!(systems[1].uses.is_empty());
         let server = MenuFilter {
             category: Some("server".to_owned()),
-            system: None,
+            ..MenuFilter::default()
         };
         assert_eq!(server.apply(&systems).len(), 1);
         let windows = MenuFilter {
-            category: None,
             system: Some("Windows".to_owned()),
+            ..MenuFilter::default()
         };
         assert_eq!(windows.apply(&systems)[0].name, "Windows");
         let cd = &systems[0].choices[2];

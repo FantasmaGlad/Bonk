@@ -26,8 +26,8 @@ pub(crate) struct ListArgs {
     /// Keep one system only (`ubuntu`)
     #[arg(long, value_name = "ID")]
     family: Option<String>,
-    /// Keep one category (`Debian derivatives`); the families list gives them
-    #[arg(long, value_name = "NAME")]
+    /// Keep one base (`debian`, `ubuntu`, `arch`, `fedora`, `opensuse`, `independent`, `bsd`, `windows`)
+    #[arg(long, value_name = "BASE")]
     category: Option<String>,
     /// Keep one architecture (`x86_64`, `aarch64`)
     #[arg(long, value_name = "ARCH")]
@@ -293,6 +293,7 @@ pub(crate) fn report_value(
             })
             .collect(),
         images: sorted(catalog, query).into_iter().cloned().collect(),
+        taxonomy: catalog.taxonomy.clone(),
     };
     serde_json::to_value(report).map_err(refused)
 }
@@ -434,6 +435,7 @@ mod tests {
                 image("u26", "ubuntu", "2026-08-26", download()),
             ],
             grub: None,
+            taxonomy: None,
         }
     }
 

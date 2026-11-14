@@ -186,10 +186,11 @@ fn load_catalog(dir: &str, json: Vec<u8>, signature: Vec<u8>) -> Result<(), Stri
             })
             .collect(),
         images,
+        taxonomy: catalog.taxonomy,
     };
-    let systems = bonk_ui::catalog::systems(&report);
+    let shelf = bonk_ui::catalog::shelf(&report);
     let mut model = screen::lock(&screen::MODEL);
-    let _ = model.update(bonk_ui::model::Message::CatalogLoaded(Ok(systems)));
+    let _ = model.update(bonk_ui::model::Message::CatalogLoaded(Ok(shelf)));
     Ok(())
 }
 
