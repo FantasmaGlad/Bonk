@@ -49,8 +49,13 @@ impl App {
             ),
             VaultState::NotVault { .. } => column![
                 text(words.not_vault).size(13),
+                offline_note(&words, self.offline),
                 row![
-                    action_button(words.prepare, Some(VaultMessage::Prepare), true),
+                    action_button(
+                        words.prepare,
+                        (!self.offline).then_some(VaultMessage::Prepare),
+                        true
+                    ),
                     close(lang),
                 ]
                 .spacing(8),
@@ -58,7 +63,7 @@ impl App {
             .spacing(8)
             .into(),
             VaultState::Confirming { .. } => confirming(lang, &words, disk),
-            VaultState::Ready { images, .. } => ready(lang, &words, images),
+            VaultState::Ready { images, .. } => ready(lang, &words, images, self.offline),
             VaultState::Finished { outcome, .. } => column![
                 text(phrases::outcome_with_explain(lang, outcome)).size(13),
                 action_button(lang.pick("OK", "OK"), Some(VaultMessage::Open), true),
@@ -125,7 +130,16 @@ fn confirming<'a>(lang: Lang, words: &VaultWords, disk: &Disk) -> Element<'a, Me
     .into()
 }
 
-fn ready<'a>(lang: Lang, words: &VaultWords, images: &'a [(String, u64)]) -> Element<'a, Message> {
+fn offline_note<'a>(words: &VaultWords, offline: bool) -> Option<Element<'a, Message>> {
+    offline.then(|| text(words.offline).size(13).color(theme::muted()).into())
+}
+
+fn ready<'a>(
+    lang: Lang,
+    words: &VaultWords,
+    images: &'a [(String, u64)],
+    offline: bool,
+) -> Element<'a, Message> {
     let mut list = column![].spacing(2);
     if images.is_empty() {
         list = list.push(text(words.empty).size(13).color(theme::muted()));
@@ -141,9 +155,14 @@ fn ready<'a>(lang: Lang, words: &VaultWords, images: &'a [(String, u64)]) -> Ele
     }
     column![
         list,
+        offline_note(words, offline),
         row![
             action_button(words.add, Some(VaultMessage::Browse), true),
-            action_button(words.update, Some(VaultMessage::Update), false),
+            action_button(
+                words.update,
+                (!offline).then_some(VaultMessage::Update),
+                false
+            ),
             close(lang),
         ]
         .spacing(8),

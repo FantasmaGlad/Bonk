@@ -270,6 +270,10 @@ impl Model {
     }
 
     fn on_catalog_loaded(&mut self, result: Result<catalog::Shelf, String>) -> Effects {
+        // A read started before the switch may still answer.
+        if self.offline {
+            return Vec::new();
+        }
         self.catalog = match result {
             Ok(shelf) => {
                 self.terms = shelf.terms;
