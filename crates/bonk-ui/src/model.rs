@@ -119,6 +119,7 @@ pub enum Focus {
     Internal,
     Virtual,
     All,
+    Offline,
     Disk(String),
     /// The technical details disclosure of the selected disk.
     Details,
@@ -182,6 +183,8 @@ pub struct Model {
     pub write: WriteState,
     pub confirming_internal: bool,
     pub catalog: crate::catalog::CatalogState,
+    /// Never reach the network: the catalog is neither read nor shown, and a web address is refused.
+    pub offline: bool,
     /// Labels of the usage categories and bases, from the catalog once read.
     pub terms: crate::terms::Terms,
     pub menu_filter: crate::catalog::MenuFilter,
@@ -290,6 +293,7 @@ fn settings_event(message: crate::settings::SettingsMessage) -> Option<(&'static
         SettingsMessage::Close => ("click_close_settings", String::new()),
         SettingsMessage::Language(choice) => ("choose_language", choice.config_value().to_owned()),
         SettingsMessage::Theme(choice) => ("choose_theme", choice.config_value().to_owned()),
+        SettingsMessage::Offline(on) => ("toggle_offline", on.to_string()),
         SettingsMessage::SystemDark(_) => return None,
     })
 }
@@ -327,6 +331,8 @@ impl Model {
                 show_internal: initial.show_internal,
                 allow_virtual: initial.allow_virtual,
                 show_all: initial.show_all,
+                offline: initial.offline,
+                advanced: initial.offline,
                 ..Self::default()
             },
             vec![Effect::Enumerate],
@@ -373,6 +379,7 @@ impl Model {
             show_internal: self.show_internal,
             allow_virtual: self.allow_virtual,
             show_all: self.show_all,
+            offline: self.offline,
         }
     }
 

@@ -102,6 +102,7 @@ pub enum SettingsMessage {
     Theme(ThemeChoice),
     /// What the system answered for [`ThemeChoice::System`], once, at start.
     SystemDark(bool),
+    Offline(bool),
 }
 
 impl Model {
@@ -160,7 +161,27 @@ impl Model {
                 self.system_dark.get_or_insert(dark);
                 Vec::new()
             }
+            SettingsMessage::Offline(on) => self.set_offline(on),
         }
+    }
+
+    fn set_offline(&mut self, on: bool) -> Effects {
+        self.focus = Some(Focus::Offline);
+        self.offline = on;
+        let mut effects = vec![Effect::SaveSetting {
+            key: "network.offline",
+            value: if on { "true" } else { "false" },
+        }];
+        if on {
+            self.catalog = crate::catalog::CatalogState::NotLoaded;
+            self.menu_open = false;
+            self.menu_filter = crate::catalog::MenuFilter::default();
+            self.requested = None;
+            self.advanced = true;
+        } else {
+            effects.extend(self.load_menu());
+        }
+        effects
     }
 
     /// Tab order of the settings page.
@@ -169,7 +190,7 @@ impl Model {
         let mut order = vec![Focus::CloseSettings];
         order.extend(LangChoice::ALL.map(Focus::Language));
         order.extend(ThemeChoice::ALL.map(Focus::Theme));
-        order.extend([Focus::Internal, Focus::Virtual, Focus::All]);
+        order.extend([Focus::Internal, Focus::Virtual, Focus::All, Focus::Offline]);
         order
     }
 }
@@ -233,6 +254,59 @@ mod tests {
         assert_eq!(model.dark(), Some(true));
         model.theme_choice = ThemeChoice::Light;
         assert_eq!(model.dark(), Some(false));
+    }
+
+    #[test]
+    fn le_mode_hors_ligne_coupe_le_catalogue_et_refuse_les_adresses_web() {
+        let draft = || WriteState::Draft {
+            disk_id: "usb-a".to_owned(),
+            image: String::new(),
+            hash: String::new(),
+            raw: false,
+            mbr: true,
+            opened: std::time::Instant::now(),
+        };
+        let mut model = model();
+        model.write = draft();
+        let effects = model.update(Message::Settings(SettingsMessage::Offline(true)));
+        assert_eq!(
+            effects,
+            [Effect::SaveSetting {
+                key: "network.offline",
+                value: "true"
+            }]
+        );
+        assert!(model.advanced, "l'image locale reste le seul chemin");
+        assert!(model.request_image("debian-13".to_owned()).is_empty());
+        assert!(model.requested.is_none());
+        assert!(model.refuses_address(" HTTPS://exemple.org/a.iso"));
+        assert!(!model.refuses_address("/home/u/a.iso"));
+
+        let effects = model.update(Message::Settings(SettingsMessage::Offline(false)));
+        assert!(
+            effects.contains(&Effect::LoadCatalog),
+            "revenu en ligne, le menu se relit"
+        );
+        assert!(!model.refuses_address("https://exemple.org/a.iso"));
+    }
+
+    #[test]
+    fn hors_ligne_des_le_demarrage() {
+        let options = ViewOptions {
+            offline: true,
+            ..ViewOptions::default()
+        };
+        let mut model = Model::new(options, Lang::Fr).0;
+        assert!(model.offline && model.advanced);
+        model.write = WriteState::Draft {
+            disk_id: "usb-a".to_owned(),
+            image: String::new(),
+            hash: String::new(),
+            raw: false,
+            mbr: true,
+            opened: std::time::Instant::now(),
+        };
+        assert!(model.load_menu().is_empty());
     }
 
     #[test]

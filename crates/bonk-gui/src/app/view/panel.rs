@@ -66,13 +66,24 @@ impl App {
                 "WRITE AN IMAGE TO THIS DISK",
                 "ÉCRIRE UNE IMAGE SUR CE DISQUE"
             ))
-            .size(14),
-            ring(
-                menu_button(&self.catalog, image, self.menu_open, lang),
-                self.has_focus(Focus::Menu),
-            ),
+            .size(14)
         ]
         .spacing(8);
+        if self.offline {
+            panel = panel.push(
+                text(lang.pick(
+                    "Offline mode: choose an image file on this computer.",
+                    "Mode hors ligne : choisissez une image présente sur cet ordinateur.",
+                ))
+                .size(13)
+                .color(theme::muted()),
+            );
+        } else {
+            panel = panel.push(ring(
+                menu_button(&self.catalog, image, self.menu_open, lang),
+                self.has_focus(Focus::Menu),
+            ));
+        }
         if let (CatalogState::Ready(systems), true) = (&self.catalog, self.menu_open) {
             panel = panel.push(menu_list(
                 systems,
@@ -162,7 +173,17 @@ impl App {
         // One clock read per render: the countdown, the button state and its label cannot disagree.
         let elapsed = opened.elapsed();
         let empty = image.trim().is_empty();
-        let ready = elapsed >= WRITE_DELAY && !empty;
+        let refused = self.refuses_address(image);
+        let ready = elapsed >= WRITE_DELAY && !empty && !refused;
+        let refusal = refused.then(|| -> Element<'a, Message> {
+            text(lang.pick(
+                "Offline mode: a web address is not downloaded.",
+                "Mode hors ligne : une adresse web n'est pas téléchargée.",
+            ))
+            .size(13)
+            .color(theme::muted())
+            .into()
+        });
         column![
             text(recap::image_line(lang, &self.catalog, image)).size(14),
             text(recap::disk_line(lang, disk)).size(14),
@@ -178,6 +199,7 @@ impl App {
                 self.has_focus(Focus::Action),
             ),
         ]
+        .extend(refusal)
         .spacing(8)
         .into()
     }

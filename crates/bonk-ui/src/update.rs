@@ -288,6 +288,10 @@ impl Model {
 
     /// Opens the window for one catalog image. The catalog is read at once, without waiting for a disk.
     pub fn request_image(&mut self, id: String) -> Effects {
+        if self.offline {
+            log::info!(target: "bonk::gui", image = id.as_str(); "link ignored: offline mode");
+            return Vec::new();
+        }
         self.requested = Some(id);
         if matches!(self.catalog, CatalogState::Ready(_)) {
             self.fill_requested();
@@ -327,12 +331,12 @@ impl Model {
 
     /// The write panel just opened: the menu must be ready. The catalog is only read here, and reread after a
     /// failure at the next selection.
-    fn load_menu(&mut self) -> Effects {
+    pub(crate) fn load_menu(&mut self) -> Effects {
         let needed = matches!(
             self.catalog,
             CatalogState::NotLoaded | CatalogState::Failed(_)
         );
-        if !needed || !matches!(self.write, WriteState::Draft { .. }) {
+        if self.offline || !needed || !matches!(self.write, WriteState::Draft { .. }) {
             return Vec::new();
         }
         self.catalog = CatalogState::Loading;
@@ -370,6 +374,16 @@ impl Model {
         }
     }
 
+    /// In offline mode an image is a file on this machine: a web address would reach the network.
+    #[must_use]
+    pub fn refuses_address(&self, image: &str) -> bool {
+        let image = image.trim().to_ascii_lowercase();
+        self.offline
+            && ["http://", "https://", "ftp://"]
+                .iter()
+                .any(|scheme| image.starts_with(scheme))
+    }
+
     pub fn start_write(&mut self, internal_confirmed: bool) -> Effects {
         self.focus = Some(Focus::Action);
         let WriteState::Draft {
@@ -383,7 +397,11 @@ impl Model {
         else {
             return Vec::new();
         };
-        if image.trim().is_empty() || opened.elapsed() < WRITE_DELAY || !self.offered(disk_id) {
+        if image.trim().is_empty()
+            || opened.elapsed() < WRITE_DELAY
+            || !self.offered(disk_id)
+            || self.refuses_address(image)
+        {
             return Vec::new();
         }
         if self.is_internal(disk_id) && !internal_confirmed {

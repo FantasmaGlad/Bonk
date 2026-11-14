@@ -132,11 +132,12 @@ pub extern "system" fn Java_app_bonkos_bonk_Native_start<'caller>(
     theme: JString<'caller>,
     system_french: jboolean,
     show_all: jboolean,
+    offline: jboolean,
 ) {
     env.with_env(|env| -> Result<_, Error> {
         let lang = text_of(env, &lang)?;
         let theme = text_of(env, &theme)?;
-        crate::settings::start(&lang, &theme, system_french, show_all);
+        crate::settings::start(&lang, &theme, system_french, show_all, offline);
         Ok(())
     })
     .resolve::<jni::errors::ThrowRuntimeExAndDefault>()

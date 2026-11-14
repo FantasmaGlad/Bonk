@@ -5,6 +5,8 @@ pub struct ViewOptions {
     pub show_internal: bool,
     pub allow_virtual: bool,
     pub show_all: bool,
+    /// Window only, no command flag: no catalog read, no download.
+    pub offline: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -134,6 +136,7 @@ mod tests {
             show_internal: true,
             allow_virtual: true,
             show_all: true,
+            offline: false,
         };
         assert_eq!(
             equivalent_commands(options, Some("usb-SanDisk_Cruzer_4C53-0:0"), None),

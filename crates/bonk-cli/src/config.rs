@@ -56,6 +56,12 @@ pub(crate) const KEYS: &[Key] = &[
         default: "false",
         help: "test mode: allow virtual disks (window, list, info)",
     },
+    Key {
+        name: "network.offline",
+        kind: Kind::Bool,
+        default: "false",
+        help: "window: never read the catalog nor download; local image files only",
+    },
 ];
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -90,6 +96,8 @@ pub struct ViewDefaults {
     pub show_internal: bool,
     pub show_all: bool,
     pub allow_virtual: bool,
+    /// The window reaches no network: no catalog, no download.
+    pub offline: bool,
     /// `None`: the system's.
     pub lang: Option<bonk_hal::Lang>,
     /// As stored: `auto`, `light` or `dark`; the window reads it.
@@ -228,6 +236,7 @@ pub(crate) fn view_defaults(effective: &[Effective]) -> ViewDefaults {
         show_internal: on("view.show_internal"),
         show_all: on("view.show_all"),
         allow_virtual: on("view.allow_virtual"),
+        offline: on("network.offline"),
         lang: match value_of(effective, "lang") {
             Some("en") => Some(bonk_hal::Lang::En),
             Some("fr") => Some(bonk_hal::Lang::Fr),
@@ -464,6 +473,7 @@ mod tests {
                 show_internal: false,
                 show_all: true,
                 allow_virtual: false,
+                offline: false,
                 lang: None,
                 theme: "auto",
             }

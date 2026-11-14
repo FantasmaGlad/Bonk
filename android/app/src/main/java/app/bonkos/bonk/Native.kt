@@ -8,7 +8,7 @@ object Native {
     external fun dispatch(message: String): String
 
     /** Choices kept in the preferences (`auto`, `en`, `fr`; `auto`, `light`, `dark`) and the system language. */
-    external fun start(lang: String, theme: String, systemFrench: Boolean, showAll: Boolean)
+    external fun start(lang: String, theme: String, systemFrench: Boolean, showAll: Boolean, offline: Boolean)
 
     /** Checks the signature; without bytes, falls back to the last verified copy. */
     external fun loadCatalog(directory: String, catalog: ByteArray, signature: ByteArray): String

@@ -94,6 +94,25 @@ fn le_menu_s_ouvre_nomme_les_versions_et_un_choix_regle_tout() {
 }
 
 #[test]
+fn hors_ligne_le_catalogue_disparait_et_une_adresse_web_est_refusee() {
+    let mut app = app_avec_menu();
+    let _ = app.update(Message::Settings(
+        bonk_ui::settings::SettingsMessage::Offline(true),
+    ));
+    let _ = app.update(Message::Settings(bonk_ui::settings::SettingsMessage::Close));
+    assert!(!contient(&app, "Choisir un système..."));
+    assert!(contient(
+        &app,
+        "Mode hors ligne : choisissez une image présente sur cet ordinateur."
+    ));
+    let _ = app.update(Message::ImageInput("https://u/26.iso".to_owned()));
+    assert!(contient(
+        &app,
+        "Mode hors ligne : une adresse web n'est pas téléchargée."
+    ));
+}
+
+#[test]
 fn le_menu_filtre_par_usage_et_par_base() {
     let mut app = app_avec_menu();
     let _ = app.update(Message::ToggleMenu);

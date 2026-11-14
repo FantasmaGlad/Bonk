@@ -1,4 +1,4 @@
-use iced::widget::{Column, button, checkbox, column, row, scrollable, text};
+use iced::widget::{Column, button, checkbox, column, row, scrollable, text, toggler};
 use iced::{Element, Fill};
 
 use bonk_ui::settings::{LangChoice, SettingsMessage, ThemeChoice};
@@ -53,7 +53,8 @@ impl App {
         let sections = column![
             self.language_section(),
             self.theme_section(),
-            self.disks_section()
+            self.disks_section(),
+            self.network_section()
         ]
         .spacing(28);
         column![title, scrollable(sections).height(Fill)]
@@ -148,6 +149,23 @@ impl App {
                 "Pour les experts : le filtre de sécurité refuse toujours les disques système.",
             ),
             Column::with_children(rows).spacing(4).into(),
+        )
+    }
+
+    /// For whoever wants a tool that never reaches the network, so that nothing reveals their address.
+    fn network_section(&self) -> Element<'_, Message> {
+        let lang = self.lang;
+        let switch = toggler(self.offline)
+            .label(lang.pick("Offline mode", "Mode hors ligne"))
+            .on_toggle(|on| Message::Settings(SettingsMessage::Offline(on)))
+            .size(20);
+        section(
+            lang.pick("Network", "Réseau"),
+            lang.pick(
+                "Never connect to the Internet: the catalog is hidden and only image files on this computer can be written.",
+                "Ne jamais se connecter à Internet : le catalogue est masqué, seules les images présentes sur cet ordinateur s'écrivent.",
+            ),
+            ring(switch, self.has_focus(Focus::Offline)),
         )
     }
 }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -36,6 +37,14 @@ internal fun SettingsPage(settings: SettingsView, send: (ToRust) -> Unit) {
                 Checkbox(settings.showAll, { send(ShowAll(it)) })
                 Small(settings.showAllLabel, LocalPalette.current.ink)
             }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(Tokens.SPACE_SMALL.dp)) {
+            Body(settings.networkTitle)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(settings.offline, { send(SettingsAction("offline", it.toString())) })
+                Small(settings.offlineLabel, LocalPalette.current.ink)
+            }
+            Small(settings.offlineNote)
         }
     }
 }

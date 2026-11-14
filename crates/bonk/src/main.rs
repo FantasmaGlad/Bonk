@@ -10,6 +10,7 @@ fn main() -> ExitCode {
                     show_internal: view.show_internal,
                     allow_virtual: view.allow_virtual,
                     show_all: view.show_all,
+                    offline: view.offline,
                 },
                 view.lang,
                 bonk_gui::ThemeChoice::from_config(Some(view.theme)),

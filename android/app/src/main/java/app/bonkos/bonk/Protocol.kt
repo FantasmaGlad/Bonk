@@ -219,6 +219,10 @@ data class SettingsView(
     @SerialName("disks_title") val disksTitle: String,
     @SerialName("show_all") val showAll: Boolean,
     @SerialName("show_all_label") val showAllLabel: String,
+    @SerialName("network_title") val networkTitle: String = "",
+    val offline: Boolean = false,
+    @SerialName("offline_label") val offlineLabel: String = "",
+    @SerialName("offline_note") val offlineNote: String = "",
 )
 
 @Serializable
