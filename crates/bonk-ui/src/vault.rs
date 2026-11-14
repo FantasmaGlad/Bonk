@@ -39,6 +39,8 @@ pub struct VaultWords {
     pub update: &'static str,
     /// On the write panel: opens the vault panel.
     pub open: &'static str,
+    /// Shown in place of the actions that read GRUB from the catalog.
+    pub offline: &'static str,
 }
 
 impl VaultWords {
@@ -61,6 +63,10 @@ impl VaultWords {
             open: lang.pick(
                 "Use as a vault (several ISO images)...",
                 "Utiliser comme coffre (plusieurs images ISO)...",
+            ),
+            offline: lang.pick(
+                "Offline mode: preparing a vault or updating GRUB needs the catalog.",
+                "Mode hors ligne : préparer un coffre ou mettre à jour GRUB demande le catalogue.",
             ),
         }
     }
@@ -208,6 +214,11 @@ impl Model {
             },
             VaultMessage::Close if !self.vault.is_busy() => {
                 self.vault = VaultState::Closed;
+                Vec::new()
+            }
+            VaultMessage::Prepare | VaultMessage::ConfirmPrepare | VaultMessage::Update
+                if self.offline =>
+            {
                 Vec::new()
             }
             VaultMessage::Prepare => {
@@ -378,6 +389,31 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn hors_ligne_ni_preparation_ni_mise_a_jour_de_grub() {
+        let mut model = Model {
+            offline: true,
+            ..model_on("usb-a")
+        };
+        model.vault = VaultState::NotVault {
+            disk_id: "usb-a".to_owned(),
+        };
+        assert!(model.apply_vault(VaultMessage::Prepare).is_empty());
+        assert!(matches!(model.vault, VaultState::NotVault { .. }));
+        model.vault = VaultState::Confirming {
+            disk_id: "usb-a".to_owned(),
+        };
+        assert!(model.apply_vault(VaultMessage::ConfirmPrepare).is_empty());
+        model.vault = VaultState::Ready {
+            disk_id: "usb-a".to_owned(),
+            images: Vec::new(),
+        };
+        assert!(model.apply_vault(VaultMessage::Update).is_empty());
+        let effects =
+            model.apply_vault(VaultMessage::Picked(Some(PathBuf::from("/isos/arch.iso"))));
+        assert!(matches!(&effects[..], [Effect::RunVault(args)] if args[1] == "add"));
     }
 
     #[test]

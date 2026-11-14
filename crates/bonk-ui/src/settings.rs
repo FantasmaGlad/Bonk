@@ -281,6 +281,11 @@ mod tests {
         assert!(model.requested.is_none());
         assert!(model.refuses_address(" HTTPS://exemple.org/a.iso"));
         assert!(!model.refuses_address("/home/u/a.iso"));
+        let _ = model.update(Message::CatalogLoaded(Ok(crate::catalog::Shelf::default())));
+        assert!(
+            matches!(model.catalog, crate::catalog::CatalogState::NotLoaded),
+            "une lecture lancée avant la bascule n'est pas reprise"
+        );
 
         let effects = model.update(Message::Settings(SettingsMessage::Offline(false)));
         assert!(

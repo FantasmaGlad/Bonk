@@ -436,6 +436,11 @@ fn vault_state(model: &Model) -> Value {
             *action,
             phase.map(|phase| (phase, *done, *total, *rate)),
         ),
+        VaultState::NotVault { .. } if model.offline => (
+            vec![words.not_vault.to_owned(), words.offline.to_owned()],
+            None,
+            vec![close],
+        ),
         VaultState::NotVault { .. } => (
             vec![words.not_vault.to_owned()],
             None,
@@ -447,7 +452,7 @@ fn vault_state(model: &Model) -> Value {
                 .iter()
                 .map(|(name, size)| json!({"name": name, "size": format_size(*size, lang)}))
                 .collect();
-            vault_ready(&words, found.is_empty(), close)
+            vault_ready(&words, found.is_empty(), model.offline, close)
         }
         VaultState::Finished { outcome, .. } => (
             vec![text::outcome(lang, outcome)],
@@ -483,13 +488,20 @@ fn vault_busy(
     (lines, fraction, cancel.into_iter().collect())
 }
 
-fn vault_ready(words: &VaultWords, empty: bool, close: Value) -> VaultBody {
-    let lines = empty.then(|| words.empty.to_owned()).into_iter().collect();
-    let buttons = vec![
-        vault_button(words.add, "browse", true),
-        vault_button(words.update, "update", false),
-        close,
-    ];
+fn vault_ready(words: &VaultWords, empty: bool, offline: bool, close: Value) -> VaultBody {
+    let lines = [
+        empty.then_some(words.empty),
+        offline.then_some(words.offline),
+    ]
+    .into_iter()
+    .flatten()
+    .map(str::to_owned)
+    .collect();
+    let mut buttons = vec![vault_button(words.add, "browse", true)];
+    if !offline {
+        buttons.push(vault_button(words.update, "update", false));
+    }
+    buttons.push(close);
     (lines, None, buttons)
 }
 
@@ -911,6 +923,31 @@ mod tests {
         })));
         samples.push(state(&model));
         samples
+    }
+
+    #[test]
+    fn hors_ligne_le_coffre_ne_propose_que_ce_qui_reste_sur_l_appareil() {
+        let actions = |model: &Model| -> Vec<String> {
+            vault_state(model)["buttons"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|button| button["action"].as_str().map(str::to_owned))
+                .collect()
+        };
+        let mut model = loaded();
+        model.offline = true;
+        model.vault = VaultState::Ready {
+            disk_id: "usb-a".to_owned(),
+            images: Vec::new(),
+        };
+        assert_eq!(actions(&model), ["browse", "close"]);
+        model.vault = VaultState::NotVault {
+            disk_id: "usb-a".to_owned(),
+        };
+        assert_eq!(actions(&model), ["close"]);
+        model.offline = false;
+        assert_eq!(actions(&model), ["prepare", "close"]);
     }
 
     /// The contract between Rust and the app, written to a file the Kotlin tests read back: effects as Rust
