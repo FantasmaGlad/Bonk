@@ -102,7 +102,7 @@ const SYSTEM_MARKERS: &[&str] = &[
 const SYSTEM_EXCEPTIONS: &[(&str, &[&str], &str)] = &[(
     "bonk-gui/src/lib.rs",
     &["target_os", "cfg(all(unix", "cfg(not("],
-    "variables d'affichage d'une session graphique Unix hors macOS ; à déplacer dans bonk-hal (STATE.md, dette)",
+    "variables d'affichage d'une session graphique Unix et réception du lien bonk:// sous macOS, lues avant l'ouverture de la fenêtre",
 )];
 
 #[test]

@@ -45,8 +45,8 @@ impl LogArgs {
 }
 
 /// Without an explicit setting `-v` gives `debug` to Bonk and `info` to rendering, `-vv` gives `trace` and
-/// `debug`; without `-v`, Bonk warnings and rendering errors only (graphics driver warnings are noise for the
-/// user).
+/// `debug`; without `-v`, Bonk warnings only: graphics libraries log as errors what Bonk recovers from (a
+/// settings portal that does not answer, a driver refusing a shader before the software renderer takes over).
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Filter {
     default: LevelFilter,
@@ -59,7 +59,7 @@ impl Filter {
     /// every component.
     pub(crate) fn new(verbose: u8, spec: Option<&str>) -> Result<Self, String> {
         let (default, render) = match verbose {
-            0 => (LevelFilter::Warn, LevelFilter::Error),
+            0 => (LevelFilter::Warn, LevelFilter::Off),
             1 => (LevelFilter::Debug, LevelFilter::Info),
             _ => (LevelFilter::Trace, LevelFilter::Debug),
         };
@@ -384,7 +384,7 @@ mod tests {
     fn niveaux_par_defaut_selon_v() -> Result<(), String> {
         let sans = Filter::new(0, None)?;
         assert_eq!(sans.level_of("hal"), LevelFilter::Warn);
-        assert_eq!(sans.level_of("render"), LevelFilter::Error);
+        assert_eq!(sans.level_of("render"), LevelFilter::Off);
         let un = Filter::new(1, None)?;
         assert_eq!(
             (un.level_of("gui"), un.level_of("render")),
