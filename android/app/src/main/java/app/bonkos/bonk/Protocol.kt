@@ -41,6 +41,9 @@ data object ToggleMenu : ToRust
 @Serializable @SerialName("category")
 data class CategoryFilter(val value: String? = null) : ToRust
 
+@Serializable @SerialName("base")
+data class BaseFilter(val value: String? = null) : ToRust
+
 @Serializable @SerialName("system")
 data class SystemFilter(val value: String? = null) : ToRust
 
@@ -284,10 +287,13 @@ data class MenuView(
     val open: Boolean = false,
     val button: String = "",
     @SerialName("all_categories") val allCategories: String = "",
+    @SerialName("all_bases") val allBases: String = "",
     @SerialName("all_systems") val allSystems: String = "",
     val category: String? = null,
+    val base: String? = null,
     val system: String? = null,
     val categories: List<String> = emptyList(),
+    val bases: List<String> = emptyList(),
     val systems: List<String> = emptyList(),
     val rows: List<MenuRow> = emptyList(),
 )

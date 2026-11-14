@@ -32,7 +32,7 @@ pub struct Family {
     /// Stable identifier: `ubuntu`.
     pub id: String,
     pub name: String,
-    /// Group shown to sort systems: `Debian derivatives`. Absent from older catalogs.
+    /// Technical base, one of the catalog's `taxonomy.bases`: `debian`. Absent from older catalogs.
     #[serde(default)]
     pub category: Option<String>,
     /// Logo, relative to the manifest. Its hash, covered by the signature, keeps it from being replaced.
@@ -46,7 +46,7 @@ pub struct Family {
     /// Official address the logo comes from.
     #[serde(default)]
     pub icon_source: Option<String>,
-    /// Usage categories, the main one first: `desktop`, `server`.
+    /// Usage categories, among the catalog's `taxonomy.uses`: `office`, `server`.
     #[serde(default)]
     pub uses: Vec<String>,
     /// Minimum memory the publisher states, in MiB, and the page it is read on.
@@ -54,6 +54,23 @@ pub struct Family {
     pub ram_mb: Option<u32>,
     #[serde(default)]
     pub ram_source: Option<String>,
+}
+
+/// A closed name of the catalog with the labels interfaces show.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Term {
+    pub id: String,
+    pub en: String,
+    pub fr: String,
+}
+
+/// The usage categories and technical bases, in menu order: a new one needs no Bonk release.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Taxonomy {
+    #[serde(default)]
+    pub uses: Vec<Term>,
+    #[serde(default)]
+    pub bases: Vec<Term>,
 }
 
 /// Life cycle of a version: what marks an old version.
@@ -164,6 +181,9 @@ pub struct CatalogReport {
     pub saved_copy: bool,
     pub families: Vec<FamilyEntry>,
     pub images: Vec<Image>,
+    /// Absent from older catalogs: interfaces fall back on their own copy.
+    #[serde(default)]
+    pub taxonomy: Option<Taxonomy>,
 }
 
 /// The manifest, once verified.
@@ -178,6 +198,8 @@ pub struct Catalog {
     /// Boot loader of the vault. Absent from older catalogs.
     #[serde(default)]
     pub grub: Option<Grub>,
+    #[serde(default)]
+    pub taxonomy: Option<Taxonomy>,
 }
 
 /// A file published next to the manifest.

@@ -63,6 +63,7 @@ class ProtocolTest {
                 ToggleMenu,
                 CategoryFilter("Servers"),
                 CategoryFilter(),
+                BaseFilter("Debian"),
                 SystemFilter("debian"),
                 Choose(0),
                 ToggleAdvanced,

@@ -69,8 +69,9 @@ pub enum Message {
     ImagePicked(Option<PathBuf>),
     ToggleMenu,
     MenuCategory(Option<String>),
+    MenuBase(Option<String>),
     MenuSystem(Option<String>),
-    CatalogLoaded(Result<Vec<crate::catalog::System>, String>),
+    CatalogLoaded(Result<crate::catalog::Shelf, String>),
     /// Address, hash and automatic settings.
     MenuChose(crate::catalog::Choice),
     ToggleAdvanced,
@@ -181,6 +182,8 @@ pub struct Model {
     pub write: WriteState,
     pub confirming_internal: bool,
     pub catalog: crate::catalog::CatalogState,
+    /// Labels of the usage categories and bases, from the catalog once read.
+    pub terms: crate::terms::Terms,
     pub menu_filter: crate::catalog::MenuFilter,
     /// A local Tor, offered in the options; never used without the box.
     pub tor: Option<String>,
@@ -243,7 +246,7 @@ pub fn ui_event(message: &Message) -> Option<(&'static str, String)> {
         ),
         Message::ToggleMenu => ("click_menu", String::new()),
         Message::RequestImage(id) => ("open_link", id.clone()),
-        Message::MenuCategory(value) | Message::MenuSystem(value) => {
+        Message::MenuCategory(value) | Message::MenuBase(value) | Message::MenuSystem(value) => {
             ("menu_filter", value.clone().unwrap_or_default())
         }
         Message::MenuChose(choice) => ("menu_chose", choice.label.clone()),

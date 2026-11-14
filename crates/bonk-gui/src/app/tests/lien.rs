@@ -1,4 +1,4 @@
-use super::menu::versions_du_catalogue;
+use super::menu::{etagere, versions_du_catalogue};
 use super::panneau::app_avec_panneau;
 use super::rendu::contient;
 use super::*;
@@ -13,7 +13,7 @@ fn brouillon(app: &App) -> Option<(&str, &str)> {
 }
 
 fn catalogue_lu(app: &mut App) {
-    let _ = app.update(Message::CatalogLoaded(Ok(versions_du_catalogue())));
+    let _ = app.update(Message::CatalogLoaded(Ok(etagere())));
 }
 
 #[test]
@@ -65,9 +65,7 @@ fn une_image_demandee_n_ecrit_jamais_d_elle_meme() {
     let mut app = app_avec_panneau();
     let effects = app.model.request_image(UBUNTU.to_owned());
     assert!(!effects.iter().any(|e| matches!(e, Effect::StartWrite(_))));
-    let effects = app
-        .model
-        .update(Message::CatalogLoaded(Ok(versions_du_catalogue())));
+    let effects = app.model.update(Message::CatalogLoaded(Ok(etagere())));
     assert!(effects.is_empty(), "{effects:?}");
     assert!(matches!(app.write, WriteState::Draft { .. }));
     let effects = app.model.update(Message::StartWrite);

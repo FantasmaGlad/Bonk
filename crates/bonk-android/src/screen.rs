@@ -6,13 +6,13 @@ use bonk_core::partition::Layout;
 use bonk_core::write::Phase;
 use bonk_hal::{Bus, Disk, DiskKind, Lang, Partition, format_size, state_label, verdict_badge};
 use bonk_ui::catalog::{
-    CatalogState, ChoiceSource, all_categories, all_systems, official_page_note, writable,
+    CatalogState, ChoiceSource, all_bases, all_categories, all_systems, official_page_note,
+    writable,
 };
 use bonk_ui::command::ViewOptions;
 use bonk_ui::event::{Event, Outcome};
 use bonk_ui::model::{Effect, Message, Model, WRITE_DELAY, WriteState};
 use bonk_ui::text;
-use bonk_ui::uses;
 use bonk_ui::vault::{VaultAction, VaultMessage, VaultState, VaultWords};
 use serde_json::{Value, json};
 
@@ -153,7 +153,10 @@ fn message_of(input: &Value, model: &Model) -> Option<Message> {
         "settings" => crate::settings::message_of(input)?,
         "menu" => Message::ToggleMenu,
         "category" => Message::MenuCategory(
-            text_of("value").and_then(|shown| uses::id_of(&shown, model.lang)),
+            text_of("value").and_then(|shown| model.terms.uses().id_of(&shown, model.lang)),
+        ),
+        "base" => Message::MenuBase(
+            text_of("value").and_then(|shown| model.terms.bases().id_of(&shown, model.lang)),
         ),
         "system" => Message::MenuSystem(text_of("value")),
         "catalog_failed" => Message::CatalogLoaded(Err(text_of("message")?)),
@@ -345,8 +348,14 @@ fn menu_state(model: &Model) -> Value {
         };
         return json!({"ready": false, "line": line});
     };
-    let (categories, names) = model.menu_filter.lists(systems);
-    let categories: Vec<String> = categories.iter().map(|id| uses::label(id, lang)).collect();
+    let lists = model.menu_filter.lists(systems, &model.terms);
+    let (uses, bases) = (model.terms.uses(), model.terms.bases());
+    let categories: Vec<String> = lists
+        .categories
+        .iter()
+        .map(|id| uses.label(id, lang))
+        .collect();
+    let base_names: Vec<String> = lists.bases.iter().map(|id| bases.label(id, lang)).collect();
     let filtered = model.menu_filter.apply(systems);
     let mut index = 0;
     let mut rows = Vec::new();
@@ -372,11 +381,14 @@ fn menu_state(model: &Model) -> Value {
         "open": model.menu_open,
         "button": chosen_title(model).unwrap_or_else(|| lang.pick("Choose a system...", "Choisir un système...").to_owned()),
         "all_categories": all_categories(lang),
+        "all_bases": all_bases(lang),
         "all_systems": all_systems(lang),
-        "category": model.menu_filter.category.as_deref().map(|id| uses::label(id, lang)),
+        "category": model.menu_filter.category.as_deref().map(|id| uses.label(id, lang)),
+        "base": model.menu_filter.base.as_deref().map(|id| bases.label(id, lang)),
         "system": model.menu_filter.system,
         "categories": categories,
-        "systems": names,
+        "bases": base_names,
+        "systems": lists.systems,
         "rows": rows,
     })
 }
@@ -823,7 +835,8 @@ mod tests {
         let mut model = loaded();
         model.catalog = CatalogState::Ready(vec![System {
             name: "Debian".to_owned(),
-            uses: vec!["desktop".to_owned(), "server".to_owned()],
+            uses: vec!["office".to_owned(), "server".to_owned()],
+            base: Some("debian".to_owned()),
             icon: None,
             choices: vec![
                 Choice {
@@ -952,6 +965,7 @@ mod tests {
             json!({"type": "menu"}),
             json!({"type": "category", "value": "Servers"}),
             json!({"type": "category"}),
+            json!({"type": "base", "value": "Debian"}),
             json!({"type": "system", "value": "debian"}),
             json!({"type": "choose", "index": 0}),
             json!({"type": "advanced"}),
