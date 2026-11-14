@@ -166,6 +166,7 @@ class Actions(
                 val buffer = ByteArray(BUFFER)
                 var done = 0L
                 while (true) {
+                    if (Bridge.cancelled) throw BonkFailure("E4003", "cancelled during the download")
                     val count = input.read(buffer)
                     if (count < 0) break
                     done += count

@@ -92,11 +92,11 @@ class BonkFailure(val code: String, message: String) : Exception(message)
 @Serializable @SerialName("catalog_failed")
 data class CatalogFailed(val message: String) : ToRust
 
-/** Nothing to report: only reread the state, after a write for instance. Rust ignores this type. */
 /** A `bonk://install/<image>` link the app was opened with; Rust checks it and reads nothing else from it. */
 @Serializable @SerialName("open")
 data class Open(val link: String) : ToRust
 
+/** Rereads the state, after a write for instance; Rust ignores the type. */
 @Serializable @SerialName("refresh")
 data object Refresh : ToRust
 
