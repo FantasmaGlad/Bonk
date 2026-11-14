@@ -62,22 +62,6 @@ impl App {
             .into()
     }
 
-    /// Why a choice is refused now, or what it does.
-    fn relaunch_note(&self) -> &'static str {
-        let lang = self.lang;
-        if self.can_relaunch() {
-            lang.pick(
-                "Bonk restarts at once to apply it.",
-                "Bonk redémarre aussitôt pour l'appliquer.",
-            )
-        } else {
-            lang.pick(
-                "Unavailable while a drive is being written.",
-                "Indisponible pendant l'écriture d'une clé.",
-            )
-        }
-    }
-
     fn language_section(&self) -> Element<'_, Message> {
         let choices = LangChoice::ALL.map(|choice| {
             option(

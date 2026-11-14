@@ -37,17 +37,7 @@ pub(crate) fn state(model: &Model) -> Value {
         return Value::Null;
     }
     let lang = model.lang;
-    let note = if model.can_relaunch() {
-        lang.pick(
-            "Bonk restarts at once to apply it.",
-            "Bonk redémarre aussitôt pour l'appliquer.",
-        )
-    } else {
-        lang.pick(
-            "Unavailable while a drive is being written.",
-            "Indisponible pendant l'écriture d'une clé.",
-        )
-    };
+    let note = model.relaunch_note();
     let languages: Vec<Value> = LangChoice::ALL
         .map(|c| {
             option(

@@ -64,22 +64,12 @@ impl IsoFamily {
     ];
 }
 
-/// The processor an ISO starts on, as GRUB names it in `grub_cpu`.
+/// The processor an ISO starts on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum IsoArch {
     X86_64,
     Aarch64,
-}
-
-impl IsoArch {
-    #[must_use]
-    pub fn grub_cpu(self) -> &'static str {
-        match self {
-            Self::X86_64 => "x86_64",
-            Self::Aarch64 => "arm64",
-        }
-    }
 }
 
 /// Tested in the menu's order: a Kiwi kernel folder names its processor; Debian and Ubuntu share one layout
@@ -718,7 +708,6 @@ mod tests {
             ("EFI/BOOT/BOOTAA64.EFI", 1),
         ];
         assert_eq!(arch("Fedora-WS-Live-44", &fedora)?, Some(IsoArch::X86_64));
-        assert_eq!(IsoArch::Aarch64.grub_cpu(), "arm64");
         Ok(())
     }
 

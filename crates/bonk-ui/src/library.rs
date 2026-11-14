@@ -82,18 +82,6 @@ pub fn parse(json: &[u8]) -> Result<Vec<Kept>, String> {
     Ok(kept)
 }
 
-#[must_use]
-pub fn list_args() -> Vec<String> {
-    ["cache", "list", "--json"].map(str::to_owned).to_vec()
-}
-
-#[must_use]
-pub fn remove_args(sha256: &str) -> Vec<String> {
-    ["cache", "clean", sha256, "--json"]
-        .map(str::to_owned)
-        .to_vec()
-}
-
 impl Model {
     #[must_use]
     pub fn kept(&self) -> &[Kept] {
@@ -212,20 +200,7 @@ impl Model {
 /// `2026-11-12` from seconds since 1970, in UTC.
 #[must_use]
 pub fn day(seconds: u64) -> String {
-    // Days to a civil date, from Howard Hinnant's algorithm; no date library for one line of text.
-    let days = i64::try_from(seconds / 86_400).unwrap_or(0) + 719_468;
-    let era = days.div_euclid(146_097);
-    let of_era = days.rem_euclid(146_097);
-    let year_of_era = (of_era - of_era / 1460 + of_era / 36_524 - of_era / 146_096) / 365;
-    let of_year = of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let shifted_month = (5 * of_year + 2) / 153;
-    let day = of_year - (153 * shifted_month + 2) / 5 + 1;
-    let month = if shifted_month < 10 {
-        shifted_month + 3
-    } else {
-        shifted_month - 9
-    };
-    let year = year_of_era + era * 400 + i64::from(month <= 2);
+    let (year, month, day) = bonk_core::date::civil_from_days(seconds / 86_400);
     format!("{year:04}-{month:02}-{day:02}")
 }
 
