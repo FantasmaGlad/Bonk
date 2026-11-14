@@ -32,7 +32,13 @@ for x in $(cat /proc/cmdline); do
 done
 if [ "$offset" ]; then
     wait_for_devs
-    if vault=$(/sbin/blkid -L BonkVault); then
+    # A USB drive can show up after udev settles: casper itself looks for its medium for a minute.
+    tries=0
+    until vault=$(/sbin/blkid -L BonkVault) || [ "$tries" -ge 60 ]; do
+        sleep 1
+        tries=$((tries + 1))
+    done
+    if [ "$vault" ]; then
         echo "LIVEMEDIA=${vault}" >> /conf/param.conf
         echo "LIVEMEDIA_OFFSET=${offset}" >> /conf/param.conf
     else
