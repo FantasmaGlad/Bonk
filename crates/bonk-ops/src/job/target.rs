@@ -191,7 +191,6 @@ fn open_disk(
     } else {
         Vec::new()
     };
-    // Identity re-checked right before opening.
     let fresh = enumerate(deps)?;
     let again = reverify(&identity, &fresh, options).map_err(map_open_target)?;
     let opened = (deps.io.open_node)(Path::new(&again.path), access, elevation);

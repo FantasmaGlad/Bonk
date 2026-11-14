@@ -111,7 +111,6 @@ pub(crate) fn explain(args: &ExplainArgs, out: &mut dyn Write) -> io::Result<boo
     Ok(true)
 }
 
-/// With the list of existing codes.
 pub(crate) fn unknown_code_message(text: &str) -> String {
     let ids: Vec<&str> = CATALOG.iter().map(|e| e.id).collect();
     format!("unknown code: '{text}' (codes: {})", ids.join(", "))

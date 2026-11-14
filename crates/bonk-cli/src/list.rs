@@ -59,7 +59,6 @@ pub(crate) fn schema() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(Report)).unwrap_or_default()
 }
 
-/// Writable disks, or all of them, with their verdicts.
 fn selected(disks: &[Disk], options: FilterOptions, all: bool) -> Vec<Entry<'_>> {
     disks
         .iter()

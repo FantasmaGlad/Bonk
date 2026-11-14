@@ -2,7 +2,6 @@ use bonk_hal::Lang;
 
 use crate::model::{Effect, Effects, Focus, Model, WriteState};
 
-/// The page the window shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Screen {
     #[default]
@@ -184,7 +183,6 @@ impl Model {
         effects
     }
 
-    /// Tab order of the settings page.
     #[must_use]
     pub fn settings_focus_order(&self) -> Vec<Focus> {
         let mut order = vec![Focus::CloseSettings];

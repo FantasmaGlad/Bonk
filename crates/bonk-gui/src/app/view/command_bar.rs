@@ -7,7 +7,6 @@ use super::super::{App, Focus, Message};
 use super::ring;
 
 impl App {
-    /// The command lines that do what the window shows, to copy.
     pub(super) fn command_bar(&self) -> Element<'_, Message> {
         let lang = self.lang;
         row![

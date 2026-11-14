@@ -423,8 +423,6 @@ pub fn verify(
     verify_boot(dev, plan, ids, boot)
 }
 
-/// `Some` when the drive carries exactly the two vault partitions, the first an exFAT volume labelled
-/// [`VAULT_LABEL`], the second typed as an EFI system partition.
 /// The boot partition reads back with exactly these files: each at the place Bonk would write it, with the same
 /// bytes. Its volume id is not compared, as each preparation draws a new one.
 ///

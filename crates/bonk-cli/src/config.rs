@@ -305,7 +305,6 @@ fn need_path(path: Option<&Path>) -> Result<&Path, ConfigError> {
     })
 }
 
-/// Error text to print, or nothing.
 pub(crate) fn run(
     action: &ConfigAction,
     path: Option<&Path>,

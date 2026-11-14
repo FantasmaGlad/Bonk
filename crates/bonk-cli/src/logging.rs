@@ -257,7 +257,6 @@ pub(crate) fn format_event(
     }
 }
 
-/// Filters by component; stderr and an optional file.
 struct Sink {
     filter: Filter,
     format: LogFormat,
@@ -292,7 +291,6 @@ impl Log for Sink {
     }
 }
 
-/// As read from the command line and the environment.
 #[derive(Debug)]
 pub(crate) struct Settings {
     pub(crate) filter: Filter,

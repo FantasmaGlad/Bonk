@@ -149,7 +149,6 @@ pub(crate) fn run_diagnose<O: Write, E: Write>(
     }
 }
 
-/// On failure, writes the error and returns the exit code.
 pub(crate) fn disks_or_exit<E, F>(err: &mut E, enumerate: F) -> Result<Vec<Disk>, u8>
 where
     E: Write,

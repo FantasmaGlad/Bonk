@@ -88,7 +88,6 @@ impl App {
         }
     }
 
-    /// The disks on the left, what to do with the chosen one on the right.
     fn wide_body(&self) -> Element<'_, Message> {
         let side = self.side_panels().unwrap_or_else(|| {
             container(text(self.side_hint()).size(14).color(theme::muted()))

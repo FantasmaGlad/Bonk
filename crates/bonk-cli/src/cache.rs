@@ -12,7 +12,6 @@ use bonk_ops::job;
 
 const IMAGES: &str = "images";
 
-/// The given directory, else the user's cache directory.
 pub(crate) fn directory(given: Option<&Path>) -> Option<PathBuf> {
     given
         .map(Path::to_path_buf)
