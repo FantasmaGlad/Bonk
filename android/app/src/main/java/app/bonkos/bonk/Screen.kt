@@ -75,7 +75,10 @@ internal fun Screen(
                 Small(error, LocalPalette.current.ink)
             }
         }
-        if (state.disks.isEmpty() && waiting.isEmpty() && errors.isEmpty()) Body(state.empty)
+        if (state.disks.isEmpty() && waiting.isEmpty() && errors.isEmpty()) {
+            Body(state.empty)
+            if (onChromeOs()) Small(stringResource(R.string.chromeos_share))
+        }
         Disks(state, send)
         when (val panel = state.panel) {
             is RunningPanel -> Running(panel, send)
@@ -92,6 +95,15 @@ internal fun Screen(
         }
     }
 }
+
+/** ChromeOS hands a USB drive to its Android system only once the user shares it, and never asks. */
+@Composable
+private fun onChromeOs(): Boolean {
+    val packages = LocalContext.current.packageManager
+    return remember { packages.hasSystemFeature(ARC_FEATURE) }
+}
+
+private const val ARC_FEATURE = "org.chromium.arc"
 
 @Composable
 private fun AskAccess(usb: UsbManager, device: UsbDevice) {
