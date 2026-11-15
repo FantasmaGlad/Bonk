@@ -76,33 +76,9 @@ internal fun Screen(
             }
         }
         if (state.disks.isEmpty() && waiting.isEmpty() && errors.isEmpty()) Body(state.empty)
-        val panel = state.panel
-        val vault = state.vault
-        state.disks.forEach { disk ->
-            DiskCard(disk, send)
-            if (disk.selected && vault != null) {
-                Vault(vault, send)
-            } else if (disk.selected && panel is DraftPanel) {
-                Draft(panel, send)
-            }
-        }
-        when (panel) {
-            is RunningPanel -> Boxed {
-                Body(panel.line)
-                Small(stringResource(R.string.do_not_unplug))
-                // Without a known total the bar scrolls instead of lying about progress.
-                val fraction = panel.fraction
-                if (fraction == null) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Color(LocalPalette.current.ink))
-                } else {
-                    LinearProgressIndicator(
-                        progress = { fraction },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = Color(LocalPalette.current.ink),
-                    )
-                }
-                Primary(panel.cancel) { send(Cancel) }
-            }
+        Disks(state, send)
+        when (val panel = state.panel) {
+            is RunningPanel -> Running(panel, send)
             is FinishedPanel -> Boxed {
                 Body(panel.message)
                 Primary(panel.close) { send(Dismiss) }
@@ -298,5 +274,40 @@ private fun Vault(vault: VaultView, send: (ToRust) -> Unit) {
                 Secondary(button.label) { send(VaultButton(button.action)) }
             }
         }
+    }
+}
+
+/** Each card, with the vault or write panel of the selected one right under it. */
+@Composable
+private fun Disks(state: ScreenState, send: (ToRust) -> Unit) {
+    val panel = state.panel
+    val vault = state.vault
+    state.disks.forEach { disk ->
+        DiskCard(disk, send)
+        if (disk.selected && vault != null) {
+            Vault(vault, send)
+        } else if (disk.selected && panel is DraftPanel) {
+            Draft(panel, send)
+        }
+    }
+}
+
+@Composable
+private fun Running(panel: RunningPanel, send: (ToRust) -> Unit) {
+    Boxed {
+        Body(panel.line)
+        Small(stringResource(R.string.do_not_unplug))
+        // Without a known total the bar scrolls instead of lying about progress.
+        val fraction = panel.fraction
+        if (fraction == null) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Color(LocalPalette.current.ink))
+        } else {
+            LinearProgressIndicator(
+                progress = { fraction },
+                modifier = Modifier.fillMaxWidth(),
+                color = Color(LocalPalette.current.ink),
+            )
+        }
+        Primary(panel.cancel) { send(Cancel) }
     }
 }
