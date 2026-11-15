@@ -18,6 +18,7 @@ mod coffre;
 mod disques;
 mod ecriture;
 mod protocole;
+mod telechargement;
 
 fn usb() -> Value {
     json!({"device": "/dev/bus/usb/001/002", "model": "UDisk", "serial": "S1", "size_bytes": 32_000_000_000_u64})

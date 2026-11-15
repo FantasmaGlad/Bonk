@@ -36,7 +36,21 @@ data class SystemView(
     val icon: String? = null,
     val back: String,
     val write: String,
+    val download: String,
+    /** A download runs: the others wait. */
+    val busy: Boolean = false,
+    val downloading: DownloadPanel? = null,
     val variants: List<VariantView>,
+)
+
+/** `fraction` absent while the size is unknown; `action` is sent back with the button. */
+@Serializable
+data class DownloadPanel(
+    val title: String,
+    val line: String,
+    val fraction: Float? = null,
+    val button: String,
+    val action: String,
 )
 
 /** `id` only for an image Bonk can write; otherwise `note` says why not. */

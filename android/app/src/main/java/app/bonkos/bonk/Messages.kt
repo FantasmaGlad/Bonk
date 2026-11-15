@@ -79,6 +79,10 @@ data object Dismiss : ToRust
 @Serializable @SerialName("download")
 data class Download(val done: Long, val total: Long?, val rate: Double) : ToRust
 
+/** A catalog image saved: where the user finds it, and its size. */
+@Serializable @SerialName("downloaded")
+data class Downloaded(val path: String, val bytes: Long) : ToRust
+
 @Serializable @SerialName("failed")
 data class Failed(val message: String, val code: String? = null) : ToRust
 
@@ -113,6 +117,10 @@ data class CatalogAction(val action: String) : ToRust
 
 @Serializable @SerialName("catalog_search")
 data class CatalogSearch(val value: String) : ToRust
+
+/** Catalog download: `start` with the variant's `id`, `cancel`, `dismiss`. */
+@Serializable @SerialName("catalog_download")
+data class CatalogDownload(val action: String, val id: String? = null) : ToRust
 
 /** A filter by the label shown; without a value the filter is removed. */
 @Serializable @SerialName("catalog_filter")

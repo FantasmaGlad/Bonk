@@ -87,11 +87,12 @@ internal fun OneLine(text: String, color: Long = LocalPalette.current.ink, size:
 }
 
 @Composable
-internal fun Primary(label: String, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun Primary(label: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
     val palette = LocalPalette.current
     Button(
         onClick = onClick,
         enabled = enabled,
+        modifier = modifier,
         shape = RoundedCornerShape(Tokens.RADIUS.dp),
         colors =
             ButtonDefaults.buttonColors(

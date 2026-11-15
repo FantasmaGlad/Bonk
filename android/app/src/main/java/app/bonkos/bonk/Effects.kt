@@ -36,6 +36,10 @@ data class Write(
     val proxy: String? = null,
 ) : Effect
 
+/** A catalog image to save without writing it; address and hash come from the signed catalog. */
+@Serializable @SerialName("download_image")
+data class DownloadImage(val url: String, val sha256: String, val name: String, val proxy: String? = null) : Effect
+
 /** A fixed address of Bonk itself, opened in the browser. */
 @Serializable @SerialName("open_link")
 data class OpenLink(val url: String) : Effect

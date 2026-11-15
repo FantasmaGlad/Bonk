@@ -23,7 +23,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -217,19 +216,9 @@ private fun Draft(panel: DraftPanel, send: (ToRust) -> Unit) {
         Menu(panel.menu, send)
         Secondary(panel.advancedButton) { send(ToggleAdvanced) }
         if (panel.advanced) {
-            OutlinedTextField(
-                value = panel.image,
-                onValueChange = { send(ImageInput(it)) },
-                label = { Small(panel.imageHint) },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            TextInput(panel.image, { send(ImageInput(it)) }, Modifier.fillMaxWidth(), label = panel.imageHint)
             Secondary(panel.pick) { send(Browse) }
-            OutlinedTextField(
-                value = panel.hash,
-                onValueChange = { send(HashInput(it)) },
-                label = { Small(panel.hashHint) },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            TextInput(panel.hash, { send(HashInput(it)) }, Modifier.fillMaxWidth(), label = panel.hashHint)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(panel.raw, { send(Raw(it)) })
                 Small(panel.rawLabel, LocalPalette.current.ink)
@@ -250,7 +239,7 @@ private fun Draft(panel: DraftPanel, send: (ToRust) -> Unit) {
                     .background(Color(LocalPalette.current.warnSoft))
                     .padding(Tokens.SPACE_MEDIUM.dp),
         )
-        Primary(panel.button, panel.enabled) { send(Start) }
+        Primary(panel.button, enabled = panel.enabled) { send(Start) }
         Secondary(panel.vaultButton) { send(VaultButton("open")) }
     }
 }

@@ -1,5 +1,6 @@
 use std::sync::atomic::Ordering;
 
+use bonk_ui::browse::BrowseMessage;
 use bonk_ui::event::Event;
 use bonk_ui::model::{Effect, Message, Model, WriteState};
 use bonk_ui::vault::VaultMessage;
@@ -47,8 +48,12 @@ pub(super) fn effects_out(
             // No download cache on Android: the library is a desktop page.
             Effect::ListKept | Effect::RemoveKept(_) => {}
             Effect::OpenLink(url) => out.push(json!({"do": "open_link", "url": url})),
-            // Never asked: the phone offers no download-only button yet.
-            Effect::RunDownload(_) => {}
+            Effect::RunDownload(args) => {
+                let _ = model.update(Message::Browse(BrowseMessage::DownloadEvent(
+                    Event::Started(0),
+                )));
+                out.extend(crate::browse::download::effect(model, &args));
+            }
             Effect::Copy(_) | Effect::ScrollList(_) | Effect::ScrollMenu(_) => {}
         }
     }

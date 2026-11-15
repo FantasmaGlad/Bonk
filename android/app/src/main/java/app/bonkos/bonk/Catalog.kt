@@ -20,13 +20,14 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.Dispatchers
@@ -80,13 +81,7 @@ private fun Grid(grid: BrowseGrid, send: (ToRust) -> Unit) {
 @Composable
 private fun Tools(grid: BrowseGrid, send: (ToRust) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp)) {
-        OutlinedTextField(
-            value = grid.search,
-            onValueChange = { send(CatalogSearch(it)) },
-            placeholder = { Small(grid.searchHint) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        TextInput(grid.search, { send(CatalogSearch(it)) }, Modifier.fillMaxWidth(), placeholder = grid.searchHint)
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp),
             verticalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp),
@@ -117,17 +112,44 @@ private fun SystemPage(system: SystemView, send: (ToRust) -> Unit) {
                 Text(system.name, fontSize = Tokens.TEXT_TITLE.sp, modifier = Modifier.padding(start = Tokens.SPACE_LARGE.dp))
             }
         }
-        items(system.variants) { variant -> Variant(variant, system.write, send) }
+        system.downloading?.let { panel -> item { Downloading(panel, send) } }
+        items(system.variants) { variant -> Variant(variant, system, send) }
     }
 }
 
 @Composable
-private fun Variant(variant: VariantView, write: String, send: (ToRust) -> Unit) {
+private fun Downloading(panel: DownloadPanel, send: (ToRust) -> Unit) {
+    Boxed {
+        Body(panel.title)
+        Small(panel.line, LocalPalette.current.ink)
+        val fraction = panel.fraction
+        if (fraction != null) {
+            LinearProgressIndicator(
+                progress = { fraction },
+                modifier = Modifier.fillMaxWidth(),
+                color = Color(LocalPalette.current.ink),
+            )
+        } else if (panel.action == "cancel") {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Color(LocalPalette.current.ink))
+        }
+        Primary(panel.button) { send(CatalogDownload(panel.action)) }
+    }
+}
+
+@Composable
+private fun Variant(variant: VariantView, system: SystemView, send: (ToRust) -> Unit) {
     Boxed {
         Body(variant.title)
         if (variant.facts.isNotEmpty()) Small(variant.facts)
         val id = variant.id
-        if (id != null) Primary(write) { send(CatalogWrite(id)) } else Small(variant.note.orEmpty())
+        if (id == null) {
+            Small(variant.note.orEmpty())
+            return@Boxed
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp)) {
+            Secondary(system.download, Modifier.weight(1f), enabled = !system.busy) { send(CatalogDownload("start", id)) }
+            Primary(system.write, Modifier.weight(1f)) { send(CatalogWrite(id)) }
+        }
     }
 }
 
