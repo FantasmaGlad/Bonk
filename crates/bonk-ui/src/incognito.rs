@@ -10,6 +10,11 @@ impl Model {
         self.use_tor && self.tor.is_some() && !self.offline
     }
 
+    /// Looked for at start and again at each refresh until one answers: Orbot or Tor may start after Bonk.
+    pub(crate) fn watch_tor(&self) -> Option<Effect> {
+        (!self.offline && self.tor.is_none()).then_some(Effect::DetectTor)
+    }
+
     pub(crate) fn apply_incognito(&mut self, message: Message) -> Effects {
         match message {
             Message::TorDetected(address) => {
@@ -61,6 +66,20 @@ mod tests {
         assert!(model.incognito());
         let _ = model.update(Message::ToggleTor(false));
         assert!(!model.incognito());
+    }
+
+    #[test]
+    fn tor_est_cherche_au_depart_et_a_chaque_actualisation_tant_qu_il_manque() {
+        let (mut model, effects) =
+            Model::new(crate::command::ViewOptions::default(), bonk_hal::Lang::En);
+        assert!(effects.contains(&Effect::DetectTor));
+        model.loading = false;
+        assert!(model.update(Message::Tick).contains(&Effect::DetectTor));
+        let _ = model.update(Message::TorDetected(Some(LOCAL_TOR.to_owned())));
+        assert!(!model.update(Message::Tick).contains(&Effect::DetectTor));
+        model.offline = true;
+        model.tor = None;
+        assert!(!model.update(Message::Tick).contains(&Effect::DetectTor));
     }
 
     #[test]

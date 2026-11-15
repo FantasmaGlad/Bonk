@@ -61,6 +61,7 @@ internal fun Screen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("BONK", fontSize = Tokens.TEXT_TITLE.sp, modifier = Modifier.weight(1f))
+            state.incognito?.let { IncognitoButton(it, send) }
             Secondary(state.settingsButton) { send(SettingsAction("open")) }
         }
         Small(state.status)

@@ -151,6 +151,7 @@ fn message_of(input: &Value, model: &Model) -> Option<Message> {
         "details" => Message::ToggleDetails,
         "show_all" => Message::ToggleAll(flag()),
         "settings" => crate::settings::message_of(input)?,
+        "incognito" | "tor_project" => crate::incognito::message_of(input, model)?,
         "menu" => Message::ToggleMenu,
         "category" => Message::MenuCategory(
             text_of("value").and_then(|shown| model.terms.uses().id_of(&shown, model.lang)),
@@ -223,9 +224,9 @@ fn effects_out(model: &mut Model, effects: Vec<Effect>, draft: Option<Value>) ->
             Effect::Relaunch { key, value } => {
                 out.push(json!({"do": "relaunch", "key": key, "value": value}));
             }
-            // No Tor on the phone without a dedicated app: the option stays off.
+            // Orbot listens on the phone's loopback, as Tor does on a computer.
             Effect::DetectTor => {
-                let _ = model.update(Message::TorDetected(None));
+                let _ = model.update(Message::TorDetected(bonk_catalog::tor::detect()));
             }
             Effect::CancelWrite(_) => CANCEL.store(true, Ordering::SeqCst),
             Effect::StartWrite(_) => {
@@ -244,8 +245,7 @@ fn effects_out(model: &mut Model, effects: Vec<Effect>, draft: Option<Value>) ->
             Effect::PickVaultIso => out.push(json!({"do": "vault_pick"})),
             // No download cache on Android: the library is a desktop page.
             Effect::ListKept | Effect::RemoveKept(_) => {}
-            // The phone has no incognito button: nothing asks for the Tor project page.
-            Effect::OpenLink(_) => {}
+            Effect::OpenLink(url) => out.push(json!({"do": "open_link", "url": url})),
             Effect::Copy(_) | Effect::ScrollList(_) | Effect::ScrollMenu(_) => {}
         }
     }
@@ -306,6 +306,7 @@ fn draft_of(model: &Model) -> Option<Value> {
         "hash": hash.trim(),
         "raw": raw,
         "mbr": mbr,
+        "proxy": crate::incognito::proxy(model),
     }))
 }
 
@@ -613,6 +614,7 @@ pub fn state(model: &Model) -> Value {
     json!({
         "settings_button": lang.pick("Settings", "Paramètres"),
         "settings": crate::settings::state(model),
+        "incognito": crate::incognito::state(model),
         // The app reads its own texts (Android resources, notification) in this language.
         "lang": lang.pick("en", "fr"),
         "status": model.status_line(model.entries().len()),
@@ -883,6 +885,10 @@ mod tests {
         }]);
         let _ = model.update(Message::ToggleMenu);
         let _ = model.update(Message::ImageInput("/x.iso".to_owned()));
+        let _ = model.update(Message::TorDetected(Some(
+            "socks5h://127.0.0.1:9050".to_owned(),
+        )));
+        let _ = model.update(Message::ToggleTor(true));
         // The button label counts the seconds to think: the sample wants them elapsed.
         if let WriteState::Draft { opened, .. } = &mut model.write {
             *opened = Instant::now()
@@ -976,6 +982,7 @@ mod tests {
                 },
                 Effect::StartWrite(Vec::new()),
                 Effect::PickVaultIso,
+                Effect::OpenLink(bonk_ui::incognito::TOR_PROJECT),
                 Effect::RunVault(bonk_ui::vault::vault_args(
                     VaultAction::Add,
                     "usb-S1-001-002",
@@ -1038,6 +1045,8 @@ mod tests {
             json!({"type": "vault", "action": "update"}),
             json!({"type": "vault", "action": "cancel"}),
             json!({"type": "vault_picked", "value": "/proc/self/fd/43"}),
+            json!({"type": "incognito"}),
+            json!({"type": "tor_project"}),
         ];
         // `choose` only means something with a loaded catalog, and `open` is not a screen message: their
         // samples fix the shape only.
@@ -1077,7 +1086,7 @@ mod tests {
         assert!(open_link(&mut model, &link).is_empty());
         assert_eq!(
             open_link(&mut Model::default(), &link),
-            vec![Effect::LoadCatalog, Effect::DetectTor]
+            vec![Effect::LoadCatalog]
         );
         assert_eq!(model.requested.as_deref(), Some("debian-13-netinst-x86_64"));
         assert!(matches!(model.write, WriteState::Draft { .. }));

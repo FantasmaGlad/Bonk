@@ -107,6 +107,13 @@ data class VaultButton(val action: String) : ToRust
 @Serializable @SerialName("vault_picked")
 data class VaultPicked(val value: String) : ToRust
 
+/** The round incognito button: turns downloads through Tor on or off. */
+@Serializable @SerialName("incognito")
+data object ToggleIncognito : ToRust
+
+@Serializable @SerialName("tor_project")
+data object OpenTorProject : ToRust
+
 /** A key as the app sees it: USB device, serial and what the probe read. */
 @Serializable
 data class Drive(
@@ -149,7 +156,13 @@ data class Write(
     val hash: String,
     val raw: Boolean,
     val mbr: Boolean,
+    /** `socks5h://` address of Orbot: the image is downloaded through it, names resolved by Tor. */
+    val proxy: String? = null,
 ) : Effect
+
+/** A fixed address of Bonk itself, opened in the browser. */
+@Serializable @SerialName("open_link")
+data class OpenLink(val url: String) : Effect
 
 @Serializable @SerialName("vault_pick")
 data object PickVaultIso : Effect
@@ -180,6 +193,8 @@ data class ScreenState(
     @SerialName("settings_button") val settingsButton: String = "",
     /** The settings page; absent on the main page. */
     val settings: SettingsView? = null,
+    /** Absent offline. */
+    val incognito: IncognitoView? = null,
     /** Language chosen in Bonk (`fr`, `en`): the app reads its own texts in it. */
     val lang: String = "en",
     val status: String = "",
@@ -192,6 +207,9 @@ data class ScreenState(
     val vault: VaultView? = null,
     val running: Boolean = false,
 )
+
+@Serializable
+data class IncognitoView(val available: Boolean, val on: Boolean, val label: String, val link: String)
 
 @Serializable
 data class VaultView(

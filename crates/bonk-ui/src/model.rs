@@ -323,20 +323,20 @@ impl WriteState {
 impl Model {
     #[must_use]
     pub fn new(initial: ViewOptions, lang: Lang) -> (Self, Effects) {
-        (
-            Self {
-                lang,
-                loading: true,
-                auto_select: true,
-                show_internal: initial.show_internal,
-                allow_virtual: initial.allow_virtual,
-                show_all: initial.show_all,
-                offline: initial.offline,
-                advanced: initial.offline,
-                ..Self::default()
-            },
-            vec![Effect::Enumerate],
-        )
+        let model = Self {
+            lang,
+            loading: true,
+            auto_select: true,
+            show_internal: initial.show_internal,
+            allow_virtual: initial.allow_virtual,
+            show_all: initial.show_all,
+            offline: initial.offline,
+            advanced: initial.offline,
+            ..Self::default()
+        };
+        let mut effects = vec![Effect::Enumerate];
+        effects.extend(model.watch_tor());
+        (model, effects)
     }
 
     /// Logs the event: what the user did, what the window made of it, and the equivalent command of the

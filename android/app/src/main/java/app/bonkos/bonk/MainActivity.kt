@@ -25,6 +25,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -33,6 +34,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -158,6 +160,8 @@ class MainActivity : ComponentActivity() {
                 askNotificationsIfNeeded()
                 actions.write(effect)
             }
+            is OpenLink -> runCatching { startActivity(Intent(Intent.ACTION_VIEW, effect.url.toUri())) }
+                .onFailure { Log.w(TAG, "no browser for ${effect.url}", it) }
             is SaveSetting -> getPreferences(MODE_PRIVATE).edit { putString(effect.key, effect.value) }
             is Relaunch -> {
                 // Written before the restart reads it.
@@ -172,6 +176,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** System icons follow the page, not the phone theme. */
+    private fun showBars(palette: Palette) {
+        val bars =
+            if (palette.dark) {
+                SystemBarStyle.dark(palette.paper.toInt())
+            } else {
+                SystemBarStyle.light(palette.paper.toInt(), palette.ink.toInt())
+            }
+        enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
+    }
+
     /** Read once per start: the screen relaunches to change it. */
     private fun dark(theme: String): Boolean =
         when (theme) {
@@ -184,15 +199,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val preferences = getPreferences(MODE_PRIVATE)
         val theme = preferences.getString("theme", "auto") ?: "auto"
-        val palette = Tokens.palette(dark(theme))
-        // System icons follow the page, not the phone theme.
-        val bars =
-            if (palette.dark) {
-                SystemBarStyle.dark(palette.paper.toInt())
-            } else {
-                SystemBarStyle.light(palette.paper.toInt(), palette.ink.toInt())
-            }
-        enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
+        val dark = dark(theme)
         actions =
             Actions(this, Bridge::send) { device, error ->
                 runOnUiThread {
@@ -229,6 +236,10 @@ class MainActivity : ComponentActivity() {
             }
         }
         setContent {
+            // The other family is never built: only incognito switches while the screen runs.
+            val incognito = screen.incognito?.on == true
+            val palette = remember(incognito) { Tokens.palette(dark, incognito) }
+            LaunchedEffect(palette) { showBars(palette) }
             BonkTheme(palette) {
                 Surface(Modifier.fillMaxSize(), color = Color(palette.paper)) {
                     val localized = remember(screen.lang) { inLanguage(screen.lang) }
