@@ -25,12 +25,14 @@ pub fn run(
     if !display_available(|name| std::env::var_os(name)) {
         return Err("no graphical display (neither WAYLAND_DISPLAY nor DISPLAY)".to_owned());
     }
+    let dark = theme.is_dark(system_theme);
     run_with_fallback(
         move || {
             launch(Start {
                 view: initial,
                 lang,
                 theme,
+                dark,
                 image,
             })
         },
@@ -95,7 +97,16 @@ fn window_icon() -> Option<iced::window::Icon> {
     iced::window::icon::from_rgba(pixels, SIDE, SIDE).ok()
 }
 
+fn system_theme() -> Option<bool> {
+    let dark = bonk_hal::appearance::system_prefers_dark();
+    if dark.is_none() {
+        log::info!(target: "bonk::gui", "system theme unknown: light");
+    }
+    dark
+}
+
 fn launch(start: Start) -> Result<(), String> {
+    theme::choose(start.dark);
     #[cfg(target_os = "macos")]
     link_macos::listen();
     iced::application(move || App::new(start.clone()), App::update, App::view)

@@ -4,6 +4,8 @@ mod widgets;
 use iced::Theme;
 use iced::theme::Palette;
 
+#[cfg(test)]
+pub(crate) use palette::tests as palette_tests;
 pub(crate) use palette::{choose, colors};
 pub(crate) use widgets::{
     card, card_button, checkbox_style, focus_ring, input_style, link_button, panel, primary_button,

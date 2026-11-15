@@ -36,17 +36,6 @@ fn les_reglages_quittent_la_page_principale() {
 }
 
 #[test]
-fn rien_n_est_dessine_avant_que_le_systeme_dise_clair_ou_sombre() {
-    let mut app = loaded(sample());
-    app.system_dark = None;
-    assert!(!contient(&app, "Cle de test"));
-    let _ = app.update(Message::Settings(
-        bonk_ui::settings::SettingsMessage::SystemDark(false),
-    ));
-    assert!(contient(&app, "Cle de test"));
-}
-
-#[test]
 fn la_fenetre_explique_pourquoi_un_disque_est_ecarte() {
     let mut app = loaded(sample());
     let _ = app.update(Message::ToggleAll(true));
@@ -114,7 +103,6 @@ fn captures_facultatives() -> Result<(), Box<dyn std::error::Error>> {
 
 type Capture = Result<(), Box<dyn std::error::Error>>;
 
-/// In the theme chosen now: [`crate::theme::choose`] is global to the process.
 fn capture(app: &App, height: f32, dossier: &std::path::Path, nom: &str) -> Capture {
     capture_a(app, Size::new(960.0, height), dossier, nom)
 }
@@ -132,11 +120,9 @@ fn captures_fenetre(dossier: &std::path::Path) -> Capture {
     capture(&app, 640.0, dossier, "fenetre-cle")?;
     let _ = app.update(Message::Settings(bonk_ui::settings::SettingsMessage::Open));
     capture(&app, 640.0, dossier, "fenetre-parametres")?;
-    // The other tests read texts, never colours: the dark capture does not disturb them.
-    crate::theme::choose(true);
-    let sombre = capture(&app, 640.0, dossier, "fenetre-parametres-sombre");
-    crate::theme::choose(false);
-    sombre?;
+    crate::theme::palette_tests::draw_with(true, || {
+        capture(&app, 640.0, dossier, "fenetre-parametres-sombre")
+    })?;
     app.focus = Some(Focus::Virtual);
     capture(&app, 640.0, dossier, "fenetre-focus-case")?;
     let _ = app.update(Message::ToggleAll(true));

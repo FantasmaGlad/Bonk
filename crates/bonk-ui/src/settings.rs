@@ -91,6 +91,16 @@ impl ThemeChoice {
             Self::Dark => lang.pick("Dark", "Sombre"),
         }
     }
+
+    /// `system` is asked only for [`Self::System`]; without an answer, light.
+    #[must_use]
+    pub fn is_dark(self, system: impl FnOnce() -> Option<bool>) -> bool {
+        match self {
+            Self::Light => false,
+            Self::Dark => true,
+            Self::System => system().unwrap_or(false),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,8 +109,6 @@ pub enum SettingsMessage {
     Close,
     Language(LangChoice),
     Theme(ThemeChoice),
-    /// What the system answered for [`ThemeChoice::System`], once, at start.
-    SystemDark(bool),
     Offline(bool),
 }
 
@@ -124,16 +132,6 @@ impl Model {
                 "Unavailable while a drive is being written.",
                 "Indisponible pendant l'écriture d'une clé.",
             )
-        }
-    }
-
-    /// Dark or light as drawn now; `None` while the system has not answered.
-    #[must_use]
-    pub fn dark(&self) -> Option<bool> {
-        match self.theme_choice {
-            ThemeChoice::Light => Some(false),
-            ThemeChoice::Dark => Some(true),
-            ThemeChoice::System => self.system_dark,
         }
     }
 
@@ -170,11 +168,6 @@ impl Model {
                     key: "theme",
                     value: choice.config_value(),
                 }]
-            }
-            SettingsMessage::SystemDark(dark) => {
-                // Read once: the theme does not follow the system while the window runs.
-                self.system_dark.get_or_insert(dark);
-                Vec::new()
             }
             SettingsMessage::Offline(on) => self.set_offline(on),
         }
@@ -260,14 +253,17 @@ mod tests {
     }
 
     #[test]
-    fn le_theme_du_systeme_n_est_lu_qu_une_fois() {
-        let mut model = model();
-        assert_eq!(model.dark(), None);
-        let _ = model.update(Message::Settings(SettingsMessage::SystemDark(true)));
-        let _ = model.update(Message::Settings(SettingsMessage::SystemDark(false)));
-        assert_eq!(model.dark(), Some(true));
-        model.theme_choice = ThemeChoice::Light;
-        assert_eq!(model.dark(), Some(false));
+    fn le_systeme_n_est_interroge_que_pour_le_theme_du_systeme() {
+        let never = || -> Option<bool> { unreachable!("system asked for a fixed theme") };
+        assert!(!ThemeChoice::Light.is_dark(never));
+        assert!(ThemeChoice::Dark.is_dark(never));
+        assert!(ThemeChoice::System.is_dark(|| Some(true)));
+        assert!(!ThemeChoice::System.is_dark(|| Some(false)));
+    }
+
+    #[test]
+    fn sans_reponse_du_systeme_le_theme_est_clair() {
+        assert!(!ThemeChoice::System.is_dark(|| None));
     }
 
     #[test]

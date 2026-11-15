@@ -29,14 +29,14 @@ import androidx.compose.ui.unit.sp
 internal const val TOUCH_DP = 48
 
 /** Light or dark, chosen once at start: the screen relaunches to change it. */
-internal val LocalPalette = staticCompositionLocalOf { Tokens.LIGHT }
+internal val LocalPalette = staticCompositionLocalOf<Palette> { error("BonkTheme provides the palette") }
 
 @Composable
 internal fun BonkTheme(palette: Palette, content: @Composable () -> Unit) {
     val ink = Color(palette.ink)
     val paper = Color(palette.paper)
     val scheme =
-        if (palette == Tokens.DARK) {
+        if (palette.dark) {
             darkColorScheme(
                 primary = Color(palette.accent),
                 onPrimary = Color(palette.onAccent),

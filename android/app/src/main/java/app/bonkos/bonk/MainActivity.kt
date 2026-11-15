@@ -184,10 +184,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val preferences = getPreferences(MODE_PRIVATE)
         val theme = preferences.getString("theme", "auto") ?: "auto"
-        val palette = if (dark(theme)) Tokens.DARK else Tokens.LIGHT
+        val palette = Tokens.palette(dark(theme))
         // System icons follow the page, not the phone theme.
         val bars =
-            if (palette == Tokens.DARK) {
+            if (palette.dark) {
                 SystemBarStyle.dark(palette.paper.toInt())
             } else {
                 SystemBarStyle.light(palette.paper.toInt(), palette.ink.toInt())
