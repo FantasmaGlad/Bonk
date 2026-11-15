@@ -43,7 +43,7 @@ internal fun CatalogPage(view: BrowseView, send: (ToRust) -> Unit) {
         Modifier.safeDrawingPadding().padding(Tokens.SPACE_PAGE.dp),
         verticalArrangement = Arrangement.spacedBy(Tokens.SPACE_LARGE.dp),
     ) {
-Row(
+        Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp),
         ) {
