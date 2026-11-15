@@ -1,15 +1,17 @@
+mod icons;
 mod palette;
 mod widgets;
 
 use iced::Theme;
 use iced::theme::Palette;
 
+pub(crate) use icons::incognito as incognito_icon;
 #[cfg(test)]
 pub(crate) use palette::tests as palette_tests;
-pub(crate) use palette::{choose, colors};
+pub(crate) use palette::{choose, colors, set_incognito};
 pub(crate) use widgets::{
     card, card_button, checkbox_style, focus_ring, input_style, link_button, panel, primary_button,
-    warning_banner,
+    round_button, warning_banner,
 };
 
 /// Commands, paths, identifiers.

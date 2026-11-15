@@ -3,6 +3,7 @@ pub mod command;
 pub mod disk;
 pub mod errors;
 pub mod event;
+pub mod incognito;
 pub mod library;
 pub mod model;
 mod navigation;

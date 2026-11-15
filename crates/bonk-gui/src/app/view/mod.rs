@@ -12,6 +12,7 @@ use super::{App, Focus, Message};
 mod command_bar;
 mod disk;
 mod header;
+mod incognito;
 mod library;
 mod list;
 mod panel;

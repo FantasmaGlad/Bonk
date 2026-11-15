@@ -139,6 +139,28 @@ pub(crate) fn link_button(_theme: &Theme, status: button::Status) -> button::Sty
     }
 }
 
+/// Incognito: filled with the accent while on, an outlined disc while off.
+pub(crate) fn round_button(on: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_theme, status| {
+        let c = colors();
+        let (background, outline) = match status {
+            button::Status::Disabled => (c.sunk, c.muted),
+            _ if on => (c.accent, c.accent),
+            status if pressed(status) => (c.accent_soft, c.accent),
+            _ => (c.surface, c.muted),
+        };
+        button::Style {
+            background: Some(background.into()),
+            border: Border {
+                color: outline,
+                width: 1.0,
+                radius: f32::MAX.into(),
+            },
+            ..button::Style::default()
+        }
+    }
+}
+
 /// Before erasing: the alert colours of the site, readable in both themes.
 pub(crate) fn warning_banner(_theme: &Theme) -> container::Style {
     let c = colors();

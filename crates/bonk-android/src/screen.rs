@@ -244,6 +244,8 @@ fn effects_out(model: &mut Model, effects: Vec<Effect>, draft: Option<Value>) ->
             Effect::PickVaultIso => out.push(json!({"do": "vault_pick"})),
             // No download cache on Android: the library is a desktop page.
             Effect::ListKept | Effect::RemoveKept(_) => {}
+            // The phone has no incognito button: nothing asks for the Tor project page.
+            Effect::OpenLink(_) => {}
             Effect::Copy(_) | Effect::ScrollList(_) | Effect::ScrollMenu(_) => {}
         }
     }
