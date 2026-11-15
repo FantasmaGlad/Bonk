@@ -48,10 +48,6 @@ pub(super) fn boxed<'a>(body: Element<'a, Message>) -> Element<'a, Message> {
 
 impl App {
     pub(crate) fn view(&self) -> Element<'_, Message> {
-        // Until the system says light or dark, nothing is drawn: no flash of the wrong theme.
-        if self.dark().is_none() {
-            return container(text("")).width(Fill).height(Fill).into();
-        }
         let page = match self.screen {
             Screen::Main => self.main_page(),
             Screen::Settings => self.settings_page(),

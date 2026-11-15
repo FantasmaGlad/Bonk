@@ -1,5 +1,4 @@
-use std::sync::LazyLock;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{LazyLock, OnceLock};
 
 use iced::Color;
 
@@ -29,22 +28,40 @@ pub(crate) static RADIUS: LazyLock<f32> = LazyLock::new(|| {
     tokens["radius"].as_f64().unwrap_or_default() as f32
 });
 
-static LIGHT: LazyLock<Colors> = LazyLock::new(|| read("light"));
-static DARK: LazyLock<Colors> = LazyLock::new(|| read("dark"));
+/// One palette per run: the other family is never built, and the window relaunches to change it.
+struct Chosen(OnceLock<Colors>);
 
-/// Chosen once, before the first frame that knows it; the window relaunches to change it.
-static DARK_CHOSEN: AtomicBool = AtomicBool::new(false);
+impl Chosen {
+    const fn new() -> Self {
+        Self(OnceLock::new())
+    }
 
+    fn choose(&self, dark: bool) {
+        self.0.get_or_init(|| read(family(dark)));
+    }
+
+    fn colors(&self) -> &Colors {
+        self.0.get_or_init(|| read(family(false)))
+    }
+}
+
+static CHOSEN: Chosen = Chosen::new();
+
+fn family(dark: bool) -> &'static str {
+    if dark { "dark" } else { "light" }
+}
+
+/// Before the window opens; later calls change nothing.
 pub(crate) fn choose(dark: bool) {
-    DARK_CHOSEN.store(dark, Ordering::Relaxed);
+    CHOSEN.choose(dark);
 }
 
 pub(crate) fn colors() -> &'static Colors {
-    if DARK_CHOSEN.load(Ordering::Relaxed) {
-        &DARK
-    } else {
-        &LIGHT
+    #[cfg(test)]
+    if let Some(colors) = tests::drawn() {
+        return colors;
     }
+    CHOSEN.colors()
 }
 
 fn read(theme: &str) -> Colors {
@@ -79,8 +96,43 @@ fn parse_hex(hex: &str) -> Option<Color> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
+    use std::cell::Cell;
+
     use super::*;
+
+    thread_local! {
+        static DRAWN: Cell<Option<&'static Colors>> = const { Cell::new(None) };
+    }
+
+    pub(super) fn drawn() -> Option<&'static Colors> {
+        DRAWN.with(Cell::get)
+    }
+
+    /// Captures draw on the test's own thread: each picks its family without touching the run's palette.
+    pub(crate) fn draw_with<T>(dark: bool, capture: impl FnOnce() -> T) -> T {
+        let colors: &'static Colors = Box::leak(Box::new(read(family(dark))));
+        DRAWN.with(|drawn| drawn.set(Some(colors)));
+        let result = capture();
+        DRAWN.with(|drawn| drawn.set(None));
+        result
+    }
+
+    #[test]
+    fn la_premiere_famille_choisie_reste_pour_toute_l_execution() {
+        let chosen = Chosen::new();
+        chosen.choose(true);
+        chosen.choose(false);
+        assert_eq!(*chosen.colors(), read("dark"));
+    }
+
+    #[test]
+    fn sans_choix_la_fenetre_est_claire_et_le_reste() {
+        let chosen = Chosen::new();
+        assert_eq!(*chosen.colors(), read("light"));
+        chosen.choose(true);
+        assert_eq!(*chosen.colors(), read("light"));
+    }
 
     /// WCAG 2.1 relative luminance.
     fn luminance(color: Color) -> f32 {

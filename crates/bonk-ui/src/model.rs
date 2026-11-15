@@ -204,8 +204,8 @@ pub struct Model {
     pub screen: crate::settings::Screen,
     pub lang_choice: crate::settings::LangChoice,
     pub theme_choice: crate::settings::ThemeChoice,
-    /// The system's answer for [`crate::settings::ThemeChoice::System`]; `None` until it comes.
-    pub system_dark: Option<bool>,
+    /// The window's theme family, resolved once before it opens.
+    pub dark: bool,
 }
 
 /// Where the image the window was opened for stands.
@@ -291,7 +291,6 @@ fn settings_event(message: crate::settings::SettingsMessage) -> Option<(&'static
         SettingsMessage::Language(choice) => ("choose_language", choice.config_value().to_owned()),
         SettingsMessage::Theme(choice) => ("choose_theme", choice.config_value().to_owned()),
         SettingsMessage::Offline(on) => ("toggle_offline", on.to_string()),
-        SettingsMessage::SystemDark(_) => return None,
     })
 }
 

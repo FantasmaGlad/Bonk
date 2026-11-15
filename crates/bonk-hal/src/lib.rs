@@ -1,3 +1,4 @@
+pub mod appearance;
 pub mod console;
 pub mod describe;
 pub mod disk;

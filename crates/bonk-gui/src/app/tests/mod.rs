@@ -83,19 +83,6 @@ fn sample() -> Vec<Disk> {
     ]
 }
 
-/// A light window, as if the system had answered: until then nothing is drawn.
-impl Default for App {
-    fn default() -> Self {
-        Self {
-            model: Model {
-                system_dark: Some(false),
-                ..Model::default()
-            },
-            program: None,
-        }
-    }
-}
-
 fn loaded(disks: Vec<Disk>) -> App {
     let mut app = App::default();
     let _ = app.update(Message::Loaded(Ok(disks)));

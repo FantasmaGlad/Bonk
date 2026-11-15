@@ -115,10 +115,10 @@ val generateTokens by tasks.registering {
         output.writeText(
             buildString {
                 appendLine("package app.bonkos.bonk")
-                appendLine("data class Palette(${light.keys.joinToString(", ") { "val ${property(it)}: Long" }})")
+                appendLine("data class Palette(val dark: Boolean, ${light.keys.joinToString(", ") { "val ${property(it)}: Long" }})")
                 appendLine("object Tokens {")
-                appendLine("    val LIGHT = Palette(${palette(light)})")
-                appendLine("    val DARK = Palette(${palette(dark)})")
+                appendLine("    fun palette(dark: Boolean): Palette =")
+                appendLine("        if (dark) Palette(true, ${palette(dark)}) else Palette(false, ${palette(light)})")
                 appendLine("    const val RADIUS = ${tokens["radius"]}")
                 text.forEach { (name, size) -> appendLine("    const val TEXT_${name.uppercase()} = $size") }
                 spacing.forEach { (name, size) -> appendLine("    const val SPACE_${name.uppercase()} = $size") }

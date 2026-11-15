@@ -29,7 +29,7 @@ use crate::transfer;
 #[cfg(test)]
 use crate::transfer::Outcome;
 use bonk_ui::command::ViewOptions;
-use bonk_ui::settings::{LangChoice, SettingsMessage, ThemeChoice};
+use bonk_ui::settings::{LangChoice, ThemeChoice};
 
 use navigation::{LIST, map_key};
 
@@ -40,10 +40,13 @@ pub(crate) struct Start {
     /// `None`: the system's language.
     pub(crate) lang: Option<Lang>,
     pub(crate) theme: ThemeChoice,
+    /// Resolved from `theme` before the window opens.
+    pub(crate) dark: bool,
     pub(crate) image: Option<String>,
 }
 
 #[derive(Debug)]
+#[cfg_attr(test, derive(Default))]
 pub(crate) struct App {
     model: Model,
     /// `bonk` itself, except in tests.
@@ -74,6 +77,7 @@ impl App {
         let (mut model, mut effects) = Model::new(start.view, lang);
         model.lang_choice = LangChoice::from_lang(start.lang);
         model.theme_choice = start.theme;
+        model.dark = start.dark;
         if let Some(id) = start.image {
             effects.extend(model.request_image(id));
         }
@@ -81,14 +85,7 @@ impl App {
             model,
             program: None,
         };
-        app.draw_theme();
-        let mut task = app.run(effects);
-        if app.dark().is_none() {
-            let system = iced::system::theme().map(|mode| {
-                Message::Settings(SettingsMessage::SystemDark(mode == iced::theme::Mode::Dark))
-            });
-            task = Task::batch([system, task]);
-        }
+        let task = app.run(effects);
         (app, task)
     }
 
@@ -102,15 +99,7 @@ impl App {
             }
             effects
         };
-        self.draw_theme();
         self.run(effects)
-    }
-
-    /// Once known, light or dark stays for the whole run.
-    fn draw_theme(&self) {
-        if let Some(dark) = self.dark() {
-            theme::choose(dark);
-        }
     }
 
     fn program(&self) -> PathBuf {
