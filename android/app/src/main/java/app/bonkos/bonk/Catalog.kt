@@ -23,10 +23,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -127,11 +131,13 @@ private fun Variant(variant: VariantView, write: String, send: (ToRust) -> Unit)
     }
 }
 
-/** A system without a logo keeps the same room: names stay aligned. */
+/** A system without a logo keeps the same room: names stay aligned. Decoded off the UI thread, so scrolling never waits for a file. */
 @Composable
 private fun Logo(path: String?, side: Int) {
-    val bitmap = remember(path) { path?.let(BitmapFactory::decodeFile)?.asImageBitmap() }
+    val bitmap by produceState<ImageBitmap?>(null, path) {
+        value = path?.let { withContext(Dispatchers.IO) { BitmapFactory.decodeFile(it)?.asImageBitmap() } }
+    }
     Box(Modifier.size(side.dp)) {
-        if (bitmap != null) Image(bitmap, contentDescription = null, modifier = Modifier.size(side.dp))
+        bitmap?.let { Image(it, contentDescription = null, modifier = Modifier.size(side.dp)) }
     }
 }

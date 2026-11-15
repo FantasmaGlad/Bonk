@@ -267,6 +267,9 @@ pub(crate) fn schema() -> serde_json::Value {
 }
 
 /// Shared with the service.
+/// Logos downloaded at a time on a cold cache: enough to hide the latency, few enough for the server.
+const ICON_WORKERS: usize = 8;
+
 pub(crate) fn report_value(
     url: Option<&str>,
     cache_dir: Option<&Path>,
@@ -276,6 +279,7 @@ pub(crate) fn report_value(
     let base = base_url(url, std::env::var("BONK_CATALOG_URL").ok());
     let fetch = |address: &str| bonk_catalog::fetch_bytes(address).map_err(|e| e.to_string());
     let catalog = &loaded.catalog;
+    let icons = bonk_catalog::icons::paths(&base, &dir, &catalog.families, ICON_WORKERS, &fetch);
     let report = CatalogReport {
         schema_version: job::SCHEMA_VERSION,
         sequence: catalog.sequence,
@@ -284,12 +288,13 @@ pub(crate) fn report_value(
         families: catalog
             .families
             .iter()
-            .map(|f| FamilyEntry {
+            .zip(icons)
+            .map(|(f, icon_path)| FamilyEntry {
                 id: f.id.clone(),
                 name: f.name.clone(),
                 category: f.category.clone(),
                 uses: f.uses.clone(),
-                icon_path: manifest::icon_path(&base, &dir, f, &fetch),
+                icon_path,
             })
             .collect(),
         images: sorted(catalog, query).into_iter().cloned().collect(),

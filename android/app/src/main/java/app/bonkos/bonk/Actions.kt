@@ -12,13 +12,18 @@ import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.URI
 import java.net.URL
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 
 private const val CATALOG = "https://catalog.bonk-os.app/v2/catalog.json"
 private const val BUFFER = 1 shl 20
 private const val RETRY_MS = 10_000L
 private const val TAG = "Bonk"
+private const val ICON_WORKERS = 8
+private const val ICONS_TIMEOUT_S = 120L
 
 // Without a timeout a silent connection would block the download and its cancel.
 private const val CONNECT_TIMEOUT_MS = 30_000
@@ -115,16 +120,27 @@ class Actions(
         }
     }
 
-    /** After the list: the cards show at once, their logos as they arrive. A logo that fails stays absent. */
+    /**
+     * After the list: the cards show at once, their logos as they arrive, [ICON_WORKERS] at a time. One by one,
+     * a cold cache took about 20 s. A logo that fails stays absent.
+     */
     private fun icons(directory: String) {
         val wanted = runCatching { Protocol.icons(Native.missingIcons(directory)) }.getOrDefault(emptyList())
+        if (wanted.isEmpty()) return
+        val pool = Executors.newFixedThreadPool(ICON_WORKERS)
+        val stored = AtomicInteger()
         wanted.forEach { icon ->
-            val bytes = fetchOrEmpty(icon.url)
-            if (bytes.isNotEmpty()) {
-                Protocol.outcome(Native.storeIcon(directory, icon.sha256, bytes)).error?.let { Log.w(TAG, it) }
+            pool.execute {
+                val bytes = fetchOrEmpty(icon.url)
+                if (bytes.isNotEmpty()) {
+                    Protocol.outcome(Native.storeIcon(directory, icon.sha256, bytes)).error?.let { Log.w(TAG, it) }
+                }
+                if (stored.incrementAndGet() % ICON_WORKERS == 0) send(Refresh)
             }
         }
-        if (wanted.isNotEmpty()) send(Refresh)
+        pool.shutdown()
+        pool.awaitTermination(ICONS_TIMEOUT_S, TimeUnit.SECONDS)
+        send(Refresh)
     }
 
     private fun download(address: String, proxy: String?): File {
