@@ -194,12 +194,12 @@ impl Model {
 
     /// One at a time: the timer does not stack them if one is slow.
     pub fn reload(&mut self) -> Effects {
-        if self.loading {
-            Vec::new()
-        } else {
+        let mut effects: Effects = self.watch_tor().into_iter().collect();
+        if !self.loading {
             self.loading = true;
-            vec![Effect::Enumerate]
+            effects.push(Effect::Enumerate);
         }
+        effects
     }
 
     /// A single offered disk and no choice yet: selecting it saves a click. Once per disk, so a deselection
@@ -300,7 +300,7 @@ impl Model {
             return Vec::new();
         }
         self.catalog = CatalogState::Loading;
-        vec![Effect::LoadCatalog, Effect::DetectTor]
+        vec![Effect::LoadCatalog]
     }
 
     /// Only an empty draft: what the user typed or chose is never replaced.
@@ -339,7 +339,7 @@ impl Model {
             return Vec::new();
         }
         self.catalog = CatalogState::Loading;
-        vec![Effect::LoadCatalog, Effect::DetectTor]
+        vec![Effect::LoadCatalog]
     }
 
     /// Opens the write panel on an offered disk, closes it otherwise. A running write or its result does not

@@ -26,10 +26,15 @@
       "hash": "",
       "image": "/x.iso",
       "mbr": true,
+      "proxy": null,
       "raw": false
     },
     {
       "do": "vault_pick"
+    },
+    {
+      "do": "open_link",
+      "url": "https://www.torproject.org/"
     },
     {
       "action": "add",
@@ -221,12 +226,24 @@
     {
       "type": "vault_picked",
       "value": "/proc/self/fd/43"
+    },
+    {
+      "type": "incognito"
+    },
+    {
+      "type": "tor_project"
     }
   ],
   "states": [
     {
       "disks": [],
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
+      "incognito": {
+        "available": false,
+        "label": "Incognito : Tor absent",
+        "link": "torproject.org",
+        "on": false
+      },
       "lang": "fr",
       "notice": "Lecture du catalogue pour trouver debian-13-netinst-x86_64...",
       "panel": null,
@@ -251,6 +268,12 @@
         }
       ],
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
+      "incognito": {
+        "available": true,
+        "label": "Incognito activé (Tor)",
+        "link": "torproject.org",
+        "on": true
+      },
       "lang": "fr",
       "notice": null,
       "panel": {
@@ -328,6 +351,12 @@
         }
       ],
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
+      "incognito": {
+        "available": true,
+        "label": "Incognito activé (Tor)",
+        "link": "torproject.org",
+        "on": true
+      },
       "lang": "fr",
       "notice": null,
       "panel": {
@@ -357,6 +386,12 @@
         }
       ],
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
+      "incognito": {
+        "available": true,
+        "label": "Incognito activé (Tor)",
+        "link": "torproject.org",
+        "on": true
+      },
       "lang": "fr",
       "notice": null,
       "panel": {
@@ -385,6 +420,12 @@
         }
       ],
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
+      "incognito": {
+        "available": true,
+        "label": "Incognito activé (Tor)",
+        "link": "torproject.org",
+        "on": true
+      },
       "lang": "fr",
       "notice": null,
       "panel": {
@@ -490,6 +531,12 @@
         }
       ],
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
+      "incognito": {
+        "available": true,
+        "label": "Incognito activé (Tor)",
+        "link": "torproject.org",
+        "on": true
+      },
       "lang": "fr",
       "notice": null,
       "panel": {

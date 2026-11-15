@@ -29,6 +29,7 @@ class ProtocolTest {
                 Relaunch("theme", "dark"),
                 Write("usb-S1-001-002", "/dev/bus/usb/001/002", "/x.iso", "", raw = false, mbr = true),
                 PickVaultIso,
+                OpenLink("https://www.torproject.org/"),
                 VaultRun("add", "usb-S1-001-002", "/dev/bus/usb/001/002", "/proc/self/fd/43"),
                 VaultRun("update", "usb-S1-001-002", "/dev/bus/usb/001/002"),
             ),
@@ -90,6 +91,8 @@ class ProtocolTest {
                 VaultButton("update"),
                 VaultButton("cancel"),
                 VaultPicked("/proc/self/fd/43"),
+                ToggleIncognito,
+                OpenTorProject,
             )
         val expected = samples.getValue("messages").jsonArray
         assertEquals(expected.size, sent.size, "un message de Rust n'a pas de type Kotlin, ou l'inverse")
@@ -112,6 +115,8 @@ class ProtocolTest {
         assertEquals(null, draft.notice)
         assertTrue(states.all { it.lang in setOf("fr", "en") })
         assertEquals(emptyList(), idle.disks)
+        assertEquals(IncognitoView(false, false, "Incognito : Tor absent", "torproject.org"), idle.incognito)
+        assertTrue(checkNotNull(draft.incognito).on)
 
         val panel = assertIs<DraftPanel>(draft.panel)
         assertTrue(draft.disks.single().selected)

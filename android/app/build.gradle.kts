@@ -104,6 +104,8 @@ val generateTokens by tasks.registering {
         val tokens = JsonSlurper().parse(input) as Map<String, Any>
         val light = tokens["light"] as Map<String, String>
         val dark = tokens["dark"] as Map<String, String>
+        val incognitoLight = tokens["incognito_light"] as Map<String, String>
+        val incognitoDark = tokens["incognito_dark"] as Map<String, String>
         val text = tokens["text"] as Map<String, Int>
         val spacing = tokens["spacing"] as Map<String, Int>
         fun property(name: String) = name.split("_").let { parts ->
@@ -117,8 +119,13 @@ val generateTokens by tasks.registering {
                 appendLine("package app.bonkos.bonk")
                 appendLine("data class Palette(val dark: Boolean, ${light.keys.joinToString(", ") { "val ${property(it)}: Long" }})")
                 appendLine("object Tokens {")
-                appendLine("    fun palette(dark: Boolean): Palette =")
-                appendLine("        if (dark) Palette(true, ${palette(dark)}) else Palette(false, ${palette(light)})")
+                appendLine("    fun palette(dark: Boolean, incognito: Boolean): Palette =")
+                appendLine("        when {")
+                appendLine("            dark && incognito -> Palette(true, ${palette(incognitoDark)})")
+                appendLine("            dark -> Palette(true, ${palette(dark)})")
+                appendLine("            incognito -> Palette(false, ${palette(incognitoLight)})")
+                appendLine("            else -> Palette(false, ${palette(light)})")
+                appendLine("        }")
                 appendLine("    const val RADIUS = ${tokens["radius"]}")
                 text.forEach { (name, size) -> appendLine("    const val TEXT_${name.uppercase()} = $size") }
                 spacing.forEach { (name, size) -> appendLine("    const val SPACE_${name.uppercase()} = $size") }
