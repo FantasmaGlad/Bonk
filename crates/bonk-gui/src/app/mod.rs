@@ -1,3 +1,4 @@
+mod blocking;
 mod catalog;
 mod navigation;
 mod settings;
@@ -28,6 +29,7 @@ use crate::theme;
 use crate::transfer;
 #[cfg(test)]
 use crate::transfer::Outcome;
+use blocking::{off_thread, off_thread_result};
 use bonk_ui::command::ViewOptions;
 use bonk_ui::settings::{LangChoice, ThemeChoice};
 
@@ -118,36 +120,26 @@ impl App {
     fn accomplish(&self, effect: Effect) -> Task<Message> {
         match effect {
             Effect::Enumerate => Task::perform(
-                async { enumerate_disks().map_err(|erreur| erreur.to_string()) },
+                off_thread_result(|| enumerate_disks().map_err(|erreur| erreur.to_string())),
                 Message::Loaded,
             ),
             Effect::LoadCatalog => {
                 let program = self.program();
                 Task::perform(
-                    async move { catalog::read(program) },
+                    off_thread_result(move || catalog::read(program)),
                     Message::CatalogLoaded,
                 )
             }
             Effect::DetectTor => {
-                Task::perform(async { bonk_catalog::tor::detect() }, Message::TorDetected)
+                let detected = off_thread(bonk_catalog::tor::detect);
+                Task::perform(async { detected.await.flatten() }, Message::TorDetected)
             }
             Effect::Copy(text) => iced::clipboard::write(text),
             Effect::OpenLink(url) => {
                 Task::perform(async move { bonk_hal::browser::open(url) }, |_| ()).discard()
             }
             Effect::PickImage => Task::perform(pick_image(self.lang), Message::ImagePicked),
-            Effect::SaveSetting { key, value } => {
-                let program = self.program();
-                Task::perform(async move { settings::save(&program, key, value) }, |_| ()).discard()
-            }
-            Effect::Relaunch { key, value } => {
-                let program = self.program();
-                Task::perform(
-                    async move { settings::save(&program, key, value) && settings::relaunch() },
-                    |started| started,
-                )
-                .then(|started| if started { iced::exit() } else { Task::none() })
-            }
+            Effect::SaveSetting { .. } | Effect::Relaunch { .. } => self.settings_task(effect),
             Effect::StartWrite(args) => {
                 Task::run(transfer::spawn(&self.program(), &args), Message::Write)
             }
@@ -163,26 +155,58 @@ impl App {
             Effect::PickVaultIso => Task::perform(pick_iso(self.lang), |path| {
                 Message::Vault(VaultMessage::Picked(path))
             }),
+            Effect::ListKept | Effect::RemoveKept(_) => self.library_task(effect),
+        }
+    }
+
+    /// Saving runs `bonk config`, and a relaunch closes this window once the new one started.
+    fn settings_task(&self, effect: Effect) -> Task<Message> {
+        match effect {
+            Effect::SaveSetting { key, value } => {
+                let program = self.program();
+                Task::perform(
+                    off_thread(move || settings::save(&program, key, value)),
+                    |_| (),
+                )
+                .discard()
+            }
+            Effect::Relaunch { key, value } => {
+                let program = self.program();
+                Task::perform(
+                    off_thread(move || {
+                        settings::save(&program, key, value) && settings::relaunch()
+                    }),
+                    |started| started == Some(true),
+                )
+                .then(|started| if started { iced::exit() } else { Task::none() })
+            }
+            _ => Task::none(),
+        }
+    }
+
+    fn library_task(&self, effect: Effect) -> Task<Message> {
+        match effect {
             Effect::ListKept => {
                 let program = self.program();
                 Task::perform(
-                    async move {
+                    off_thread_result(move || {
                         catalog::run_json(&program, &["cache", "list", "--json"])
                             .and_then(|output| library::parse(&output))
-                    },
+                    }),
                     |listed| Message::Library(LibraryMessage::Listed(listed)),
                 )
             }
             Effect::RemoveKept(sha256) => {
                 let program = self.program();
                 Task::perform(
-                    async move {
+                    off_thread_result(move || {
                         catalog::run_json(&program, &["cache", "clean", &sha256, "--json"])
                             .map(drop)
-                    },
+                    }),
                     |removed| Message::Library(LibraryMessage::Removed(removed)),
                 )
             }
+            _ => Task::none(),
         }
     }
 
