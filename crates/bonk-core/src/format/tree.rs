@@ -79,6 +79,45 @@ pub(super) fn collect_children(
     Ok(children)
 }
 
+/// A contiguous run of clusters.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Placed {
+    pub(super) first_cluster: u32,
+    pub(super) clusters: u32,
+}
+
+/// Files one after the other from `next`, in their order; an empty file takes no cluster. `narrow` names the
+/// filesystem when a number overflows.
+pub(super) fn place_files(
+    files: &[NewFile],
+    cluster_bytes: u64,
+    next: &mut u64,
+    narrow: fn(u64) -> Result<u32, FormatError>,
+) -> Result<Vec<Placed>, FormatError> {
+    let mut placed = Vec::with_capacity(files.len());
+    for file in files {
+        let clusters = file.size.div_ceil(cluster_bytes);
+        placed.push(Placed {
+            first_cluster: if clusters == 0 { 0 } else { narrow(*next)? },
+            clusters: narrow(clusters)?,
+        });
+        *next += clusters;
+    }
+    Ok(placed)
+}
+
+/// Refused before the first write: `used` clusters do not fit in the `available` ones.
+pub(super) fn check_room(used: u64, available: u64, cluster_bytes: u64) -> Result<(), FormatError> {
+    if used > available {
+        return Err(FormatError::TooSmall(format!(
+            "{} bytes to store: the drive only has {} data bytes",
+            used * cluster_bytes,
+            available * cluster_bytes
+        )));
+    }
+    Ok(())
+}
+
 /// Copies `size` bytes contiguously and returns their SHA-256. `advance` gets the bytes of each block and
 /// returns false to stop.
 pub(super) fn write_contiguous(

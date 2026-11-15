@@ -3,7 +3,8 @@ use std::io::Read;
 
 use super::fat32::{self, FAT_HEAD, FATS, Geometry, ROOT_CLUSTER, Volume, narrow, write_boot};
 use super::tree::{
-    ChildKind, Children, NewFile, collect_children, verify_contiguous, write_contiguous,
+    ChildKind, Children, NewFile, Placed, check_room, collect_children, place_files,
+    verify_contiguous, write_contiguous,
 };
 use super::{FormatError, zero_range};
 use crate::block::BlockDevice;
@@ -19,12 +20,6 @@ const FIXED_DATE: u16 = 0x0021;
 const LONG_NAME_UNITS: usize = 13;
 const MAX_NAME_UNITS: usize = 255;
 pub const MAX_FILE_BYTES: u64 = u32::MAX as u64;
-
-#[derive(Debug, Clone, Copy)]
-struct Placed {
-    first_cluster: u32,
-    clusters: u32,
-}
 
 /// Long entries, short name, rank in its directory.
 type Row = (Vec<[u8; ENTRY]>, [u8; 11], usize);
@@ -264,23 +259,9 @@ pub fn layout(
         placed_dirs.insert(path.clone(), (narrow(next)?, narrow(clusters)?));
         next += clusters;
     }
-    let mut placed_files = Vec::with_capacity(files.len());
-    for file in files {
-        let clusters = file.size.div_ceil(cluster);
-        placed_files.push(Placed {
-            first_cluster: if clusters == 0 { 0 } else { narrow(next)? },
-            clusters: narrow(clusters)?,
-        });
-        next += clusters;
-    }
+    let placed_files = place_files(files, cluster, &mut next, narrow::<u32>)?;
     let used = next - u64::from(ROOT_CLUSTER);
-    if used > geometry.clusters {
-        return Err(FormatError::TooSmall(format!(
-            "{} bytes to store: the drive only has {} data bytes",
-            used * cluster,
-            geometry.clusters * cluster
-        )));
-    }
+    check_room(used, geometry.clusters, cluster)?;
     let directories = directory_bytes(
         volume.label,
         files,

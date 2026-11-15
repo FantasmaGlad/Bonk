@@ -6,7 +6,8 @@ use super::exfat::{
     geometry, upcase_map,
 };
 use super::tree::{
-    ChildKind, Children, NewFile, collect_children, verify_contiguous, write_contiguous,
+    ChildKind, Children, NewFile, Placed, check_room, collect_children, place_files,
+    verify_contiguous, write_contiguous,
 };
 use super::{FormatError, zero_range};
 use crate::block::BlockDevice;
@@ -26,12 +27,6 @@ const MAX_NAME_UNITS: usize = 255;
 /// 1 January 1980: nothing depends on the clock, two writes give the same bytes.
 const FIXED_TIMESTAMP: u32 = 0x0021_0000;
 const MEDIA: u32 = 0xFFFF_FFF8;
-
-#[derive(Debug, Clone, Copy)]
-pub(super) struct Placed {
-    pub(super) first_cluster: u32,
-    pub(super) clusters: u32,
-}
 
 /// Where every byte goes, computed before the first write. Each file and non-root directory is contiguous,
 /// without a FAT chain.
@@ -156,23 +151,10 @@ pub fn layout(
     let names = name_units_by_directory(&children, &upcase)?;
     let mut next = u64::from(geo.root_cluster());
     let placed_dirs = place_directories(&names, &geo, volume.label.is_some(), &mut next)?;
-    let mut placed_files = Vec::with_capacity(files.len());
-    for file in files {
-        let clusters = file.size.div_ceil(u64::from(geo.cluster_bytes));
-        placed_files.push(Placed {
-            first_cluster: if clusters == 0 { 0 } else { narrow(next)? },
-            clusters: narrow(clusters)?,
-        });
-        next += clusters;
-    }
+    let cluster_bytes = u64::from(geo.cluster_bytes);
+    let placed_files = place_files(files, cluster_bytes, &mut next, narrow)?;
     let used = next - u64::from(FIRST_CLUSTER);
-    if used > u64::from(geo.clusters) {
-        return Err(FormatError::TooSmall(format!(
-            "{} bytes to store: the drive only has {} data bytes",
-            used * u64::from(geo.cluster_bytes),
-            u64::from(geo.clusters) * u64::from(geo.cluster_bytes)
-        )));
-    }
+    check_room(used, u64::from(geo.clusters), cluster_bytes)?;
     let tree = Tree {
         geo: &geo,
         label: volume.label,
