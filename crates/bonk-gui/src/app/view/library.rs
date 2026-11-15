@@ -41,7 +41,7 @@ impl App {
                         "The cache action failed.",
                         "L'action sur le cache a échoué."
                     ),
-                    technical(lang, error)
+                    technical(error)
                 ))
                 .size(13),
             );
@@ -57,7 +57,7 @@ impl App {
             Listing::Failed(error) => quiet(format!(
                 "{} {}",
                 lang.pick("Cannot read the cache.", "Cache illisible."),
-                technical(lang, error)
+                technical(error)
             )),
             Listing::Ready(kept) if kept.is_empty() => quiet(
                 lang.pick(

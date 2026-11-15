@@ -58,7 +58,7 @@ impl App {
                     "ERREUR : les disques n'ont pas pu être détectés."
                 ))
                 .size(16),
-                text(technical(lang, erreur)).size(14).color(theme::muted()),
+                text(technical(erreur)).size(14).color(theme::muted()),
                 text(lang.pick(
                     "No disk is offered while detection fails.",
                     "Aucun disque n'est proposé tant que la détection échoue."

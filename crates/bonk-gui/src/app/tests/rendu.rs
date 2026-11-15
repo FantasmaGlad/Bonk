@@ -81,10 +81,7 @@ fn un_echec_s_affiche_en_toutes_lettres() {
         &app,
         "ERREUR : les disques n'ont pas pu être détectés."
     ));
-    assert!(contient(
-        &app,
-        "Détail technique (en anglais) : base udev introuvable"
-    ));
+    assert!(contient(&app, "Base udev introuvable"));
 }
 
 /// Writes PNG captures of the window to the directory `BONK_GUI_CAPTURES` names, to look at. Without the

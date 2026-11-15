@@ -109,7 +109,7 @@ impl App {
                 text(format!(
                     "{} {}",
                     lang.pick("Catalog unavailable.", "Catalogue indisponible."),
-                    technical(lang, error)
+                    technical(error)
                 ))
                 .size(13)
                 .color(theme::muted())
