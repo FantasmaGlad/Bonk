@@ -25,7 +25,7 @@ object Bridge {
     private var pickedName: String? = null
 
     fun send(message: ToRust) {
-        if (message == Cancel) cancelled = true
+        if (message == Cancel || message == CatalogDownload("cancel")) cancelled = true
         val text = Protocol.encode(message)
         worker.execute {
             // A Rust panic comes back as an exception: caught, only this message is lost.

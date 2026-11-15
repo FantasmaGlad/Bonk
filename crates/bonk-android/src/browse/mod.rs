@@ -1,3 +1,5 @@
+pub(crate) mod download;
+
 use bonk_hal::Lang;
 use bonk_ui::browse::{
     BrowseMessage, Options, desktop_label, media_label, options, variant_facts, writable_count,
@@ -123,6 +125,9 @@ fn system_page(model: &Model, system: &System) -> Value {
         "icon": system.icon,
         "back": lang.pick("All systems", "Tous les systèmes"),
         "write": lang.pick("Write this image", "Écrire cette image"),
+        "download": lang.pick("Download", "Télécharger"),
+        "busy": download::running(model),
+        "downloading": download::panel(model, system),
         "variants": variants,
     })
 }
@@ -163,6 +168,7 @@ pub(crate) fn message_of(input: &Value, model: &Model) -> Option<Message> {
         "catalog_search" => BrowseMessage::Search(text("value").unwrap_or_default()),
         "catalog_system" => BrowseMessage::OpenSystem(text("name")?),
         "catalog_write" => BrowseMessage::Write(text("id")?),
+        "catalog_download" => download::message_of(input, model)?,
         "catalog_filter" => filter_message(model, input["kind"].as_str()?, text("value"))?,
         _ => return None,
     };

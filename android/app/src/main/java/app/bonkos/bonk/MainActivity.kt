@@ -169,6 +169,7 @@ class MainActivity : ComponentActivity() {
                 recreate()
             }
             PickVaultIso -> pickVaultIso.launch(arrayOf("*/*"))
+            is DownloadImage -> ImageDownload(this, Bridge::send).start(effect)
             is VaultRun -> {
                 if (effect.action != "list") askNotificationsIfNeeded()
                 actions.vault(effect)

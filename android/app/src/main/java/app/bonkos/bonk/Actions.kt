@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 
 private const val CATALOG = "https://catalog.bonk-os.app/v2/catalog.json"
-private const val BUFFER = 1 shl 20
+internal const val BUFFER = 1 shl 20
 private const val RETRY_MS = 10_000L
 private const val TAG = "Bonk"
 private const val ICON_WORKERS = 8
@@ -29,7 +29,7 @@ private const val ICONS_TIMEOUT_S = 120L
 private const val CONNECT_TIMEOUT_MS = 30_000
 private const val READ_TIMEOUT_MS = 60_000
 
-private fun open(address: String, proxy: Proxy = Proxy.NO_PROXY): HttpURLConnection =
+internal fun open(address: String, proxy: Proxy = Proxy.NO_PROXY): HttpURLConnection =
     (URL(address).openConnection(proxy) as HttpURLConnection).apply {
         connectTimeout = CONNECT_TIMEOUT_MS
         readTimeout = READ_TIMEOUT_MS
@@ -154,26 +154,8 @@ class Actions(
             throw BonkFailure("E3008", "not enough free space on the phone: $total bytes needed")
         }
         if (total > 0) storage.allocateBytes(volume, total)
-        var done = 0L
-        var reported = 0L
-        val started = System.nanoTime()
         connection.inputStream.use { input ->
-            target.outputStream().use { output ->
-                val buffer = ByteArray(BUFFER)
-                while (true) {
-                    if (Bridge.cancelled) throw BonkFailure("E4003", "cancelled during the download")
-                    val count = input.read(buffer)
-                    if (count < 0) break
-                    output.write(buffer, 0, count)
-                    done += count
-                    if (done - reported > 16 * BUFFER) {
-                        reported = done
-                        val seconds = (System.nanoTime() - started) / 1e9
-                        // The system gives -1 for an unknown size: Rust then expects no total.
-                        send(Download(done, total.takeIf { it >= 0 }, done / seconds))
-                    }
-                }
-            }
+            target.outputStream().use { output -> copyReporting(input, output, total, null, send) }
         }
         return target
     }

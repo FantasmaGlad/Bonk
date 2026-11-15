@@ -1,4 +1,5 @@
 use bonk_core::write::Phase;
+use bonk_ui::browse::BrowseMessage;
 use bonk_ui::catalog::{CatalogState, writable};
 use bonk_ui::event::{Event, Outcome};
 use bonk_ui::model::{Message, Model};
@@ -22,7 +23,9 @@ fn vault_message(action: &str) -> Option<VaultMessage> {
 
 /// What the engine or the app reports belongs to the drive work running: the vault's or the write's.
 pub(super) fn drive_event(model: &Model, event: Event) -> Message {
-    if model.vault.is_busy() {
+    if crate::browse::download::running(model) {
+        Message::Browse(BrowseMessage::DownloadEvent(event))
+    } else if model.vault.is_busy() {
         Message::Vault(VaultMessage::Event(event))
     } else {
         Message::Write(event)
@@ -45,9 +48,8 @@ pub(super) fn message_of(input: &Value, model: &Model) -> Option<Message> {
         "show_all" => Message::ToggleAll(flag()),
         "settings" => crate::settings::message_of(input)?,
         "incognito" | "tor_project" => crate::incognito::message_of(input, model)?,
-        "catalog" | "catalog_search" | "catalog_system" | "catalog_write" | "catalog_filter" => {
-            crate::browse::message_of(input, model)?
-        }
+        "catalog" | "catalog_search" | "catalog_system" | "catalog_write" | "catalog_download"
+        | "catalog_filter" => crate::browse::message_of(input, model)?,
         "menu" => Message::ToggleMenu,
         "category" => Message::MenuCategory(
             text_of("value").and_then(|shown| model.terms.uses().id_of(&shown, model.lang)),
@@ -65,16 +67,28 @@ pub(super) fn message_of(input: &Value, model: &Model) -> Option<Message> {
         "mbr" => Message::ToggleMbr(flag()),
         "browse" => Message::BrowseImage,
         "picked" => Message::ImagePicked(text_of("value").map(Into::into)),
+        "start" if crate::browse::download::running(model) => return None,
         "start" => Message::StartWrite,
         "confirm" => Message::ConfirmInternal,
         "close_confirm" => Message::CloseInternal,
         "cancel" => Message::CancelWrite,
         "dismiss" => Message::DismissWrite,
         "download" | "failed" => drive_event(model, app_event(input)?),
+        "downloaded" => crate::browse::download::saved(input)?,
+        "vault" if starts_vault_work(input) && crate::browse::download::running(model) => {
+            return None;
+        }
         "vault" => Message::Vault(vault_message(input["action"].as_str()?)?),
         "vault_picked" => Message::Vault(VaultMessage::Picked(text_of("value").map(Into::into))),
         _ => return None,
     })
+}
+
+fn starts_vault_work(input: &Value) -> bool {
+    matches!(
+        input["action"].as_str(),
+        Some("confirm" | "browse" | "update")
+    )
 }
 
 /// The writable menu row the user touched, by its position.

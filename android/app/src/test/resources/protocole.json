@@ -816,6 +816,9 @@
         "back": "Retour",
         "system": {
           "back": "Tous les systèmes",
+          "busy": false,
+          "download": "Télécharger",
+          "downloading": null,
           "icon": null,
           "name": "Debian",
           "variants": [
