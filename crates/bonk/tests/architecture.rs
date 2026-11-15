@@ -74,12 +74,56 @@ fn chaque_crate_ne_depend_que_de_ce_que_permet_sa_couche() {
 }
 
 /// Production code of a file: its tests apart, as for the size cap.
-fn production(file: &Path) -> String {
+fn read(file: &Path) -> String {
     // Windows checks out sources with CRLF line endings.
-    let text = fs::read_to_string(file)
+    fs::read_to_string(file)
         .unwrap_or_default()
-        .replace("\r\n", "\n");
-    text.split("#[cfg(test)]\nmod tests")
+        .replace("\r\n", "\n")
+}
+
+/// The module name a file defines and the directory its declaration lives in.
+fn module_of(file: &Path) -> Option<(String, PathBuf)> {
+    let dir = file.parent()?;
+    let stem = file.file_stem()?.to_str()?;
+    if stem == "mod" {
+        Some((
+            dir.file_name()?.to_str()?.to_owned(),
+            dir.parent()?.to_owned(),
+        ))
+    } else {
+        Some((stem.to_owned(), dir.to_owned()))
+    }
+}
+
+/// Compiled only for tests: declared under `#[cfg(test)]`, or inside a module that is.
+fn test_only(file: &Path) -> bool {
+    let Some((name, home)) = module_of(file) else {
+        return false;
+    };
+    let mut parents = vec![
+        home.join("mod.rs"),
+        home.join("lib.rs"),
+        home.join("main.rs"),
+    ];
+    if let (Some(up), Some(dir)) = (home.parent(), home.file_name()) {
+        parents.push(up.join(dir).with_extension("rs"));
+    }
+    parents
+        .iter()
+        .filter(|parent| parent.as_path() != file)
+        .any(|parent| {
+            let text = read(parent);
+            text.contains(&format!("#[cfg(test)]\nmod {name};"))
+                || (text.contains(&format!("\nmod {name};")) && test_only(parent))
+        })
+}
+
+fn production(file: &Path) -> String {
+    if test_only(file) {
+        return String::new();
+    }
+    read(file)
+        .split("#[cfg(test)]\nmod tests")
         .next()
         .unwrap_or_default()
         .to_owned()
@@ -217,4 +261,13 @@ fn aucun_fichier_de_production_ne_depasse_le_plafond() {
     let mut trouves = Vec::new();
     parcourir(&crates, &mut trouves);
     assert!(trouves.is_empty(), "{trouves:?}");
+}
+
+#[test]
+fn un_module_de_tests_a_part_n_est_pas_du_code_de_production() {
+    let cli = crates_dir().join("bonk-cli").join("src");
+    assert!(test_only(&cli.join("config").join("tests.rs")));
+    assert!(test_only(&cli.join("job_tests").join("write.rs")));
+    assert!(!test_only(&cli.join("config").join("store.rs")));
+    assert!(!test_only(&cli.join("lib.rs")));
 }

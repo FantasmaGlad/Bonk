@@ -255,7 +255,7 @@ fn le_coffre_refuse_fixture_sur_un_vrai_disque() {
 
     let conflict = |args: &[&str]| {
         let cli = crate::Cli::try_parse_from(args).expect("ligne valide");
-        crate::fixture_conflict(&cli.command)
+        crate::fixture_guard::fixture_conflict(&cli.command)
     };
     assert!(conflict(&["bonk", "vault", "list", "usb-a"]).is_some());
     assert!(conflict(&["bonk", "vault", "init", "usb-a", "--yes"]).is_some());
@@ -270,7 +270,7 @@ fn la_fenetre_refuse_fixture() {
 
     let conflict = |args: &[&str]| {
         let cli = crate::Cli::try_parse_from(args).expect("ligne valide");
-        crate::fixture_conflict(&cli.command)
+        crate::fixture_guard::fixture_conflict(&cli.command)
     };
     assert!(conflict(&["bonk"]).is_some());
     assert!(conflict(&["bonk", "gui"]).is_some());
