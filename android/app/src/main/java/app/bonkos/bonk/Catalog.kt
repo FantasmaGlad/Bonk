@@ -43,7 +43,10 @@ internal fun CatalogPage(view: BrowseView, send: (ToRust) -> Unit) {
         Modifier.safeDrawingPadding().padding(Tokens.SPACE_PAGE.dp),
         verticalArrangement = Arrangement.spacedBy(Tokens.SPACE_LARGE.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp),
+        ) {
             Text(view.title, fontSize = Tokens.TEXT_TITLE.sp, modifier = Modifier.weight(1f))
             Secondary(view.back) { send(CatalogAction("close")) }
         }
@@ -81,8 +84,8 @@ private fun Tools(grid: BrowseGrid, send: (ToRust) -> Unit) {
             modifier = Modifier.fillMaxWidth(),
         )
         FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_SMALL.dp),
-            verticalArrangement = Arrangement.spacedBy(Tokens.SPACE_SMALL.dp),
+            horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp),
+            verticalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp),
         ) {
             grid.filters.forEach { filter ->
                 Picker(filter.chosen.orEmpty(), filter.options, filter.all, { CatalogFilter(filter.kind, it) }, send)
