@@ -1,3 +1,6 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use bonk_core::format::Ids;
 use std::fs;
 use std::path::Path;
 
@@ -123,6 +126,68 @@ pub(super) struct OpenRequest {
     pub(super) elevation: Elevation,
     pub(super) size_hint: Option<u64>,
     pub(super) trace_io: Option<TraceIo>,
+}
+
+impl OpenRequest {
+    pub(super) fn read_write(
+        options: FilterOptions,
+        elevation: Elevation,
+        trace_io: Option<TraceIo>,
+        size_hint: Option<u64>,
+    ) -> Self {
+        Self {
+            options,
+            access: Access::ReadWrite,
+            elevation,
+            size_hint,
+            trace_io,
+        }
+    }
+}
+
+/// A target opened to build volumes on, and the identifiers they take.
+pub(super) struct OpenedForWriting {
+    pub(super) device: Box<dyn BlockDevice>,
+    pub(super) info: TargetInfo,
+    pub(super) unmounted: Vec<String>,
+    pub(super) ids: Ids,
+    /// What is checked again once the system has reread the new table; `None` for an image file.
+    pub(super) identity: Option<TargetIdentity>,
+}
+
+/// Opens, then a last chance to cancel before the first byte: `before` names the work in that message.
+pub(super) fn open_for_writing(
+    chosen: Chosen,
+    target: &Target,
+    request: &OpenRequest,
+    deps: &Deps<'_>,
+    before: &str,
+) -> Result<OpenedForWriting, JobError> {
+    let seed = fresh_seed(&chosen.info.path);
+    let identity = chosen.disk.as_ref().map(TargetIdentity::from);
+    let (device, info, unmounted) = open_target(chosen, target, request, deps)?;
+    if (deps.io.cancelled)() {
+        return Err(fail(Code::Cancelled, format!("cancelled before {before}")));
+    }
+    Ok(OpenedForWriting {
+        device,
+        info,
+        unmounted,
+        ids: Ids::from_seed(&seed),
+        identity,
+    })
+}
+
+/// Two formats must not give the same GUIDs. The only clock and randomness of formatting: `bonk-core` has
+/// none, so its tests stay deterministic.
+pub(super) fn fresh_seed(target: &str) -> Vec<u8> {
+    use std::hash::{BuildHasher, RandomState};
+
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_nanos());
+    let random = RandomState::new().hash_one(target);
+    format!("{target}:{nanos}:{}:{random}", std::process::id()).into_bytes()
 }
 
 /// Nothing to unmount, nothing to write.
