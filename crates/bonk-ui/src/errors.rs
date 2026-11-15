@@ -49,24 +49,23 @@ pub fn french_title(code: &str) -> Option<&'static str> {
         .map(|(_, title)| *title)
 }
 
-/// Engine and system messages stay in English: shown only after a sentence in the window's language,
-/// and labelled as such.
+/// The engine or system message as it came, after the sentence of the window: its own sentence.
 #[must_use]
-pub fn technical(lang: Lang, message: &str) -> String {
-    match lang {
-        Lang::En => format!("Details: {message}"),
-        Lang::Fr => format!("Détail technique (en anglais) : {message}"),
-    }
+pub fn technical(message: &str) -> String {
+    let mut letters = message.chars();
+    letters.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(letters).collect()
+    })
 }
 
-/// The code follows the title, so the English detail closes the line instead of splitting a sentence.
+/// The code follows the title, so the engine's message closes the line instead of splitting a sentence.
 #[must_use]
 pub fn failure_text(lang: Lang, code: Option<&str>, message: &str) -> String {
     let tag = code.map_or_else(String::new, |c| format!(" [{c}]"));
     match (lang, code.and_then(french_title)) {
         (Lang::En, _) => format!("FAILED: {message}{tag}"),
-        (Lang::Fr, Some(title)) => format!("ÉCHEC : {title}{tag}. {}", technical(lang, message)),
-        (Lang::Fr, None) => format!("ÉCHEC{tag}. {}", technical(lang, message)),
+        (Lang::Fr, Some(title)) => format!("ÉCHEC : {title}{tag}. {}", technical(message)),
+        (Lang::Fr, None) => format!("ÉCHEC{tag}. {}", technical(message)),
     }
 }
 
@@ -75,18 +74,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn le_detail_anglais_ne_se_glisse_jamais_dans_une_phrase_francaise() {
+    fn le_message_du_moteur_suit_la_phrase_sans_commentaire_sur_sa_langue() {
         assert_eq!(
             failure_text(Lang::Fr, Some("E3005"), "bad hash"),
-            "ÉCHEC : L'empreinte de l'image ne correspond pas [E3005]. Détail technique (en anglais) : bad hash"
+            "ÉCHEC : L'empreinte de l'image ne correspond pas [E3005]. Bad hash"
         );
         assert_eq!(
             failure_text(Lang::En, Some("E3005"), "bad hash"),
             "FAILED: bad hash [E3005]"
         );
-        assert_eq!(
-            failure_text(Lang::Fr, None, "bad"),
-            "ÉCHEC. Détail technique (en anglais) : bad"
-        );
+        assert_eq!(failure_text(Lang::Fr, None, "bad"), "ÉCHEC. Bad");
     }
 }
