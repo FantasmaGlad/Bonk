@@ -106,11 +106,18 @@ internal fun Primary(label: String, enabled: Boolean = true, onClick: () -> Unit
 }
 
 @Composable
-internal fun Secondary(label: String, chosen: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun Secondary(
+    label: String,
+    modifier: Modifier = Modifier,
+    chosen: Boolean = false,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
     val palette = LocalPalette.current
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
+        modifier = modifier,
         shape = RoundedCornerShape(Tokens.RADIUS.dp),
         // Its own outline marks the choice: never a second frame around it.
         border = BorderStroke(if (chosen) 2.dp else 1.dp, Color(if (chosen) palette.accent else palette.muted)),

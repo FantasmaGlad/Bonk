@@ -13,4 +13,5 @@
     <string name="drive_unreadable">Cette clé est vue mais ne répond pas (%1$s). Bonk réessaie toutes les 10 secondes.</string>
     <string name="writing_notification">Bonk écrit sur un disque</string>
     <string name="do_not_unplug">Ne débranchez pas le disque avant le résultat. Vous pouvez quitter l\'application.</string>
+    <string name="chromeos_share">Sur Chromebook, une clé USB n\'arrive aux applications Android qu\'une fois partagée : paramètres de ChromeOS, Applications, Google Play Store, préférences USB.</string>
 </resources>
