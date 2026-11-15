@@ -172,13 +172,9 @@ fn gpt_header(block: usize, h: &GptHeader) -> Vec<u8> {
     s
 }
 
-fn write_gpt(dev: &mut dyn BlockDevice, slots: &[Slot<'_>], ids: &Ids) -> Result<(), FormatError> {
-    let block = u64::from(dev.block_size());
-    let block_len = dev.block_size() as usize;
-    let last = dev.size() / block - 1;
-    let table_sectors = gpt_table_sectors(block);
-
-    let mut table = vec![0u8; table_sectors as usize * block_len];
+/// The partition entry array, padded with zeros to `len` bytes; a name keeps its first 36 UTF-16 units.
+fn gpt_entries(slots: &[Slot<'_>], len: usize) -> Vec<u8> {
+    let mut table = vec![0u8; len];
     for (slot, entry) in slots
         .iter()
         .zip(table.as_chunks_mut::<{ GPT_ENTRY_SIZE as usize }>().0)
@@ -197,6 +193,16 @@ fn write_gpt(dev: &mut dyn BlockDevice, slots: &[Slot<'_>], ids: &Ids) -> Result
             entry[56 + i * 2..58 + i * 2].copy_from_slice(&unit.to_le_bytes());
         }
     }
+    table
+}
+
+fn write_gpt(dev: &mut dyn BlockDevice, slots: &[Slot<'_>], ids: &Ids) -> Result<(), FormatError> {
+    let block = u64::from(dev.block_size());
+    let block_len = dev.block_size() as usize;
+    let last = dev.size() / block - 1;
+    let table_sectors = gpt_table_sectors(block);
+
+    let table = gpt_entries(slots, table_sectors as usize * block_len);
     let table_len = (GPT_ENTRIES * GPT_ENTRY_SIZE) as usize;
     let table_crc = crc32(&table[..table_len]);
 

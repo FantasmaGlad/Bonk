@@ -3,7 +3,8 @@ use std::io::Read;
 use super::FormatError;
 use super::exfat::{END_OF_CHAIN, ENTRY, FIRST_CLUSTER, checksum16, upcase_map};
 use super::exfat_read::Reader;
-use super::exfat_tree::{Placed, entries_for, entry_set, name_units};
+use super::exfat_tree::{entries_for, entry_set, name_units};
+use super::tree::Placed;
 use super::tree::{verify_contiguous, write_contiguous};
 use crate::block::BlockDevice;
 use crate::partition::read_range;
@@ -245,34 +246,15 @@ pub fn add_file(
     let mut volume = Volume::read(dev, span.first_lba, span.sectors)?;
     let units = name_units(name)?;
     let upcase = upcase_map();
-    let wanted = upcased(&units, &upcase);
-    let taken = Reader::entries(&volume.root_bytes, &mut None)
-        .iter()
-        .any(|raw| upcased(&raw.name.encode_utf16().collect::<Vec<_>>(), &upcase) == wanted);
-    if taken {
-        return Err(FormatError::Name(format!("{name}: already on the volume")));
-    }
-    let count = size.div_ceil(volume.cluster_bytes);
-    let first_cluster = if count == 0 {
-        0
-    } else {
-        volume.free_run(count).ok_or_else(|| {
-            FormatError::TooLarge(format!(
-                "{name}: no free contiguous space of {size} bytes on the volume"
-            ))
-        })?
-    };
-    let clusters = u32::try_from(count).map_err(|_| FormatError::TooLarge(name.to_owned()))?;
+    refuse_taken(&volume, &units, &upcase, name)?;
+    let placed = reserve(&volume, name, size)?;
+    let (first_cluster, clusters) = (placed.first_cluster, placed.clusters);
     let slot = volume.free_slots(entries_for(&units)).ok_or_else(|| {
         FormatError::TooLarge(format!("{name}: the volume's root directory is full"))
     })?;
-    let placed = Placed {
-        first_cluster,
-        clusters,
-    };
     let set = file_entry_set(&units, &upcase, placed, size, hidden);
     set_dirty(dev, volume.start, true)?;
-    let offset = if count == 0 {
+    let offset = if clusters == 0 {
         0
     } else {
         volume.cluster_offset(first_cluster)
@@ -295,7 +277,47 @@ pub fn add_file(
         name: name.to_owned(),
         size_bytes: size,
         sha256,
-        volume_offset: if count == 0 { 0 } else { offset - volume.start },
+        volume_offset: if clusters == 0 {
+            0
+        } else {
+            offset - volume.start
+        },
+    })
+}
+
+/// exFAT compares names upper-cased: two that differ only by case are the same file.
+fn refuse_taken(
+    volume: &Volume,
+    units: &[u16],
+    upcase: &[u16],
+    name: &str,
+) -> Result<(), FormatError> {
+    let wanted = upcased(units, upcase);
+    let taken = Reader::entries(&volume.root_bytes, &mut None)
+        .iter()
+        .any(|raw| upcased(&raw.name.encode_utf16().collect::<Vec<_>>(), upcase) == wanted);
+    if taken {
+        return Err(FormatError::Name(format!("{name}: already on the volume")));
+    }
+    Ok(())
+}
+
+/// One free contiguous run for the whole file; an empty file takes no cluster.
+fn reserve(volume: &Volume, name: &str, size: u64) -> Result<Placed, FormatError> {
+    let count = size.div_ceil(volume.cluster_bytes);
+    let first_cluster = if count == 0 {
+        0
+    } else {
+        volume.free_run(count).ok_or_else(|| {
+            FormatError::TooLarge(format!(
+                "{name}: no free contiguous space of {size} bytes on the volume"
+            ))
+        })?
+    };
+    let clusters = u32::try_from(count).map_err(|_| FormatError::TooLarge(name.to_owned()))?;
+    Ok(Placed {
+        first_cluster,
+        clusters,
     })
 }
 
