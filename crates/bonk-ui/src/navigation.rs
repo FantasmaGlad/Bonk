@@ -9,14 +9,18 @@ pub fn is_disk(order: &[Focus], i: usize) -> bool {
 }
 
 impl Model {
-    /// Tab order: the settings button, then the disks shown.
+    /// Tab order: the header buttons, then the disks shown.
     pub fn focus_order(&self) -> Vec<Focus> {
         match self.screen {
             Screen::Settings => return self.settings_focus_order(),
             Screen::Library => return self.library_focus_order(),
             Screen::Main => {}
         }
-        let mut order = vec![Focus::Library, Focus::Settings];
+        let mut order = Vec::new();
+        if !self.offline {
+            order.push(Focus::Tor);
+        }
+        order.extend([Focus::Library, Focus::Settings]);
         if self.error.is_none() {
             for (disk, _) in self.entries() {
                 order.push(Focus::Disk(disk.id.clone()));
@@ -32,7 +36,6 @@ impl Model {
                         order.push(Focus::Image);
                         order.push(Focus::Browse);
                         order.push(Focus::Hash);
-                        order.push(Focus::Tor);
                         order.push(Focus::Raw);
                         order.push(Focus::Mbr);
                     }
@@ -171,7 +174,7 @@ impl Model {
             },
             Some(Focus::Browse) => Message::BrowseImage,
             Some(Focus::Tor) if self.tor.is_some() => Message::ToggleTor(!self.use_tor),
-            Some(Focus::Tor) => return Vec::new(),
+            Some(Focus::Tor) => Message::OpenTorProject,
             Some(Focus::Raw) => match &self.write {
                 WriteState::Draft { raw, .. } => Message::ToggleRaw(!raw),
                 _ => return Vec::new(),
@@ -201,7 +204,12 @@ fn target(order: &[Focus], current: Option<usize>, nav: Nav) -> Option<usize> {
         Nav::Previous => Some(current.map_or(last, |i| if i == 0 { last } else { i - 1 })),
         // Arrows move between disks; from a control, Down enters the list.
         Nav::Down => match current {
-            Some(i) if !matches!(order[i], Focus::Library | Focus::Settings | Focus::Copy) => {
+            Some(i)
+                if !matches!(
+                    order[i],
+                    Focus::Tor | Focus::Library | Focus::Settings | Focus::Copy
+                ) =>
+            {
                 // Next disk, skipping the current disk's write panel.
                 (i + 1..order.len())
                     .find(|j| is_disk(order, *j))
@@ -228,7 +236,6 @@ fn in_disk_area(focus: &Focus) -> bool {
             | Focus::Image
             | Focus::Browse
             | Focus::Hash
-            | Focus::Tor
             | Focus::Raw
             | Focus::Mbr
             | Focus::Action

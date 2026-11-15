@@ -17,19 +17,21 @@ pub(super) fn avec_tout_affiche() -> App {
 fn tab_parcourt_les_commandes_puis_les_disques_et_reboucle() {
     let mut app = avec_tout_affiche();
     let mut vus = Vec::new();
-    for _ in 0..12 {
+    for _ in 0..14 {
         nav(&mut app, Nav::Next);
         vus.push(app.focus.clone());
     }
     assert_eq!(
         vus,
         [
+            Some(Focus::Tor),
             Some(Focus::Library),
             Some(Focus::Settings),
             Some(Focus::Disk("nvme-systeme".to_owned())),
             Some(Focus::Disk("usb-cle".to_owned())),
             Some(Focus::Disk("sata-libre".to_owned())),
             Some(Focus::Copy),
+            Some(Focus::Tor),
             Some(Focus::Library),
             Some(Focus::Settings),
             Some(Focus::Disk("nvme-systeme".to_owned())),
@@ -38,6 +40,31 @@ fn tab_parcourt_les_commandes_puis_les_disques_et_reboucle() {
             Some(Focus::Copy),
         ]
     );
+}
+
+#[test]
+fn le_bouton_incognito_bascule_tor_au_clavier_ou_mene_au_projet() {
+    let mut app = avec_tout_affiche();
+    app.focus = Some(Focus::Tor);
+    let effects = app.model.update(Message::Nav(Nav::Activate));
+    assert_eq!(
+        effects,
+        vec![Effect::OpenLink(bonk_ui::incognito::TOR_PROJECT)]
+    );
+    let _ = app.update(Message::TorDetected(Some(
+        "socks5h://127.0.0.1:9050".to_owned(),
+    )));
+    nav(&mut app, Nav::Activate);
+    assert!(app.incognito());
+    nav(&mut app, Nav::Activate);
+    assert!(!app.incognito());
+}
+
+#[test]
+fn hors_ligne_le_bouton_incognito_sort_de_l_ordre() {
+    let mut app = avec_tout_affiche();
+    let _ = app.update(Message::Settings(SettingsMessage::Offline(true)));
+    assert!(!app.focus_order().contains(&Focus::Tor));
 }
 
 #[test]

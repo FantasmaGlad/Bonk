@@ -38,9 +38,10 @@ impl Model {
             | Message::ToggleMbr(_)
             | Message::BrowseImage
             | Message::ImagePicked(_)
-            | Message::TorDetected(_)
-            | Message::ToggleTor(_)
             | Message::ToggleAdvanced) => self.apply_draft(message),
+            message @ (Message::TorDetected(_)
+            | Message::ToggleTor(_)
+            | Message::OpenTorProject) => self.apply_incognito(message),
             message @ (Message::RequestImage(_)
             | Message::ToggleMenu
             | Message::MenuCategory(_)
@@ -101,13 +102,8 @@ impl Model {
             Message::ToggleRaw(_) => Focus::Raw,
             Message::ToggleMbr(_) => Focus::Mbr,
             Message::BrowseImage => Focus::Browse,
-            Message::ToggleTor(_) => Focus::Tor,
             Message::ToggleAdvanced => Focus::Advanced,
             Message::ImagePicked(path) => return self.on_image_picked(path.clone()),
-            Message::TorDetected(address) => {
-                self.tor.clone_from(address);
-                return Vec::new();
-            }
             _ => return Vec::new(),
         };
         self.focus = Some(focus);
@@ -120,7 +116,6 @@ impl Model {
             (Message::ToggleRaw(on), WriteState::Draft { raw, .. }) => *raw = on,
             (Message::ToggleMbr(on), WriteState::Draft { mbr, .. }) => *mbr = on,
             (Message::BrowseImage, _) => return vec![Effect::PickImage],
-            (Message::ToggleTor(on), _) => self.use_tor = on && self.tor.is_some(),
             (Message::ToggleAdvanced, _) => self.advanced = !self.advanced,
             _ => {}
         }

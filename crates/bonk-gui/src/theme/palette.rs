@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, OnceLock};
 
 use iced::Color;
@@ -28,8 +29,37 @@ pub(crate) static RADIUS: LazyLock<f32> = LazyLock::new(|| {
     tokens["radius"].as_f64().unwrap_or_default() as f32
 });
 
-/// One palette per run: the other family is never built, and the window relaunches to change it.
-struct Chosen(OnceLock<Colors>);
+/// A theme and its incognito variant, switched without a relaunch when Tor is turned on.
+#[derive(Debug, PartialEq)]
+struct Family {
+    plain: Colors,
+    incognito: Colors,
+}
+
+impl Family {
+    fn read(dark: bool) -> Self {
+        let (plain, incognito) = if dark {
+            ("dark", "incognito_dark")
+        } else {
+            ("light", "incognito_light")
+        };
+        Self {
+            plain: read(plain),
+            incognito: read(incognito),
+        }
+    }
+
+    fn colors(&self, incognito: bool) -> &Colors {
+        if incognito {
+            &self.incognito
+        } else {
+            &self.plain
+        }
+    }
+}
+
+/// One family per run: the other is never built, and the window relaunches to change it.
+struct Chosen(OnceLock<Family>);
 
 impl Chosen {
     const fn new() -> Self {
@@ -37,23 +67,24 @@ impl Chosen {
     }
 
     fn choose(&self, dark: bool) {
-        self.0.get_or_init(|| read(family(dark)));
+        self.0.get_or_init(|| Family::read(dark));
     }
 
-    fn colors(&self) -> &Colors {
-        self.0.get_or_init(|| read(family(false)))
+    fn family(&self) -> &Family {
+        self.0.get_or_init(|| Family::read(false))
     }
 }
 
 static CHOSEN: Chosen = Chosen::new();
-
-fn family(dark: bool) -> &'static str {
-    if dark { "dark" } else { "light" }
-}
+static INCOGNITO: AtomicBool = AtomicBool::new(false);
 
 /// Before the window opens; later calls change nothing.
 pub(crate) fn choose(dark: bool) {
     CHOSEN.choose(dark);
+}
+
+pub(crate) fn set_incognito(on: bool) {
+    INCOGNITO.store(on, Ordering::Relaxed);
 }
 
 pub(crate) fn colors() -> &'static Colors {
@@ -61,7 +92,7 @@ pub(crate) fn colors() -> &'static Colors {
     if let Some(colors) = tests::drawn() {
         return colors;
     }
-    CHOSEN.colors()
+    CHOSEN.family().colors(INCOGNITO.load(Ordering::Relaxed))
 }
 
 fn read(theme: &str) -> Colors {
@@ -109,9 +140,9 @@ pub(crate) mod tests {
         DRAWN.with(Cell::get)
     }
 
-    /// Captures draw on the test's own thread: each picks its family without touching the run's palette.
-    pub(crate) fn draw_with<T>(dark: bool, capture: impl FnOnce() -> T) -> T {
-        let colors: &'static Colors = Box::leak(Box::new(read(family(dark))));
+    /// Captures draw on the test's own thread: each picks its palette without touching the run's.
+    pub(crate) fn draw_with<T>(palette: &str, capture: impl FnOnce() -> T) -> T {
+        let colors: &'static Colors = Box::leak(Box::new(read(palette)));
         DRAWN.with(|drawn| drawn.set(Some(colors)));
         let result = capture();
         DRAWN.with(|drawn| drawn.set(None));
@@ -123,15 +154,24 @@ pub(crate) mod tests {
         let chosen = Chosen::new();
         chosen.choose(true);
         chosen.choose(false);
-        assert_eq!(*chosen.colors(), read("dark"));
+        assert_eq!(*chosen.family(), Family::read(true));
     }
 
     #[test]
     fn sans_choix_la_fenetre_est_claire_et_le_reste() {
         let chosen = Chosen::new();
-        assert_eq!(*chosen.colors(), read("light"));
+        assert_eq!(*chosen.family(), Family::read(false));
         chosen.choose(true);
-        assert_eq!(*chosen.colors(), read("light"));
+        assert_eq!(*chosen.family(), Family::read(false));
+    }
+
+    #[test]
+    fn chaque_famille_porte_sa_variante_incognito() {
+        let dark = Family::read(true);
+        assert_eq!(*dark.colors(false), read("dark"));
+        assert_eq!(*dark.colors(true), read("incognito_dark"));
+        let light = Family::read(false);
+        assert_eq!(*light.colors(true), read("incognito_light"));
     }
 
     /// WCAG 2.1 relative luminance.
@@ -151,10 +191,10 @@ pub(crate) mod tests {
         (a.max(b) + 0.05) / (a.min(b) + 0.05)
     }
 
-    /// Text 4.5:1 on every background it sits on, in both themes; a missing or malformed colour fails here.
+    /// Text 4.5:1 on every background it sits on, in every palette; a missing or malformed colour fails here.
     #[test]
-    fn les_deux_themes_tiennent_les_contrastes() {
-        for theme in ["light", "dark"] {
+    fn chaque_palette_tient_les_contrastes() {
+        for theme in ["light", "dark", "incognito_light", "incognito_dark"] {
             let c = read(theme);
             for (front, back) in [
                 (c.ink, c.paper),

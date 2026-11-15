@@ -98,7 +98,25 @@ fn captures_facultatives() -> Result<(), Box<dyn std::error::Error>> {
     captures_fenetre(&dossier)?;
     captures_ecriture(&dossier)?;
     captures_coffre(&dossier)?;
+    captures_incognito(&dossier)?;
     capture(&avec_une_image(), 640.0, &dossier, "fenetre-bibliotheque")
+}
+
+fn captures_incognito(dossier: &std::path::Path) -> Capture {
+    let mut app = loaded(sample());
+    capture(&app, 640.0, dossier, "fenetre-sans-tor")?;
+    let _ = app.update(Message::TorDetected(Some(
+        "socks5h://127.0.0.1:9050".to_owned(),
+    )));
+    let _ = app.update(Message::Select("usb-cle".to_owned()));
+    capture(&app, 640.0, dossier, "fenetre-tor-desactive")?;
+    let _ = app.update(Message::ToggleTor(true));
+    for palette in ["incognito_light", "incognito_dark"] {
+        crate::theme::palette_tests::draw_with(palette, || {
+            capture(&app, 640.0, dossier, &format!("fenetre-{palette}"))
+        })?;
+    }
+    Ok(())
 }
 
 type Capture = Result<(), Box<dyn std::error::Error>>;
@@ -120,7 +138,7 @@ fn captures_fenetre(dossier: &std::path::Path) -> Capture {
     capture(&app, 640.0, dossier, "fenetre-cle")?;
     let _ = app.update(Message::Settings(bonk_ui::settings::SettingsMessage::Open));
     capture(&app, 640.0, dossier, "fenetre-parametres")?;
-    crate::theme::palette_tests::draw_with(true, || {
+    crate::theme::palette_tests::draw_with("dark", || {
         capture(&app, 640.0, dossier, "fenetre-parametres-sombre")
     })?;
     app.focus = Some(Focus::Virtual);

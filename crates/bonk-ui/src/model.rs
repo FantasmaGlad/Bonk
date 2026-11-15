@@ -40,6 +40,8 @@ pub enum Effect {
     ListKept,
     /// `bonk cache clean <SHA256>`, answered by [`crate::library::LibraryMessage::Removed`].
     RemoveKept(String),
+    /// Opened in the user's browser; only fixed addresses of Bonk itself.
+    OpenLink(&'static str),
 }
 
 pub type Effects = Vec<Effect>;
@@ -62,6 +64,7 @@ pub enum Message {
     ToggleRaw(bool),
     TorDetected(Option<String>),
     ToggleTor(bool),
+    OpenTorProject,
     ToggleMbr(bool),
     BrowseImage,
     /// `None`: closed without a choice.
@@ -185,7 +188,7 @@ pub struct Model {
     /// Labels of the usage categories and bases, from the catalog once read.
     pub terms: crate::terms::Terms,
     pub menu_filter: crate::catalog::MenuFilter,
-    /// A local Tor, offered in the options; never used without the box.
+    /// A local Tor, offered by the incognito button; never used without it.
     pub tor: Option<String>,
     pub lang: Lang,
     pub use_tor: bool,
@@ -237,6 +240,7 @@ pub fn ui_event(message: &Message) -> Option<(&'static str, String)> {
         Message::ToggleRaw(on) => ("toggle_raw", on.to_string()),
         Message::ToggleTor(on) => ("toggle_tor", on.to_string()),
         Message::TorDetected(found) => ("tor_detected", found.is_some().to_string()),
+        Message::OpenTorProject => ("click_tor_project", String::new()),
         Message::ToggleMbr(on) => ("toggle_mbr", on.to_string()),
         Message::BrowseImage => ("click_browse", String::new()),
         // As for typing, the event detail does not carry the chosen path.

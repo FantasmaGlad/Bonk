@@ -181,6 +181,7 @@ impl Model {
             value: if on { "true" } else { "false" },
         }];
         if on {
+            self.use_tor = false;
             self.catalog = crate::catalog::CatalogState::NotLoaded;
             self.menu_open = false;
             self.menu_filter = crate::catalog::MenuFilter::default();

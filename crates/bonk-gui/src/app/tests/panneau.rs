@@ -314,8 +314,6 @@ fn le_clavier_parcourt_le_panneau_et_l_action_respecte_le_delai() {
     nav(&mut app, Nav::Next);
     assert_eq!(app.focus, Some(Focus::Hash));
     nav(&mut app, Nav::Next);
-    assert_eq!(app.focus, Some(Focus::Tor));
-    nav(&mut app, Nav::Next);
     assert_eq!(app.focus, Some(Focus::Raw));
     nav(&mut app, Nav::Next);
     assert_eq!(app.focus, Some(Focus::Mbr));

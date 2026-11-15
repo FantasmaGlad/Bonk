@@ -211,16 +211,6 @@ impl App {
         mbr: bool,
     ) -> Element<'a, Message> {
         let lang = self.lang;
-        let tor = match &self.tor {
-            Some(_) => lang.pick(
-                "Download through Tor: slower, without showing your address to the publisher",
-                "Télécharger par Tor : plus lent, sans montrer votre adresse à l'éditeur",
-            ),
-            None => lang.pick(
-                "Download through Tor: no Tor detected on this computer",
-                "Télécharger par Tor : aucun Tor détecté sur cet ordinateur",
-            ),
-        };
         let raw_label = lang.pick(
             "Write the bytes as they are, without refusing a non-bootable image",
             "Écrire les octets tels quels, sans refuser une image non amorçable",
@@ -229,14 +219,9 @@ impl App {
             "Windows drive: MBR table, boots in BIOS and UEFI up to 2 TiB (unchecked: GPT, UEFI only)",
             "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
         );
-        let tor_toggle = self
-            .tor
-            .is_some()
-            .then_some(Message::ToggleTor as fn(bool) -> Message);
         column![
             self.image_row(image),
             self.hash_input(hash),
-            self.option_box(self.use_tor, tor, tor_toggle, Focus::Tor),
             self.option_box(raw, raw_label, Some(Message::ToggleRaw), Focus::Raw),
             self.option_box(mbr, mbr_label, Some(Message::ToggleMbr), Focus::Mbr),
         ]

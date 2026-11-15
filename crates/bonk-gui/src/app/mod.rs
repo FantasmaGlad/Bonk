@@ -85,6 +85,7 @@ impl App {
             model,
             program: None,
         };
+        theme::set_incognito(app.incognito());
         let task = app.run(effects);
         (app, task)
     }
@@ -99,6 +100,7 @@ impl App {
             }
             effects
         };
+        theme::set_incognito(self.incognito());
         self.run(effects)
     }
 
@@ -130,6 +132,9 @@ impl App {
                 Task::perform(async { bonk_catalog::tor::detect() }, Message::TorDetected)
             }
             Effect::Copy(text) => iced::clipboard::write(text),
+            Effect::OpenLink(url) => {
+                Task::perform(async move { bonk_hal::browser::open(url) }, |_| ()).discard()
+            }
             Effect::PickImage => Task::perform(pick_image(self.lang), Message::ImagePicked),
             Effect::SaveSetting { key, value } => {
                 let program = self.program();
