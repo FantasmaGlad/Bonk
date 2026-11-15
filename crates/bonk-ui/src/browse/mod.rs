@@ -1,7 +1,9 @@
+mod download;
 mod filter;
 mod labels;
 mod text;
 
+pub use download::{DownloadState, Step, download_args};
 pub use filter::{BrowseFilter, Options, options};
 pub use labels::{desktop_label, media_label};
 pub use text::{variant_facts, writable_count};
@@ -16,9 +18,10 @@ pub struct BrowseState {
     pub filter: BrowseFilter,
     /// By name: one page per system.
     pub opened: Option<String>,
+    pub download: Option<DownloadState>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BrowseMessage {
     Open,
     Close,
@@ -31,6 +34,11 @@ pub enum BrowseMessage {
     CloseSystem,
     /// Back to the drives with this catalog image asked for.
     Write(String),
+    /// Kept in the library without being written.
+    Download(String),
+    CancelDownload,
+    DownloadEvent(crate::event::Event),
+    DismissDownload,
 }
 
 impl Model {
@@ -73,6 +81,19 @@ impl Model {
                 self.focus = self.browse.opened.take().map(Focus::System);
             }
             BrowseMessage::Write(id) => return self.write_from_catalog(id),
+            BrowseMessage::Download(id) => return self.start_download(id),
+            BrowseMessage::CancelDownload => return self.cancel_download(),
+            BrowseMessage::DownloadEvent(event) => return self.download_event(event),
+            BrowseMessage::DismissDownload => {
+                if !self
+                    .browse
+                    .download
+                    .as_ref()
+                    .is_some_and(DownloadState::running)
+                {
+                    self.browse.download = None;
+                }
+            }
         }
         Vec::new()
     }
@@ -115,13 +136,21 @@ impl Model {
         match self.opened_system() {
             Some(system) => {
                 order.push(Focus::CloseSystem);
+                if self.browse.download.is_some() {
+                    order.push(Focus::DownloadAction);
+                }
                 order.extend(
                     system
                         .choices
                         .iter()
                         .filter(|choice| self.browse.filter.keeps_choice(choice))
                         .filter(|choice| matches!(choice.source, ChoiceSource::Download { .. }))
-                        .map(|choice| Focus::Variant(choice.id.clone())),
+                        .flat_map(|choice| {
+                            [
+                                Focus::Variant(choice.id.clone()),
+                                Focus::Download(choice.id.clone()),
+                            ]
+                        }),
                 );
             }
             None => {

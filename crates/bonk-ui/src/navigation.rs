@@ -165,6 +165,19 @@ impl Model {
             Some(Focus::System(name)) => Message::Browse(BrowseMessage::OpenSystem(name)),
             Some(Focus::CloseSystem) => Message::Browse(BrowseMessage::CloseSystem),
             Some(Focus::Variant(id)) => Message::Browse(BrowseMessage::Write(id)),
+            Some(Focus::Download(id)) => Message::Browse(BrowseMessage::Download(id)),
+            Some(Focus::DownloadAction) => Message::Browse(
+                if self
+                    .browse
+                    .download
+                    .as_ref()
+                    .is_some_and(crate::browse::DownloadState::running)
+                {
+                    BrowseMessage::CancelDownload
+                } else {
+                    BrowseMessage::DismissDownload
+                },
+            ),
             Some(Focus::CatalogSearch) => return Vec::new(),
             Some(Focus::KeptWrite(sha256)) => Message::Library(LibraryMessage::Write(sha256)),
             Some(Focus::KeptRemove(sha256)) => Message::Library(LibraryMessage::Remove(sha256)),

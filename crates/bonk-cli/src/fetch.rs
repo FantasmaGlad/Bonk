@@ -136,6 +136,36 @@ fn cached_download(
     deps: &Deps<'_>,
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<PathBuf, JobError> {
+    let (dest, already_kept) = cache_entry(cache_dir, sha256, name)?;
+    if already_kept {
+        log::info!(target: "bonk::catalog", path = dest.display().to_string().as_str(); "image already downloaded");
+    } else {
+        fetch_to(url, &dest, deps, progress)?;
+    }
+    Ok(dest)
+}
+
+/// Where the image is kept, and whether it already is. Downloaded when missing.
+pub(crate) fn kept_or_fetched(
+    url: &str,
+    cache_dir: Option<&Path>,
+    sha256: &str,
+    deps: &Deps<'_>,
+    progress: &mut dyn FnMut(&Progress) -> Control,
+) -> Result<(PathBuf, bool), JobError> {
+    let name = source_name(Path::new(url), Some(url))?;
+    let (dest, already_kept) = cache_entry(cache_dir, sha256, &name)?;
+    if !already_kept {
+        fetch_to(url, &dest, deps, progress)?;
+    }
+    Ok((dest, already_kept))
+}
+
+fn cache_entry(
+    cache_dir: Option<&Path>,
+    sha256: &str,
+    name: &str,
+) -> Result<(PathBuf, bool), JobError> {
     let cache = crate::cache::directory(cache_dir).ok_or_else(|| {
         error(
             Code::DownloadFailed,
@@ -143,12 +173,8 @@ fn cached_download(
         )
     })?;
     let dest = crate::cache::image_path(&cache, sha256, name);
-    if dest.exists() {
-        log::info!(target: "bonk::catalog", path = dest.display().to_string().as_str(); "image already downloaded");
-    } else {
-        fetch_to(url, &dest, deps, progress)?;
-    }
-    Ok(dest)
+    let already_kept = dest.exists();
+    Ok((dest, already_kept))
 }
 
 fn fetch_to(

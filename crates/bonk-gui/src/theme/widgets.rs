@@ -55,7 +55,11 @@ pub(crate) fn card(
         };
         button::Style {
             background: Some(if selected { c.accent_soft } else { c.surface }.into()),
-            text_color: c.ink,
+            text_color: if status == button::Status::Disabled {
+                c.muted
+            } else {
+                c.ink
+            },
             border: border(outline, width),
             ..button::Style::default()
         }

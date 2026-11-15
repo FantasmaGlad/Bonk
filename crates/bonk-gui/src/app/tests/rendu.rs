@@ -117,7 +117,18 @@ fn captures_catalogue(dossier: &std::path::Path) -> Capture {
     let _ = app.update(Message::Browse(BrowseMessage::OpenSystem(
         "Ubuntu".to_owned(),
     )));
-    capture(&app, 640.0, dossier, "fenetre-catalogue-systeme")
+    capture(&app, 640.0, dossier, "fenetre-catalogue-systeme")?;
+    let _ = app.update(Message::Browse(BrowseMessage::Download(premiere_variante(
+        &app,
+    ))));
+    capture(&app, 640.0, dossier, "fenetre-catalogue-telechargement")
+}
+
+fn premiere_variante(app: &App) -> String {
+    app.opened_system()
+        .and_then(|system| system.choices.first())
+        .map(|choice| choice.id.clone())
+        .unwrap_or_default()
 }
 
 #[test]
@@ -133,6 +144,32 @@ fn l_onglet_catalogue_montre_les_systemes_puis_leurs_variantes() {
     )));
     assert!(contient(&app, "Écrire cette image"));
     assert!(contient(&app, "Tous les systèmes"));
+    assert!(contient(&app, "Télécharger"));
+}
+
+#[test]
+fn un_telechargement_s_affiche_sur_la_page_du_systeme_puis_son_resultat() {
+    use bonk_ui::browse::BrowseMessage;
+    use bonk_ui::event::Event;
+    let mut app = avec_le_catalogue();
+    let _ = app.update(Message::Browse(BrowseMessage::OpenSystem(
+        "Ubuntu".to_owned(),
+    )));
+    let _ = app.update(Message::Browse(BrowseMessage::Download(premiere_variante(
+        &app,
+    ))));
+    assert!(contient(&app, "Début du téléchargement..."));
+    assert!(contient(&app, "Annuler"));
+    let _ = app.update(Message::Browse(BrowseMessage::DownloadEvent(
+        Event::Finished(Outcome::Downloaded {
+            path: "/c/ubuntu.iso".to_owned(),
+            bytes: 3_000_000_000,
+        }),
+    )));
+    assert!(contient(
+        &app,
+        "Image téléchargée et contrôlée, gardée dans la bibliothèque (3,0 Go)."
+    ));
 }
 
 fn captures_incognito(dossier: &std::path::Path) -> Capture {

@@ -283,7 +283,7 @@ where
         Some(Command::List(args)) => run_list(&args, &view, out, err, enumerate),
         Some(Command::Info(args)) => run_info(&args, &view, out, err, enumerate),
         Some(Command::Config { action }) => run_config(&action, env, out, err),
-        Some(Command::Catalog { action }) => catalog::run(&action, out, err),
+        Some(Command::Catalog { action }) => catalog::run(&action, deps, quiet, out, err),
         Some(Command::Cache { action }) => cache::run(&action, out, err),
         Some(Command::Schema(args)) => run_schema(&args, out, err),
         Some(Command::Completions { shell }) => run_completions(shell, out, err),

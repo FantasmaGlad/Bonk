@@ -6,8 +6,9 @@ mod write;
 
 pub(crate) use args::*;
 pub(crate) use output::{
-    finish, progress_mode, schema_error, schema_plan, schema_progress, schema_repair,
-    schema_verify, schema_write, schema_write_extract, sink, target_line,
+    end_progress_line, error_event, finish, print_json, progress_mode, schema_error, schema_plan,
+    schema_progress, schema_repair, schema_verify, schema_write, schema_write_extract, sink,
+    target_line,
 };
 pub(crate) use repair::run_repair;
 pub(crate) use verify::run_verify;

@@ -34,6 +34,11 @@ pub enum Outcome {
         message: String,
     },
     Vault(VaultDone),
+    /// A catalog image kept without being written.
+    Downloaded {
+        path: String,
+        bytes: u64,
+    },
 }
 
 /// What a `bonk vault` command did, read from its JSON result.
@@ -117,6 +122,10 @@ pub fn parse_line(line: &str) -> Option<Event> {
             total: value["bytes_total"].as_u64(),
             rate: value["bytes_per_second"].as_f64().unwrap_or(0.0),
         }),
+        "result" if value["download"].is_object() => Some(Event::Finished(Outcome::Downloaded {
+            path: value["download"]["path"].as_str()?.to_owned(),
+            bytes: value["download"]["bytes"].as_u64()?,
+        })),
         "result" if value["write"].is_null() => {
             vault_done(&value).map(|done| Event::Finished(Outcome::Vault(done)))
         }

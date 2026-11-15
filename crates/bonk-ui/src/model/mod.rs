@@ -40,6 +40,8 @@ pub enum Effect {
     ScrollMenu(f32),
     /// `bonk vault` arguments, run as `bonk write` is.
     RunVault(Vec<String>),
+    /// `bonk catalog download` arguments, run as `bonk write` is.
+    RunDownload(Vec<String>),
     PickVaultIso,
     /// `bonk cache list --json`, answered by [`crate::library::LibraryMessage::Listed`].
     ListKept,
@@ -126,6 +128,10 @@ pub enum Focus {
     CloseSystem,
     /// A writable variant on a system page, by catalog id.
     Variant(String),
+    /// Its download button.
+    Download(String),
+    /// Cancels the running download, or closes its result.
+    DownloadAction,
     /// Write or remove the kept image with this hash.
     KeptWrite(String),
     KeptRemove(String),

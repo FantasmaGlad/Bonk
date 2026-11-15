@@ -10,6 +10,8 @@ use clap::{Args, Subcommand, ValueEnum};
 use serde::Deserialize;
 
 use crate::errors::{Code, report};
+
+pub(crate) mod download;
 use bonk_ops::job::{self, JobError};
 
 /// Up to the format version directory.
@@ -19,6 +21,8 @@ const DEFAULT_URL: &str = "https://catalog.bonk-os.app/v2/";
 pub(crate) enum CatalogAction {
     /// List the images offered, newest version of each system first
     List(ListArgs),
+    /// Download an image into the cache and check its hash, without writing it
+    Download(download::DownloadArgs),
 }
 
 #[derive(Debug, Args)]
@@ -339,8 +343,20 @@ fn write_table(catalog: &Catalog, query: &Query, out: &mut dyn Write) -> io::Res
     Ok(())
 }
 
-pub(crate) fn run(action: &CatalogAction, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
-    let CatalogAction::List(args) = action;
+pub(crate) fn run(
+    action: &CatalogAction,
+    deps: &job::Deps<'_>,
+    quiet: bool,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> u8 {
+    match action {
+        CatalogAction::List(args) => run_list(args, out, err),
+        CatalogAction::Download(args) => download::run(args, deps, quiet, out, err),
+    }
+}
+
+fn run_list(args: &ListArgs, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let url = args.catalog_url.as_deref();
     let cache = args.cache_dir.as_deref();
     let query = Query {

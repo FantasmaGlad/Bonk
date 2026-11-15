@@ -19,6 +19,7 @@ use iced::{Subscription, Task, Theme};
 
 #[cfg(test)]
 use bonk_core::write::Phase;
+use bonk_ui::browse::BrowseMessage;
 use bonk_ui::library::{self, LibraryMessage};
 pub(crate) use bonk_ui::model::{
     Effect, Focus, Message, Model, Nav, REFRESH_EVERY, WRITE_DELAY, WriteState,
@@ -152,6 +153,11 @@ impl App {
             Effect::RunVault(args) => Task::run(transfer::spawn(&self.program(), &args), |event| {
                 Message::Vault(VaultMessage::Event(event))
             }),
+            Effect::RunDownload(args) => {
+                Task::run(transfer::spawn(&self.program(), &args), |event| {
+                    Message::Browse(BrowseMessage::DownloadEvent(event))
+                })
+            }
             Effect::PickVaultIso => Task::perform(pick_iso(self.lang), |path| {
                 Message::Vault(VaultMessage::Picked(path))
             }),
