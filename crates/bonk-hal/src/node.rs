@@ -16,11 +16,11 @@ mod imp {
     use std::fs::{self, OpenOptions};
     use std::io::{self, Seek, SeekFrom};
     use std::os::fd::OwnedFd;
-    use std::os::unix::fs::{FileExt, FileTypeExt, MetadataExt, OpenOptionsExt};
+    use std::os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt};
 
     use super::*;
     use crate::linux::LinuxRoots;
-    use bonk_core::{check_access, check_geometry};
+    use bonk_core::check_geometry;
 
     fn invalid(message: &str) -> BlockError {
         BlockError::Io(io::Error::new(
@@ -139,18 +139,12 @@ mod imp {
         }
 
         fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), BlockError> {
-            check_access(self.size, self.block_size, offset, buf.len())?;
-            self.file.read_exact_at(buf, offset)?;
-            Ok(())
+            crate::image::read_checked(&self.file, (self.size, self.block_size), offset, buf)
         }
 
         fn write_at(&mut self, offset: u64, data: &[u8]) -> Result<(), BlockError> {
-            if self.read_only {
-                return Err(BlockError::ReadOnly);
-            }
-            check_access(self.size, self.block_size, offset, data.len())?;
-            self.file.write_all_at(data, offset)?;
-            Ok(())
+            let geometry = (self.size, self.block_size);
+            crate::image::write_checked(&self.file, geometry, self.read_only, offset, data)
         }
 
         fn flush(&mut self) -> Result<(), BlockError> {
