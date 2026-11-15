@@ -11,55 +11,36 @@ use bonk_core::format::Filesystem;
 use bonk_core::{BlockDevice, BlockError};
 use serde_json::{Value, json};
 use windows_sys::Win32::Foundation::{
-    DUPLICATE_SAME_ACCESS, DuplicateHandle, ERROR_CANCELLED, ERROR_PIPE_CONNECTED, HANDLE,
-    INVALID_HANDLE_VALUE,
+    ERROR_CANCELLED, ERROR_PIPE_CONNECTED, HANDLE, INVALID_HANDLE_VALUE,
 };
 use windows_sys::Win32::Storage::FileSystem::{FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_DUPLEX};
 use windows_sys::Win32::System::Pipes::{
-    ConnectNamedPipe, CreateNamedPipeW, GetNamedPipeClientProcessId, GetNamedPipeServerProcessId,
-    PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
+    ConnectNamedPipe, CreateNamedPipeW, GetNamedPipeClientProcessId, PIPE_REJECT_REMOTE_CLIENTS,
+    PIPE_TYPE_BYTE, PIPE_WAIT,
 };
-use windows_sys::Win32::System::Threading::{
-    GetCurrentProcess, GetProcessId, INFINITE, OpenProcess, PROCESS_DUP_HANDLE, WaitForSingleObject,
-};
+use windows_sys::Win32::System::Threading::{GetProcessId, INFINITE, WaitForSingleObject};
 use windows_sys::Win32::UI::Shell::{
     SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, ShellExecuteExW,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE;
 
-use super::Platform;
-use super::windows::Windows;
-use super::windows_disk;
-use super::windows_query::wide;
 use crate::disk::Disk;
 use crate::image::Access;
-use crate::safety::{Eligibility, Exclusion, FilterOptions, evaluate};
+use crate::platform::windows_disk;
+use crate::platform::windows_query::wide;
 use crate::target::OpenTargetError;
-use crate::windows_facts::partition_numbers;
 
-/// Hidden subcommand of the binary, started elevated.
-const HELPER_COMMAND: &str = "elevated-helper";
-
-fn access_name(access: Access) -> &'static str {
-    match access {
-        Access::ReadOnly => "ro",
-        Access::ReadWrite => "rw",
-    }
-}
+use super::*;
 
 /// Client side: pipe to the helper, kept until exit.
-struct Session {
+pub(in crate::platform) struct Session {
     pipe: File,
     reader: BufReader<File>,
 }
 
-static SESSION: Mutex<Option<Session>> = Mutex::new(None);
+pub(in crate::platform) static SESSION: Mutex<Option<Session>> = Mutex::new(None);
 
-fn denied(message: impl Into<String>) -> io::Error {
-    io::Error::new(io::ErrorKind::PermissionDenied, message.into())
-}
-
-fn start() -> io::Result<Session> {
+pub(in crate::platform) fn start() -> io::Result<Session> {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_nanos());
@@ -86,7 +67,7 @@ fn start() -> io::Result<Session> {
     })
 }
 
-fn create_pipe(name: &str) -> io::Result<File> {
+pub(in crate::platform) fn create_pipe(name: &str) -> io::Result<File> {
     let wide_name = wide(name);
     // SAFETY: zero-terminated name; `FIRST_PIPE_INSTANCE` refuses a pipe someone else created.
     let pipe = unsafe {
@@ -109,7 +90,7 @@ fn create_pipe(name: &str) -> io::Result<File> {
 }
 
 /// The helper is this executable, started with the `runas` verb: the system asks for the rights.
-fn launch_helper(name: &str, client: u32) -> io::Result<HANDLE> {
+pub(in crate::platform) fn launch_helper(name: &str, client: u32) -> io::Result<HANDLE> {
     let exe = wide(&std::env::current_exe()?.to_string_lossy());
     let verb = wide("runas");
     let parameters = wide(&format!(
@@ -140,7 +121,7 @@ fn launch_helper(name: &str, client: u32) -> io::Result<HANDLE> {
 }
 
 /// Only the helper just started may hold the pipe.
-fn accept(pipe: &File, helper: u32) -> io::Result<()> {
+pub(in crate::platform) fn accept(pipe: &File, helper: u32) -> io::Result<()> {
     // SAFETY: valid pipe handle, not overlapped.
     if unsafe { ConnectNamedPipe(pipe.as_raw_handle(), null_mut()) } == 0 {
         let error = io::Error::last_os_error();
@@ -160,7 +141,7 @@ fn accept(pipe: &File, helper: u32) -> io::Result<()> {
 }
 
 /// Starts the helper if needed (one prompt per process), then sends the request.
-fn ask(request: &Value) -> io::Result<Value> {
+pub(in crate::platform) fn ask(request: &Value) -> io::Result<Value> {
     let mut slot = SESSION
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -183,12 +164,15 @@ fn ask(request: &Value) -> io::Result<Value> {
     }
 }
 
-pub(super) fn prepare(path: &Path, access: Access) -> Result<(), BlockError> {
+pub(in crate::platform) fn prepare(path: &Path, access: Access) -> Result<(), BlockError> {
     ask(&json!({"op": "check", "path": path.to_string_lossy(), "access": access_name(access)}))?;
     Ok(())
 }
 
-pub(super) fn open(path: &Path, access: Access) -> Result<Box<dyn BlockDevice>, BlockError> {
+pub(in crate::platform) fn open(
+    path: &Path,
+    access: Access,
+) -> Result<Box<dyn BlockDevice>, BlockError> {
     let reply =
         ask(&json!({"op": "open", "path": path.to_string_lossy(), "access": access_name(access)}))?;
     let handle = reply["handle"]
@@ -200,7 +184,7 @@ pub(super) fn open(path: &Path, access: Access) -> Result<Box<dyn BlockDevice>, 
     Ok(Box::new(windows_disk::from_file(file, access)?))
 }
 
-pub(super) fn unmount(disk: &Disk) -> Result<Vec<String>, OpenTargetError> {
+pub(in crate::platform) fn unmount(disk: &Disk) -> Result<Vec<String>, OpenTargetError> {
     let reply = ask(&json!({"op": "unmount", "path": disk.path}))
         .map_err(|e| OpenTargetError::Unmount(e.to_string()))?;
     Ok(reply["unmounted"]
@@ -214,12 +198,12 @@ pub(super) fn unmount(disk: &Disk) -> Result<Vec<String>, OpenTargetError> {
         .unwrap_or_default())
 }
 
-pub(super) fn rescan(path: &Path) -> Result<(), BlockError> {
+pub(in crate::platform) fn rescan(path: &Path) -> Result<(), BlockError> {
     ask(&json!({"op": "rescan", "path": path.to_string_lossy()}))?;
     Ok(())
 }
 
-pub(super) fn format(
+pub(in crate::platform) fn format(
     partition: &Path,
     fs: Filesystem,
     label: Option<&str>,
@@ -227,132 +211,5 @@ pub(super) fn format(
     ask(
         &json!({"op": "format", "path": partition.to_string_lossy(), "fs": fs.name(), "label": label}),
     )?;
-    Ok(())
-}
-
-/// With the widest options: the client's request is not trusted, but it may have allowed an internal or
-/// virtual disk. The system disk and its kind stay refused regardless.
-///
-/// `fresh_table`: Bonk just wrote the table, and Windows may have given the new partition a letter. That
-/// mount says nothing about the disk.
-fn check_allowed(path: &str, fresh_table: bool) -> Result<(), String> {
-    let disks = Windows.enumerate().map_err(|e| e.to_string())?;
-    let disk = disks
-        .iter()
-        .find(|d| d.path.eq_ignore_ascii_case(path))
-        .ok_or_else(|| format!("disk not found: '{path}'"))?;
-    let options = FilterOptions {
-        show_internal: true,
-        allow_virtual: true,
-    };
-    let refused = match evaluate(disk, options) {
-        Eligibility::Excluded { reasons } => reasons
-            .iter()
-            .any(|r| !(fresh_table && matches!(r, Exclusion::MountedOutsideUserPaths { .. }))),
-        _ => false,
-    };
-    if refused {
-        return Err(format!("{path}: refused by the safety filter"));
-    }
-    Ok(())
-}
-
-/// The handle value only means something in the client.
-fn hand_over(file: &File, client: u32) -> io::Result<usize> {
-    // SAFETY: plain process id.
-    let target = unsafe { OpenProcess(PROCESS_DUP_HANDLE, 0, client) };
-    if target.is_null() {
-        return Err(io::Error::last_os_error());
-    }
-    // SAFETY: `target` was just opened and is closed only here.
-    let target = unsafe { OwnedHandle::from_raw_handle(target) };
-    let mut copy: HANDLE = null_mut();
-    // SAFETY: valid handles; the copy belongs to the client.
-    let done = unsafe {
-        DuplicateHandle(
-            GetCurrentProcess(),
-            file.as_raw_handle(),
-            target.as_raw_handle(),
-            &raw mut copy,
-            0,
-            0,
-            DUPLICATE_SAME_ACCESS,
-        )
-    };
-    if done == 0 {
-        return Err(io::Error::last_os_error());
-    }
-    Ok(copy as usize)
-}
-
-fn respond(request: &Value, client: u32) -> Result<Value, String> {
-    let path = request["path"].as_str().ok_or("no path")?;
-    let access = if request["access"] == "ro" {
-        Access::ReadOnly
-    } else {
-        Access::ReadWrite
-    };
-    let text = |e: &dyn std::fmt::Display| e.to_string();
-    match request["op"].as_str() {
-        Some("check") => {
-            check_allowed(path, false)?;
-            windows_disk::prepare(Path::new(path), access).map_err(|e| text(&e))?;
-            Ok(json!({}))
-        }
-        Some("unmount") => {
-            check_allowed(path, false)?;
-            let unmounted = windows_disk::unmount(path).map_err(|e| text(&e))?;
-            Ok(json!({ "unmounted": unmounted }))
-        }
-        Some("open") => {
-            check_allowed(path, false)?;
-            let file = windows_disk::open_file(Path::new(path), access).map_err(|e| text(&e))?;
-            let handle = hand_over(&file, client).map_err(|e| text(&e))?;
-            Ok(json!({ "handle": handle }))
-        }
-        Some("rescan") => {
-            check_allowed(path, true)?;
-            windows_disk::rescan(Path::new(path)).map_err(|e| text(&e))?;
-            Ok(json!({}))
-        }
-        Some("format") => {
-            let (disk, _) = partition_numbers(path).ok_or("not a partition")?;
-            check_allowed(&format!(r"\\.\PhysicalDrive{disk}"), true)?;
-            let fs = Filesystem::ALL
-                .into_iter()
-                .find(|fs| request["fs"] == fs.name())
-                .ok_or("unknown filesystem")?;
-            windows_disk::format_partition(Path::new(path), fs, request["label"].as_str())
-                .map_err(|e| text(&e))?;
-            Ok(json!({}))
-        }
-        Some(other) => Err(format!("unknown request: {other}")),
-        None => Err("no request".to_owned()),
-    }
-}
-
-/// When the pipe closes the process exits and its locks go.
-pub(super) fn serve(client: u32, pipe: &str) -> Result<(), String> {
-    let text = |e: io::Error| e.to_string();
-    let mut writer = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(pipe)
-        .map_err(text)?;
-    let mut server = 0u32;
-    // SAFETY: valid pipe, valid output.
-    let known = unsafe { GetNamedPipeServerProcessId(writer.as_raw_handle(), &raw mut server) };
-    if known == 0 || server != client {
-        return Err("the pipe does not belong to the announced client".to_owned());
-    }
-    let reader = BufReader::new(writer.try_clone().map_err(text)?);
-    for line in reader.lines() {
-        let line = line.map_err(text)?;
-        let reply = serde_json::from_str::<Value>(&line)
-            .map_err(|e| e.to_string())
-            .and_then(|request| respond(&request, client))
-            .unwrap_or_else(|error| json!({ "error": error }));
-        writeln!(writer, "{reply}").map_err(text)?;
-    }
     Ok(())
 }

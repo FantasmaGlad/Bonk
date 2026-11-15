@@ -1,14 +1,13 @@
 use std::fs::{File, OpenOptions};
 use std::io::{self, IoSliceMut};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
-use std::os::unix::fs::FileExt;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use bonk_core::{BlockDevice, BlockError, check_access, check_geometry};
+use bonk_core::{BlockDevice, BlockError, check_geometry};
 
 use super::Elevation;
 use crate::disk::Disk;
@@ -32,18 +31,6 @@ fn raw_path(path: &Path) -> Result<String, BlockError> {
             "the path is not a whole disk",
         ))
     })
-}
-
-fn has_access(raw: &str, access: Access) -> bool {
-    let Ok(name) = std::ffi::CString::new(raw) else {
-        return false;
-    };
-    let mode = match access {
-        Access::ReadOnly => libc::R_OK,
-        Access::ReadWrite => libc::R_OK | libc::W_OK,
-    };
-    // SAFETY: `name` is a valid C string for the whole call.
-    unsafe { libc::access(name.as_ptr(), mode) == 0 }
 }
 
 fn receive_fd(socket: &UnixStream) -> io::Result<OwnedFd> {
@@ -125,7 +112,7 @@ pub(super) fn prepare(
     cancelled: &dyn Fn() -> bool,
 ) -> Result<(), BlockError> {
     let raw = raw_path(path)?;
-    if has_access(&raw, access) {
+    if crate::image::has_access(Path::new(&raw), access) {
         return Ok(());
     }
     if elevation == Elevation::Never {
@@ -164,7 +151,7 @@ pub(super) fn open(
         .map(|(_, _, fd)| File::from(fd));
     let file = match granted {
         Some(file) => file,
-        None if has_access(&raw, access) => OpenOptions::new()
+        None if crate::image::has_access(Path::new(&raw), access) => OpenOptions::new()
             .read(true)
             .write(access == Access::ReadWrite)
             .open(&raw)?,
@@ -207,18 +194,12 @@ impl BlockDevice for MacDisk {
     }
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), BlockError> {
-        check_access(self.size, self.block_size, offset, buf.len())?;
-        self.file.read_exact_at(buf, offset)?;
-        Ok(())
+        crate::image::read_checked(&self.file, (self.size, self.block_size), offset, buf)
     }
 
     fn write_at(&mut self, offset: u64, data: &[u8]) -> Result<(), BlockError> {
-        if self.read_only {
-            return Err(BlockError::ReadOnly);
-        }
-        check_access(self.size, self.block_size, offset, data.len())?;
-        self.file.write_all_at(data, offset)?;
-        Ok(())
+        let geometry = (self.size, self.block_size);
+        crate::image::write_checked(&self.file, geometry, self.read_only, offset, data)
     }
 
     fn flush(&mut self) -> Result<(), BlockError> {

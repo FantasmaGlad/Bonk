@@ -40,7 +40,7 @@ impl Platform for Linux {
         elevation: Elevation,
         cancelled: &dyn Fn() -> bool,
     ) -> Result<(), BlockError> {
-        if has_access(path, access) {
+        if crate::image::has_access(path, access) {
             return Ok(());
         }
         if elevation == Elevation::Never {
@@ -201,21 +201,6 @@ fn denied(path: &Path) -> BlockError {
             path.display()
         ),
     ))
-}
-
-/// `access(2)` does not touch the disk.
-fn has_access(path: &Path, access: Access) -> bool {
-    use std::os::unix::ffi::OsStrExt;
-
-    let Ok(name) = std::ffi::CString::new(path.as_os_str().as_bytes()) else {
-        return false;
-    };
-    let mode = match access {
-        Access::ReadOnly => libc::R_OK,
-        Access::ReadWrite => libc::R_OK | libc::W_OK,
-    };
-    // SAFETY: `name` is a valid C string for the whole call.
-    unsafe { libc::access(name.as_ptr(), mode) == 0 }
 }
 
 fn unmount_with(

@@ -10,6 +10,22 @@ pub enum Access {
     ReadWrite,
 }
 
+/// `access(2)` does not touch the disk.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub(crate) fn has_access(path: &Path, access: Access) -> bool {
+    use std::os::unix::ffi::OsStrExt;
+
+    let Ok(name) = std::ffi::CString::new(path.as_os_str().as_bytes()) else {
+        return false;
+    };
+    let mode = match access {
+        Access::ReadOnly => libc::R_OK,
+        Access::ReadWrite => libc::R_OK | libc::W_OK,
+    };
+    // SAFETY: `name` is a valid C string for the whole call.
+    unsafe { libc::access(name.as_ptr(), mode) == 0 }
+}
+
 /// Same file whatever the path: equal canonical paths or, on Unix, same device and inode (hard link). A
 /// missing file is never the same as another.
 #[must_use]
@@ -96,18 +112,17 @@ impl BlockDevice for FileDevice {
     }
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), BlockError> {
-        check_access(self.size, self.block_size, offset, buf.len())?;
-        read_exact_at(&self.file, buf, offset)?;
-        Ok(())
+        read_checked(&self.file, (self.size, self.block_size), offset, buf)
     }
 
     fn write_at(&mut self, offset: u64, data: &[u8]) -> Result<(), BlockError> {
-        if self.read_only {
-            return Err(BlockError::ReadOnly);
-        }
-        check_access(self.size, self.block_size, offset, data.len())?;
-        write_all_at(&self.file, data, offset)?;
-        Ok(())
+        write_checked(
+            &self.file,
+            (self.size, self.block_size),
+            self.read_only,
+            offset,
+            data,
+        )
     }
 
     fn flush(&mut self) -> Result<(), BlockError> {
@@ -116,6 +131,33 @@ impl BlockDevice for FileDevice {
         }
         Ok(())
     }
+}
+
+/// `geometry`: size and block size of the device, against which the access is checked first.
+pub(crate) fn read_checked(
+    file: &File,
+    geometry: (u64, u32),
+    offset: u64,
+    buf: &mut [u8],
+) -> Result<(), BlockError> {
+    check_access(geometry.0, geometry.1, offset, buf.len())?;
+    read_exact_at(file, buf, offset)?;
+    Ok(())
+}
+
+pub(crate) fn write_checked(
+    file: &File,
+    geometry: (u64, u32),
+    read_only: bool,
+    offset: u64,
+    data: &[u8],
+) -> Result<(), BlockError> {
+    if read_only {
+        return Err(BlockError::ReadOnly);
+    }
+    check_access(geometry.0, geometry.1, offset, data.len())?;
+    write_all_at(file, data, offset)?;
+    Ok(())
 }
 
 // Positional access: no shared cursor, so no state to resync between calls.
