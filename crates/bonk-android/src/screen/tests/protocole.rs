@@ -34,6 +34,8 @@ fn debian_catalog() -> CatalogState {
                     url: "https://cdimage.debian.org/x.iso".to_owned(),
                     sha256: "ab".repeat(32),
                 },
+                desktop: None,
+                media: None,
             },
             Choice {
                 id: "debian-13-dvd-x86_64".to_owned(),
@@ -42,6 +44,8 @@ fn debian_catalog() -> CatalogState {
                 end_of_life: false,
                 note: Some("évaluation".to_owned()),
                 source: ChoiceSource::OfficialPage("https://www.debian.org/".to_owned()),
+                desktop: None,
+                media: None,
             },
         ],
     }])

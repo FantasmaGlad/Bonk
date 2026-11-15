@@ -8,6 +8,7 @@ pub enum Screen {
     Main,
     Settings,
     Library,
+    Catalog,
 }
 
 /// `System` follows the machine at each start.
@@ -182,6 +183,9 @@ impl Model {
         }];
         if on {
             self.use_tor = false;
+            if self.screen == Screen::Catalog {
+                self.screen = Screen::Main;
+            }
             self.catalog = crate::catalog::CatalogState::NotLoaded;
             self.menu_open = false;
             self.menu_filter = crate::catalog::MenuFilter::default();

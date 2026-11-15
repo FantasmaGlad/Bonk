@@ -1,3 +1,4 @@
+pub mod browse;
 pub mod catalog;
 pub mod command;
 pub mod disk;

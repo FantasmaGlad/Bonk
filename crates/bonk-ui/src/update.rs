@@ -27,6 +27,7 @@ impl Model {
             Message::Settings(message) => self.apply_settings(message),
             Message::Vault(message) => self.apply_vault(message),
             Message::Library(message) => self.apply_library(message),
+            Message::Browse(message) => self.apply_browse(message),
             message @ (Message::ToggleInternal(_)
             | Message::ToggleVirtual(_)
             | Message::ToggleAll(_)

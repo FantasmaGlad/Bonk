@@ -65,6 +65,7 @@ pub enum Message {
     TorDetected(Option<String>),
     ToggleTor(bool),
     OpenTorProject,
+    Browse(crate::browse::BrowseMessage),
     ToggleMbr(bool),
     BrowseImage,
     /// `None`: closed without a choice.
@@ -111,6 +112,15 @@ pub enum Focus {
     CloseSettings,
     Library,
     CloseLibrary,
+    /// The catalog tab button, its back button, its search field.
+    Catalog,
+    CloseCatalog,
+    CatalogSearch,
+    /// A system card of the catalog tab, by name.
+    System(String),
+    CloseSystem,
+    /// A writable variant on a system page, by catalog id.
+    Variant(String),
     /// Write or remove the kept image with this hash.
     KeptWrite(String),
     KeptRemove(String),
@@ -204,6 +214,7 @@ pub struct Model {
     pub requested: Option<String>,
     pub vault: crate::vault::VaultState,
     pub library: crate::library::LibraryState,
+    pub browse: crate::browse::BrowseState,
     pub screen: crate::settings::Screen,
     pub lang_choice: crate::settings::LangChoice,
     pub theme_choice: crate::settings::ThemeChoice,
@@ -263,6 +274,7 @@ pub fn ui_event(message: &Message) -> Option<(&'static str, String)> {
         Message::Vault(message) => return vault_event(message),
         Message::Settings(message) => return settings_event(*message),
         Message::Library(message) => return library_event(message),
+        Message::Browse(message) => ("catalog_tab", format!("{message:?}")),
         Message::Tick
         | Message::Clock
         | Message::Loaded(_)

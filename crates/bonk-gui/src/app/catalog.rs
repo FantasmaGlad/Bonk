@@ -46,12 +46,20 @@ pub(crate) fn run_json(program: &std::path::Path, args: &[&str]) -> Result<Vec<u
 pub(super) const MENU: &str = "menu-images";
 
 fn logo(icon: Option<&PathBuf>) -> Element<'_, Message> {
+    sized_logo(icon, 24.0)
+}
+
+/// A system without a logo keeps the same width: names stay aligned.
+pub(crate) fn sized_logo(icon: Option<&PathBuf>, side: f32) -> Element<'_, Message> {
     match icon {
         Some(path) => image(image::Handle::from_path(path))
-            .width(Length::Fixed(24.0))
-            .height(Length::Fixed(24.0))
+            .width(Length::Fixed(side))
+            .height(Length::Fixed(side))
             .into(),
-        None => container(text("")).width(Length::Fixed(24.0)).into(),
+        None => container(text(""))
+            .width(Length::Fixed(side))
+            .height(Length::Fixed(side))
+            .into(),
     }
 }
 

@@ -99,7 +99,40 @@ fn captures_facultatives() -> Result<(), Box<dyn std::error::Error>> {
     captures_ecriture(&dossier)?;
     captures_coffre(&dossier)?;
     captures_incognito(&dossier)?;
+    captures_catalogue(&dossier)?;
     capture(&avec_une_image(), 640.0, &dossier, "fenetre-bibliotheque")
+}
+
+fn avec_le_catalogue() -> App {
+    let mut app = loaded(sample());
+    app.catalog = bonk_ui::catalog::CatalogState::Ready(super::menu::versions_du_catalogue());
+    let _ = app.update(Message::Browse(bonk_ui::browse::BrowseMessage::Open));
+    app
+}
+
+fn captures_catalogue(dossier: &std::path::Path) -> Capture {
+    use bonk_ui::browse::BrowseMessage;
+    let mut app = avec_le_catalogue();
+    capture(&app, 640.0, dossier, "fenetre-catalogue")?;
+    let _ = app.update(Message::Browse(BrowseMessage::OpenSystem(
+        "Ubuntu".to_owned(),
+    )));
+    capture(&app, 640.0, dossier, "fenetre-catalogue-systeme")
+}
+
+#[test]
+fn l_onglet_catalogue_montre_les_systemes_puis_leurs_variantes() {
+    use bonk_ui::browse::BrowseMessage;
+    let mut app = avec_le_catalogue();
+    assert!(contient(&app, "Ubuntu"));
+    let _ = app.update(Message::Browse(BrowseMessage::Search("zzz".to_owned())));
+    assert!(contient(&app, "Aucun système ne correspond."));
+    let _ = app.update(Message::Browse(BrowseMessage::Search(String::new())));
+    let _ = app.update(Message::Browse(BrowseMessage::OpenSystem(
+        "Ubuntu".to_owned(),
+    )));
+    assert!(contient(&app, "Écrire cette image"));
+    assert!(contient(&app, "Tous les systèmes"));
 }
 
 fn captures_incognito(dossier: &std::path::Path) -> Capture {

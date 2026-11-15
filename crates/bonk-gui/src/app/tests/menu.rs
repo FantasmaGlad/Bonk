@@ -17,6 +17,8 @@ pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
                     url: "https://u/26.iso".to_owned(),
                     sha256: "a".repeat(64),
                 },
+                desktop: None,
+                media: None,
             },
             catalog::Choice {
                 id: "ubuntu-24.04-desktop-x86_64".to_owned(),
@@ -28,6 +30,8 @@ pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
                     url: "https://u/24.iso".to_owned(),
                     sha256: "b".repeat(64),
                 },
+                desktop: None,
+                media: None,
             },
             catalog::Choice {
                 id: "ubuntu-11".to_owned(),
@@ -36,6 +40,8 @@ pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
                 end_of_life: false,
                 note: None,
                 source: catalog::ChoiceSource::OfficialPage("https://p/".to_owned()),
+                desktop: None,
+                media: None,
             },
         ],
     }]

@@ -1,6 +1,7 @@
 use iced::widget::{Row, button, column, text};
 use iced::{Element, Fill};
 
+use bonk_ui::browse::BrowseMessage;
 use bonk_ui::library::LibraryMessage;
 use bonk_ui::settings::SettingsMessage;
 
@@ -22,6 +23,7 @@ impl App {
         Row::new()
             .push(title)
             .extend(self.incognito_control())
+            .extend(self.catalog_button())
             .push(ring(
                 button(text(lang.pick("Library", "Bibliothèque")).size(14))
                     .on_press(Message::Library(LibraryMessage::Open))
@@ -39,5 +41,18 @@ impl App {
             .spacing(8)
             .align_y(iced::Center)
             .into()
+    }
+
+    /// Hidden offline: the catalog is never read there.
+    fn catalog_button(&self) -> Option<Element<'_, Message>> {
+        (!self.offline).then(|| {
+            ring(
+                button(text(self.lang.pick("Catalog", "Catalogue")).size(14))
+                    .on_press(Message::Browse(BrowseMessage::Open))
+                    .padding([6, 14])
+                    .style(theme::card_button(false)),
+                self.has_focus(Focus::Catalog),
+            )
+        })
     }
 }
