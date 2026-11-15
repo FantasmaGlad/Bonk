@@ -53,6 +53,11 @@ internal fun Screen(
         SettingsPage(settings, send)
         return
     }
+    val browse = state.browse
+    if (browse != null) {
+        CatalogPage(browse, send)
+        return
+    }
     Column(
         Modifier.safeDrawingPadding()
             .padding(Tokens.SPACE_PAGE.dp)
@@ -62,6 +67,7 @@ internal fun Screen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("BONK", fontSize = Tokens.TEXT_TITLE.sp, modifier = Modifier.weight(1f))
             state.incognito?.let { IncognitoButton(it, send) }
+            state.catalogButton?.let { label -> Secondary(label) { send(CatalogAction("open")) } }
             Secondary(state.settingsButton) { send(SettingsAction("open")) }
         }
         Small(state.status)
@@ -149,7 +155,7 @@ private fun DiskCard(disk: DiskView, send: (ToRust) -> Unit) {
 }
 
 @Composable
-private fun Picker(selected: String, options: List<String>, all: String, filter: (String?) -> ToRust, send: (ToRust) -> Unit) {
+internal fun Picker(selected: String, options: List<String>, all: String, filter: (String?) -> ToRust, send: (ToRust) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         Secondary(selected.ifEmpty { all }) { open = true }

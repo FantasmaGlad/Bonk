@@ -1,7 +1,6 @@
 use std::fs::File;
 use std::os::fd::{FromRawFd, RawFd};
 
-use bonk_catalog::manifest::{self, CatalogReport, FamilyEntry, TRUSTED_KEYS};
 use bonk_core::msc::{BulkTransport, UsbDisk};
 use bonk_core::{BlockDevice, BlockError, partition};
 use bonk_hal::usbfs::UsbfsTransport;
@@ -10,7 +9,7 @@ use jni::objects::{JByteArray, JClass, JString};
 use jni::sys::{jboolean, jint, jlong};
 use jni::{Env, EnvUnowned};
 
-use crate::{bench, screen, vault, writer};
+use crate::{bench, catalog, screen, vault, writer};
 
 /// Duplicates the descriptor: the app's own stays with the app and closes with its connection.
 fn transport(fd: RawFd, descriptors: &[u8]) -> Result<UsbfsTransport, String> {
@@ -143,58 +142,6 @@ pub extern "system" fn Java_app_bonkos_bonk_Native_start<'caller>(
     .resolve::<jni::errors::ThrowRuntimeExAndDefault>()
 }
 
-/// Checks the signature of the catalog Kotlin downloaded (system HTTPS) and hands it to the screen. Without
-/// network, `manifest::load` falls back to the last verified copy.
-fn load_catalog(dir: &str, json: Vec<u8>, signature: Vec<u8>) -> Result<(), String> {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |elapsed| elapsed.as_secs());
-    let fetch = move |address: &str| -> Result<Vec<u8>, String> {
-        let bytes = if address.ends_with(".sig") {
-            &signature
-        } else {
-            &json
-        };
-        if bytes.is_empty() {
-            Err("no network".to_owned())
-        } else {
-            Ok(bytes.clone())
-        }
-    };
-    let base = "https://catalog.bonk-os.app/v2/";
-    let loaded = manifest::load(base, std::path::Path::new(dir), now, &TRUSTED_KEYS, &fetch)
-        .map_err(|error| error.to_string())?;
-    let mut catalog = loaded.catalog;
-    vault::set_grub(base, catalog.grub.take());
-    let mut images = catalog.images;
-    images.sort_by(|a, b| {
-        manifest::version_numbers(&b.version).cmp(&manifest::version_numbers(&a.version))
-    });
-    let report = CatalogReport {
-        schema_version: catalog.schema_version,
-        sequence: catalog.sequence,
-        expires_unix: catalog.expires_unix,
-        saved_copy: loaded.saved_copy,
-        families: catalog
-            .families
-            .into_iter()
-            .map(|family| FamilyEntry {
-                id: family.id,
-                name: family.name,
-                category: family.category,
-                uses: family.uses,
-                icon_path: None,
-            })
-            .collect(),
-        images,
-        taxonomy: catalog.taxonomy,
-    };
-    let shelf = bonk_ui::catalog::shelf(&report);
-    let mut model = screen::lock(&screen::MODEL);
-    let _ = model.update(bonk_ui::model::Message::CatalogLoaded(Ok(shelf)));
-    Ok(())
-}
-
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_app_bonkos_bonk_Native_loadCatalog<'caller>(
     mut env: EnvUnowned<'caller>,
@@ -207,7 +154,41 @@ pub extern "system" fn Java_app_bonkos_bonk_Native_loadCatalog<'caller>(
         let dir = text_of(env, &dir)?;
         let json = env.convert_byte_array(&json)?;
         let signature = env.convert_byte_array(&signature)?;
-        let result = load_catalog(&dir, json, signature).map(|()| serde_json::json!({"ok": true}));
+        let result = catalog::load(&dir, json, signature).map(|()| serde_json::json!({"ok": true}));
+        answer(env, result)
+    })
+    .resolve::<jni::errors::ThrowRuntimeExAndDefault>()
+}
+
+/// The logos still to download, as `[{"url", "sha256"}]`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_app_bonkos_bonk_Native_missingIcons<'caller>(
+    mut env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    dir: JString<'caller>,
+) -> JString<'caller> {
+    env.with_env(|env| -> Result<_, Error> {
+        let dir = text_of(env, &dir)?;
+        env.new_string(catalog::missing_icons(&dir).to_string())
+    })
+    .resolve::<jni::errors::ThrowRuntimeExAndDefault>()
+}
+
+/// Kept and shown only if the bytes match the signed hash.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_app_bonkos_bonk_Native_storeIcon<'caller>(
+    mut env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    dir: JString<'caller>,
+    sha256: JString<'caller>,
+    bytes: JByteArray<'caller>,
+) -> JString<'caller> {
+    env.with_env(|env| -> Result<_, Error> {
+        let dir = text_of(env, &dir)?;
+        let sha256 = text_of(env, &sha256)?;
+        let bytes = env.convert_byte_array(&bytes)?;
+        let result =
+            catalog::store_icon(&dir, &sha256, &bytes).map(|()| serde_json::json!({"ok": true}));
         answer(env, result)
     })
     .resolve::<jni::errors::ThrowRuntimeExAndDefault>()

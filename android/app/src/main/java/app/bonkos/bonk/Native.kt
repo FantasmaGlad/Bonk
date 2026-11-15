@@ -13,6 +13,12 @@ object Native {
     /** Checks the signature; without bytes, falls back to the last verified copy. */
     external fun loadCatalog(directory: String, catalog: ByteArray, signature: ByteArray): String
 
+    /** The logos of the loaded catalog still missing from `directory`, as `[{"url", "sha256"}]`. */
+    external fun missingIcons(directory: String): String
+
+    /** Kept only if `bytes` match the signed hash. */
+    external fun storeIcon(directory: String, sha256: String, bytes: ByteArray): String
+
     /** Blocks. Rust refuses if `device` and `serial` are not the chosen disk's. */
     external fun write(
         fd: Int,

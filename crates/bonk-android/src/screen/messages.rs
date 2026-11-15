@@ -45,6 +45,9 @@ pub(super) fn message_of(input: &Value, model: &Model) -> Option<Message> {
         "show_all" => Message::ToggleAll(flag()),
         "settings" => crate::settings::message_of(input)?,
         "incognito" | "tor_project" => crate::incognito::message_of(input, model)?,
+        "catalog" | "catalog_search" | "catalog_system" | "catalog_write" | "catalog_filter" => {
+            crate::browse::message_of(input, model)?
+        }
         "menu" => Message::ToggleMenu,
         "category" => Message::MenuCategory(
             text_of("value").and_then(|shown| model.terms.uses().id_of(&shown, model.lang)),

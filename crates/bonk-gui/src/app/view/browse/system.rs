@@ -1,8 +1,7 @@
 use iced::widget::{Column, button, column, row, scrollable, text};
 use iced::{Element, Fill};
 
-use bonk_hal::Lang;
-use bonk_ui::browse::{BrowseMessage, desktop_label, media_label};
+use bonk_ui::browse::{BrowseMessage, variant_facts};
 use bonk_ui::catalog::{Choice, ChoiceSource, System, official_page_note};
 
 use crate::app::catalog::sized_logo;
@@ -43,7 +42,9 @@ impl App {
         let lang = self.lang;
         let about = column![
             text(format!("{} {}", choice.name, choice.title(lang))).size(14),
-            text(facts(choice, lang)).size(12).color(theme::muted()),
+            text(variant_facts(choice, lang))
+                .size(12)
+                .color(theme::muted()),
         ]
         .spacing(2)
         .width(Fill);
@@ -69,17 +70,4 @@ impl App {
         };
         super::super::boxed(row![about, action].spacing(12).align_y(iced::Center).into())
     }
-}
-
-/// Desktop, medium and the catalog note, on one line.
-fn facts(choice: &Choice, lang: Lang) -> String {
-    [
-        choice.desktop.as_deref().map(|id| desktop_label(id, lang)),
-        choice.media.as_deref().map(|id| media_label(id, lang)),
-        choice.note.clone(),
-    ]
-    .into_iter()
-    .flatten()
-    .collect::<Vec<_>>()
-    .join(" · ")
 }

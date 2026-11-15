@@ -5,6 +5,10 @@
 
 pub mod bench;
 #[cfg(any(target_os = "linux", target_os = "android"))]
+mod browse;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+mod catalog;
+#[cfg(any(target_os = "linux", target_os = "android"))]
 mod incognito;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 mod jni_api;

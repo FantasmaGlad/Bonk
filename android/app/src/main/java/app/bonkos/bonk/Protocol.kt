@@ -114,6 +114,23 @@ data object ToggleIncognito : ToRust
 @Serializable @SerialName("tor_project")
 data object OpenTorProject : ToRust
 
+/** Catalog tab: `open`, `close`, `close_system`. */
+@Serializable @SerialName("catalog")
+data class CatalogAction(val action: String) : ToRust
+
+@Serializable @SerialName("catalog_search")
+data class CatalogSearch(val value: String) : ToRust
+
+/** A filter by the label shown; without a value the filter is removed. */
+@Serializable @SerialName("catalog_filter")
+data class CatalogFilter(val kind: String, val value: String? = null) : ToRust
+
+@Serializable @SerialName("catalog_system")
+data class CatalogSystem(val name: String) : ToRust
+
+@Serializable @SerialName("catalog_write")
+data class CatalogWrite(val id: String) : ToRust
+
 /** A key as the app sees it: USB device, serial and what the probe read. */
 @Serializable
 data class Drive(
@@ -195,6 +212,10 @@ data class ScreenState(
     val settings: SettingsView? = null,
     /** Absent offline. */
     val incognito: IncognitoView? = null,
+    /** Absent offline. */
+    @SerialName("catalog_button") val catalogButton: String? = null,
+    /** The catalog tab; absent on the other pages. */
+    val browse: BrowseView? = null,
     /** Language chosen in Bonk (`fr`, `en`): the app reads its own texts in it. */
     val lang: String = "en",
     val status: String = "",
@@ -207,6 +228,50 @@ data class ScreenState(
     val vault: VaultView? = null,
     val running: Boolean = false,
 )
+
+@Serializable
+data class BrowseView(
+    val title: String,
+    val back: String,
+    /** While the catalog is read, or why it could not be. */
+    val waiting: String? = null,
+    val grid: BrowseGrid? = null,
+    val system: SystemView? = null,
+)
+
+@Serializable
+data class BrowseGrid(
+    val search: String,
+    @SerialName("search_hint") val searchHint: String,
+    val filters: List<FilterView>,
+    val cards: List<CardView>,
+    val none: String,
+)
+
+/** `options` and `chosen` are labels; `kind` names the filter for Rust. */
+@Serializable
+data class FilterView(val kind: String, val all: String, val options: List<String>, val chosen: String? = null)
+
+/** `icon`: a logo checked by Rust against its signed hash, in the app's files. */
+@Serializable
+data class CardView(val name: String, val count: String, val icon: String? = null)
+
+@Serializable
+data class SystemView(
+    val name: String,
+    val icon: String? = null,
+    val back: String,
+    val write: String,
+    val variants: List<VariantView>,
+)
+
+/** `id` only for an image Bonk can write; otherwise `note` says why not. */
+@Serializable
+data class VariantView(val title: String, val facts: String, val id: String? = null, val note: String? = null)
+
+/** A logo to download; Rust keeps it only if its bytes match `sha256`. */
+@Serializable
+data class IconDownload(val url: String, val sha256: String)
 
 @Serializable
 data class IncognitoView(val available: Boolean, val on: Boolean, val label: String, val link: String)
@@ -350,6 +415,8 @@ object Protocol {
     fun probe(text: String): Probe = fromRust.decodeFromString(Probe.serializer(), text)
 
     fun outcome(text: String): Outcome = fromRust.decodeFromString(Outcome.serializer(), text)
+
+    fun icons(text: String): List<IconDownload> = fromRust.decodeFromString(text)
 
     /** A write or a vault action, handed to the service. */
     fun encodeTask(task: Effect): String = fromRust.encodeToString(Effect.serializer(), task)
