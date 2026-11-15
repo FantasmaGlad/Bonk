@@ -47,6 +47,8 @@ pub(super) fn effects_out(
             // No download cache on Android: the library is a desktop page.
             Effect::ListKept | Effect::RemoveKept(_) => {}
             Effect::OpenLink(url) => out.push(json!({"do": "open_link", "url": url})),
+            // Never asked: the phone offers no download-only button yet.
+            Effect::RunDownload(_) => {}
             Effect::Copy(_) | Effect::ScrollList(_) | Effect::ScrollMenu(_) => {}
         }
     }

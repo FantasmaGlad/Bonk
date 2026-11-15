@@ -28,7 +28,7 @@ pub(crate) struct ErrorEvent<'a> {
     message: &'a str,
 }
 
-pub(super) fn error_event(error: &JobError, out: &mut dyn Write) {
+pub(crate) fn error_event(error: &JobError, out: &mut dyn Write) {
     let event = ErrorEvent {
         schema_version: job::SCHEMA_VERSION,
         event: "error",
@@ -134,13 +134,13 @@ fn tty_progress(p: &Progress, err: &mut dyn Write) {
     let _ = err.flush();
 }
 
-pub(super) fn end_progress_line(mode: ProgressMode, err: &mut dyn Write) {
+pub(crate) fn end_progress_line(mode: ProgressMode, err: &mut dyn Write) {
     if mode == ProgressMode::Auto && io::stderr().is_terminal() {
         let _ = writeln!(err);
     }
 }
 
-pub(super) fn print_json(
+pub(crate) fn print_json(
     out: &mut dyn Write,
     value: &impl Serialize,
     compact: bool,

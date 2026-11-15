@@ -153,6 +153,14 @@ pub fn outcome(lang: Lang, outcome: &Outcome) -> String {
         ),
         Outcome::Failed { code, message } => failure_text(lang, code.as_deref(), message),
         Outcome::Vault(done) => vault_outcome(lang, done),
+        Outcome::Downloaded { bytes, .. } => format!(
+            "{} ({}).",
+            lang.pick(
+                "Image downloaded and checked, kept in the library",
+                "Image téléchargée et contrôlée, gardée dans la bibliothèque"
+            ),
+            format_size(*bytes, lang)
+        ),
     }
 }
 

@@ -19,6 +19,7 @@ pub(crate) fn registry() -> Vec<Entry> {
         ("config", config::schema),
         ("cache", cache::schema),
         ("catalog", catalog::schema),
+        ("catalog-download", catalog::download::schema),
         ("debug-filter", debug::schema_filter),
         ("debug-sources", debug::schema_sources),
         ("debug-layout", debug::schema_layout),
