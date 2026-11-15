@@ -105,18 +105,26 @@ class Actions(
 
     fun catalog() {
         thread {
+            val directory = File(context.filesDir, "catalog").path
             val answer =
                 runCatching {
-                    Protocol.outcome(
-                        Native.loadCatalog(
-                            File(context.filesDir, "catalog").path,
-                            fetchOrEmpty(CATALOG),
-                            fetchOrEmpty("$CATALOG.sig"),
-                        ),
-                    )
+                    Protocol.outcome(Native.loadCatalog(directory, fetchOrEmpty(CATALOG), fetchOrEmpty("$CATALOG.sig")))
                 }.getOrElse { Outcome(error = it.message ?: it.toString()) }
             send(answer.error?.let(::CatalogFailed) ?: Refresh)
+            if (answer.error == null) icons(directory)
         }
+    }
+
+    /** After the list: the cards show at once, their logos as they arrive. A logo that fails stays absent. */
+    private fun icons(directory: String) {
+        val wanted = runCatching { Protocol.icons(Native.missingIcons(directory)) }.getOrDefault(emptyList())
+        wanted.forEach { icon ->
+            val bytes = fetchOrEmpty(icon.url)
+            if (bytes.isNotEmpty()) {
+                Protocol.outcome(Native.storeIcon(directory, icon.sha256, bytes)).error?.let { Log.w(TAG, it) }
+            }
+        }
+        if (wanted.isNotEmpty()) send(Refresh)
     }
 
     private fun download(address: String, proxy: String?): File {

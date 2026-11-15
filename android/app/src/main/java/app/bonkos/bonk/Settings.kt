@@ -26,7 +26,10 @@ internal fun SettingsPage(settings: SettingsView, send: (ToRust) -> Unit) {
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(Tokens.SPACE_LARGE.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp),
+        ) {
             Text(settings.title, fontSize = Tokens.TEXT_TITLE.sp, modifier = Modifier.weight(1f))
             Secondary(settings.back) { send(SettingsAction("close")) }
         }

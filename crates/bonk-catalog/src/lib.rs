@@ -1,4 +1,5 @@
 mod download;
+pub mod icons;
 pub mod link;
 pub mod manifest;
 mod sums;

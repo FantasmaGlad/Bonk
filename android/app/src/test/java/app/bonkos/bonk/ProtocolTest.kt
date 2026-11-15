@@ -93,6 +93,14 @@ class ProtocolTest {
                 VaultPicked("/proc/self/fd/43"),
                 ToggleIncognito,
                 OpenTorProject,
+                CatalogAction("open"),
+                CatalogAction("close"),
+                CatalogAction("close_system"),
+                CatalogSearch("deb"),
+                CatalogSystem("Debian"),
+                CatalogWrite("debian-13-netinst-x86_64"),
+                CatalogFilter("media", "Clé USB"),
+                CatalogFilter("media"),
             )
         val expected = samples.getValue("messages").jsonArray
         assertEquals(expected.size, sent.size, "un message de Rust n'a pas de type Kotlin, ou l'inverse")
@@ -107,9 +115,16 @@ class ProtocolTest {
             samples.getValue("states").jsonArray.map {
                 Protocol.answer(JsonObject(mapOf("state" to it)).toString()).state
             }
-        assertEquals(6, states.size)
+        assertEquals(8, states.size)
         val (idle, draft, running, finished) = states
-        val (vaultReady, vaultBusy) = states.drop(4)
+        val (vaultReady, vaultBusy, catalogGrid, catalogSystem) = states.drop(4)
+        assertEquals(null, idle.browse)
+        assertEquals("Catalogue", idle.catalogButton)
+        val grid = checkNotNull(checkNotNull(catalogGrid.browse).grid)
+        assertEquals(listOf("Debian"), grid.cards.map { it.name })
+        assertEquals(listOf("uses", "base", "desktop", "media"), grid.filters.map { it.kind })
+        val page = checkNotNull(checkNotNull(catalogSystem.browse).system)
+        assertEquals(listOf("debian-13-netinst-x86_64", null), page.variants.map { it.id })
         assertEquals(null, idle.panel)
         assertTrue("debian-13-netinst-x86_64" in checkNotNull(idle.notice))
         assertEquals(null, draft.notice)

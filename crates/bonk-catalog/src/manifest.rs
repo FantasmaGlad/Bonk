@@ -470,7 +470,7 @@ fn seen_sequence(dir: &Path) -> u64 {
 }
 
 /// Never leaves a half-written file: a cut keeps the old one.
-fn replace(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+pub(crate) fn replace(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let partial = path.with_extension("part");
     fs::write(&partial, bytes)?;
     fs::rename(&partial, path)
@@ -523,7 +523,7 @@ pub fn load(
     }
 }
 
-fn hex(bytes: &[u8]) -> String {
+pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
@@ -575,14 +575,7 @@ pub fn icon_path(
     family: &Family,
     fetch: &dyn Fn(&str) -> Result<Vec<u8>, String>,
 ) -> Option<PathBuf> {
-    let matches = |bytes: &[u8]| {
-        hex(digest(&SHA256, bytes).as_ref()).eq_ignore_ascii_case(&family.icon_sha256)
-    };
-    let extension = Path::new(&family.icon).extension()?.to_str()?;
-    let path = dir
-        .join("icons")
-        .join(format!("{}.{extension}", family.icon_sha256));
-    if fs::read(&path).is_ok_and(|bytes| matches(&bytes)) {
+    if let Some(path) = crate::icons::cached(dir, family) {
         return Some(path);
     }
     let warn = |what: &str, error: &dyn std::fmt::Display| {
@@ -591,19 +584,9 @@ pub fn icon_path(
     let bytes = fetch(&format!("{base}{}", family.icon))
         .map_err(|e| warn("icon not downloaded", &e))
         .ok()?;
-    if !matches(&bytes) {
-        warn("icon does not match its hash", &family.icon_sha256);
-        return None;
-    }
-    let saved = path
-        .parent()
-        .map_or(Ok(()), fs::create_dir_all)
-        .and_then(|()| replace(&path, &bytes));
-    if let Err(e) = saved {
-        warn("icon not cached", &e);
-        return None;
-    }
-    Some(path)
+    crate::icons::store(dir, family, &bytes)
+        .map_err(|e| warn("icon not kept", &e))
+        .ok()
 }
 
 #[cfg(test)]

@@ -232,10 +232,45 @@
     },
     {
       "type": "tor_project"
+    },
+    {
+      "action": "open",
+      "type": "catalog"
+    },
+    {
+      "action": "close",
+      "type": "catalog"
+    },
+    {
+      "action": "close_system",
+      "type": "catalog"
+    },
+    {
+      "type": "catalog_search",
+      "value": "deb"
+    },
+    {
+      "name": "Debian",
+      "type": "catalog_system"
+    },
+    {
+      "id": "debian-13-netinst-x86_64",
+      "type": "catalog_write"
+    },
+    {
+      "kind": "media",
+      "type": "catalog_filter",
+      "value": "Clé USB"
+    },
+    {
+      "kind": "media",
+      "type": "catalog_filter"
     }
   ],
   "states": [
     {
+      "browse": null,
+      "catalog_button": "Catalogue",
       "disks": [],
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
       "incognito": {
@@ -254,6 +289,8 @@
       "vault": null
     },
     {
+      "browse": null,
+      "catalog_button": "Catalogue",
       "disks": [
         {
           "badge": "PROPOSÉ",
@@ -337,6 +374,8 @@
       "vault": null
     },
     {
+      "browse": null,
+      "catalog_button": "Catalogue",
       "disks": [
         {
           "badge": "PROPOSÉ",
@@ -372,6 +411,8 @@
       "vault": null
     },
     {
+      "browse": null,
+      "catalog_button": "Catalogue",
       "disks": [
         {
           "badge": "PROPOSÉ",
@@ -406,6 +447,8 @@
       "vault": null
     },
     {
+      "browse": null,
+      "catalog_button": "Catalogue",
       "disks": [
         {
           "badge": "PROPOSÉ",
@@ -517,6 +560,283 @@
       }
     },
     {
+      "browse": null,
+      "catalog_button": "Catalogue",
+      "disks": [
+        {
+          "badge": "PROPOSÉ",
+          "details": [],
+          "details_button": "Détails techniques",
+          "device": "/dev/bus/usb/001/002",
+          "facts": "32,0 Go   USB",
+          "id": "usb-S1-001-002",
+          "model": "UDisk",
+          "selected": true,
+          "state": "proposé"
+        }
+      ],
+      "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
+      "incognito": {
+        "available": true,
+        "label": "Incognito activé (Tor)",
+        "link": "torproject.org",
+        "on": true
+      },
+      "lang": "fr",
+      "notice": null,
+      "panel": {
+        "advanced": false,
+        "advanced_button": "Autre image ou options...",
+        "button": "Écrire et effacer ce disque (dans 3 s)",
+        "enabled": false,
+        "hash": "",
+        "hash_hint": "Empreinte SHA-256 (exigée pour une adresse)",
+        "image": "",
+        "image_hint": "Adresse https:// de l'image",
+        "image_line": "Image : aucune choisie pour l'instant",
+        "kind": "draft",
+        "mbr": true,
+        "mbr_label": "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
+        "menu": {
+          "all_bases": "Toutes les bases",
+          "all_categories": "Toutes les catégories",
+          "all_systems": "Tous les systèmes",
+          "base": null,
+          "bases": [
+            "Debian"
+          ],
+          "button": "Choisir un système...",
+          "categories": [
+            "Bureautique",
+            "Serveurs"
+          ],
+          "category": null,
+          "open": true,
+          "ready": true,
+          "rows": [
+            {
+              "index": 0,
+              "note": null,
+              "title": "Debian 13.7.0 netinst"
+            },
+            {
+              "index": null,
+              "note": "à télécharger sur https://www.debian.org/, puis Autre image",
+              "title": "Debian DVD"
+            }
+          ],
+          "system": null,
+          "systems": [
+            "Debian"
+          ]
+        },
+        "pick": "Choisir l'image...",
+        "raw": false,
+        "raw_label": "Écrire les octets tels quels, sans refuser une image non amorçable",
+        "summary": "Disque effacé : UDisk, 32,0 Go",
+        "title": "ÉCRIRE UNE IMAGE SUR CE DISQUE",
+        "vault_button": "Utiliser comme coffre (plusieurs images ISO)...",
+        "warning": "Toutes les données de ce disque seront effacées. Cette action est irréversible."
+      },
+      "running": true,
+      "settings": null,
+      "settings_button": "Paramètres",
+      "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s.",
+      "vault": {
+        "busy": true,
+        "buttons": [
+          {
+            "action": "cancel",
+            "label": "Annuler",
+            "primary": true
+          }
+        ],
+        "fraction": 0.25,
+        "images": [],
+        "lines": [
+          "Ajout de l'ISO...",
+          "Écriture : 1,0 Mo sur 4,1 Mo  (1,0 Mo/s)"
+        ],
+        "title": "COFFRE : PLUSIEURS IMAGES ISO SUR UNE CLÉ"
+      }
+    },
+    {
+      "browse": {
+        "back": "Retour",
+        "grid": {
+          "cards": [
+            {
+              "count": "1 image à écrire",
+              "icon": null,
+              "name": "Debian"
+            }
+          ],
+          "filters": [
+            {
+              "all": "Tous les usages",
+              "chosen": null,
+              "kind": "uses",
+              "options": [
+                "Bureautique",
+                "Serveurs"
+              ]
+            },
+            {
+              "all": "Toutes les bases",
+              "chosen": null,
+              "kind": "base",
+              "options": [
+                "Debian"
+              ]
+            },
+            {
+              "all": "Tous les bureaux",
+              "chosen": null,
+              "kind": "desktop",
+              "options": [
+                "GNOME"
+              ]
+            },
+            {
+              "all": "Tous les supports",
+              "chosen": null,
+              "kind": "media",
+              "options": [
+                "Clé USB"
+              ]
+            }
+          ],
+          "none": "Aucun système ne correspond.",
+          "search": "",
+          "search_hint": "Rechercher : Ubuntu, Fedora, Windows…"
+        },
+        "title": "Catalogue"
+      },
+      "catalog_button": "Catalogue",
+      "disks": [
+        {
+          "badge": "PROPOSÉ",
+          "details": [],
+          "details_button": "Détails techniques",
+          "device": "/dev/bus/usb/001/002",
+          "facts": "32,0 Go   USB",
+          "id": "usb-S1-001-002",
+          "model": "UDisk",
+          "selected": true,
+          "state": "proposé"
+        }
+      ],
+      "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
+      "incognito": {
+        "available": true,
+        "label": "Incognito activé (Tor)",
+        "link": "torproject.org",
+        "on": true
+      },
+      "lang": "fr",
+      "notice": null,
+      "panel": {
+        "advanced": false,
+        "advanced_button": "Autre image ou options...",
+        "button": "Écrire et effacer ce disque (dans 3 s)",
+        "enabled": false,
+        "hash": "",
+        "hash_hint": "Empreinte SHA-256 (exigée pour une adresse)",
+        "image": "",
+        "image_hint": "Adresse https:// de l'image",
+        "image_line": "Image : aucune choisie pour l'instant",
+        "kind": "draft",
+        "mbr": true,
+        "mbr_label": "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
+        "menu": {
+          "all_bases": "Toutes les bases",
+          "all_categories": "Toutes les catégories",
+          "all_systems": "Tous les systèmes",
+          "base": null,
+          "bases": [
+            "Debian"
+          ],
+          "button": "Choisir un système...",
+          "categories": [
+            "Bureautique",
+            "Serveurs"
+          ],
+          "category": null,
+          "open": true,
+          "ready": true,
+          "rows": [
+            {
+              "index": 0,
+              "note": null,
+              "title": "Debian 13.7.0 netinst"
+            },
+            {
+              "index": null,
+              "note": "à télécharger sur https://www.debian.org/, puis Autre image",
+              "title": "Debian DVD"
+            }
+          ],
+          "system": null,
+          "systems": [
+            "Debian"
+          ]
+        },
+        "pick": "Choisir l'image...",
+        "raw": false,
+        "raw_label": "Écrire les octets tels quels, sans refuser une image non amorçable",
+        "summary": "Disque effacé : UDisk, 32,0 Go",
+        "title": "ÉCRIRE UNE IMAGE SUR CE DISQUE",
+        "vault_button": "Utiliser comme coffre (plusieurs images ISO)...",
+        "warning": "Toutes les données de ce disque seront effacées. Cette action est irréversible."
+      },
+      "running": true,
+      "settings": null,
+      "settings_button": "Paramètres",
+      "status": "1 disque(s) affiché(s) sur 1 détecté(s). Actualisation automatique toutes les 2 s.",
+      "vault": {
+        "busy": true,
+        "buttons": [
+          {
+            "action": "cancel",
+            "label": "Annuler",
+            "primary": true
+          }
+        ],
+        "fraction": 0.25,
+        "images": [],
+        "lines": [
+          "Ajout de l'ISO...",
+          "Écriture : 1,0 Mo sur 4,1 Mo  (1,0 Mo/s)"
+        ],
+        "title": "COFFRE : PLUSIEURS IMAGES ISO SUR UNE CLÉ"
+      }
+    },
+    {
+      "browse": {
+        "back": "Retour",
+        "system": {
+          "back": "Tous les systèmes",
+          "icon": null,
+          "name": "Debian",
+          "variants": [
+            {
+              "facts": "GNOME · Clé USB",
+              "id": "debian-13-netinst-x86_64",
+              "note": null,
+              "title": "Debian 13.7.0 netinst"
+            },
+            {
+              "facts": "évaluation",
+              "id": null,
+              "note": "à télécharger sur https://www.debian.org/, puis Autre image",
+              "title": "Debian DVD"
+            }
+          ],
+          "write": "Écrire cette image"
+        },
+        "title": "Catalogue"
+      },
+      "catalog_button": "Catalogue",
       "disks": [
         {
           "badge": "PROPOSÉ",

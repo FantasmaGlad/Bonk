@@ -17,6 +17,8 @@ pub fn state(model: &Model) -> Value {
         "settings_button": lang.pick("Settings", "Paramètres"),
         "settings": crate::settings::state(model),
         "incognito": crate::incognito::state(model),
+        "catalog_button": crate::browse::button(model),
+        "browse": crate::browse::state(model),
         // The app reads its own texts (Android resources, notification) in this language.
         "lang": lang.pick("en", "fr"),
         "status": model.status_line(model.entries().len()),

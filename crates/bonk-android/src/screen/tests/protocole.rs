@@ -11,6 +11,21 @@ fn state_samples() -> Vec<Value> {
     let mut samples = vec![state(&idle)];
     samples.extend(write_samples(&mut model));
     samples.extend(vault_samples(&mut model));
+    samples.extend(catalog_samples(&mut model));
+    samples
+}
+
+/// Catalog tab: grid, then a system page.
+fn catalog_samples(model: &mut Model) -> Vec<Value> {
+    use bonk_ui::browse::BrowseMessage;
+
+    let _ = model.update(Message::Browse(BrowseMessage::Close));
+    let _ = model.update(Message::Browse(BrowseMessage::Open));
+    let mut samples = vec![state(model)];
+    let _ = model.update(Message::Browse(BrowseMessage::OpenSystem(
+        "Debian".to_owned(),
+    )));
+    samples.push(state(model));
     samples
 }
 
@@ -34,8 +49,8 @@ fn debian_catalog() -> CatalogState {
                     url: "https://cdimage.debian.org/x.iso".to_owned(),
                     sha256: "ab".repeat(32),
                 },
-                desktop: None,
-                media: None,
+                desktop: Some("gnome".to_owned()),
+                media: Some("usb".to_owned()),
             },
             Choice {
                 id: "debian-13-dvd-x86_64".to_owned(),
@@ -120,12 +135,14 @@ fn le_protocole_avec_kotlin_suit_ses_echantillons() -> Result<(), Box<dyn std::e
     let _ = model.update(Message::ImageInput("/x.iso".to_owned()));
     let effects = effect_samples(&mut model);
     let messages = message_samples();
-    // `choose` only means something with a loaded catalog, and `open` is not a screen message: their
-    // samples fix the shape only.
-    for message in messages
-        .iter()
-        .filter(|m| m["type"] != "choose" && m["type"] != "open")
-    {
+    // `choose` and `catalog_filter` only mean something with a loaded catalog, and `open` is not a screen
+    // message: their samples fix the shape only.
+    for message in messages.iter().filter(|m| {
+        !matches!(
+            m["type"].as_str(),
+            Some("choose" | "open" | "catalog_filter")
+        )
+    }) {
         assert!(
             message_of(message, &model).is_some(),
             "refusé par Rust : {message}"
@@ -224,6 +241,14 @@ fn message_samples() -> Vec<Value> {
         json!({"type": "vault_picked", "value": "/proc/self/fd/43"}),
         json!({"type": "incognito"}),
         json!({"type": "tor_project"}),
+        json!({"type": "catalog", "action": "open"}),
+        json!({"type": "catalog", "action": "close"}),
+        json!({"type": "catalog", "action": "close_system"}),
+        json!({"type": "catalog_search", "value": "deb"}),
+        json!({"type": "catalog_system", "name": "Debian"}),
+        json!({"type": "catalog_write", "id": "debian-13-netinst-x86_64"}),
+        json!({"type": "catalog_filter", "kind": "media", "value": "Clé USB"}),
+        json!({"type": "catalog_filter", "kind": "media"}),
     ]
 }
 

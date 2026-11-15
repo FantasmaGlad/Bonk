@@ -1,8 +1,10 @@
 mod filter;
 mod labels;
+mod text;
 
 pub use filter::{BrowseFilter, Options, options};
 pub use labels::{desktop_label, media_label};
+pub use text::{variant_facts, writable_count};
 
 use crate::catalog::{CatalogState, ChoiceSource, System};
 use crate::model::{Effect, Effects, Focus, Model};

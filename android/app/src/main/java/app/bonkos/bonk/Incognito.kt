@@ -2,9 +2,9 @@ package app.bonkos.bonk
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ButtonDefaults
@@ -29,7 +29,10 @@ private const val GLYPH_DP = 22
 internal fun IncognitoButton(view: IncognitoView, send: (ToRust) -> Unit) {
     val palette = LocalPalette.current
     val glyph = if (!view.available) palette.muted else if (view.on) palette.onAccent else palette.ink
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp),
+    ) {
         OutlinedButton(
             onClick = { send(ToggleIncognito) },
             enabled = view.available,
@@ -55,7 +58,7 @@ internal fun IncognitoButton(view: IncognitoView, send: (ToRust) -> Unit) {
             )
         }
         if (!view.available) {
-            TextButton(onClick = { send(OpenTorProject) }, modifier = Modifier.padding(start = Tokens.SPACE_SMALL.dp)) {
+            TextButton(onClick = { send(OpenTorProject) }) {
                 Small(view.link, palette.accent)
             }
         }
