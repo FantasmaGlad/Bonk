@@ -136,6 +136,26 @@ fn with_shrinking_limit(
     }
 }
 
+/// A transfer is capped at `limit`: chain until `len` bytes or a short packet, the only sign the key is done
+/// (`BulkTransport::receive` contract). `transfer(done, size)` reads at most `size` bytes after the `done`
+/// already read.
+fn receive_chained(
+    len: usize,
+    limit: &mut usize,
+    mut transfer: impl FnMut(usize, usize) -> io::Result<usize>,
+) -> io::Result<usize> {
+    let mut done = 0;
+    while done < len {
+        let asked = (len - done).min(*limit);
+        let read = with_shrinking_limit(limit, asked, |size| transfer(done, size))?;
+        done += read;
+        if read < asked.min(*limit) {
+            break;
+        }
+    }
+    Ok(done)
+}
+
 fn bulk_error(error: io::Error) -> BulkError {
     match error.raw_os_error() {
         Some(libc::EPIPE) => BulkError::Stall,
@@ -248,17 +268,21 @@ impl UsbfsTransport {
         usize::try_from(done).map_err(|_| io::Error::last_os_error())
     }
 
+    fn bulk_once(&mut self, endpoint: u8, data: *mut u8, size: usize) -> io::Result<usize> {
+        let mut transfer = BulkTransfer {
+            endpoint: u32::from(endpoint),
+            // `size` never exceeds `TRANSFER_START`.
+            length: size as u32,
+            timeout_ms: TIMEOUT_MS,
+            data: data.cast(),
+        };
+        self.ioctl(USBDEVFS_BULK, (&raw mut transfer).cast())
+    }
+
     fn bulk(&mut self, endpoint: u8, data: *mut u8, length: usize) -> Result<usize, BulkError> {
         let mut limit = self.transfer_limit;
         let result = with_shrinking_limit(&mut limit, length, |size| {
-            let mut transfer = BulkTransfer {
-                endpoint: u32::from(endpoint),
-                // `size` never exceeds `TRANSFER_START`.
-                length: size as u32,
-                timeout_ms: TIMEOUT_MS,
-                data: data.cast(),
-            };
-            self.ioctl(USBDEVFS_BULK, (&raw mut transfer).cast())
+            self.bulk_once(endpoint, data, size)
         });
         self.transfer_limit = limit;
         result.map_err(bulk_error)
@@ -285,18 +309,14 @@ impl BulkTransport for UsbfsTransport {
     }
 
     fn receive(&mut self, buf: &mut [u8]) -> Result<usize, BulkError> {
-        // A transfer is capped at `transfer_limit`: chain until the buffer is full or a short packet arrives,
-        // the only sign the key is done (`BulkTransport::receive` contract).
-        let mut done = 0;
-        while done < buf.len() {
-            let asked = (buf.len() - done).min(self.transfer_limit);
-            let read = self.bulk(self.interface.endpoint_in, buf[done..].as_mut_ptr(), asked)?;
-            done += read;
-            if read < asked.min(self.transfer_limit) {
-                break;
-            }
-        }
-        Ok(done)
+        let endpoint = self.interface.endpoint_in;
+        let mut limit = self.transfer_limit;
+        let len = buf.len();
+        let result = receive_chained(len, &mut limit, |done, size| {
+            self.bulk_once(endpoint, buf[done..].as_mut_ptr(), size)
+        });
+        self.transfer_limit = limit;
+        result.map_err(bulk_error)
     }
 
     fn clear_halt(&mut self, direction: Direction) -> Result<(), BulkError> {
@@ -481,6 +501,38 @@ mod tests {
         })?;
         assert_eq!(sizes, [256 << 10, 128 << 10, 64 << 10]);
         assert_eq!((done, limit), (64 << 10, 64 << 10));
+        Ok(())
+    }
+
+    /// Out of memory in the middle of a receive: smaller transfers until the buffer is full, and the limit
+    /// stays smaller for the next one.
+    #[test]
+    fn une_reception_sans_memoire_se_poursuit_plus_petite() -> io::Result<()> {
+        let mut limit = TRANSFER_START;
+        let mut asked = Vec::new();
+        let done = receive_chained(1 << 20, &mut limit, |_, size| {
+            asked.push(size);
+            if size > 128 << 10 {
+                Err(io::Error::from_raw_os_error(libc::ENOMEM))
+            } else {
+                Ok(size)
+            }
+        })?;
+        assert_eq!(done, 1 << 20);
+        assert_eq!(limit, 128 << 10);
+        assert_eq!(asked.iter().filter(|size| **size == 128 << 10).count(), 8);
+        Ok(())
+    }
+
+    #[test]
+    fn un_paquet_court_termine_la_reception() -> io::Result<()> {
+        let mut limit = TRANSFER_START;
+        let mut transfers = 0;
+        let done = receive_chained(1 << 20, &mut limit, |done, size| {
+            transfers += 1;
+            Ok(if done == 0 { size } else { 13 })
+        })?;
+        assert_eq!((done, transfers), (TRANSFER_START + 13, 2));
         Ok(())
     }
 

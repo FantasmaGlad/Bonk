@@ -184,7 +184,12 @@ pub(crate) fn serve(
             Err(RecvTimeoutError::Disconnected) => break,
         }
     }
-    // Client gone or stop asked: the running operation stops between two blocks and answers.
+    shut_down(&mut state, interrupted)
+}
+
+/// Client gone or stop asked: the running operation stops between two blocks and answers. One that panicked
+/// never sent its result: the service says so by its exit code.
+fn shut_down(state: &mut State, interrupted: bool) -> u8 {
     let mut panicked = false;
     if let Some(job) = state.job.take() {
         job.cancel.store(true, Ordering::SeqCst);
@@ -193,7 +198,7 @@ pub(crate) fn serve(
             panicked = true;
         }
     }
-    stop_watch(&mut state);
+    stop_watch(state);
     if panicked {
         EXIT_RUNTIME_ERROR
     } else if interrupted {

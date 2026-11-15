@@ -27,6 +27,20 @@ pub(super) fn open_read_only(
     })
 }
 
+/// Neither a file nor a path: only the enumeration can name it, so its failure is the answer.
+pub(super) fn disk_named(
+    wanted: &str,
+    enumerate: impl FnOnce() -> Result<Vec<bonk_hal::Disk>, bonk_hal::EnumerateError>,
+) -> Result<Option<PathBuf>, (Code, String)> {
+    let disks =
+        enumerate().map_err(|erreur| (Code::of_enumeration(&erreur), erreur.to_string()))?;
+    Ok(disks
+        .into_iter()
+        // On Windows a disk named by its path does not exist as a file.
+        .find(|d| d.id == wanted || d.path.eq_ignore_ascii_case(wanted))
+        .map(|d| PathBuf::from(d.path)))
+}
+
 /// An image, or a real disk by path or stable id, read-only: nothing writes through the returned type.
 fn open_device(target: &Path) -> Result<Box<dyn BlockDevice>, (Code, String)> {
     let platform = bonk_hal::platform::current();
@@ -35,16 +49,7 @@ fn open_device(target: &Path) -> Result<Box<dyn BlockDevice>, (Code, String)> {
     } else if target.exists() {
         Some(target.to_path_buf())
     } else {
-        let wanted = target.to_string_lossy();
-        // Neither a file nor a path: only the enumeration can name it, so its failure is the answer.
-        let disks = platform
-            .enumerate()
-            .map_err(|erreur| (Code::of_enumeration(&erreur), erreur.to_string()))?;
-        disks
-            .into_iter()
-            // On Windows a disk named by its path does not exist as a file.
-            .find(|d| d.id == wanted || d.path.eq_ignore_ascii_case(&wanted))
-            .map(|d| PathBuf::from(d.path))
+        disk_named(&target.to_string_lossy(), || platform.enumerate())?
     };
     if let Some(path) = disk_path {
         return platform
