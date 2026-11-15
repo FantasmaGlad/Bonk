@@ -3,6 +3,10 @@ name: distribution
 on:
   release:
     types: [published]
+  pull_request:
+    paths:
+      - ".github/scripts/manifestes.py"
+      - ".github/workflows/distribution.yml"
   workflow_dispatch:
     inputs:
       tag:
@@ -14,8 +18,29 @@ permissions:
   contents: read
 
 jobs:
+  essai:
+    name: manifestes, essai sur la dernière release
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Générer les manifestes de la dernière release, sans rien publier
+        run: |
+          tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS
+          python3 .github/scripts/manifestes.py SHA256SUMS "$tag" manifestes
+          python3 -c 'import json; json.load(open("manifestes/bonk.json"))'
+          test -s manifestes/bonk.rb && test -s manifestes/PKGBUILD
+
   manifestes:
     name: manifestes
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
