@@ -403,10 +403,9 @@ pub const CATALOG: &[Entry] = &[
         causes: &[
             "not an ISO 9660 image",
             "not a family the vault starts: Debian live, Ubuntu, Arch Linux, Fedora live",
-            "a space in its name: the started system could not find it again",
             "a name not ending in .iso: the vault menu would not list it",
         ],
-        remedy: "Write the image on its own drive with `bonk write`, or rename it without spaces.",
+        remedy: "Write the image on its own drive with `bonk write`.",
     },
     Entry {
         code: Code::VaultNoRoom,

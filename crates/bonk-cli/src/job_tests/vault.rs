@@ -342,26 +342,45 @@ fn ajouter_puis_retirer_une_iso_sur_le_coffre() {
 fn une_iso_que_le_menu_ne_demarre_pas_est_refusee_avant_le_disque() {
     let (scenario, _cache) = vault_scenario(Some(GRUB), "cache-refus");
     let inconnue = iso_file("inconnue.iso", &[("boot/vmlinuz", 1)]);
-    let espace = iso_file(
-        "avec espace.iso",
-        &[("live/vmlinuz", 1), ("live/initrd.img", 1)],
-    );
     let extension = iso_file(
         "debian-live.img",
         &[("live/vmlinuz", 1), ("live/initrd.img", 1)],
     );
     let pas_iso = std::env::temp_dir().join(format!("bonk-job-{}-zero.iso", std::process::id()));
     std::fs::write(&pas_iso, vec![0u8; 64 * 2048]).expect("fichier de test");
-    for path in [&inconnue, &espace, &extension, &pas_iso] {
+    for path in [&inconnue, &extension, &pas_iso] {
         let arg = path.display().to_string();
         let (code, _, err) = scenario.run(&["vault", "add", "usb-a", &arg, "--yes"]);
         assert_eq!(code, EXIT_USAGE, "{err}");
         assert!(err.contains("E7004"), "{err}");
     }
     assert!(scenario.log().is_empty(), "{:?}", scenario.log());
-    for path in [&inconnue, &espace, &extension, &pas_iso] {
+    for path in [&inconnue, &extension, &pas_iso] {
         let _ = std::fs::remove_file(path);
     }
+}
+
+/// A live system's kernel line splits on spaces: Bonk writes them as `_` in the vault.
+#[test]
+fn une_iso_dont_le_nom_a_des_espaces_entre_avec_des_soulignes() {
+    let (scenario, cache) = vault_scenario(Some(GRUB), "cache-espace");
+    let cache = cache.arg();
+    let (code, _, err) = scenario.run(&init_args(&cache, &[]));
+    assert_eq!(code, 0, "{err}");
+    let debian = iso_file(
+        "debian live.iso",
+        &[("live/vmlinuz", 1), ("live/initrd.img", 1)],
+    );
+    let arg = debian.display().to_string();
+    let (code, out, err) = scenario.run(&["vault", "add", "usb-a", &arg, "--yes", "--json"]);
+    assert_eq!(code, 0, "{err}");
+    let value: serde_json::Value = serde_json::from_str(&out).expect("JSON");
+    let kept = value["name"].as_str().unwrap_or_default();
+    assert!(
+        kept.ends_with("debian_live.iso") && !kept.contains(' '),
+        "{kept}"
+    );
+    let _ = std::fs::remove_file(&debian);
 }
 
 /// A newer GRUB in the catalog: the check says so, --yes replaces it, the ISO stays.

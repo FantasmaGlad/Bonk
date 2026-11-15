@@ -80,33 +80,36 @@ pub(super) fn edit_error(error: FormatError) -> JobError {
     }
 }
 
-/// The ISO's name, family and processor, checked as the vault menu will check them at boot.
-pub(super) fn vault_source(
-    path: &Path,
-    name: Option<&str>,
-) -> Result<(String, u64, vault::IsoKind), JobError> {
-    let name = name
+/// The name the ISO takes in the vault. The menu lists `*.iso` and `*.ISO` only, and the kernel line of a live
+/// system splits on spaces: Bonk writes them as `_`, which the user would have to do by hand otherwise.
+pub(super) fn vault_name(path: &Path, name: Option<&str>) -> Result<String, JobError> {
+    let given = name
         .or_else(|| path.file_name().and_then(|name| name.to_str()))
         .ok_or_else(|| {
             fail(
                 Code::IsoNotForVault,
                 format!("{}: no file name", path.display()),
             )
-        })?
-        .to_owned();
-    // The menu lists `*.iso` and `*.ISO` only.
-    if !name.to_ascii_lowercase().ends_with(".iso") {
+        })?;
+    if !given.to_ascii_lowercase().ends_with(".iso") {
         return Err(fail(
             Code::IsoNotForVault,
-            format!("{name}: the vault menu only lists files ending in .iso"),
+            format!("{given}: the vault menu only lists files ending in .iso"),
         ));
     }
-    if name.contains(' ') {
-        return Err(fail(
-            Code::IsoNotForVault,
-            format!("{name}: a space in the name; rename it without spaces"),
-        ));
+    let name = given.replace(' ', "_");
+    if name != given {
+        log::info!(target: "bonk::vault", given = given, kept = name.as_str(); "spaces written as _");
     }
+    Ok(name)
+}
+
+/// The ISO's name, family and processor, checked as the vault menu will check them at boot.
+pub(super) fn vault_source(
+    path: &Path,
+    name: Option<&str>,
+) -> Result<(String, u64, vault::IsoKind), JobError> {
+    let name = vault_name(path, name)?;
     let file = std::fs::File::open(path)
         .map_err(|e| fail(Code::SourceUnreadable, format!("{}: {e}", path.display())))?;
     let size = file
