@@ -16,9 +16,9 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use super::Target;
-use super::format::fresh_seed;
 use super::source::ImageFile;
-use super::target::{Chosen, OpenRequest, open_target, reread_table};
+use super::target::{Chosen, OpenRequest, reread_table};
+use super::target::{OpenedForWriting, open_for_writing};
 use super::translate::{guarded, support_lost};
 use super::types::{Deps, JobError, TargetInfo, fail};
 use super::write::WriteJob;
@@ -431,23 +431,21 @@ pub(super) fn run(
     deps: &Deps<'_>,
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<ExtractDone, JobError> {
-    let seed_name = chosen.info.path.clone();
-    let request = OpenRequest {
-        options: job.options,
-        access: bonk_hal::Access::ReadWrite,
-        elevation: job.elevation,
-        // Simulation file to create: large enough for the volume, sparse, never less than FAT32 needs.
-        size_hint: Some(
-            prepared
-                .describe(job.table, DEFAULT_BLOCK_SIZE)
-                .bytes
-                .saturating_mul(2)
-                .max(MIN_SIMULATED),
-        ),
-        trace_io: job.trace_io,
-    };
-    let (mut device, info, unmounted) = open_target(chosen, &job.target, &request, deps)?;
-    let ids = Ids::from_seed(&fresh_seed(&seed_name));
+    // Simulation file to create: large enough for the volume, sparse, never less than FAT32 needs.
+    let size_hint = prepared
+        .describe(job.table, DEFAULT_BLOCK_SIZE)
+        .bytes
+        .saturating_mul(2)
+        .max(MIN_SIMULATED);
+    let request =
+        OpenRequest::read_write(job.options, job.elevation, job.trace_io, Some(size_hint));
+    let OpenedForWriting {
+        mut device,
+        info,
+        unmounted,
+        ids,
+        ..
+    } = open_for_writing(chosen, &job.target, &request, deps, "extracting")?;
     let (layout, volume, extraction) = write_volume(&mut *device, prepared, job.table, &ids)?;
     let write_failure = |e| format_failure(Code::WriteFailed, e);
     let total = layout.data_bytes();

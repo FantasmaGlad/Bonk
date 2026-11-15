@@ -1,16 +1,14 @@
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use bonk_core::BlockDevice;
 use bonk_core::format::table::{self, PartitionPlan, TableKind};
 use bonk_core::format::{Filesystem, FormatError, Ids, exfat, fat32, normalize_label};
 use bonk_core::partition::{Severity, inspect};
 use bonk_hal::platform::format_capability;
-use bonk_hal::{Access, Elevation, FilterOptions, OpenTargetError, TargetIdentity};
+use bonk_hal::{Elevation, FilterOptions, OpenTargetError, TargetIdentity};
 
-use super::target::{
-    Chosen, OpenRequest, choose, enumerate, map_open_target, open_target, reread_table,
-};
+use super::target::{Chosen, OpenRequest, choose, enumerate, map_open_target, reread_table};
+use super::target::{OpenedForWriting, open_for_writing};
 use super::types::{Deps, FormatDone, JobError, SCHEMA_VERSION, Target, TargetInfo, TraceIo, fail};
 use super::verify::drop_cache_before_verify;
 use super::write::confirm_internal;
@@ -156,18 +154,6 @@ fn check_available(fs: Filesystem, chosen: &Chosen, deps: &Deps<'_>) -> Result<(
             format!("{fs} unavailable on this host"),
         )),
     }
-}
-
-/// Two formats must not give the same GUIDs. The only clock and randomness of formatting: `bonk-core` has
-/// none, so its tests stay deterministic.
-pub(super) fn fresh_seed(target: &str) -> Vec<u8> {
-    use std::hash::{BuildHasher, RandomState};
-
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed| elapsed.as_nanos());
-    let random = RandomState::new().hash_one(target);
-    format!("{target}:{nanos}:{}:{random}", std::process::id()).into_bytes()
 }
 
 /// No error, and the wanted partition.
@@ -434,20 +420,15 @@ fn format_target(
     mut settled: Settled,
     deps: &Deps<'_>,
 ) -> Result<FormatDone, JobError> {
-    let seed_name = chosen.info.path.clone();
-    let identity = chosen.disk.as_ref().map(TargetIdentity::from);
-    let request = OpenRequest {
-        options: job.options,
-        access: Access::ReadWrite,
-        elevation: job.elevation,
-        size_hint: Some(settled.size),
-        trace_io: job.trace_io,
-    };
-    let (mut device, info, unmounted) = open_target(chosen, &job.target, &request, deps)?;
-    if (deps.io.cancelled)() {
-        return Err(fail(Code::Cancelled, "cancelled before formatting"));
-    }
-    let ids = Ids::from_seed(&fresh_seed(&seed_name));
+    let request =
+        OpenRequest::read_write(job.options, job.elevation, job.trace_io, Some(settled.size));
+    let OpenedForWriting {
+        mut device,
+        info,
+        unmounted,
+        ids,
+        identity,
+    } = open_for_writing(chosen, &job.target, &request, deps, "formatting")?;
     let filesystem = settled.filesystem;
     log::info!(
         target: "bonk::write",
