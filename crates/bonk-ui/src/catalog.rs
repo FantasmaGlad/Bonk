@@ -14,6 +14,10 @@ pub struct Choice {
     /// What to know before choosing it (evaluation, CD only).
     pub note: Option<String>,
     pub source: ChoiceSource,
+    /// Catalog desktop id: `gnome`, `none`, `choice`.
+    pub desktop: Option<String>,
+    /// Catalog medium id: `usb`, `sd`, `optical`.
+    pub media: Option<String>,
 }
 
 impl Choice {
@@ -164,6 +168,8 @@ fn choice(image: &Image) -> Choice {
         end_of_life: matches!(image.channel, Channel::EndOfLife | Channel::Archive),
         note: image.note.clone(),
         source,
+        desktop: image.desktop.clone(),
+        media: image.media.clone(),
     }
 }
 

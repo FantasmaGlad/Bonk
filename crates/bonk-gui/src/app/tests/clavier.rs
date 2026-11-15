@@ -17,7 +17,7 @@ pub(super) fn avec_tout_affiche() -> App {
 fn tab_parcourt_les_commandes_puis_les_disques_et_reboucle() {
     let mut app = avec_tout_affiche();
     let mut vus = Vec::new();
-    for _ in 0..14 {
+    for _ in 0..16 {
         nav(&mut app, Nav::Next);
         vus.push(app.focus.clone());
     }
@@ -25,6 +25,7 @@ fn tab_parcourt_les_commandes_puis_les_disques_et_reboucle() {
         vus,
         [
             Some(Focus::Tor),
+            Some(Focus::Catalog),
             Some(Focus::Library),
             Some(Focus::Settings),
             Some(Focus::Disk("nvme-systeme".to_owned())),
@@ -32,6 +33,7 @@ fn tab_parcourt_les_commandes_puis_les_disques_et_reboucle() {
             Some(Focus::Disk("sata-libre".to_owned())),
             Some(Focus::Copy),
             Some(Focus::Tor),
+            Some(Focus::Catalog),
             Some(Focus::Library),
             Some(Focus::Settings),
             Some(Focus::Disk("nvme-systeme".to_owned())),

@@ -9,6 +9,7 @@ use bonk_ui::settings::Screen;
 
 use super::{App, Focus, Message};
 
+mod browse;
 mod command_bar;
 mod disk;
 mod header;
@@ -53,6 +54,7 @@ impl App {
             Screen::Main => self.main_page(),
             Screen::Settings => self.settings_page(),
             Screen::Library => self.library_page(),
+            Screen::Catalog => self.catalog_page(),
         };
         let window = container(page).padding(20).width(Fill).height(Fill);
         match self.internal_to_confirm() {

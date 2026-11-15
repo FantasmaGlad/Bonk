@@ -1,3 +1,4 @@
+use crate::browse::BrowseMessage;
 use crate::catalog::{CatalogState, writable};
 use crate::library::LibraryMessage;
 use crate::model::{Effect, Effects, Focus, Message, Model, Nav, WriteState};
@@ -14,11 +15,12 @@ impl Model {
         match self.screen {
             Screen::Settings => return self.settings_focus_order(),
             Screen::Library => return self.library_focus_order(),
+            Screen::Catalog => return self.catalog_focus_order(),
             Screen::Main => {}
         }
         let mut order = Vec::new();
         if !self.offline {
-            order.push(Focus::Tor);
+            order.extend([Focus::Tor, Focus::Catalog]);
         }
         order.extend([Focus::Library, Focus::Settings]);
         if self.error.is_none() {
@@ -111,6 +113,14 @@ impl Model {
             (Nav::Escape, Screen::Library) => {
                 return Some(self.apply(Message::Library(LibraryMessage::Close)));
             }
+            (Nav::Escape, Screen::Catalog) => {
+                let back = if self.browse.opened.is_some() {
+                    BrowseMessage::CloseSystem
+                } else {
+                    BrowseMessage::Close
+                };
+                return Some(self.apply(Message::Browse(back)));
+            }
             _ => {}
         }
         if !self.menu_open {
@@ -150,6 +160,12 @@ impl Model {
             Some(Focus::CloseSettings) => Message::Settings(SettingsMessage::Close),
             Some(Focus::Library) => Message::Library(LibraryMessage::Open),
             Some(Focus::CloseLibrary) => Message::Library(LibraryMessage::Close),
+            Some(Focus::Catalog) => Message::Browse(BrowseMessage::Open),
+            Some(Focus::CloseCatalog) => Message::Browse(BrowseMessage::Close),
+            Some(Focus::System(name)) => Message::Browse(BrowseMessage::OpenSystem(name)),
+            Some(Focus::CloseSystem) => Message::Browse(BrowseMessage::CloseSystem),
+            Some(Focus::Variant(id)) => Message::Browse(BrowseMessage::Write(id)),
+            Some(Focus::CatalogSearch) => return Vec::new(),
             Some(Focus::KeptWrite(sha256)) => Message::Library(LibraryMessage::Write(sha256)),
             Some(Focus::KeptRemove(sha256)) => Message::Library(LibraryMessage::Remove(sha256)),
             Some(Focus::Language(choice)) => Message::Settings(SettingsMessage::Language(choice)),
@@ -207,7 +223,7 @@ fn target(order: &[Focus], current: Option<usize>, nav: Nav) -> Option<usize> {
             Some(i)
                 if !matches!(
                     order[i],
-                    Focus::Tor | Focus::Library | Focus::Settings | Focus::Copy
+                    Focus::Tor | Focus::Catalog | Focus::Library | Focus::Settings | Focus::Copy
                 ) =>
             {
                 // Next disk, skipping the current disk's write panel.
