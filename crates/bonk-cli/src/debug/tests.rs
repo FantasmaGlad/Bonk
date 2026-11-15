@@ -194,3 +194,56 @@ fn lignes_de_hexdump() {
     );
     assert!(hexdump_lines(0, &[]).is_empty());
 }
+
+fn one_disk() -> Vec<bonk_hal::Disk> {
+    vec![bonk_hal::Disk {
+        id: "usb-cle".to_owned(),
+        path: r"\\.\PhysicalDrive2".to_owned(),
+        model: "Clé".to_owned(),
+        serial: None,
+        size_bytes: 1 << 30,
+        bus: bonk_hal::Bus::Usb,
+        kind: bonk_hal::DiskKind::Physical,
+        removable_flag: true,
+        logical_block_size: None,
+        location: None,
+        fs_type: None,
+        holders: vec![],
+        partitions: vec![],
+    }]
+}
+
+#[test]
+fn un_echec_d_enumeration_donne_son_code_et_sa_raison() {
+    let echec = layout::disk_named("usb-cle", || {
+        Err(bonk_hal::EnumerateError::Malformed {
+            what: "udev".to_owned(),
+            detail: "illisible".to_owned(),
+        })
+    });
+    let Err((code, message)) = echec else {
+        panic!("l'échec d'énumération est perdu");
+    };
+    assert_eq!(code, Code::EnumerationFailed);
+    assert!(message.contains("illisible"), "{message}");
+    let absent = layout::disk_named("x", || {
+        Err(bonk_hal::EnumerateError::Unsupported { os: "haiku" })
+    });
+    assert!(matches!(absent, Err((Code::EnumerationUnsupported, _))));
+}
+
+#[test]
+fn un_disque_se_nomme_par_son_identifiant_ou_son_chemin() {
+    assert!(matches!(
+        layout::disk_named("usb-cle", || Ok(one_disk())),
+        Ok(Some(_))
+    ));
+    assert!(matches!(
+        layout::disk_named(r"\\.\physicaldrive2", || Ok(one_disk())),
+        Ok(Some(_))
+    ));
+    assert!(matches!(
+        layout::disk_named("autre", || Ok(one_disk())),
+        Ok(None)
+    ));
+}

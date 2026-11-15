@@ -78,3 +78,50 @@ fn une_reparation_que_le_support_ne_garde_pas_est_un_echec()
     assert_eq!(erreur.code, Code::GptRepairFailed);
     Ok(())
 }
+
+/// Serves what was there before until its cache is dropped, as a kernel page cache can after a write.
+struct CacheTenace {
+    inner: MemoryDevice,
+    ancien: Option<MemoryDevice>,
+}
+
+impl BlockDevice for CacheTenace {
+    fn size(&self) -> u64 {
+        self.inner.size()
+    }
+    fn block_size(&self) -> u32 {
+        self.inner.block_size()
+    }
+    fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), BlockError> {
+        self.ancien
+            .as_ref()
+            .unwrap_or(&self.inner)
+            .read_at(offset, buf)
+    }
+    fn write_at(&mut self, offset: u64, data: &[u8]) -> Result<(), BlockError> {
+        self.inner.write_at(offset, data)
+    }
+    fn flush(&mut self) -> Result<(), BlockError> {
+        Ok(())
+    }
+    fn drop_cache(&mut self) -> Result<(), BlockError> {
+        self.ancien = None;
+        Ok(())
+    }
+}
+
+#[test]
+fn le_cache_est_vide_avant_de_relire_la_gpt_reparee() -> Result<(), Box<dyn std::error::Error>> {
+    let inner = image_sur_un_plus_grand_support()?;
+    let mut copie = MemoryDevice::new(inner.size(), inner.block_size())?;
+    copie.write_at(0, inner.as_bytes())?;
+    let ancien = Some(copie);
+    let mut support = CacheTenace { inner, ancien };
+    assert!(
+        repair_if_needed(&mut support)
+            .map_err(|e| e.message)?
+            .is_some()
+    );
+    assert!(support.ancien.is_none());
+    Ok(())
+}

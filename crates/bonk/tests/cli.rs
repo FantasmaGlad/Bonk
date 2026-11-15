@@ -97,7 +97,7 @@ fn list_json_reussit_ou_echoue_proprement() -> Resultat {
     Ok(())
 }
 
-/// The runner's disk carries the system: it must be listed and forbidden, never offered.
+/// The machine's system disks are listed and forbidden, never offered: at least one, however many there are.
 #[cfg(any(windows, target_os = "macos"))]
 #[test]
 fn le_disque_systeme_du_runner_est_interdit() -> Resultat {
@@ -113,9 +113,11 @@ fn le_disque_systeme_du_runner_est_interdit() -> Resultat {
                 .is_some_and(|parts| parts.iter().any(|p| p["is_system_volume"] == true))
         })
         .collect();
-    assert_eq!(systeme.len(), 1, "{rapport}");
-    assert_eq!(
-        systeme[0]["eligibility"]["verdict"], "excluded",
+    assert!(!systeme.is_empty(), "{rapport}");
+    assert!(
+        systeme
+            .iter()
+            .all(|disque| disque["eligibility"]["verdict"] == "excluded"),
         "{rapport}"
     );
     let sources = bonk().args(["debug", "sources", "--json"]).output()?;

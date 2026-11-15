@@ -740,3 +740,24 @@ fn le_coffre_par_le_service() {
     let _ = std::fs::remove_file(&image);
     let _ = std::fs::remove_dir_all(&cache);
 }
+
+/// An operation thread that panicked never answered: the service must not exit as if all went well.
+#[test]
+fn une_operation_qui_panique_donne_une_sortie_en_erreur() {
+    let job = |panics: bool| JobHandle {
+        cancel: Arc::new(AtomicBool::new(false)),
+        thread: std::thread::spawn(move || assert!(!panics, "panique simulée")),
+    };
+    let mut state = State {
+        job: Some(job(true)),
+        ..State::default()
+    };
+    assert_eq!(shut_down(&mut state, false), EXIT_RUNTIME_ERROR);
+    assert!(state.job.is_none());
+    let mut calm = State {
+        job: Some(job(false)),
+        ..State::default()
+    };
+    assert_eq!(shut_down(&mut calm, true), EXIT_CANCELLED);
+    assert_eq!(shut_down(&mut State::default(), false), 0);
+}
