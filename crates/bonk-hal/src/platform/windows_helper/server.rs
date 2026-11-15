@@ -14,15 +14,15 @@ use crate::image::Access;
 use crate::platform::Platform;
 use crate::platform::windows::Windows;
 use crate::platform::windows_disk;
-use crate::safety::{Eligibility, Exclusion, FilterOptions, evaluate};
-use crate::windows_facts::partition_numbers;
+use crate::safety::{Eligibility, FilterOptions, evaluate};
+use crate::windows_facts::{FreshTable, helper_refuses, partition_numbers};
 
 /// With the widest options: the client's request is not trusted, but it may have allowed an internal or
 /// virtual disk. The system disk and its kind stay refused regardless.
 ///
 /// `fresh_table`: Bonk just wrote the table, and Windows may have given the new partition a letter. That
 /// mount says nothing about the disk.
-pub(in crate::platform) fn check_allowed(path: &str, fresh_table: bool) -> Result<(), String> {
+pub(in crate::platform) fn check_allowed(path: &str, fresh: FreshTable) -> Result<(), String> {
     let disks = Windows.enumerate().map_err(|e| e.to_string())?;
     let disk = disks
         .iter()
@@ -33,9 +33,7 @@ pub(in crate::platform) fn check_allowed(path: &str, fresh_table: bool) -> Resul
         allow_virtual: true,
     };
     let refused = match evaluate(disk, options) {
-        Eligibility::Excluded { reasons } => reasons
-            .iter()
-            .any(|r| !(fresh_table && matches!(r, Exclusion::MountedOutsideUserPaths { .. }))),
+        Eligibility::Excluded { reasons } => helper_refuses(&reasons, fresh),
         _ => false,
     };
     if refused {
@@ -82,29 +80,32 @@ pub(in crate::platform) fn respond(request: &Value, client: u32) -> Result<Value
     let text = |e: &dyn std::fmt::Display| e.to_string();
     match request["op"].as_str() {
         Some("check") => {
-            check_allowed(path, false)?;
+            check_allowed(path, FreshTable::No)?;
             windows_disk::prepare(Path::new(path), access).map_err(|e| text(&e))?;
             Ok(json!({}))
         }
         Some("unmount") => {
-            check_allowed(path, false)?;
+            check_allowed(path, FreshTable::No)?;
             let unmounted = windows_disk::unmount(path).map_err(|e| text(&e))?;
             Ok(json!({ "unmounted": unmounted }))
         }
         Some("open") => {
-            check_allowed(path, false)?;
+            check_allowed(path, FreshTable::No)?;
             let file = windows_disk::open_file(Path::new(path), access).map_err(|e| text(&e))?;
             let handle = hand_over(&file, client).map_err(|e| text(&e))?;
             Ok(json!({ "handle": handle }))
         }
         Some("rescan") => {
-            check_allowed(path, true)?;
+            check_allowed(path, FreshTable::Whole)?;
             windows_disk::rescan(Path::new(path)).map_err(|e| text(&e))?;
             Ok(json!({}))
         }
         Some("format") => {
-            let (disk, _) = partition_numbers(path).ok_or("not a partition")?;
-            check_allowed(&format!(r"\\.\PhysicalDrive{disk}"), true)?;
+            let (disk, part) = partition_numbers(path).ok_or("not a partition")?;
+            check_allowed(
+                &format!(r"\\.\PhysicalDrive{disk}"),
+                FreshTable::Partition(part),
+            )?;
             let fs = Filesystem::ALL
                 .into_iter()
                 .find(|fs| request["fs"] == fs.name())

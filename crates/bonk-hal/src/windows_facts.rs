@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::disk::{Bus, Disk, DiskKind, Partition};
 use crate::enumerate::{EnumerateError, SourceRead};
+use crate::safety::Exclusion;
 
 pub const SOURCE: &str = "windows:facts";
 
@@ -291,6 +292,28 @@ pub fn partition_numbers(path: &str) -> Option<(u32, u32)> {
     Some((disk_number(disk)?, part.parse().ok()?))
 }
 
+/// How far a table Bonk just wrote lifts the exclusion of a partition the system mounted on its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FreshTable {
+    No,
+    /// After writing the table: every partition on it is new.
+    Whole,
+    /// Formatting this partition number: only its own mount is tolerated.
+    Partition(u32),
+}
+
+/// What the elevated helper still refuses on a disk the safety filter excludes.
+#[must_use]
+pub fn helper_refuses(reasons: &[Exclusion], fresh: FreshTable) -> bool {
+    reasons.iter().any(|reason| match (reason, fresh) {
+        (Exclusion::MountedOutsideUserPaths { .. }, FreshTable::Whole) => false,
+        (Exclusion::MountedOutsideUserPaths { partition, .. }, FreshTable::Partition(number)) => {
+            partition_numbers(partition).map(|(_, part)| part) != Some(number)
+        }
+        _ => true,
+    })
+}
+
 pub(crate) fn from_capture(reads: &[SourceRead]) -> Option<Result<Vec<Disk>, EnumerateError>> {
     let read = reads.iter().find(|read| read.path == SOURCE)?;
     let parsed: Result<WindowsFacts, String> = read
@@ -327,6 +350,33 @@ pub fn sanitize(content: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn mounted(partition: &str) -> Exclusion {
+        Exclusion::MountedOutsideUserPaths {
+            partition: partition.to_owned(),
+            mount: "D:".to_owned(),
+        }
+    }
+
+    #[test]
+    fn seule_la_partition_formatee_peut_etre_montee_par_le_systeme() {
+        let disk = r"\\.\PhysicalDrive2";
+        let first = [mounted(&format!(r"{disk}\Partition1"))];
+        let second = [mounted(&format!(r"{disk}\Partition2"))];
+        assert!(!helper_refuses(&first, FreshTable::Partition(1)));
+        assert!(helper_refuses(&second, FreshTable::Partition(1)));
+        assert!(!helper_refuses(&second, FreshTable::Whole));
+        assert!(helper_refuses(&first, FreshTable::No));
+    }
+
+    #[test]
+    fn une_autre_exclusion_refuse_toujours() {
+        let system = [Exclusion::SystemVolume {
+            partition: r"\\.\PhysicalDrive2\Partition1".to_owned(),
+        }];
+        assert!(helper_refuses(&system, FreshTable::Whole));
+        assert!(helper_refuses(&system, FreshTable::Partition(1)));
+    }
     use crate::safety::{Eligibility, Exclusion, FilterOptions, evaluate};
 
     fn volume(name: &str, mount: &[&str], fs: &str, extents: &[(u32, u64)]) -> RawVolume {
