@@ -38,3 +38,19 @@ fn un_disque_trop_petit_ne_recoit_rien() {
     assert_eq!(result.err().map(|e| e.code), Some(Code::FormatFailed));
     assert!(device.as_bytes().iter().all(|b| *b == 0));
 }
+
+#[test]
+fn les_espaces_d_un_nom_d_iso_deviennent_des_soulignes() {
+    use super::edit::vault_name;
+    let path = std::path::Path::new("/tmp/Ubuntu 26.04 desktop.iso");
+    assert_eq!(
+        vault_name(path, None).ok().as_deref(),
+        Some("Ubuntu_26.04_desktop.iso")
+    );
+    assert_eq!(
+        vault_name(path, Some("ma copie.ISO")).ok().as_deref(),
+        Some("ma_copie.ISO")
+    );
+    let refus = vault_name(path, Some("image.img")).err();
+    assert_eq!(refus.map(|e| e.code), Some(Code::IsoNotForVault));
+}

@@ -109,7 +109,7 @@ pub(crate) struct AddArgs {
     #[command(flatten)]
     common: CommonArgs,
 
-    /// ISO image to copy: Debian live, Ubuntu, Arch Linux or Fedora live, without spaces in its name
+    /// ISO image to copy: Debian live, Ubuntu, Arch Linux or Fedora live; spaces in its name become _
     iso: PathBuf,
 
     /// Confirm: without --yes, Bonk does nothing
