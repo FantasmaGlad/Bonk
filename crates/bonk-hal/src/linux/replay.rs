@@ -65,18 +65,28 @@ fn file_name(name: &str) -> io::Result<&str> {
 }
 
 pub(super) fn build_tree(base: &Path, reads: &[SourceRead]) -> io::Result<()> {
-    use std::collections::BTreeMap;
     let udev = crate::enumerate::UDEV_DATA.trim_start_matches('/');
     for dir in ["sys/block", "proc/self", udev, "dev"] {
         fs::create_dir_all(base.join(dir))?;
     }
     // `/sys/block/<name>` links to the canonical device path.
-    let links: BTreeMap<&str, &str> = reads
+    let links: Links<'_> = reads
         .iter()
         .filter(|r| r.kind == "link")
         .filter_map(|r| r.content.as_deref().map(|c| (standard_path(&r.path), c)))
         .collect();
-    for (link, relative) in &links {
+    make_links(base, &links)?;
+    for read in reads.iter().filter(|r| r.ok) {
+        write_read(base, &links, read)?;
+    }
+    Ok(())
+}
+
+/// Each `/sys/block/<name>` captured as a link, and the canonical path it names.
+type Links<'a> = std::collections::BTreeMap<&'a str, &'a str>;
+
+fn make_links(base: &Path, links: &Links<'_>) -> io::Result<()> {
+    for (link, relative) in links {
         let Some(name) = link.rsplit('/').next() else {
             continue;
         };
@@ -85,43 +95,46 @@ pub(super) fn build_tree(base: &Path, reads: &[SourceRead]) -> io::Result<()> {
         #[cfg(unix)]
         std::os::unix::fs::symlink(format!("../{relative}"), base.join("sys/block").join(name))?;
     }
-    // A path read through a link is written at the canonical place.
-    let place = |path: &str| -> io::Result<PathBuf> {
-        let path = standard_path(path);
-        for (link, relative) in &links {
-            if let Some(rest) = path
-                .strip_prefix(link)
-                .filter(|r| r.is_empty() || r.starts_with('/'))
-            {
-                return Ok(base
-                    .join("sys")
-                    .join(self::relative(relative)?)
-                    .join(self::relative(rest)?));
+    Ok(())
+}
+
+/// A path read through a link is written at the canonical place.
+fn place(base: &Path, links: &Links<'_>, path: &str) -> io::Result<PathBuf> {
+    let path = standard_path(path);
+    for (link, relative) in links {
+        if let Some(rest) = path
+            .strip_prefix(link)
+            .filter(|r| r.is_empty() || r.starts_with('/'))
+        {
+            return Ok(base
+                .join("sys")
+                .join(self::relative(relative)?)
+                .join(self::relative(rest)?));
+        }
+    }
+    Ok(base.join(self::relative(path)?))
+}
+
+fn write_read(base: &Path, links: &Links<'_>, read: &SourceRead) -> io::Result<()> {
+    match read.kind.as_str() {
+        "file" => {
+            let target = place(base, links, &read.path)?;
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::write(target, read.content.as_deref().unwrap_or_default())?;
+        }
+        "dir" => {
+            let target = place(base, links, &read.path)?;
+            fs::create_dir_all(&target)?;
+            // Stacked devices are only known by name.
+            if standard_path(&read.path).ends_with("/holders") {
+                for name in read.content.as_deref().unwrap_or_default().lines() {
+                    fs::write(target.join(file_name(name)?), "")?;
+                }
             }
         }
-        Ok(base.join(self::relative(path)?))
-    };
-    for read in reads.iter().filter(|r| r.ok) {
-        match read.kind.as_str() {
-            "file" => {
-                let target = place(&read.path)?;
-                if let Some(parent) = target.parent() {
-                    fs::create_dir_all(parent)?;
-                }
-                fs::write(target, read.content.as_deref().unwrap_or_default())?;
-            }
-            "dir" => {
-                let target = place(&read.path)?;
-                fs::create_dir_all(&target)?;
-                // Stacked devices are only known by name.
-                if standard_path(&read.path).ends_with("/holders") {
-                    for name in read.content.as_deref().unwrap_or_default().lines() {
-                        fs::write(target.join(file_name(name)?), "")?;
-                    }
-                }
-            }
-            _ => {}
-        }
+        _ => {}
     }
     Ok(())
 }
