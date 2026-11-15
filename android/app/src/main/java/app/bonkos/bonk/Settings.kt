@@ -26,7 +26,7 @@ internal fun SettingsPage(settings: SettingsView, send: (ToRust) -> Unit) {
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(Tokens.SPACE_LARGE.dp),
     ) {
-Row(
+        Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp),
         ) {
@@ -43,7 +43,10 @@ Row(
         }
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.SPACE_SMALL.dp)) {
             Body(settings.networkTitle)
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp),
+            ) {
                 Switch(settings.offline, { send(SettingsAction("offline", it.toString())) })
                 Small(settings.offlineLabel, LocalPalette.current.ink)
             }

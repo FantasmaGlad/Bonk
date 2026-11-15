@@ -64,15 +64,7 @@ internal fun Screen(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(Tokens.SPACE_LARGE.dp),
     ) {
-Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp),
-        ) {
-            Text("BONK", fontSize = Tokens.TEXT_TITLE.sp, modifier = Modifier.weight(1f))
-            state.incognito?.let { IncognitoButton(it, send) }
-            state.catalogButton?.let { label -> Secondary(label) { send(CatalogAction("open")) } }
-            Secondary(state.settingsButton) { send(SettingsAction("open")) }
-        }
+        Header(state, send)
         Small(state.status)
         state.notice?.let { Body(it) }
         val waiting = remember(revision, errors) { usb.drives().filterNot(usb::hasPermission) }
