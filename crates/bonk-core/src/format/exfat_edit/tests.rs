@@ -1,6 +1,7 @@
 use super::*;
 use crate::block::MemoryDevice;
 use crate::format::exfat::{self, Volume as NewVolume};
+use crate::partition::read_range;
 
 const MIB: u64 = 1 << 20;
 const VOLUME: NewVolume<'static> = NewVolume {

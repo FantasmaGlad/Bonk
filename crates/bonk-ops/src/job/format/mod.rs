@@ -1,18 +1,25 @@
-use std::path::Path;
-
 use bonk_core::BlockDevice;
 use bonk_core::format::table::{self, PartitionPlan, TableKind};
-use bonk_core::format::{Filesystem, FormatError, Ids, exfat, fat32, normalize_label};
+use bonk_core::format::{Filesystem, FormatError, Ids, normalize_label};
 use bonk_core::partition::{Severity, inspect};
 use bonk_hal::platform::format_capability;
-use bonk_hal::{Elevation, FilterOptions, OpenTargetError, TargetIdentity};
+use bonk_hal::{Elevation, FilterOptions};
 
-use super::target::{Chosen, OpenRequest, choose, enumerate, map_open_target, reread_table};
+use super::target::{Chosen, OpenRequest, choose};
 use super::target::{OpenedForWriting, open_for_writing};
 use super::types::{Deps, FormatDone, JobError, SCHEMA_VERSION, Target, TargetInfo, TraceIo, fail};
 use super::verify::drop_cache_before_verify;
 use super::write::confirm_internal;
 use crate::errors::Code;
+
+mod host;
+mod native;
+#[cfg(test)]
+mod tests;
+
+pub(super) use host::wait_for_partitions;
+use host::*;
+use native::*;
 
 /// Above this, `exfat` rather than `fat32`: the usual tool limit and what devices expect.
 const FAT32_DEFAULT_LIMIT: u64 = 32 << 30;
@@ -44,83 +51,6 @@ pub fn default_filesystem(size: u64) -> Filesystem {
 
 fn format_error(err: FormatError) -> JobError {
     fail(Code::FormatFailed, err)
-}
-
-/// `None` for host tools.
-fn native_cluster_bytes(
-    filesystem: Filesystem,
-    sectors: u64,
-    block: u32,
-) -> Result<Option<u32>, FormatError> {
-    Ok(match filesystem {
-        Filesystem::Fat32 => Some(fat32::geometry(sectors, block)?.cluster_bytes),
-        Filesystem::Exfat => Some(exfat::geometry(sectors, block)?.cluster_bytes),
-        Filesystem::Ntfs | Filesystem::Ext4 => None,
-    })
-}
-
-fn write_native(
-    device: &mut dyn BlockDevice,
-    filesystem: Filesystem,
-    partition: PartitionPlan,
-    label: Option<&str>,
-    volume_id: u32,
-) -> Result<(), FormatError> {
-    match filesystem {
-        Filesystem::Fat32 => fat32::write(
-            device,
-            &fat32::Volume {
-                first_lba: partition.first_lba,
-                sectors: partition.sectors(),
-                label,
-                volume_id,
-                bios_boot: false,
-            },
-        )
-        .map(drop),
-        Filesystem::Exfat => exfat::write(
-            device,
-            &exfat::Volume {
-                first_lba: partition.first_lba,
-                sectors: partition.sectors(),
-                label,
-                volume_id,
-            },
-        )
-        .map(drop),
-        Filesystem::Ntfs | Filesystem::Ext4 => Ok(()),
-    }
-}
-
-fn verify_native(
-    device: &dyn BlockDevice,
-    filesystem: Filesystem,
-    partition: PartitionPlan,
-    label: Option<&str>,
-    volume_id: u32,
-) -> Result<(), FormatError> {
-    match filesystem {
-        Filesystem::Fat32 => fat32::verify(
-            device,
-            &fat32::Volume {
-                first_lba: partition.first_lba,
-                sectors: partition.sectors(),
-                label,
-                volume_id,
-                bios_boot: false,
-            },
-        ),
-        Filesystem::Exfat => exfat::verify(
-            device,
-            &exfat::Volume {
-                first_lba: partition.first_lba,
-                sectors: partition.sectors(),
-                label,
-                volume_id,
-            },
-        ),
-        Filesystem::Ntfs | Filesystem::Ext4 => Ok(()),
-    }
 }
 
 /// Before any action.
@@ -189,76 +119,6 @@ fn check_table(dev: &dyn BlockDevice, part: PartitionPlan) -> Result<(), JobErro
     }
 }
 
-/// Recognized by its size: the system may keep the old table for a while, and formatting an old partition at
-/// the same place would destroy the wrong area.
-fn wait_for_partition(
-    id: &str,
-    expected_bytes: u64,
-    deps: &Deps<'_>,
-) -> Result<Option<String>, JobError> {
-    Ok(
-        wait_for_partitions(id, &[expected_bytes], deps)?
-            .and_then(|paths| paths.into_iter().next()),
-    )
-}
-
-/// Paths of the disk's partitions once their sizes are exactly `expected`, in any order.
-pub(super) fn wait_for_partitions(
-    id: &str,
-    expected: &[u64],
-    deps: &Deps<'_>,
-) -> Result<Option<Vec<String>>, JobError> {
-    let mut wanted = expected.to_vec();
-    wanted.sort_unstable();
-    for _ in 0..PARTITION_LOOKS {
-        let disks = enumerate(deps)?;
-        let found = disks.iter().find(|disk| disk.id == id).filter(|disk| {
-            let mut sizes: Vec<u64> = disk.partitions.iter().map(|p| p.size_bytes).collect();
-            sizes.sort_unstable();
-            sizes == wanted
-        });
-        if let Some(disk) = found {
-            return Ok(Some(
-                disk.partitions.iter().map(|p| p.path.clone()).collect(),
-            ));
-        }
-        if (deps.io.cancelled)() {
-            return Err(fail(
-                Code::Cancelled,
-                "cancelled while waiting for the partition",
-            ));
-        }
-        (deps.io.pause)();
-    }
-    Ok(None)
-}
-
-/// The host tool's output is not parsed: the system must at least recognize the result.
-fn wait_for_filesystem(id: &str, fs: Filesystem, deps: &Deps<'_>) -> Result<(), JobError> {
-    for _ in 0..PARTITION_LOOKS {
-        let disks = enumerate(deps)?;
-        let found = disks
-            .iter()
-            .find(|disk| disk.id == id)
-            .and_then(|disk| disk.partitions.first())
-            .and_then(|partition| partition.fs_type.as_deref());
-        if found == Some(fs.name()) {
-            return Ok(());
-        }
-        if (deps.io.cancelled)() {
-            return Err(fail(
-                Code::Cancelled,
-                "cancelled while waiting for the file system",
-            ));
-        }
-        (deps.io.pause)();
-    }
-    Err(fail(
-        Code::FormatFailed,
-        format!("the system does not recognize {fs} on the new partition"),
-    ))
-}
-
 fn write_volume(
     device: &mut dyn BlockDevice,
     kind: TableKind,
@@ -287,54 +147,6 @@ fn write_volume(
     check_table(device, partition)?;
     verify_native(device, filesystem, partition, label, ids.volume_id).map_err(format_error)?;
     Ok((partition, cluster_bytes))
-}
-
-struct HostDisk<'a> {
-    identity: &'a TargetIdentity,
-    path: &'a str,
-    elevation: Elevation,
-}
-
-/// The system rereads the table, shows the partition and formats it with its own tools.
-fn hand_over_to_host(
-    disk: &HostDisk<'_>,
-    partition_bytes: u64,
-    filesystem: Filesystem,
-    label: Option<&str>,
-    deps: &Deps<'_>,
-) -> Result<(), JobError> {
-    reread_table(Path::new(disk.path), disk.elevation, deps);
-    let path = wait_for_partition(&disk.identity.id, partition_bytes, deps)?;
-    if !filesystem.is_native() {
-        let path = path.ok_or_else(|| {
-            fail(
-                Code::FormatFailed,
-                "the system does not show the new partition: nothing was formatted on it",
-            )
-        })?;
-        // The host tool writes to a path: its disk must be the chosen one (same id, serial, size). The full
-        // filter is not run again: the system just mounted the new partition (Windows gives it a letter at
-        // once), and that mount is ours.
-        let disks = enumerate(deps)?;
-        let found = disks
-            .iter()
-            .find(|candidate| candidate.id == disk.identity.id)
-            .ok_or_else(|| map_open_target(OpenTargetError::NotFound(disk.identity.id.clone())))?;
-        let actual = TargetIdentity::from(found);
-        if actual != *disk.identity {
-            return Err(map_open_target(OpenTargetError::IdentityChanged {
-                expected: Box::new(disk.identity.clone()),
-                actual: Box::new(actual),
-            }));
-        }
-        (deps.io.format_partition)(Path::new(&path), filesystem, label, disk.elevation)
-            .map_err(|e| fail(Code::FormatFailed, e))?;
-        wait_for_filesystem(&disk.identity.id, filesystem, deps)?;
-    } else if path.is_none() {
-        // FAT32 is written and read back: the system will see it at the next plug.
-        log::warn!(target: "bonk::write", "new partition not visible yet: unplug and replug the disk");
-    }
-    Ok(())
 }
 
 struct Settled {
@@ -458,55 +270,4 @@ fn format_target(
     settled.planned = partition;
     settled.cluster_bytes = cluster_bytes;
     Ok(done(job, &settled, info, unmounted))
-}
-
-#[cfg(test)]
-mod volume_tests {
-    #![allow(clippy::unwrap_used)]
-
-    use bonk_core::MemoryDevice;
-
-    use super::*;
-
-    fn ids() -> Ids {
-        Ids::from_seed(b"essai")
-    }
-
-    /// The plan uses 512-byte sectors: on 4 KiB sectors only the real drive shows FAT32 does not fit. The
-    /// refusal must come before the table.
-    #[test]
-    fn fat32_refuse_sur_secteurs_de_4_kio_ne_laisse_aucune_table() {
-        let mut device = MemoryDevice::new(100 << 20, 4096).unwrap();
-        let result = write_volume(
-            &mut device,
-            TableKind::Gpt,
-            Filesystem::Fat32,
-            None,
-            &ids(),
-            &|| false,
-        );
-        assert!(result.is_err());
-        assert!(device.as_bytes().iter().all(|b| *b == 0));
-    }
-
-    /// Cancel is seen between steps: no filesystem after a cancelled table.
-    #[test]
-    fn l_annulation_arrete_le_formatage_entre_ses_etapes() {
-        let mut device = MemoryDevice::new(100 << 20, 512).unwrap();
-        let result = write_volume(
-            &mut device,
-            TableKind::Gpt,
-            Filesystem::Fat32,
-            None,
-            &ids(),
-            &|| true,
-        );
-        assert_eq!(result.err().map(|e| e.code), Some(Code::Cancelled));
-        let volume = 1 << 20;
-        assert!(
-            device.as_bytes()[volume..volume + 512]
-                .iter()
-                .all(|b| *b == 0)
-        );
-    }
 }

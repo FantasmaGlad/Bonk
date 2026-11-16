@@ -1,13 +1,12 @@
 use std::io::Read;
 
 use super::FormatError;
-use super::exfat::{END_OF_CHAIN, ENTRY, FIRST_CLUSTER, checksum16, upcase_map};
+use super::exfat::{END_OF_CHAIN, ENTRY, FIRST_CLUSTER, upcase_map};
 use super::exfat_read::Reader;
-use super::exfat_tree::{entries_for, entry_set, name_units};
+use super::exfat_tree::{entries_for, name_units};
 use super::tree::Placed;
 use super::tree::{verify_contiguous, write_contiguous};
 use crate::block::BlockDevice;
-use crate::partition::read_range;
 
 #[cfg(test)]
 mod tests;

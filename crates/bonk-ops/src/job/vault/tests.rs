@@ -2,7 +2,7 @@
 
 use bonk_core::format::Ids;
 use bonk_core::format::table::TableKind;
-use bonk_core::vault::{self};
+use bonk_core::vault;
 
 use crate::errors::Code;
 
