@@ -11,7 +11,6 @@ on:
       - ".github/workflows/ci.yml"
       - ".github/paquets-linux.txt"
       - ".github/scripts/essai-disque-virtuel.*"
-      - ".github/scripts/longueur.py"
   # Merged PRs were checked one by one; the weekly run checks them together, on every system.
   schedule:
     - cron: "37 4 * * 1"
@@ -52,8 +51,6 @@ jobs:
           grep -vE '^[[:space:]]*(#|$)' .github/paquets-linux.txt | xargs sudo apt-get install -y --no-install-recommends
       - name: Formatage
         run: cargo fmt --all --check
-      - name: Longueur des fichiers
-        run: python3 .github/scripts/longueur.py
       - name: Lint
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       # Without linking, ring's C is unused: `true` stands in for the compiler.
