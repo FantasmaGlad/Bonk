@@ -51,7 +51,6 @@ pub(super) const ARCH_RULES: [(&str, IsoArch); 3] = [
     ("EFI/boot/bootaa64.efi", IsoArch::Aarch64),
 ];
 
-/// An ISO the vault menu starts, and the processor it starts on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IsoKind {
     pub family: IsoFamily,

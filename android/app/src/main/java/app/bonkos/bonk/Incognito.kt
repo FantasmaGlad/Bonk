@@ -24,7 +24,6 @@ import androidx.compose.ui.unit.dp
 
 private const val GLYPH_DP = 22
 
-/** Round, filled while Tor is on; without Tor, inactive beside the Tor project link. */
 @Composable
 internal fun IncognitoButton(view: IncognitoView, send: (ToRust) -> Unit) {
     val palette = LocalPalette.current

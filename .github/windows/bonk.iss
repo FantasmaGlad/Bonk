@@ -1,5 +1,4 @@
-; Installateur de Bonk : raccourci du menu Démarrer et désinstallation, sans droits d'administrateur. Le disque,
-; lui, demandera son autorisation au moment d'écrire ; l'interface ne tourne jamais en administrateur.
+; Per-user install without administrator rights: elevation is asked only when a disk is written.
 #define Version GetEnv("BONK_VERSION")
 #define Arch GetEnv("BONK_ARCH")
 #define Allowed GetEnv("BONK_ALLOWED")

@@ -421,7 +421,6 @@ impl<'a, 'b> Advance<'a, 'b> {
     }
 }
 
-/// Table, volume, files, then each file read back with the cache dropped.
 pub(super) fn run(
     prepared: &WindowsImage,
     file: &ImageFile,
