@@ -19,7 +19,10 @@ pub const REFRESH_EVERY: Duration = Duration::from_secs(2);
 #[derive(Debug, Clone, PartialEq)]
 pub enum Effect {
     Enumerate,
-    LoadCatalog,
+    /// `bonk catalog list`, through Tor when the interface is incognito.
+    LoadCatalog {
+        proxy: Option<String>,
+    },
     DetectTor,
     Copy(String),
     PickImage,
@@ -204,6 +207,8 @@ pub struct Model {
     pub write: WriteState,
     pub confirming_internal: bool,
     pub catalog: crate::catalog::CatalogState,
+    /// The network or Tor did not answer: the catalog shown is the last verified copy.
+    pub catalog_saved: bool,
     /// Never reach the network: the catalog is neither read nor shown, and a web address is refused.
     pub offline: bool,
     /// Labels of the usage categories and bases, from the catalog once read.

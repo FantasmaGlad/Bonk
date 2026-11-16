@@ -9,8 +9,9 @@ sealed interface Effect
 @Serializable @SerialName("enumerate")
 data object Enumerate : Effect
 
+/** `proxy`: Tor while incognito; the catalog, its signature and the logos then all go through it. */
 @Serializable @SerialName("catalog")
-data object LoadCatalog : Effect
+data class LoadCatalog(val proxy: String? = null) : Effect
 
 @Serializable @SerialName("pick")
 data object PickImage : Effect
@@ -62,4 +63,6 @@ data class VaultRun(
     val device: String?,
     val iso: String? = null,
     val grub: List<GrubDownload> = emptyList(),
+    /** Tor while incognito, for GRUB. */
+    val proxy: String? = null,
 ) : Effect

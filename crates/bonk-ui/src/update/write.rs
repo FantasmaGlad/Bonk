@@ -114,7 +114,7 @@ impl Model {
             },
             self.view_options(),
             internal_confirmed,
-            self.tor.as_deref().filter(|_| self.use_tor),
+            self.proxy(),
         );
         log::info!(target: "bonk::gui", disk = disk_id.as_str(); "starting the write");
         self.write = WriteState::Running {

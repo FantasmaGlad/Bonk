@@ -271,3 +271,40 @@ fn un_module_de_tests_a_part_n_est_pas_du_code_de_production() {
     assert!(!test_only(&cli.join("config").join("store.rs")));
     assert!(!test_only(&cli.join("lib.rs")));
 }
+
+/// One place to change when the catalog moves: every other file reads `manifest::DEFAULT_BASE`.
+#[test]
+fn l_adresse_du_catalogue_n_est_ecrite_qu_une_fois() {
+    fn walk(dir: &Path, found: &mut Vec<PathBuf>) {
+        for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            let name = path.file_name().unwrap_or_default();
+            if path.is_dir() {
+                if name != "target" && name != "build" {
+                    walk(&path, found);
+                }
+            } else if path.extension().is_some_and(|e| e == "rs" || e == "kt") {
+                found.push(path);
+            }
+        }
+    }
+    let crates = crates_dir();
+    let mut files = Vec::new();
+    walk(&crates, &mut files);
+    walk(
+        &crates.join("..").join("android").join("app").join("src"),
+        &mut files,
+    );
+    let definition = crates
+        .join("bonk-catalog")
+        .join("src")
+        .join("manifest")
+        .join("mod.rs");
+    let host = ["catalog", "bonk-os", "app"].join(".");
+    let written: Vec<PathBuf> = files
+        .into_iter()
+        .filter(|file| *file != definition && read(file).contains(&host))
+        .collect();
+    assert!(written.is_empty(), "{written:?}");
+    assert!(read(&definition).contains(&host));
+}

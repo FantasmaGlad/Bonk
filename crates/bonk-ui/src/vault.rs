@@ -181,14 +181,23 @@ pub fn vault_args(
 }
 
 impl Model {
-    fn run_vault(&mut self, disk_id: String, action: VaultAction, extra: Option<&str>) -> Effects {
-        let args = vault_args(
+    pub(crate) fn run_vault(
+        &mut self,
+        disk_id: String,
+        action: VaultAction,
+        extra: Option<&str>,
+    ) -> Effects {
+        let mut args = vault_args(
             action,
             &disk_id,
             extra,
             self.show_internal,
             self.allow_virtual,
         );
+        // Preparing and updating fetch GRUB from the catalog.
+        if let Some(proxy) = self.proxy() {
+            args.extend(["--proxy".to_owned(), proxy.to_owned()]);
+        }
         log::info!(target: "bonk::gui", action = action.name(); "vault command");
         self.vault = VaultState::Busy {
             disk_id,

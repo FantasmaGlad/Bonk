@@ -154,7 +154,7 @@ impl Model {
             )
         {
             self.catalog = CatalogState::Loading;
-            effects.push(Effect::LoadCatalog);
+            effects.push(self.load_catalog());
         }
         effects
     }
@@ -243,7 +243,7 @@ mod tests {
         assert_eq!(model.screen, Screen::Library);
         assert!(matches!(
             effects[..],
-            [Effect::ListKept, Effect::LoadCatalog]
+            [Effect::ListKept, Effect::LoadCatalog { proxy: None }]
         ));
         model.navigate(crate::model::Nav::Escape);
         assert_eq!(model.screen, Screen::Main);

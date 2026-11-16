@@ -43,7 +43,8 @@ impl App {
                 .to_owned(),
             ),
         };
-        column![title, body].spacing(14).into()
+        let notice = self.catalog_notice().map(|notice| quiet(notice.to_owned()));
+        column![title].extend(notice).push(body).spacing(14).into()
     }
 
     fn catalog_grid<'a>(&'a self, systems: &'a [System]) -> Element<'a, Message> {

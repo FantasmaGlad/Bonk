@@ -1,6 +1,6 @@
 use crate::catalog;
 use crate::catalog::{CatalogState, ChoiceSource};
-use crate::model::{Effect, Effects, Focus, Message, Model, WriteState};
+use crate::model::{Effects, Focus, Message, Model, WriteState};
 use crate::source::ImageSource;
 
 impl Model {
@@ -41,6 +41,7 @@ impl Model {
         self.catalog = match result {
             Ok(shelf) => {
                 self.terms = shelf.terms;
+                self.catalog_saved = shelf.saved_copy;
                 CatalogState::Ready(shelf.systems)
             }
             Err(error) => {
@@ -69,7 +70,7 @@ impl Model {
             return Vec::new();
         }
         self.catalog = CatalogState::Loading;
-        vec![Effect::LoadCatalog]
+        vec![self.load_catalog()]
     }
 
     /// Only an empty draft: what the user typed or chose is never replaced.
@@ -108,6 +109,6 @@ impl Model {
             return Vec::new();
         }
         self.catalog = CatalogState::Loading;
-        vec![Effect::LoadCatalog]
+        vec![self.load_catalog()]
     }
 }

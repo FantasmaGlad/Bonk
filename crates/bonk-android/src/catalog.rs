@@ -8,10 +8,16 @@ use serde_json::{Value, json};
 
 use crate::{screen, vault};
 
-const BASE: &str = "https://catalog.bonk-os.app/v2/";
-
 /// The families of the last verified catalog: their logos are fetched by Kotlin after it.
 static FAMILIES: Mutex<Vec<Family>> = Mutex::new(Vec::new());
+
+/// The catalog and its signature, for Kotlin, which downloads them through the system's HTTPS.
+pub(crate) fn addresses() -> Value {
+    json!({
+        "catalog": format!("{}{}", manifest::DEFAULT_BASE, manifest::MANIFEST),
+        "signature": format!("{}{}", manifest::DEFAULT_BASE, manifest::SIGNATURE),
+    })
+}
 
 /// Checks the signature of the catalog Kotlin downloaded (system HTTPS) and hands it to the screen. Without
 /// network, `manifest::load` falls back to the last verified copy.
@@ -31,10 +37,16 @@ pub(crate) fn load(dir: &str, json: Vec<u8>, signature: Vec<u8>) -> Result<(), S
             Ok(bytes.clone())
         }
     };
-    let loaded = manifest::load(BASE, std::path::Path::new(dir), now, &TRUSTED_KEYS, &fetch)
-        .map_err(|error| error.to_string())?;
+    let loaded = manifest::load(
+        manifest::DEFAULT_BASE,
+        std::path::Path::new(dir),
+        now,
+        &TRUSTED_KEYS,
+        &fetch,
+    )
+    .map_err(|error| error.to_string())?;
     let mut catalog = loaded.catalog;
-    vault::set_grub(BASE, catalog.grub.take());
+    vault::set_grub(manifest::DEFAULT_BASE, catalog.grub.take());
     *screen::lock(&FAMILIES) = catalog.families.clone();
     let mut images = catalog.images;
     images.sort_by(|a, b| {
@@ -72,7 +84,7 @@ pub(crate) fn missing_icons(dir: &str) -> Value {
         .iter()
         .filter(|family| icons::cached(dir, family).is_none())
         .map(
-            |family| json!({"url": format!("{BASE}{}", family.icon), "sha256": family.icon_sha256}),
+            |family| json!({"url": format!("{}{}", manifest::DEFAULT_BASE, family.icon), "sha256": family.icon_sha256}),
         )
         .collect();
     Value::Array(wanted)
@@ -128,7 +140,7 @@ mod tests {
         let missing = missing_icons(&dir_text);
         assert_eq!(
             missing[0]["url"],
-            "https://catalog.bonk-os.app/v2/icons/debian.png"
+            format!("{}icons/debian.png", manifest::DEFAULT_BASE)
         );
         assert!(store_icon(&dir_text, LOGO_SHA256, b"autre").is_err());
         store_icon(&dir_text, LOGO_SHA256, logo)?;

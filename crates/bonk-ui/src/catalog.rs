@@ -63,6 +63,8 @@ pub struct System {
 pub struct Shelf {
     pub systems: Vec<System>,
     pub terms: crate::terms::Terms,
+    /// The last verified copy: the network did not answer.
+    pub saved_copy: bool,
 }
 
 /// A usage category, a base, or a single system and its versions. Empty: everything.
@@ -204,6 +206,7 @@ pub fn shelf(report: &CatalogReport) -> Shelf {
     Shelf {
         systems: systems(report),
         terms: crate::terms::Terms::from_catalog(report.taxonomy.as_ref()),
+        saved_copy: report.saved_copy,
     }
 }
 

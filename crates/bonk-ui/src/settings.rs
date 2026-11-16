@@ -304,7 +304,7 @@ mod tests {
 
         let effects = model.update(Message::Settings(SettingsMessage::Offline(false)));
         assert!(
-            effects.contains(&Effect::LoadCatalog),
+            effects.contains(&Effect::LoadCatalog { proxy: None }),
             "revenu en ligne, le menu se relit"
         );
         assert!(!model.refuses_address("https://exemple.org/a.iso"));

@@ -4,7 +4,12 @@
       "do": "enumerate"
     },
     {
-      "do": "catalog"
+      "do": "catalog",
+      "proxy": null
+    },
+    {
+      "do": "catalog",
+      "proxy": "socks5h://127.0.0.1:9050"
     },
     {
       "do": "pick"
@@ -42,7 +47,8 @@
       "disk_id": "usb-S1-001-002",
       "do": "vault",
       "grub": [],
-      "iso": "/proc/self/fd/43"
+      "iso": "/proc/self/fd/43",
+      "proxy": null
     },
     {
       "action": "update",
@@ -50,7 +56,8 @@
       "disk_id": "usb-S1-001-002",
       "do": "vault",
       "grub": [],
-      "iso": null
+      "iso": null,
+      "proxy": null
     }
   ],
   "messages": [
@@ -710,6 +717,7 @@
           "search": "",
           "search_hint": "Rechercher : Ubuntu, Fedora, Windows…"
         },
+        "notice": null,
         "title": "Catalogue"
       },
       "catalog_button": "Catalogue",
@@ -814,6 +822,7 @@
     {
       "browse": {
         "back": "Retour",
+        "notice": null,
         "system": {
           "back": "Tous les systèmes",
           "busy": false,

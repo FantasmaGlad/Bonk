@@ -8,45 +8,27 @@ import android.util.Log
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
-import java.net.InetSocketAddress
 import java.net.Proxy
-import java.net.URI
-import java.net.URL
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 
-private const val CATALOG = "https://catalog.bonk-os.app/v2/catalog.json"
 internal const val BUFFER = 1 shl 20
 private const val RETRY_MS = 10_000L
 private const val TAG = "Bonk"
 private const val ICON_WORKERS = 8
 private const val ICONS_TIMEOUT_S = 120L
 
-// Without a timeout a silent connection would block the download and its cancel.
-private const val CONNECT_TIMEOUT_MS = 30_000
-private const val READ_TIMEOUT_MS = 60_000
-
-internal fun open(address: String, proxy: Proxy = Proxy.NO_PROXY): HttpURLConnection =
-    (URL(address).openConnection(proxy) as HttpURLConnection).apply {
-        connectTimeout = CONNECT_TIMEOUT_MS
-        readTimeout = READ_TIMEOUT_MS
-    }
-
-/** Rust only hands over `socks5h://` addresses: anything else is refused, never a direct connection. */
-internal fun socks(address: String): Proxy {
-    val uri = URI(address)
-    if (uri.scheme != "socks5h" || uri.host == null || uri.port < 0) {
-        throw BonkFailure("E3008", "$address: only socks5h:// is accepted")
-    }
-    return Proxy(Proxy.Type.SOCKS, InetSocketAddress(uri.host, uri.port))
-}
-
-/** The catalog keeps its last verified copy when the network fails: nothing here may prevent it. */
-private fun fetchOrEmpty(address: String): ByteArray =
-    runCatching { open(address).inputStream.use { it.readBytes() } }.getOrDefault(ByteArray(0))
+/**
+ * The catalog keeps its last verified copy when the network fails: nothing here may prevent it. With a `proxy`
+ * that does not answer the result is empty, never a direct connection.
+ */
+private fun fetchOrEmpty(address: String, proxy: String?): ByteArray =
+    runCatching {
+        open(address, proxy?.let(::socks) ?: Proxy.NO_PROXY).inputStream.use { it.readBytes() }
+    }.getOrDefault(ByteArray(0))
 
 class Actions(
     private val context: Context,
@@ -108,15 +90,19 @@ class Actions(
         }
     }
 
-    fun catalog() {
+    fun catalog(proxy: String?) {
         thread {
             val directory = File(context.filesDir, "catalog").path
             val answer =
                 runCatching {
-                    Protocol.outcome(Native.loadCatalog(directory, fetchOrEmpty(CATALOG), fetchOrEmpty("$CATALOG.sig")))
+                    Protocol.catalogAddresses(Native.catalogAddresses()).let { at ->
+                        Protocol.outcome(
+                            Native.loadCatalog(directory, fetchOrEmpty(at.catalog, proxy), fetchOrEmpty(at.signature, proxy)),
+                        )
+                    }
                 }.getOrElse { Outcome(error = it.message ?: it.toString()) }
             send(answer.error?.let(::CatalogFailed) ?: Refresh)
-            if (answer.error == null) icons(directory)
+            if (answer.error == null) icons(directory, proxy)
         }
     }
 
@@ -124,14 +110,14 @@ class Actions(
      * After the list: the cards show at once, their logos as they arrive, [ICON_WORKERS] at a time. One by one,
      * a cold cache took about 20 s. A logo that fails stays absent.
      */
-    private fun icons(directory: String) {
+    private fun icons(directory: String, proxy: String?) {
         val wanted = runCatching { Protocol.icons(Native.missingIcons(directory)) }.getOrDefault(emptyList())
         if (wanted.isEmpty()) return
         val pool = Executors.newFixedThreadPool(ICON_WORKERS)
         val stored = AtomicInteger()
         wanted.forEach { icon ->
             pool.execute {
-                val bytes = fetchOrEmpty(icon.url)
+                val bytes = fetchOrEmpty(icon.url, proxy)
                 if (bytes.isNotEmpty()) {
                     Protocol.outcome(Native.storeIcon(directory, icon.sha256, bytes)).error?.let { Log.w(TAG, it) }
                 }
@@ -145,7 +131,7 @@ class Actions(
 
     private fun download(address: String, proxy: String?): File {
         val target = File(context.cacheDir, "image.download")
-        val connection = open(address, proxy?.let(::socks) ?: Proxy.NO_PROXY)
+        val connection = open(address, proxy?.let(::socks) ?: Proxy.NO_PROXY, compressed = false)
         val total = connection.contentLengthLong
         // allocateBytes clears system caches rather than refuse an image that would fit.
         val storage = context.getSystemService(StorageManager::class.java)
@@ -177,9 +163,9 @@ class Actions(
     }
 
     /** Rust checks the bytes against the signed catalog; the bound only stops a runaway download. */
-    private fun downloadGrub(grub: GrubDownload, folder: File) {
+    private fun downloadGrub(grub: GrubDownload, folder: File, proxy: String?) {
         val target = File(folder, grub.arch)
-        open(grub.url).inputStream.use { input ->
+        open(grub.url, proxy?.let(::socks) ?: Proxy.NO_PROXY).inputStream.use { input ->
             target.outputStream().use { output ->
                 val buffer = ByteArray(BUFFER)
                 var done = 0L
@@ -207,7 +193,7 @@ class Actions(
                     File(context.cacheDir, "grub").apply {
                         deleteRecursively()
                         mkdirs()
-                        images.forEach { downloadGrub(it, this) }
+                        images.forEach { downloadGrub(it, this, request.proxy) }
                     }
                 }
             val iso = request.iso.orEmpty()

@@ -23,7 +23,8 @@ class ProtocolTest {
         assertEquals(
             listOf(
                 Enumerate,
-                LoadCatalog,
+                LoadCatalog(),
+                LoadCatalog("socks5h://127.0.0.1:9050"),
                 PickImage,
                 SaveSetting("view.show_all", "true"),
                 Relaunch("theme", "dark"),

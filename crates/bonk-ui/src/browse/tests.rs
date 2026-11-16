@@ -1,7 +1,7 @@
 use super::*;
 use crate::catalog::Choice;
 use crate::event::{Event, Outcome};
-use crate::model::Message;
+use crate::model::{Effect, Message};
 
 fn debian() -> System {
     let download = |id: &str| Choice {
@@ -40,7 +40,7 @@ fn l_onglet_lit_le_catalogue_une_fois_et_jamais_hors_ligne() {
     let mut model = Model::default();
     assert_eq!(
         browse(BrowseMessage::Open, &mut model),
-        [Effect::LoadCatalog]
+        [Effect::LoadCatalog { proxy: None }]
     );
     assert_eq!(model.screen, Screen::Catalog);
     assert!(browse(BrowseMessage::Open, &mut model).is_empty());

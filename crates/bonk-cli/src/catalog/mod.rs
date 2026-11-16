@@ -15,7 +15,6 @@ pub(crate) mod download;
 use bonk_ops::job::{self, JobError};
 
 /// Up to the format version directory.
-const DEFAULT_URL: &str = "https://catalog.bonk-os.app/v2/";
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum CatalogAction {
@@ -91,7 +90,7 @@ fn base_url(given: Option<&str>, variable: Option<String>) -> String {
     let url = given
         .map(str::to_owned)
         .or(variable)
-        .unwrap_or_else(|| DEFAULT_URL.to_owned());
+        .unwrap_or_else(|| manifest::DEFAULT_BASE.to_owned());
     if url.ends_with('/') {
         url
     } else {
@@ -573,7 +572,7 @@ mod tests {
             "https://a/b/"
         );
         assert_eq!(base_url(None, Some("https://c".into())), "https://c/");
-        assert_eq!(base_url(None, None), DEFAULT_URL);
+        assert_eq!(base_url(None, None), manifest::DEFAULT_BASE);
     }
 
     #[test]

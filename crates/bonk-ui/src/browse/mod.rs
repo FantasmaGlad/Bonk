@@ -9,7 +9,7 @@ pub use labels::{desktop_label, media_label};
 pub use text::{variant_facts, writable_count};
 
 use crate::catalog::{CatalogState, ChoiceSource, System};
-use crate::model::{Effect, Effects, Focus, Model};
+use crate::model::{Effects, Focus, Model};
 use crate::settings::Screen;
 
 /// The catalog tab: its filters and the system whose variants are shown.
@@ -109,7 +109,7 @@ impl Model {
             CatalogState::NotLoaded | CatalogState::Failed(_)
         ) {
             self.catalog = CatalogState::Loading;
-            return vec![Effect::LoadCatalog];
+            return vec![self.load_catalog()];
         }
         Vec::new()
     }

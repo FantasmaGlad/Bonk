@@ -10,11 +10,14 @@ mod verify;
 pub(crate) use cache::hex;
 pub use cache::{FetchSized, asset_matches, asset_path, icon_path};
 pub(crate) use load::replace;
-pub use load::{Loaded, load};
+pub use load::{Loaded, MANIFEST, SIGNATURE, load};
 pub use types::*;
 pub use verify::verify;
 
 pub const SCHEMA_VERSION: u32 = 2;
+
+/// Where Bonk reads its catalog unless told otherwise; the signature, not the address, is what makes it trusted.
+pub const DEFAULT_BASE: &str = "https://catalog.bonk-os.app/v2/";
 
 /// The current key, in the publishing secrets, and an offline backup that keeps publishing possible without a
 /// new Bonk release if the first is lost.

@@ -26,6 +26,7 @@ pub(crate) fn state(model: &Model) -> Value {
     let mut view = json!({
         "title": lang.pick("Catalog", "Catalogue"),
         "back": lang.pick("Back", "Retour"),
+        "notice": model.catalog_notice(),
     });
     match (&model.catalog, model.opened_system()) {
         (CatalogState::Ready(_), Some(system)) => view["system"] = system_page(model, system),

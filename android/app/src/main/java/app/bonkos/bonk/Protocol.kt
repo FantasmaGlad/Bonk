@@ -11,6 +11,9 @@ class BonkFailure(val code: String, message: String) : Exception(message)
 data class Outcome(val error: String? = null)
 
 @Serializable
+data class CatalogAddresses(val catalog: String, val signature: String)
+
+@Serializable
 data class Probe(
     @SerialName("size_bytes") val sizeBytes: Long = 0,
     val partitions: List<PartitionInfo> = emptyList(),
@@ -28,6 +31,8 @@ object Protocol {
         }
 
     fun encode(message: ToRust): String = toRust.encodeToString(ToRust.serializer(), message)
+
+    fun catalogAddresses(json: String): CatalogAddresses = fromRust.decodeFromString(CatalogAddresses.serializer(), json)
 
     fun answer(text: String): Answer = fromRust.decodeFromString(Answer.serializer(), text)
 

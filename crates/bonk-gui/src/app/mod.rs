@@ -124,10 +124,10 @@ impl App {
                 off_thread_result(|| enumerate_disks().map_err(|erreur| erreur.to_string())),
                 Message::Loaded,
             ),
-            Effect::LoadCatalog => {
+            Effect::LoadCatalog { proxy } => {
                 let program = self.program();
                 Task::perform(
-                    off_thread_result(move || catalog::read(program)),
+                    off_thread_result(move || catalog::read(program, proxy.as_deref())),
                     Message::CatalogLoaded,
                 )
             }

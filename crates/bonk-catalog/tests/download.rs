@@ -16,7 +16,7 @@ use bonk_catalog::{
 const ETAG: &str = "\"v1\"";
 
 /// What the server does with a connection, by its number (from 0).
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, PartialEq)]
 enum Reply {
     /// Honours `Range` and `If-Range`.
     Serve,
@@ -26,6 +26,10 @@ enum Reply {
     WrongStart,
     Mute,
     Status(u16),
+    /// Compresses the body when the request accepts gzip.
+    Gzip,
+    /// These gzip bytes, whatever the request.
+    Raw(Vec<u8>),
 }
 
 struct Server {
@@ -82,6 +86,15 @@ fn requested_start(request: &str) -> Option<usize> {
         .ok()
 }
 
+fn answer_gzip(mut stream: TcpStream, gzip: &[u8]) {
+    let _ = write!(
+        stream,
+        "HTTP/1.1 200 OK\r\ncontent-encoding: gzip\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+        gzip.len()
+    );
+    let _ = stream.write_all(gzip);
+}
+
 fn answer(mut stream: TcpStream, request: &str, body: &[u8], reply: Reply) {
     let start = requested_start(request);
     let fresh = request.contains(&format!("if-range: {ETAG}"));
@@ -98,6 +111,10 @@ fn answer(mut stream: TcpStream, request: &str, body: &[u8], reply: Reply) {
             );
             return;
         }
+        Reply::Gzip if request.contains("accept-encoding: gzip") => {
+            return answer_gzip(stream, &gzip_stored(body));
+        }
+        Reply::Raw(gzip) => return answer_gzip(stream, &gzip),
         Reply::WrongStart => {
             let _ = write!(
                 stream,
@@ -168,6 +185,27 @@ impl Drop for Temp {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.0);
     }
+}
+
+/// Gzip with one stored deflate block: valid compressed framing without a compressor in the tests.
+fn gzip_stored(body: &[u8]) -> Vec<u8> {
+    let crc = body.iter().fold(!0u32, |crc, byte| {
+        (0..8).fold(crc ^ u32::from(*byte), |c, _| {
+            if c & 1 == 1 {
+                (c >> 1) ^ 0xEDB8_8320
+            } else {
+                c >> 1
+            }
+        })
+    });
+    let len = u16::try_from(body.len()).unwrap();
+    let mut out = vec![0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 0xff, 1];
+    out.extend_from_slice(&len.to_le_bytes());
+    out.extend_from_slice(&(!len).to_le_bytes());
+    out.extend_from_slice(body);
+    out.extend_from_slice(&(!crc).to_le_bytes());
+    out.extend_from_slice(&u32::try_from(body.len()).unwrap().to_le_bytes());
+    out
 }
 
 fn data(len: usize) -> Vec<u8> {
@@ -375,6 +413,41 @@ fn le_texte_d_empreintes_se_lit_et_une_page_absente_se_dit() {
         fetch_text(&server.url()),
         Err(DownloadError::Refused { status: 404, .. })
     ));
+}
+
+/// The catalog, its signature and the logos travel compressed: about six times fewer bytes.
+#[test]
+fn un_fichier_du_catalogue_se_recoit_compresse_et_se_lit_tel_quel() {
+    let body = b"{\"schema_version\":2}".repeat(50);
+    let server = Server::start(body.clone(), |_| Reply::Gzip);
+    assert_eq!(
+        fetch_limited(&server.url(), body.len() as u64).unwrap(),
+        body
+    );
+    assert!(server.requests()[0].contains("accept-encoding: gzip"));
+}
+
+/// A few compressed bytes cannot unfold past the expected size.
+#[test]
+fn une_reponse_compressee_ne_depasse_pas_la_taille_attendue_une_fois_decompressee() {
+    let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
+    encoder.write_all(&vec![0u8; 1 << 20]).unwrap();
+    let bomb = encoder.finish().unwrap();
+    assert!(bomb.len() < 2048);
+    let server = Server::start(Vec::new(), move |_| Reply::Raw(bomb.clone()));
+    let error = fetch_limited(&server.url(), 4096).unwrap_err();
+    assert!(error.to_string().contains("once decompressed"), "{error}");
+}
+
+/// An image is never asked compressed: resuming and the published hash count the file's own bytes.
+#[test]
+fn une_image_se_demande_sans_compression() {
+    let body = data(4096);
+    let server = Server::start(body.clone(), |_| Reply::Gzip);
+    let temp = Temp::new("identite");
+    assert_eq!(run(&server.url(), &temp.dest()).unwrap(), body.len() as u64);
+    assert_eq!(fs::read(temp.dest()).unwrap(), body);
+    assert!(server.requests()[0].contains("accept-encoding: identity"));
 }
 
 /// A published file larger than the text bound (GRUB is 1.4 MB) is read up to its signed size.
