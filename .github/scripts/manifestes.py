@@ -7,6 +7,7 @@ from pathlib import Path
 
 DEPOT = "FantasmaGlad/Bonk"
 DESCRIPTION = "Bootable media writer for USB drives and external disks, with a graphical and a command-line interface."
+HOMEBREW_DESCRIPTION = "Bootable media writer for USB drives and external disks"
 DESCRIPTION_FR = "Création de supports d'amorçage (clés USB et disques externes), interface graphique et ligne de commande."
 LICENCE = "MIT"
 
@@ -66,8 +67,8 @@ def homebrew(r: Release) -> str:
         return f'      url "{r.url(nom)}"\n      sha256 "{r.sha(nom)}"\n'
 
     return f'''class Bonk < Formula
-  desc "{DESCRIPTION}"
-  homepage "https://github.com/{DEPOT}"
+  desc "{HOMEBREW_DESCRIPTION}"
+  homepage "https://bonk-os.app"
   version "{r.version}"
   license "{LICENCE}"
 
