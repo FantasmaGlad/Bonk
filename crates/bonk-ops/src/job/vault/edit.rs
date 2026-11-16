@@ -8,7 +8,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::errors::Code;
-use crate::job::extract::Advance;
+use crate::job::advance::Advance;
 use crate::job::translate::guarded;
 use crate::job::translate::support_lost;
 use crate::job::types::{Deps, JobError, SCHEMA_VERSION, Target, TargetInfo, TraceIo, fail};
