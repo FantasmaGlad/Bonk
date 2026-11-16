@@ -8,10 +8,7 @@ import android.util.Log
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
-import java.net.InetSocketAddress
 import java.net.Proxy
-import java.net.URI
-import java.net.URL
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -24,25 +21,6 @@ private const val RETRY_MS = 10_000L
 private const val TAG = "Bonk"
 private const val ICON_WORKERS = 8
 private const val ICONS_TIMEOUT_S = 120L
-
-// Without a timeout a silent connection would block the download and its cancel.
-private const val CONNECT_TIMEOUT_MS = 30_000
-private const val READ_TIMEOUT_MS = 60_000
-
-internal fun open(address: String, proxy: Proxy = Proxy.NO_PROXY): HttpURLConnection =
-    (URL(address).openConnection(proxy) as HttpURLConnection).apply {
-        connectTimeout = CONNECT_TIMEOUT_MS
-        readTimeout = READ_TIMEOUT_MS
-    }
-
-/** Rust only hands over `socks5h://` addresses: anything else is refused, never a direct connection. */
-internal fun socks(address: String): Proxy {
-    val uri = URI(address)
-    if (uri.scheme != "socks5h" || uri.host == null || uri.port < 0) {
-        throw BonkFailure("E3008", "$address: only socks5h:// is accepted")
-    }
-    return Proxy(Proxy.Type.SOCKS, InetSocketAddress(uri.host, uri.port))
-}
 
 /** The catalog keeps its last verified copy when the network fails: nothing here may prevent it. */
 private fun fetchOrEmpty(address: String): ByteArray =
