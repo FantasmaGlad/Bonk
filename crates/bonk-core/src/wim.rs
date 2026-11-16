@@ -202,7 +202,6 @@ pub fn split(
 
 type Entry = (Resource, [u8; ENTRY_LEN - RESOURCE_LEN]);
 
-/// Lookup entries, metadata resources first.
 fn metadata_first(lookup: &[u8], file_size: u64) -> Result<Vec<Entry>, WimError> {
     let mut metadata = Vec::new();
     let mut streams = Vec::new();

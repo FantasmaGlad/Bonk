@@ -278,7 +278,6 @@ private fun Vault(vault: VaultView, send: (ToRust) -> Unit) {
     }
 }
 
-/** Each card, with the vault or write panel of the selected one right under it. */
 @Composable
 private fun Disks(state: ScreenState, send: (ToRust) -> Unit) {
     val panel = state.panel

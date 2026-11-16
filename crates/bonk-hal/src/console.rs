@@ -17,7 +17,6 @@ pub fn detach_if_alone() -> bool {
     }
 }
 
-/// Keeps a child from opening its own console when the window starts it.
 pub fn hide_child_console(command: &mut Command) -> &mut Command {
     #[cfg(windows)]
     {

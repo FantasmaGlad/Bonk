@@ -15,7 +15,6 @@ import androidx.compose.ui.unit.sp
 /** Below this width the title and the buttons do not fit on one line. */
 private const val NARROW_DP = 600
 
-/** Title and page buttons; on a narrow screen the page buttons share a second line, half each. */
 @Composable
 internal fun Header(state: ScreenState, send: (ToRust) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {

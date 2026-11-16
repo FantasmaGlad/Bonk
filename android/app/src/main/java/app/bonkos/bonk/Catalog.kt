@@ -39,7 +39,6 @@ private const val CARD_MIN_DP = 150
 private const val CARD_LOGO_DP = 48
 private const val PAGE_LOGO_DP = 64
 
-/** The catalog tab: a grid of systems, or one system and its variants. Back closes one level. */
 @Composable
 internal fun CatalogPage(view: BrowseView, send: (ToRust) -> Unit) {
     val system = view.system
