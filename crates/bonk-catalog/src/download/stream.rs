@@ -14,13 +14,21 @@ pub(super) enum Event {
     Failed(String),
 }
 
-pub(super) fn header_text(headers: &ureq::http::HeaderMap, name: header::HeaderName) -> Option<String> {
+pub(super) fn header_text(
+    headers: &ureq::http::HeaderMap,
+    name: header::HeaderName,
+) -> Option<String> {
     headers.get(name)?.to_str().ok().map(str::to_owned)
 }
 
 /// A response read on its own thread: head, chunks, then `End` or `Failed`. Stops as soon as the caller lets
 /// go.
-pub(super) fn connect(agent: Agent, url: String, from: u64, validator: Option<String>) -> Receiver<Event> {
+pub(super) fn connect(
+    agent: Agent,
+    url: String,
+    from: u64,
+    validator: Option<String>,
+) -> Receiver<Event> {
     let (sender, receiver) = mpsc::sync_channel(QUEUED_CHUNKS);
     std::thread::spawn(move || {
         if let Err(message) = read_response(&agent, &url, from, validator.as_deref(), &sender) {

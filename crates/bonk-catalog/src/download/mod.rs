@@ -14,8 +14,8 @@ mod http;
 mod partial;
 mod stream;
 
-pub use http::{fetch_bytes, fetch_limited, fetch_text, file_name, is_url, set_proxy};
 use http::*;
+pub use http::{fetch_bytes, fetch_limited, fetch_text, file_name, is_url, set_proxy};
 use partial::*;
 use stream::*;
 

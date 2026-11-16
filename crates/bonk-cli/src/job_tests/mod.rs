@@ -15,148 +15,19 @@ use crate::errors::{
 use crate::{Env, execute};
 use bonk_ops::job::Io;
 
+mod cache;
+mod compressed;
+mod devices;
+mod download;
 mod format;
 mod internal;
 pub(crate) mod vault;
+mod verify;
 mod write;
 
+use devices::*;
+
 const DISK_SIZE: usize = 64 << 20;
-
-#[derive(Clone)]
-struct Shared(Rc<RefCell<MemoryDevice>>);
-
-impl Shared {
-    fn new() -> Self {
-        Self::sized(DISK_SIZE as u64)
-    }
-
-    fn sized(size: u64) -> Self {
-        Self(Rc::new(RefCell::new(
-            MemoryDevice::new(size, 512).expect("géométrie valide"),
-        )))
-    }
-}
-
-impl BlockDevice for Shared {
-    fn size(&self) -> u64 {
-        self.0.borrow().size()
-    }
-    fn block_size(&self) -> u32 {
-        512
-    }
-    fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), BlockError> {
-        self.0.borrow().read_at(offset, buf)
-    }
-    fn write_at(&mut self, offset: u64, data: &[u8]) -> Result<(), BlockError> {
-        self.0.borrow_mut().write_at(offset, data)
-    }
-    fn flush(&mut self) -> Result<(), BlockError> {
-        Ok(())
-    }
-}
-
-/// Logs the cache drop and flags any read before it: on a real disk, a check read before the drop reads the
-/// kernel cache, not the drive.
-struct Logged {
-    inner: Box<dyn BlockDevice>,
-    log: Log,
-    cache_clean: Cell<bool>,
-    open_devices: Rc<Cell<usize>>,
-}
-
-impl Drop for Logged {
-    fn drop(&mut self) {
-        self.open_devices.set(self.open_devices.get() - 1);
-    }
-}
-
-impl BlockDevice for Logged {
-    fn size(&self) -> u64 {
-        self.inner.size()
-    }
-    fn block_size(&self) -> u32 {
-        self.inner.block_size()
-    }
-    fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), BlockError> {
-        if !self.cache_clean.get() {
-            self.log
-                .borrow_mut()
-                .push("lecture_avant_vidage_du_cache".to_owned());
-        }
-        self.inner.read_at(offset, buf)
-    }
-    fn write_at(&mut self, offset: u64, data: &[u8]) -> Result<(), BlockError> {
-        self.cache_clean.set(false);
-        self.inner.write_at(offset, data)
-    }
-    fn flush(&mut self) -> Result<(), BlockError> {
-        self.inner.flush()
-    }
-    fn drop_cache(&mut self) -> Result<(), BlockError> {
-        self.cache_clean.set(true);
-        self.log.borrow_mut().push("drop_cache".to_owned());
-        self.inner.drop_cache()
-    }
-}
-
-#[derive(Clone, Copy, Default)]
-struct Faults {
-    /// Wrong read-backs: faulty drive.
-    reads: bool,
-    /// Cache flush refused (`SYNCHRONIZE CACHE`, `fsync`): the data may never reach the drive.
-    flush: bool,
-    /// Unplugged once this many bytes are written: every later write fails.
-    unplugged_after: Option<u64>,
-    /// Writes accepted but lost past this position, like a failing or fake card.
-    lost_after: Option<u64>,
-}
-
-struct Faulty {
-    inner: Shared,
-    faults: Faults,
-    written: u64,
-}
-
-impl BlockDevice for Faulty {
-    fn size(&self) -> u64 {
-        self.inner.size()
-    }
-    fn block_size(&self) -> u32 {
-        512
-    }
-    fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), BlockError> {
-        self.inner.read_at(offset, buf)?;
-        if self.faults.reads && offset == 0 {
-            buf[0] ^= 0xFF;
-        }
-        Ok(())
-    }
-    fn write_at(&mut self, offset: u64, data: &[u8]) -> Result<(), BlockError> {
-        if self
-            .faults
-            .unplugged_after
-            .is_some_and(|limit| self.written >= limit)
-        {
-            return Err(BlockError::Io(io::Error::new(
-                io::ErrorKind::NotConnected,
-                "device disconnected",
-            )));
-        }
-        self.written += data.len() as u64;
-        if self.faults.lost_after.is_some_and(|limit| offset >= limit) {
-            return Ok(());
-        }
-        self.inner.write_at(offset, data)
-    }
-    fn flush(&mut self) -> Result<(), BlockError> {
-        if self.faults.flush {
-            return Err(BlockError::Io(io::Error::other(
-                "SYNCHRONIZE CACHE refused",
-            )));
-        }
-        Ok(())
-    }
-}
 
 fn partition(path: &str, mounts: &[&str], system: bool) -> Partition {
     Partition {
@@ -473,3 +344,39 @@ fn with_internal() -> Scenario {
 }
 
 const CONFIRMATION_REQUIRED: &str = "E2005";
+
+/// Local server of one file, served as often as asked.
+fn serve_file(body: Vec<u8>) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+    use std::io::{BufRead, BufReader, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let hits = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let seen = std::sync::Arc::clone(&hits);
+    std::thread::spawn(move || {
+        for mut stream in listener.incoming().flatten() {
+            seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            while reader.read_line(&mut line).unwrap_or(0) > 0 && line != "\r\n" {
+                line.clear();
+            }
+            let _ = write!(
+                stream,
+                "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = stream.write_all(&body);
+        }
+    });
+    (format!("http://127.0.0.1:{port}/image.img"), hits)
+}
+
+fn sha256_of(bytes: &[u8]) -> String {
+    bonk_core::write::hash_stream(
+        &mut std::io::Cursor::new(bytes),
+        None,
+        bonk_core::write::DEFAULT_CHUNK,
+        &mut |_| bonk_core::write::Control::Continue,
+    )
+    .unwrap()
+}
