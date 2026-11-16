@@ -64,7 +64,7 @@ impl Model {
                 choice.id == id && matches!(choice.source, ChoiceSource::Download { .. })
             })
         });
-        if busy || !downloadable {
+        if busy || !downloadable || self.network_closed() {
             return Vec::new();
         }
         let args = download_args(&id, self.proxy());

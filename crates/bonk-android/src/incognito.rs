@@ -7,16 +7,11 @@ pub(crate) fn state(model: &Model) -> Value {
     if model.offline {
         return Value::Null;
     }
-    let lang = model.lang;
-    let label = match (&model.tor, model.use_tor) {
-        (None, _) => lang.pick("Incognito: no Tor", "Incognito : Tor absent"),
-        (Some(_), true) => lang.pick("Incognito on (Tor)", "Incognito activé (Tor)"),
-        (Some(_), false) => lang.pick("Incognito off", "Incognito désactivé"),
-    };
     json!({
-        "available": model.tor.is_some(),
+        // While Tor is awaited the button can still turn incognito off.
+        "available": model.tor.is_some() || model.use_tor,
         "on": model.incognito(),
-        "label": label,
+        "label": model.incognito_label(),
         "link": TOR_PROJECT.trim_start_matches("https://www.").trim_end_matches('/'),
     })
 }
@@ -27,12 +22,6 @@ pub(crate) fn message_of(input: &Value, model: &Model) -> Option<Message> {
         "tor_project" => Message::OpenTorProject,
         _ => return None,
     })
-}
-
-/// Orbot's SOCKS port, for the downloads of the next write; the address keeps `socks5h` so names are
-/// resolved by Tor.
-pub(crate) fn proxy(model: &Model) -> Option<&str> {
-    model.tor.as_deref().filter(|_| model.incognito())
 }
 
 #[cfg(test)]
@@ -47,7 +36,7 @@ mod tests {
         let shown = state(&model);
         assert_eq!(shown["available"], false);
         assert_eq!(shown["link"], "torproject.org");
-        assert_eq!(proxy(&model), None);
+        assert_eq!(model.proxy(), None);
     }
 
     fn touch(model: &mut Model) {
@@ -62,9 +51,9 @@ mod tests {
         let _ = model.update(Message::TorDetected(Some(ORBOT.to_owned())));
         touch(&mut model);
         assert_eq!(state(&model)["on"], true);
-        assert_eq!(proxy(&model), Some(ORBOT));
+        assert_eq!(model.proxy(), Some(ORBOT));
         touch(&mut model);
-        assert_eq!(proxy(&model), None);
+        assert_eq!(model.proxy(), None);
     }
 
     #[test]

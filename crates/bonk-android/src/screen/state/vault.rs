@@ -47,7 +47,7 @@ pub(in crate::screen) fn vault_state(model: &Model) -> Value {
                 .iter()
                 .map(|(name, size)| json!({"name": name, "size": format_size(*size, lang)}))
                 .collect();
-            vault_ready(&words, found.is_empty(), model.offline, close)
+            vault_ready(&words, found.is_empty(), model.network_closed(), close)
         }
         VaultState::Finished { outcome, .. } => (
             vec![text::outcome(lang, outcome)],

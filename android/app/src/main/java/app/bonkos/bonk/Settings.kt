@@ -51,6 +51,14 @@ internal fun SettingsPage(settings: SettingsView, send: (ToRust) -> Unit) {
                 Small(settings.offlineLabel, LocalPalette.current.ink)
             }
             Small(settings.offlineNote)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp),
+            ) {
+                Switch(settings.incognitoAtStart, { send(SettingsAction("incognito_at_start", it.toString())) })
+                Small(settings.incognitoLabel, LocalPalette.current.ink)
+            }
+            Small(settings.incognitoNote)
         }
     }
 }

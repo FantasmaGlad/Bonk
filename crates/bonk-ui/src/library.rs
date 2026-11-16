@@ -153,8 +153,7 @@ impl Model {
                 CatalogState::NotLoaded | CatalogState::Failed(_)
             )
         {
-            self.catalog = CatalogState::Loading;
-            effects.push(self.load_catalog());
+            effects.extend(self.read_catalog());
         }
         effects
     }

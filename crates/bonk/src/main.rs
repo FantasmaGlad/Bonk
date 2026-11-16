@@ -11,6 +11,7 @@ fn main() -> ExitCode {
                     allow_virtual: view.allow_virtual,
                     show_all: view.show_all,
                     offline: view.offline,
+                    incognito: view.incognito,
                 },
                 view.lang,
                 bonk_gui::ThemeChoice::from_config(Some(view.theme)),

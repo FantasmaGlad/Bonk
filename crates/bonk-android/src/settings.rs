@@ -22,6 +22,7 @@ pub(crate) fn message_of(input: &Value) -> Option<Message> {
                 .find(|choice| Some(choice.config_value()) == value)?,
         ),
         "offline" => SettingsMessage::Offline(value? == "true"),
+        "incognito_at_start" => SettingsMessage::IncognitoAtStart(value? == "true"),
         _ => return None,
     };
     Some(Message::Settings(settings))
@@ -76,11 +77,24 @@ pub(crate) fn state(model: &Model) -> Value {
             "Never connect to the Internet: the catalog is hidden and only image files on this device can be written.",
             "Ne jamais se connecter à Internet : le catalogue est masqué, seules les images présentes sur cet appareil s'écrivent.",
         ),
+        "incognito_at_start": model.incognito_at_start,
+        "incognito_label": lang.pick("Start in incognito", "Démarrer en mode incognito"),
+        "incognito_note": lang.pick(
+            "From the next start, everything goes through Orbot; until it answers, nothing reaches the network. The round button still turns it off.",
+            "Dès le prochain démarrage, tout passe par Orbot ; tant qu'il ne répond pas, rien ne part sur le réseau. Le bouton rond le coupe toujours.",
+        ),
     })
 }
 
 /// What the app read in its preferences and from the system, at each start.
-pub fn start(lang: &str, theme: &str, system_french: bool, show_all: bool, offline: bool) {
+pub fn start(
+    lang: &str,
+    theme: &str,
+    system_french: bool,
+    show_all: bool,
+    offline: bool,
+    incognito: bool,
+) {
     let mut model = lock(&MODEL);
     model.lang_choice = LangChoice::ALL
         .into_iter()
@@ -96,6 +110,8 @@ pub fn start(lang: &str, theme: &str, system_french: bool, show_all: bool, offli
     model.show_all = show_all;
     model.offline = offline;
     model.advanced |= offline;
+    model.incognito_at_start = incognito;
+    model.use_tor = incognito && !offline;
 }
 
 #[cfg(test)]

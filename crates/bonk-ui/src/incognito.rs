@@ -11,6 +11,18 @@ impl Model {
         self.use_tor && self.tor.is_some() && !self.offline
     }
 
+    /// Incognito asked for while no Tor answers yet: nothing may reach the network meanwhile.
+    #[must_use]
+    pub fn tor_awaited(&self) -> bool {
+        self.use_tor && self.tor.is_none() && !self.offline
+    }
+
+    /// No catalog, download or web address: offline, or incognito still waiting for Tor.
+    #[must_use]
+    pub fn network_closed(&self) -> bool {
+        self.offline || self.tor_awaited()
+    }
+
     /// The Tor address every request goes through while incognito: catalog, logos, images.
     #[must_use]
     pub fn proxy(&self) -> Option<&str> {
@@ -23,12 +35,31 @@ impl Model {
         }
     }
 
-    /// Read again on the new route, unless it was never asked for; the list shown stays until the answer.
-    fn reload_catalog(&self) -> Effects {
-        if self.offline || matches!(self.catalog, CatalogState::NotLoaded) {
+    /// The only way the catalog is asked for: never before Tor when incognito is waiting for it.
+    pub(crate) fn read_catalog(&mut self) -> Effects {
+        if self.tor_awaited() {
+            self.catalog = CatalogState::Failed(
+                self.lang
+                    .pick(
+                        "Waiting for Tor: incognito keeps everything off the network until it answers.",
+                        "En attente de Tor : l'incognito ne laisse rien partir sur le réseau avant sa réponse.",
+                    )
+                    .to_owned(),
+            );
             return Vec::new();
         }
+        self.catalog = CatalogState::Loading;
         vec![self.load_catalog()]
+    }
+
+    /// Read again on the new route, unless it was never asked for; the list shown stays until the answer.
+    fn reload_catalog(&mut self) -> Effects {
+        match self.catalog {
+            _ if self.offline => Vec::new(),
+            CatalogState::NotLoaded => Vec::new(),
+            CatalogState::Failed(_) => self.read_catalog(),
+            _ => vec![self.load_catalog()],
+        }
     }
 
     /// Why the catalog shown is the saved copy; nothing when it was just read.
@@ -50,6 +81,23 @@ impl Model {
         })
     }
 
+    #[must_use]
+    pub fn incognito_label(&self) -> &'static str {
+        match (&self.tor, self.use_tor) {
+            (None, true) => self.lang.pick(
+                "Incognito: waiting for Tor",
+                "Incognito : en attente de Tor",
+            ),
+            (None, false) => self
+                .lang
+                .pick("Incognito: no Tor", "Incognito : Tor absent"),
+            (Some(_), true) => self
+                .lang
+                .pick("Incognito on (Tor)", "Incognito activé (Tor)"),
+            (Some(_), false) => self.lang.pick("Incognito off", "Incognito désactivé"),
+        }
+    }
+
     /// Looked for at start and again at each refresh until one answers: Orbot or Tor may start after Bonk.
     pub(crate) fn watch_tor(&self) -> Option<Effect> {
         (!self.offline && self.tor.is_none()).then_some(Effect::DetectTor)
@@ -58,14 +106,22 @@ impl Model {
     pub(crate) fn apply_incognito(&mut self, message: Message) -> Effects {
         match message {
             Message::TorDetected(address) => {
+                let awaited = self.tor_awaited();
                 self.tor = address;
-                self.use_tor &= self.tor.is_some();
+                // Asked for at start, incognito keeps waiting: Orbot or Tor may start after Bonk.
+                if !self.incognito_at_start {
+                    self.use_tor &= self.tor.is_some();
+                }
+                if awaited && self.incognito() {
+                    return self.reload_catalog();
+                }
             }
             Message::ToggleTor(on) => {
                 self.focus = Some(Focus::Tor);
-                let before = self.incognito();
+                let before = (self.incognito(), self.tor_awaited());
+                // Turning it off is always possible, even while Tor is awaited.
                 self.use_tor = on && self.tor.is_some() && !self.offline;
-                if self.incognito() != before {
+                if (self.incognito(), self.tor_awaited()) != before {
                     return self.reload_catalog();
                 }
             }
@@ -214,5 +270,67 @@ mod tests {
                 .catalog_notice()
                 .is_some_and(|n| n.starts_with("Tor does not answer"))
         );
+    }
+
+    fn started_incognito() -> Model {
+        let options = crate::command::ViewOptions {
+            incognito: true,
+            ..crate::command::ViewOptions::default()
+        };
+        let (mut model, _) = Model::new(options, bonk_hal::Lang::En);
+        model.loading = false;
+        model
+    }
+
+    /// Asked for at start, incognito holds every request until Tor answers, then reads through it.
+    #[test]
+    fn au_demarrage_rien_ne_part_avant_tor() {
+        let mut model = started_incognito();
+        let _ = model.update(Message::TorDetected(None));
+        assert!(model.tor_awaited() && model.network_closed());
+        assert!(
+            model
+                .request_image("debian-13-netinst-x86_64".to_owned())
+                .is_empty()
+        );
+        assert!(matches!(model.catalog, CatalogState::Failed(_)));
+        assert!(model.refuses_address("https://exemple.org/a.iso"));
+        let vault = model.run_vault("usb-a".to_owned(), crate::vault::VaultAction::Prepare, None);
+        assert!(vault.is_empty());
+        assert_eq!(model.incognito_label(), "Incognito: waiting for Tor");
+        assert_eq!(
+            model.update(Message::TorDetected(Some(LOCAL_TOR.to_owned()))),
+            vec![Effect::LoadCatalog {
+                proxy: Some(LOCAL_TOR.to_owned())
+            }]
+        );
+        assert!(model.incognito() && !model.network_closed());
+    }
+
+    #[test]
+    fn l_attente_de_tor_se_coupe_au_bouton() {
+        let mut model = started_incognito();
+        let _ = model.request_image("debian-13-netinst-x86_64".to_owned());
+        assert_eq!(
+            model.update(Message::ToggleTor(false)),
+            vec![Effect::LoadCatalog { proxy: None }]
+        );
+        assert!(!model.network_closed());
+    }
+
+    #[test]
+    fn le_reglage_se_garde_pour_les_demarrages_suivants() {
+        let mut model = Model::default();
+        assert_eq!(
+            model.update(Message::Settings(
+                crate::settings::SettingsMessage::IncognitoAtStart(true)
+            )),
+            vec![Effect::SaveSetting {
+                key: "network.incognito",
+                value: "true",
+            }]
+        );
+        assert!(model.incognito_at_start && !model.use_tor);
+        assert!(model.view_options().incognito);
     }
 }

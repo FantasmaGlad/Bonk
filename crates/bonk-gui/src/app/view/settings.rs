@@ -54,7 +54,8 @@ impl App {
             self.language_section(),
             self.theme_section(),
             self.disks_section(),
-            self.network_section()
+            self.network_section(),
+            self.incognito_section()
         ]
         .spacing(28);
         column![title, scrollable(sections).height(Fill)]
@@ -150,6 +151,23 @@ impl App {
                 "Ne jamais se connecter à Internet : le catalogue est masqué, seules les images présentes sur cet ordinateur s'écrivent.",
             ),
             ring(switch, self.has_focus(Focus::Offline)),
+        )
+    }
+
+    /// Incognito from the first request: nothing goes out before a local Tor answers.
+    fn incognito_section(&self) -> Element<'_, Message> {
+        let lang = self.lang;
+        let switch = toggler(self.incognito_at_start)
+            .label(lang.pick("Start in incognito", "Démarrer en mode incognito"))
+            .on_toggle(|on| Message::Settings(SettingsMessage::IncognitoAtStart(on)))
+            .size(20);
+        section(
+            lang.pick("Incognito", "Incognito"),
+            lang.pick(
+                "From the next start, everything goes through a local Tor (Tor Browser open, or the tor service); until it answers, nothing reaches the network. The round button still turns it off.",
+                "Dès le prochain démarrage, tout passe par un Tor local (navigateur Tor ouvert, ou service tor) ; tant qu'il ne répond pas, rien ne part sur le réseau. Le bouton rond le coupe toujours.",
+            ),
+            ring(switch, self.has_focus(Focus::IncognitoAtStart)),
         )
     }
 }

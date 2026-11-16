@@ -74,10 +74,26 @@ impl Model {
     #[must_use]
     pub fn refuses_address(&self, image: &str) -> bool {
         let image = image.trim().to_ascii_lowercase();
-        self.offline
+        self.network_closed()
             && ["http://", "https://", "ftp://"]
                 .iter()
                 .any(|scheme| image.starts_with(scheme))
+    }
+
+    /// Why a web address is not downloaded now.
+    #[must_use]
+    pub fn address_refusal(&self) -> &'static str {
+        if self.offline {
+            self.lang.pick(
+                "Offline mode: a web address is not downloaded.",
+                "Mode hors ligne : une adresse web n'est pas téléchargée.",
+            )
+        } else {
+            self.lang.pick(
+                "Waiting for Tor: a web address is downloaded only through it.",
+                "En attente de Tor : une adresse web ne se télécharge que par lui.",
+            )
+        }
     }
 
     pub fn start_write(&mut self, internal_confirmed: bool) -> Effects {

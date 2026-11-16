@@ -66,6 +66,9 @@ data class SettingsView(
     val offline: Boolean = false,
     @SerialName("offline_label") val offlineLabel: String = "",
     @SerialName("offline_note") val offlineNote: String = "",
+    @SerialName("incognito_at_start") val incognitoAtStart: Boolean = false,
+    @SerialName("incognito_label") val incognitoLabel: String = "",
+    @SerialName("incognito_note") val incognitoNote: String = "",
 )
 
 @Serializable

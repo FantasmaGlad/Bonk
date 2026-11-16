@@ -108,8 +108,7 @@ impl Model {
             self.catalog,
             CatalogState::NotLoaded | CatalogState::Failed(_)
         ) {
-            self.catalog = CatalogState::Loading;
-            return vec![self.load_catalog()];
+            return self.read_catalog();
         }
         Vec::new()
     }

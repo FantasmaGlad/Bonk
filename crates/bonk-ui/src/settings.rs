@@ -111,6 +111,8 @@ pub enum SettingsMessage {
     Language(LangChoice),
     Theme(ThemeChoice),
     Offline(bool),
+    /// Kept for the next starts; the header button switches the current one.
+    IncognitoAtStart(bool),
 }
 
 impl Model {
@@ -171,6 +173,14 @@ impl Model {
                 }]
             }
             SettingsMessage::Offline(on) => self.set_offline(on),
+            SettingsMessage::IncognitoAtStart(on) => {
+                self.focus = Some(Focus::IncognitoAtStart);
+                self.incognito_at_start = on;
+                vec![Effect::SaveSetting {
+                    key: "network.incognito",
+                    value: if on { "true" } else { "false" },
+                }]
+            }
         }
     }
 
@@ -202,7 +212,13 @@ impl Model {
         let mut order = vec![Focus::CloseSettings];
         order.extend(LangChoice::ALL.map(Focus::Language));
         order.extend(ThemeChoice::ALL.map(Focus::Theme));
-        order.extend([Focus::Internal, Focus::Virtual, Focus::All, Focus::Offline]);
+        order.extend([
+            Focus::Internal,
+            Focus::Virtual,
+            Focus::All,
+            Focus::Offline,
+            Focus::IncognitoAtStart,
+        ]);
         order
     }
 }

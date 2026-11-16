@@ -28,6 +28,7 @@ impl Model {
             allow_virtual: self.allow_virtual,
             show_all: self.show_all,
             offline: self.offline,
+            incognito: self.incognito_at_start,
         }
     }
 

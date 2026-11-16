@@ -24,6 +24,7 @@ fn toutes_les_commandes_equivalentes_sont_acceptees_par_la_cli() -> Result<(), S
             allow_virtual: bits & 2 != 0,
             show_all: bits & 4 != 0,
             offline: false,
+            incognito: false,
         };
         for selection in identifiants {
             let commandes = equivalent_commands(options, selection, Some(WriteView::image(image)));
