@@ -117,6 +117,7 @@ mod tests {
         dir
     }
 
+    /// Parallelism is shown by downloads that overlap, never by a duration: a slow machine must not fail it.
     #[test]
     fn les_logos_arrivent_en_parallele_et_une_seule_fois_chacun() {
         use std::sync::atomic::AtomicUsize;
@@ -132,9 +133,18 @@ mod tests {
             .collect();
         families.push(families[0].clone());
         let calls = AtomicUsize::new(0);
+        let running = AtomicUsize::new(0);
+        let peak = AtomicUsize::new(0);
         let fetch = |address: &str| -> Result<Vec<u8>, String> {
-            calls.fetch_add(1, Ordering::Relaxed);
-            std::thread::sleep(Duration::from_millis(100));
+            calls.fetch_add(1, Ordering::SeqCst);
+            let now = running.fetch_add(1, Ordering::SeqCst) + 1;
+            peak.fetch_max(now, Ordering::SeqCst);
+            // Waits for a second download to start; sequential code never gets one.
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while peak.load(Ordering::SeqCst) < 2 && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            running.fetch_sub(1, Ordering::SeqCst);
             let n: u8 = address
                 .trim_start_matches("https://c/icons/")
                 .trim_end_matches(".png")
@@ -142,14 +152,10 @@ mod tests {
                 .map_err(|_| format!("adresse inattendue : {address}"))?;
             Ok(logo(n))
         };
-        let started = Instant::now();
         let found = paths("https://c/", &dir, &families, 4, &fetch);
-        assert!(
-            started.elapsed() < Duration::from_millis(500),
-            "{:?}",
-            started.elapsed()
-        );
-        assert_eq!(calls.load(Ordering::Relaxed), 8);
+        let peak = peak.load(Ordering::SeqCst);
+        assert!((2..=4).contains(&peak), "{peak}");
+        assert_eq!(calls.load(Ordering::SeqCst), 8);
         assert!(found.iter().all(Option::is_some));
         assert_eq!(found[0], found[8]);
         let _ = fs::remove_dir_all(&dir);
