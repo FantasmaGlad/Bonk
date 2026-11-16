@@ -11,8 +11,8 @@ pub struct Loaded {
     pub saved_copy: bool,
 }
 
-const MANIFEST: &str = "catalog.json";
-const SIGNATURE: &str = "catalog.json.sig";
+pub const MANIFEST: &str = "catalog.json";
+pub const SIGNATURE: &str = "catalog.json.sig";
 const SEEN: &str = "seen";
 
 pub(super) fn seen_sequence(dir: &Path) -> u64 {

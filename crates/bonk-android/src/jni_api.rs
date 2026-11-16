@@ -143,6 +143,15 @@ pub extern "system" fn Java_app_bonkos_bonk_Native_start<'caller>(
 }
 
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_app_bonkos_bonk_Native_catalogAddresses<'caller>(
+    mut env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+) -> JString<'caller> {
+    env.with_env(|env| -> Result<_, Error> { env.new_string(catalog::addresses().to_string()) })
+        .resolve::<jni::errors::ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_app_bonkos_bonk_Native_loadCatalog<'caller>(
     mut env: EnvUnowned<'caller>,
     _class: JClass<'caller>,

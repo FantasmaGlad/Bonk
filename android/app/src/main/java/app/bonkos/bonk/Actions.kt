@@ -15,7 +15,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 
-private const val CATALOG = "https://catalog.bonk-os.app/v2/catalog.json"
 internal const val BUFFER = 1 shl 20
 private const val RETRY_MS = 10_000L
 private const val TAG = "Bonk"
@@ -91,7 +90,9 @@ class Actions(
             val directory = File(context.filesDir, "catalog").path
             val answer =
                 runCatching {
-                    Protocol.outcome(Native.loadCatalog(directory, fetchOrEmpty(CATALOG), fetchOrEmpty("$CATALOG.sig")))
+                    Protocol.catalogAddresses(Native.catalogAddresses()).let { at ->
+                        Protocol.outcome(Native.loadCatalog(directory, fetchOrEmpty(at.catalog), fetchOrEmpty(at.signature)))
+                    }
                 }.getOrElse { Outcome(error = it.message ?: it.toString()) }
             send(answer.error?.let(::CatalogFailed) ?: Refresh)
             if (answer.error == null) icons(directory)
