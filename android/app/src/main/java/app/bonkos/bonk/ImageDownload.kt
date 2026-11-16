@@ -57,7 +57,7 @@ class ImageDownload(private val context: Context, private val send: (ToRust) -> 
 
     private fun run(request: DownloadImage) {
         try {
-            val connection = open(request.url, request.proxy?.let(::socks) ?: Proxy.NO_PROXY)
+            val connection = open(request.url, request.proxy?.let(::socks) ?: Proxy.NO_PROXY, compressed = false)
             val total = connection.contentLengthLong
             val target = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) Shared(request.name) else Private(request.name)
             if (total > 0 && target.free() <= total) {

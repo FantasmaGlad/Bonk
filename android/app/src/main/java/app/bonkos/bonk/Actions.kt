@@ -124,7 +124,7 @@ class Actions(
 
     private fun download(address: String, proxy: String?): File {
         val target = File(context.cacheDir, "image.download")
-        val connection = open(address, proxy?.let(::socks) ?: Proxy.NO_PROXY)
+        val connection = open(address, proxy?.let(::socks) ?: Proxy.NO_PROXY, compressed = false)
         val total = connection.contentLengthLong
         // allocateBytes clears system caches rather than refuse an image that would fit.
         val storage = context.getSystemService(StorageManager::class.java)

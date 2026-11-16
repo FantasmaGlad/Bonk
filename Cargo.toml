@@ -32,7 +32,7 @@ iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-s
 iced_test = "0.14"
 rfd = "0.17"
 # `ring` chosen by hand: ureq's `rustls` option would also pull `webpki-roots`.
-ureq = { version = "3", default-features = false, features = ["rustls-no-provider", "platform-verifier", "socks-proxy"] }
+ureq = { version = "3", default-features = false, features = ["rustls-no-provider", "platform-verifier", "socks-proxy", "gzip"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 windows-sys = "0.61"
 winresource = "0.1"

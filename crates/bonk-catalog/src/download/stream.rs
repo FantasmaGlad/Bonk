@@ -51,7 +51,8 @@ pub(super) fn read_response(
     validator: Option<&str>,
     sender: &SyncSender<Event>,
 ) -> Result<(), String> {
-    let mut request = agent.get(url);
+    // Range, Content-Length and the published hash all count the bytes of the file itself.
+    let mut request = agent.get(url).header(header::ACCEPT_ENCODING, "identity");
     if from > 0 {
         request = request.header(header::RANGE, format!("bytes={from}-"));
         if let Some(validator) = validator {

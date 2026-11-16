@@ -1,3 +1,4 @@
+use std::io::Read;
 use std::sync::{Arc, PoisonError, RwLock};
 use std::time::Duration;
 
@@ -107,11 +108,27 @@ pub fn fetch_limited(url: &str, limit: u64) -> Result<Vec<u8>, DownloadError> {
             status: status.as_u16(),
         });
     }
+    let network = |e: &dyn std::fmt::Display| DownloadError::Network(format!("{url}: {e}"));
+    let mut bytes = Vec::new();
     response
         .body_mut()
         .with_config()
-        // ureq refuses a body that reaches its limit: exactly `limit` bytes must still pass.
-        .limit(limit.saturating_add(1))
-        .read_to_vec()
-        .map_err(|e| DownloadError::Network(format!("{url}: {e}")))
+        // ureq counts the bytes received, before decompression, and refuses a body that reaches its limit.
+        .limit(compressed_bound(limit).saturating_add(1))
+        .reader()
+        .take(limit.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|e| network(&e))?;
+    if bytes.len() as u64 > limit {
+        return Err(network(&format!(
+            "more than {limit} bytes once decompressed"
+        )));
+    }
+    Ok(bytes)
+}
+
+/// Largest gzip stream for `len` bytes: 18 bytes of framing and 5 per stored deflate block of 65535 bytes.
+fn compressed_bound(len: u64) -> u64 {
+    len.saturating_add(18)
+        .saturating_add(len.div_ceil(65_535).max(1).saturating_mul(5))
 }
