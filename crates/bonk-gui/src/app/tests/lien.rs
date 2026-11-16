@@ -20,7 +20,10 @@ fn catalogue_lu(app: &mut App) {
 fn une_image_demandee_lit_le_catalogue_sans_attendre_un_disque() {
     let mut app = App::default();
     let effects = app.model.request_image(UBUNTU.to_owned());
-    assert!(effects.contains(&Effect::LoadCatalog), "{effects:?}");
+    assert!(
+        effects.contains(&Effect::LoadCatalog { proxy: None }),
+        "{effects:?}"
+    );
     assert!(contient(
         &app,
         "Lecture du catalogue pour trouver ubuntu-26.04-desktop-x86_64..."

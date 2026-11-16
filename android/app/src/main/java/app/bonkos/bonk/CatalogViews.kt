@@ -9,6 +9,8 @@ data class BrowseView(
     val back: String,
     /** While the catalog is read, or why it could not be. */
     val waiting: String? = null,
+    /** Why the catalog shown is the saved copy. */
+    val notice: String? = null,
     val grid: BrowseGrid? = null,
     val system: SystemView? = null,
 )

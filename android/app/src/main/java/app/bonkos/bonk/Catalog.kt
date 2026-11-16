@@ -54,6 +54,7 @@ internal fun CatalogPage(view: BrowseView, send: (ToRust) -> Unit) {
             Text(view.title, fontSize = Tokens.TEXT_TITLE.sp, modifier = Modifier.weight(1f))
             Secondary(view.back) { send(CatalogAction("close")) }
         }
+        view.notice?.let { Small(it) }
         val grid = view.grid
         when {
             system != null -> SystemPage(system, send)

@@ -161,7 +161,10 @@ fn effect_samples(model: &mut Model) -> Vec<Value> {
         model,
         vec![
             Effect::Enumerate,
-            Effect::LoadCatalog,
+            Effect::LoadCatalog { proxy: None },
+            Effect::LoadCatalog {
+                proxy: Some("socks5h://127.0.0.1:9050".to_owned()),
+            },
             Effect::PickImage,
             Effect::SaveSetting {
                 key: "view.show_all",

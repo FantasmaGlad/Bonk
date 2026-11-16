@@ -67,7 +67,7 @@ impl Model {
         if busy || !downloadable {
             return Vec::new();
         }
-        let args = download_args(&id, self.tor.as_deref().filter(|_| self.use_tor));
+        let args = download_args(&id, self.proxy());
         log::info!(target: "bonk::gui", image = id.as_str(); "downloading without writing");
         self.browse.download = Some(DownloadState::Running {
             id,

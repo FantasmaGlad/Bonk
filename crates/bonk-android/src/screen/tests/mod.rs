@@ -42,7 +42,7 @@ fn un_lien_choisit_une_image_du_catalogue_sans_rien_ecrire() {
     assert!(open_link(&mut model, &link).is_empty());
     assert_eq!(
         open_link(&mut Model::default(), &link),
-        vec![Effect::LoadCatalog]
+        vec![Effect::LoadCatalog { proxy: None }]
     );
     assert_eq!(model.requested.as_deref(), Some("debian-13-netinst-x86_64"));
     assert!(matches!(model.write, WriteState::Draft { .. }));

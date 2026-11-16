@@ -18,7 +18,7 @@ pub(super) fn effects_out(
     for effect in effects {
         match effect {
             Effect::Enumerate => out.push(json!({"do": "enumerate"})),
-            Effect::LoadCatalog => out.push(json!({"do": "catalog"})),
+            Effect::LoadCatalog { proxy } => out.push(json!({"do": "catalog", "proxy": proxy})),
             Effect::PickImage => out.push(json!({"do": "pick"})),
             Effect::SaveSetting { key, value } => {
                 out.push(json!({"do": "save_setting", "key": key, "value": value}));
@@ -87,6 +87,7 @@ fn vault_effect(model: &Model, args: &[String]) -> Option<Value> {
         "device": device,
         "iso": iso,
         "grub": grub,
+        "proxy": model.proxy(),
     }))
 }
 

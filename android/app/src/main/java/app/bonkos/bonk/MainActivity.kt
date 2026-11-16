@@ -154,7 +154,7 @@ class MainActivity : ComponentActivity() {
     private fun accomplish(effect: Effect) {
         when (effect) {
             Enumerate -> actions.enumerate()
-            LoadCatalog -> actions.catalog()
+            is LoadCatalog -> actions.catalog(effect.proxy)
             PickImage -> pickFile.launch(arrayOf("*/*"))
             is Write -> {
                 askNotificationsIfNeeded()

@@ -51,6 +51,7 @@ pub(super) fn etagere() -> catalog::Shelf {
     catalog::Shelf {
         systems: versions_du_catalogue(),
         terms: bonk_ui::terms::Terms::default(),
+        saved_copy: false,
     }
 }
 
