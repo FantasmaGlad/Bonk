@@ -32,8 +32,8 @@ impl App {
     fn incognito_button(&self) -> Element<'_, Message> {
         let c = theme::colors();
         let glyph = match (&self.tor, self.use_tor) {
-            (None, _) => c.muted,
-            (Some(_), true) => c.on_accent,
+            (_, true) => c.on_accent,
+            (None, false) => c.muted,
             (Some(_), false) => c.ink,
         };
         button(
@@ -41,24 +41,15 @@ impl App {
                 .width(GLYPH)
                 .height(GLYPH),
         )
-        .on_press_maybe(self.tor.as_ref().map(|_| Message::ToggleTor(!self.use_tor)))
+        // While Tor is awaited the button can still turn incognito off.
+        .on_press_maybe(
+            (self.tor.is_some() || self.use_tor).then_some(Message::ToggleTor(!self.use_tor)),
+        )
         .width(Length::Fixed(SIDE))
         .height(Length::Fixed(SIDE))
         .padding((SIDE - GLYPH) / 2.0)
         .style(theme::round_button(self.use_tor))
         .into()
-    }
-
-    fn incognito_label(&self) -> &'static str {
-        match (&self.tor, self.use_tor) {
-            (None, _) => self
-                .lang
-                .pick("Incognito: no Tor", "Incognito : Tor absent"),
-            (Some(_), true) => self
-                .lang
-                .pick("Incognito on (Tor)", "Incognito activé (Tor)"),
-            (Some(_), false) => self.lang.pick("Incognito off", "Incognito désactivé"),
-        }
     }
 
     fn tor_project_link(&self) -> Element<'_, Message> {

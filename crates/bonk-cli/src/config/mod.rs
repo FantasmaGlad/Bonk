@@ -61,6 +61,12 @@ pub(crate) const KEYS: &[Key] = &[
         default: "false",
         help: "window: never read the catalog nor download; local image files only",
     },
+    Key {
+        name: "network.incognito",
+        kind: Kind::Bool,
+        default: "false",
+        help: "window: start in incognito; nothing reaches the network until a local Tor answers",
+    },
 ];
 
 /// Display settings shared by the window and read commands.
@@ -71,6 +77,8 @@ pub struct ViewDefaults {
     pub allow_virtual: bool,
     /// The window reaches no network: no catalog, no download.
     pub offline: bool,
+    /// The window starts in incognito and waits for Tor before any network use.
+    pub incognito: bool,
     /// `None`: the system's.
     pub lang: Option<bonk_hal::Lang>,
     /// As stored: `auto`, `light` or `dark`; the window reads it.

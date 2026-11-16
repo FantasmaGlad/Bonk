@@ -76,7 +76,7 @@ pub(crate) fn effect(model: &Model, args: &[String]) -> Option<Value> {
         "url": url,
         "sha256": sha256,
         "name": bonk_catalog::file_name(url)?,
-        "proxy": crate::incognito::proxy(model),
+        "proxy": model.proxy(),
     }))
 }
 

@@ -190,7 +190,7 @@ pub(crate) struct WriteArgs {
     #[arg(long, value_enum, default_value_t = TableKind::WINDOWS_DEFAULT.into())]
     pub(super) table: TableArg,
 
-    /// Do not read the drive back after writing
+    /// Do not read the drive back after a raw write; a Windows drive is always read back file by file
     #[arg(long)]
     pub(super) no_verify: bool,
 

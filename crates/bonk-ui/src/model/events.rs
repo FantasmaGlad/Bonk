@@ -76,6 +76,7 @@ pub(super) fn settings_event(
         SettingsMessage::Language(choice) => ("choose_language", choice.config_value().to_owned()),
         SettingsMessage::Theme(choice) => ("choose_theme", choice.config_value().to_owned()),
         SettingsMessage::Offline(on) => ("toggle_offline", on.to_string()),
+        SettingsMessage::IncognitoAtStart(on) => ("toggle_incognito_at_start", on.to_string()),
     })
 }
 

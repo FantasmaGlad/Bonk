@@ -8,7 +8,14 @@ object Native {
     external fun dispatch(message: String): String
 
     /** Choices kept in the preferences (`auto`, `en`, `fr`; `auto`, `light`, `dark`) and the system language. */
-    external fun start(lang: String, theme: String, systemFrench: Boolean, showAll: Boolean, offline: Boolean)
+    external fun start(
+        lang: String,
+        theme: String,
+        systemFrench: Boolean,
+        showAll: Boolean,
+        offline: Boolean,
+        incognito: Boolean,
+    )
 
     /** Where the catalog and its signature are published, as `{"catalog", "signature"}`. */
     external fun catalogAddresses(): String

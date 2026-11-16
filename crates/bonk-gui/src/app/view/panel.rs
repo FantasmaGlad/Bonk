@@ -175,13 +175,10 @@ impl App {
         let refused = self.refuses_address(image);
         let ready = elapsed >= WRITE_DELAY && !empty && !refused;
         let refusal = refused.then(|| -> Element<'a, Message> {
-            text(lang.pick(
-                "Offline mode: a web address is not downloaded.",
-                "Mode hors ligne : une adresse web n'est pas téléchargée.",
-            ))
-            .size(13)
-            .color(theme::muted())
-            .into()
+            text(self.address_refusal())
+                .size(13)
+                .color(theme::muted())
+                .into()
         });
         column![
             text(recap::image_line(lang, &self.catalog, image)).size(14),

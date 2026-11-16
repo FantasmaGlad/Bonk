@@ -69,8 +69,7 @@ impl Model {
         if matches!(self.catalog, CatalogState::Loading) {
             return Vec::new();
         }
-        self.catalog = CatalogState::Loading;
-        vec![self.load_catalog()]
+        self.read_catalog()
     }
 
     /// Only an empty draft: what the user typed or chose is never replaced.
@@ -108,7 +107,6 @@ impl Model {
         if self.offline || !needed || !matches!(self.write, WriteState::Draft { .. }) {
             return Vec::new();
         }
-        self.catalog = CatalogState::Loading;
-        vec![self.load_catalog()]
+        self.read_catalog()
     }
 }

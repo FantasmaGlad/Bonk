@@ -7,6 +7,8 @@ pub struct ViewOptions {
     pub show_all: bool,
     /// Window only, no command flag: no catalog read, no download.
     pub offline: bool,
+    /// Window only: start in incognito, nothing on the network until Tor answers.
+    pub incognito: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -137,6 +139,7 @@ mod tests {
             allow_virtual: true,
             show_all: true,
             offline: false,
+            incognito: false,
         };
         assert_eq!(
             equivalent_commands(options, Some("usb-SanDisk_Cruzer_4C53-0:0"), None),

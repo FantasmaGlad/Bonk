@@ -144,6 +144,7 @@ pub enum Focus {
     Virtual,
     All,
     Offline,
+    IncognitoAtStart,
     Disk(String),
     /// The technical details disclosure of the selected disk.
     Details,
@@ -216,6 +217,8 @@ pub struct Model {
     pub menu_filter: crate::catalog::MenuFilter,
     /// A local Tor, offered by the incognito button; never used without it.
     pub tor: Option<String>,
+    /// Kept setting: start in incognito, and wait for Tor rather than reach the network without it.
+    pub incognito_at_start: bool,
     pub lang: Lang,
     pub use_tor: bool,
     pub menu_open: bool,
@@ -272,6 +275,8 @@ impl Model {
             show_all: initial.show_all,
             offline: initial.offline,
             advanced: initial.offline,
+            incognito_at_start: initial.incognito,
+            use_tor: initial.incognito && !initial.offline,
             ..Self::default()
         };
         let mut effects = vec![Effect::Enumerate];

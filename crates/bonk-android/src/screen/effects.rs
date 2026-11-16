@@ -115,6 +115,6 @@ pub(super) fn draft_of(model: &Model) -> Option<Value> {
         "hash": hash.trim(),
         "raw": raw,
         "mbr": mbr,
-        "proxy": crate::incognito::proxy(model),
+        "proxy": model.proxy(),
     }))
 }

@@ -53,7 +53,7 @@ impl App {
                 row![
                     action_button(
                         words.prepare,
-                        (!self.offline).then_some(VaultMessage::Prepare),
+                        (!self.network_closed()).then_some(VaultMessage::Prepare),
                         true
                     ),
                     close(lang),
@@ -63,7 +63,7 @@ impl App {
             .spacing(8)
             .into(),
             VaultState::Confirming { .. } => confirming(lang, &words, disk),
-            VaultState::Ready { images, .. } => ready(lang, &words, images, self.offline),
+            VaultState::Ready { images, .. } => ready(lang, &words, images, self.network_closed()),
             VaultState::Finished { outcome, .. } => column![
                 text(phrases::outcome_with_explain(lang, outcome)).size(13),
                 action_button(lang.pick("OK", "OK"), Some(VaultMessage::Open), true),

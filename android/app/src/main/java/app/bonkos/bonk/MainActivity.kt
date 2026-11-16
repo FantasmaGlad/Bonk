@@ -214,6 +214,7 @@ class MainActivity : ComponentActivity() {
             Locale.getDefault().language == "fr",
             preferences.getString("view.show_all", "false") == "true",
             preferences.getString("network.offline", "false") == "true",
+            preferences.getString("network.incognito", "false") == "true",
         )
         val filter =
             IntentFilter().apply {

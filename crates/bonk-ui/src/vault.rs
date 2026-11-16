@@ -187,6 +187,10 @@ impl Model {
         action: VaultAction,
         extra: Option<&str>,
     ) -> Effects {
+        // Preparing and updating fetch GRUB: never without the route the user chose.
+        if matches!(action, VaultAction::Prepare | VaultAction::Update) && self.network_closed() {
+            return Vec::new();
+        }
         let mut args = vault_args(
             action,
             &disk_id,
@@ -194,7 +198,6 @@ impl Model {
             self.show_internal,
             self.allow_virtual,
         );
-        // Preparing and updating fetch GRUB from the catalog.
         if let Some(proxy) = self.proxy() {
             args.extend(["--proxy".to_owned(), proxy.to_owned()]);
         }
