@@ -1,14 +1,11 @@
 use std::fmt;
-use std::fs::{self, File, OpenOptions};
-use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender};
-use std::sync::{Arc, PoisonError, RwLock};
+use std::fs;
+use std::io::{self, Write};
+use std::path::Path;
+use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::time::Duration;
 
-use ureq::http::{StatusCode, header};
-use ureq::tls::{RootCerts, TlsConfig};
-use ureq::{Agent, Proxy};
+use ureq::Agent;
 
 mod http;
 mod partial;

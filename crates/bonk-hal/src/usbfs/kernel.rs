@@ -1,4 +1,8 @@
-use super::*;
+use std::io;
+
+use bonk_core::msc::BulkError;
+
+use super::TRANSFER_MIN;
 
 pub(super) const fn request(direction: u64, nr: u64, size: usize) -> u64 {
     (direction << 30) | ((size as u64) << 16) | ((b'U' as u64) << 8) | nr

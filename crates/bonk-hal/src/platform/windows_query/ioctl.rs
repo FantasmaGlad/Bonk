@@ -1,4 +1,16 @@
-use super::*;
+use std::ffi::{OsString, c_void};
+use std::io;
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
+use std::ptr::{null, null_mut};
+
+use windows_sys::Win32::Foundation::{
+    CloseHandle, ERROR_INSUFFICIENT_BUFFER, ERROR_MORE_DATA, HANDLE, INVALID_HANDLE_VALUE,
+};
+use windows_sys::Win32::Storage::FileSystem::{
+    CreateFileW, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+};
+use windows_sys::Win32::System::IO::DeviceIoControl;
+use windows_sys::core::GUID;
 
 pub(in crate::platform) struct Handle(pub(in crate::platform) HANDLE);
 

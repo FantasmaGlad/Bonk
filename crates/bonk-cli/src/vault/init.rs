@@ -1,4 +1,11 @@
-use super::*;
+use std::io::{self, Write};
+
+use bonk_ops::job::{self, Deps, TraceIo, VaultInitDone, VaultInitJob};
+
+use super::{InitArgs, size};
+use crate::catalog;
+use crate::transfer::{finish, target_line};
+use crate::vault::grub;
 
 pub(super) fn run_init(
     args: &InitArgs,

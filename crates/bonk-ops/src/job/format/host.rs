@@ -1,4 +1,12 @@
-use super::*;
+use std::path::Path;
+
+use bonk_core::format::Filesystem;
+use bonk_hal::{Elevation, OpenTargetError, TargetIdentity};
+
+use super::PARTITION_LOOKS;
+use crate::errors::Code;
+use crate::job::target::{enumerate, map_open_target, reread_table};
+use crate::job::types::{Deps, JobError, fail};
 
 /// Recognized by its size: the system may keep the old table for a while, and formatting an old partition at
 /// the same place would destroy the wrong area.

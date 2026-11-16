@@ -1,4 +1,7 @@
-use super::*;
+use crate::catalog;
+use crate::catalog::{CatalogState, ChoiceSource};
+use crate::model::{Effect, Effects, Focus, Message, Model, WriteState};
+use crate::source::ImageSource;
 
 impl Model {
     /// The catalog menu. [`Self::apply`] sends no other message here.

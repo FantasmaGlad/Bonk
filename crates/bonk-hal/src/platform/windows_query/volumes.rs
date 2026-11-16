@@ -1,4 +1,19 @@
-use super::*;
+use std::io;
+use std::ptr::null_mut;
+
+use windows_sys::Win32::Foundation::{
+    ERROR_INVALID_FUNCTION, ERROR_MORE_DATA, ERROR_NO_MEDIA_IN_DRIVE, ERROR_NO_MORE_FILES,
+    ERROR_NOT_READY, INVALID_HANDLE_VALUE,
+};
+use windows_sys::Win32::Storage::FileSystem::{
+    FindFirstVolumeW, FindNextVolumeW, FindVolumeClose, GetVolumeInformationW,
+    GetVolumePathNamesForVolumeNameW, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
+};
+use windows_sys::Win32::System::Ioctl::{DISK_EXTENT, VOLUME_DISK_EXTENTS};
+
+use super::ioctl::wide;
+use crate::platform::windows_query::{from_wide, has_code, ioctl, open_for_query};
+use crate::windows_facts::{RawExtent, RawVolume};
 
 pub(super) fn mount_points(volume: &str) -> io::Result<Vec<String>> {
     let name = wide(volume);

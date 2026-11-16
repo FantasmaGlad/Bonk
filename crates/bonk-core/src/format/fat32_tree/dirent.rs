@@ -1,6 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::*;
+use super::{
+    ATTR_ARCHIVE, ATTR_DIRECTORY, ATTR_LABEL, ATTR_LONG_NAME, ENTRY, FIXED_DATE, LONG_NAME_UNITS,
+    MAX_NAME_UNITS, Row,
+};
+use crate::format::FormatError;
+use crate::format::fat32::{self, ROOT_CLUSTER, narrow};
+use crate::format::tree::{ChildKind, Children, NewFile, Placed};
 
 pub(super) fn is_plain_short(name: &str) -> bool {
     let (base, ext) = name.rsplit_once('.').unwrap_or((name, ""));

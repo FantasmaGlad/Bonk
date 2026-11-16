@@ -1,4 +1,11 @@
-use super::*;
+use super::{ATTR_HIDDEN, ENTRY_BITMAP, IN_USE, VOLUME_DIRTY, VOLUME_FLAGS};
+use crate::block::BlockDevice;
+use crate::format::FormatError;
+use crate::format::exfat::{ENTRY, FIRST_CLUSTER, checksum16};
+use crate::format::exfat_read::Reader;
+use crate::format::exfat_tree::entry_set;
+use crate::format::tree::Placed;
+use crate::partition::read_range;
 
 /// Where the volume is on the drive and what the edit touches, read before the first write.
 pub(super) struct Volume {

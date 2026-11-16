@@ -1,4 +1,8 @@
-use super::*;
+use super::transport::{BulkError, BulkTransport, Direction, MscError, Sense};
+use super::{
+    ASC_INVALID_OPCODE, CBW_LEN, CBW_SIGNATURE, CSW_LEN, CSW_SIGNATURE, READY_ATTEMPTS,
+    SENSE_ILLEGAL_REQUEST,
+};
 
 enum Data<'a> {
     None,

@@ -1,4 +1,12 @@
-use super::*;
+use std::io::Write;
+
+use bonk_core::vault as core_vault;
+use bonk_hal::format_size;
+use bonk_ops::job::{self, Deps, TraceIo, VaultListJob};
+
+use super::ListArgs;
+use crate::config::ViewDefaults;
+use crate::transfer::{finish, target_line};
 
 pub(super) fn run_list(
     args: &ListArgs,

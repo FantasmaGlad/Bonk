@@ -1,4 +1,11 @@
-use super::*;
+use std::io::Write;
+
+use bonk_ops::job::{self, Deps, TraceIo, VaultUpdateDone, VaultUpdateJob};
+
+use super::UpdateArgs;
+use crate::catalog;
+use crate::transfer::{finish, target_line};
+use crate::vault::grub;
 
 pub(super) fn run_update(
     args: &UpdateArgs,

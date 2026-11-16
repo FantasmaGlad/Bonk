@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 
-use super::*;
+use super::MAX_TRANSFER;
+use super::session::{Inquiry, MassStorage};
+use super::transport::{BulkTransport, MscError};
 use crate::block::{BlockDevice, BlockError, check_access, check_geometry};
 
 pub struct UsbDisk<T> {

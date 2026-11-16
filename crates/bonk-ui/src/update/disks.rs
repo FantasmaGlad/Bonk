@@ -1,4 +1,6 @@
-use super::*;
+use bonk_hal::Disk;
+
+use crate::model::{Effects, Model};
 
 impl Model {
     /// A single offered disk and no choice yet: selecting it saves a click. Once per disk, so a deselection

@@ -1,30 +1,24 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::io::Read;
 
 use super::exfat::{
-    BOOT_REGION, FIRST_CLUSTER, Geometry, UPCASE, Volume, boot_region, checksum16, checksum32,
-    geometry, upcase_map,
+    BOOT_REGION, FIRST_CLUSTER, Geometry, UPCASE, Volume, boot_region, geometry, upcase_map,
 };
 use super::tree::{
-    ChildKind, Children, NewFile, Placed, check_room, collect_children, place_files,
-    verify_contiguous, write_contiguous,
+    Children, NewFile, Placed, check_room, collect_children, place_files, verify_contiguous,
+    write_contiguous,
 };
 use super::{FormatError, zero_range};
 use crate::block::BlockDevice;
-use crate::bytes::{put_u16, put_u32, put_u64};
 use crate::partition::read_range;
 
-use super::exfat::{
-    ATTR_DIRECTORY, END_OF_CHAIN, ENTRY, ENTRY_FILE, ENTRY_LABEL, ENTRY_NAME, ENTRY_STREAM,
-    MAX_DIRECTORY_BYTES, NAME_UNITS, NO_FAT_CHAIN,
-};
+use super::exfat::END_OF_CHAIN;
 
 mod entries;
 mod plan;
 #[cfg(test)]
 mod tests;
 
-use entries::system_entries;
 pub(super) use entries::{entries_for, entry_set, name_units};
 use plan::*;
 

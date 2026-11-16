@@ -1,22 +1,16 @@
-use std::collections::BTreeMap;
-use std::fs;
-use std::io::{self, Write};
-use std::path::{Path, PathBuf};
+use std::io::Write;
+use std::path::PathBuf;
 
-use bonk_catalog::manifest;
 use bonk_core::format::table::{PartitionPlan, TableKind};
-use bonk_core::vault::{self as core_vault, BootFile};
 use bonk_hal::format_size;
 use clap::{Args, Subcommand};
 
 use crate::catalog;
 use crate::config::ViewDefaults;
 use crate::format::TableArg;
-use crate::transfer::{CommonArgs, finish, progress_mode, sink, target_line};
+use crate::transfer::CommonArgs;
 use bonk_ops::job::{
-    self, Deps, GrubInfo, JobError, TraceIo, VaultAddDone, VaultAddJob, VaultInitDone,
-    VaultInitJob, VaultListDone, VaultListJob, VaultRemoveDone, VaultRemoveJob, VaultUpdateDone,
-    VaultUpdateJob,
+    Deps, VaultAddDone, VaultInitDone, VaultListDone, VaultRemoveDone, VaultUpdateDone,
 };
 
 mod edit;

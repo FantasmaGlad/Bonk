@@ -1,4 +1,11 @@
-use super::*;
+use std::sync::{Arc, PoisonError, RwLock};
+use std::time::Duration;
+
+use ureq::http::StatusCode;
+use ureq::tls::{RootCerts, TlsConfig};
+use ureq::{Agent, Proxy};
+
+use super::{DownloadError, TEXT_LIMIT};
 
 /// Redirections follow the same rule.
 pub(super) fn https_required(url: &str) -> Result<bool, DownloadError> {

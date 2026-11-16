@@ -1,6 +1,20 @@
 use std::io::{self, Read};
 
-use super::*;
+use bonk_core::format::NewFile;
+use bonk_core::format::fat32::Volume;
+use bonk_core::format::fat32_tree::{self, MAX_FILE_BYTES};
+use bonk_core::format::table::TableKind;
+use bonk_core::pe::{self, Machine, Signer};
+use bonk_core::udf::{self, Content, ReadAt, Tree, Udf};
+use bonk_core::wim::{self, Segment};
+
+use super::{
+    Extraction, Firmware, LABEL, LOADER_LIMIT, LOADERS, PART_LIMIT, WIM_HEADER, format_failure,
+    partition_plan,
+};
+use crate::errors::Code;
+use crate::job::source::ImageFile;
+use crate::job::types::{JobError, fail};
 
 impl ReadAt for ImageFile {
     fn read_exact_at(&self, offset: u64, buf: &mut [u8]) -> io::Result<()> {

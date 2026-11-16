@@ -1,14 +1,4 @@
-use std::time::Instant;
-
-use bonk_core::format::table::TableKind;
-use bonk_core::write::Phase;
-use bonk_hal::Disk;
-
-use crate::catalog::{self, CatalogState, ChoiceSource};
-use crate::command::WriteView;
-use crate::event::{Event, write_args};
-use crate::model::{Effect, Effects, Focus, Message, Model, WRITE_DELAY, WriteState};
-use crate::source::ImageSource;
+use crate::model::{Effect, Effects, Focus, Message, Model};
 
 mod disks;
 mod draft;
@@ -111,7 +101,12 @@ impl Model {
     }
 
     /// A display box changed: the list too, hence the panel and the focus. Kept for the next start.
-    pub(super) fn after_view_option(&mut self, focus: Focus, key: &'static str, on: bool) -> Effects {
+    pub(super) fn after_view_option(
+        &mut self,
+        focus: Focus,
+        key: &'static str,
+        on: bool,
+    ) -> Effects {
         self.focus = Some(focus);
         self.sync_write();
         self.fix_focus();

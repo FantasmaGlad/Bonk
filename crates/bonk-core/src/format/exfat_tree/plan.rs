@@ -1,4 +1,10 @@
-use super::*;
+use std::collections::{BTreeMap, BTreeSet};
+
+use super::entries::{entries_for, entry_set, name_units, system_entries};
+use super::{Names, narrow};
+use crate::format::FormatError;
+use crate::format::exfat::{ENTRY, Geometry, MAX_DIRECTORY_BYTES};
+use crate::format::tree::{ChildKind, Children, NewFile, Placed};
 
 pub(super) fn name_units_by_directory(
     children: &Children,

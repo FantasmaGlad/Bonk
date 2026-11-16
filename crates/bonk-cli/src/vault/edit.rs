@@ -1,4 +1,11 @@
-use super::*;
+use std::io::Write;
+
+use bonk_hal::format_size;
+use bonk_ops::job::{self, Deps, TraceIo, VaultAddJob, VaultRemoveJob};
+
+use super::{AddArgs, RemoveArgs};
+use crate::transfer::{finish, progress_mode, sink, target_line};
+use crate::vault::{arch_name, family_name};
 
 pub(super) fn run_add(
     args: &AddArgs,

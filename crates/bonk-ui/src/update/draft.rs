@@ -1,4 +1,5 @@
-use super::*;
+use crate::model::{Effect, Effects, Focus, Message, Model, WriteState};
+use crate::source::ImageSource;
 
 impl Model {
     /// The fields of the write panel. [`Self::apply`] sends no other message here.

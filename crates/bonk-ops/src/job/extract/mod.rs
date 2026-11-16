@@ -2,21 +2,16 @@ use std::io;
 use std::path::Path;
 use std::time::Instant;
 
-use bonk_core::format::NewFile;
-use bonk_core::format::fat32::Volume;
-use bonk_core::format::fat32_tree::{self, Layout, MAX_FILE_BYTES};
+use bonk_core::DEFAULT_BLOCK_SIZE;
+use bonk_core::format::FormatError;
+use bonk_core::format::fat32_tree::MAX_FILE_BYTES;
 use bonk_core::format::table::{self, PartitionPlan, TableKind};
-use bonk_core::format::{Filesystem, FormatError, Ids};
-use bonk_core::pe::{self, Machine, Signer};
-use bonk_core::udf::{self, Content, ReadAt, Tree, Udf};
-use bonk_core::wim::{self, Segment};
-use bonk_core::write::{Control, Phase, Progress};
-use bonk_core::{BlockDevice, DEFAULT_BLOCK_SIZE};
+use bonk_core::pe::{Machine, Signer};
+use bonk_core::write::{Control, Progress};
 use schemars::JsonSchema;
 use serde::Serialize;
 
 use super::Target;
-use super::advance::Advance;
 use super::source::ImageFile;
 use super::target::{Chosen, OpenRequest, reread_table};
 use super::target::{OpenedForWriting, open_for_writing};

@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use bonk_core::format::FormatError;
-use bonk_core::vault::{self};
+use bonk_core::vault;
 use bonk_core::write::{Control, Phase, Progress};
 use bonk_hal::{Access, Elevation, FilterOptions};
 use schemars::JsonSchema;

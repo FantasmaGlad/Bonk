@@ -1,4 +1,29 @@
-use super::*;
+use std::collections::HashMap;
+use std::io;
+use std::mem::offset_of;
+use std::ptr::{null, null_mut};
+
+use windows_sys::Win32::Devices::DeviceAndDriverInstallation::{
+    DIGCF_DEVICEINTERFACE, DIGCF_PRESENT, HDEVINFO, SP_DEVICE_INTERFACE_DATA,
+    SP_DEVICE_INTERFACE_DETAIL_DATA_W, SetupDiDestroyDeviceInfoList, SetupDiEnumDeviceInterfaces,
+    SetupDiGetClassDevsW, SetupDiGetDeviceInterfaceDetailW,
+};
+use windows_sys::Win32::Foundation::{
+    ERROR_FILE_NOT_FOUND, ERROR_NO_MEDIA_IN_DRIVE, ERROR_NOT_READY, ERROR_PATH_NOT_FOUND,
+};
+use windows_sys::Win32::System::Ioctl::{
+    DISK_GEOMETRY_EX, DRIVE_LAYOUT_INFORMATION_EX, GUID_DEVINTERFACE_DISK,
+    IOCTL_DISK_GET_DRIVE_GEOMETRY_EX, IOCTL_DISK_GET_DRIVE_LAYOUT_EX,
+    IOCTL_STORAGE_GET_DEVICE_NUMBER, IOCTL_STORAGE_QUERY_PROPERTY, PARTITION_INFORMATION_EX,
+    PARTITION_STYLE_GPT, PARTITION_STYLE_MBR, PropertyStandardQuery, STORAGE_DEVICE_DESCRIPTOR,
+    STORAGE_DEVICE_NUMBER, STORAGE_PROPERTY_QUERY, StorageDeviceProperty,
+};
+
+use super::ioctl::Handle;
+use crate::platform::windows_query::{
+    as_bytes, from_wide, guid_text, has_code, ioctl, open_for_query, text_at,
+};
+use crate::windows_facts::{RawDisk, RawPartition};
 
 pub(super) fn layout(handle: &Handle) -> io::Result<Vec<RawPartition>> {
     let buffer = ioctl(handle, IOCTL_DISK_GET_DRIVE_LAYOUT_EX, &[], 16 * 1024)?;

@@ -1,5 +1,18 @@
-use super::image::ItemReader;
-use super::*;
+use std::time::Instant;
+
+use bonk_core::BlockDevice;
+use bonk_core::format::fat32::Volume;
+use bonk_core::format::fat32_tree::{self, Layout};
+use bonk_core::format::table::{self, TableKind};
+use bonk_core::format::{Filesystem, Ids};
+use bonk_core::write::{Control, Phase, Progress};
+
+use super::image::{ItemReader, WindowsImage};
+use super::{ExtractVerify, Extraction, Firmware, LABEL, format_failure, partition_plan};
+use crate::errors::Code;
+use crate::job::advance::Advance;
+use crate::job::source::ImageFile;
+use crate::job::types::JobError;
 
 /// Everything is computed before the first write: a refusal costs the key nothing. Then the table and
 /// the FAT32 structures; the files follow.

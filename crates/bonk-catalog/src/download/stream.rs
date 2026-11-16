@@ -1,4 +1,10 @@
-use super::*;
+use std::io::Read;
+use std::sync::mpsc::{self, Receiver, SyncSender};
+
+use ureq::Agent;
+use ureq::http::header;
+
+use super::{CHUNK, QUEUED_CHUNKS};
 
 pub(super) struct Head {
     pub(super) status: u16,

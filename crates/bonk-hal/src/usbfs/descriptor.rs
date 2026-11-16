@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    ATTRIBUTES_BULK, CLASS_STORAGE, DESCRIPTOR_ENDPOINT, DESCRIPTOR_INTERFACE, DESCRIPTOR_STRING,
+    ENDPOINT_IN, PROTOCOL_BULK_ONLY, SUBCLASS_SCSI,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StorageInterface {
