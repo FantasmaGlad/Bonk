@@ -1,6 +1,12 @@
 mod app;
 #[cfg(target_os = "macos")]
 mod link_macos;
+#[cfg(not(target_os = "macos"))]
+mod link_macos {
+    pub(crate) fn take() -> Vec<String> {
+        Vec::new()
+    }
+}
 pub use bonk_ui::french_title;
 mod locale;
 mod theme;
