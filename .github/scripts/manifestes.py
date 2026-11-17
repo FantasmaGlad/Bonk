@@ -28,15 +28,15 @@ class Release:
         self.version = tag.removeprefix("v")
         self.empreintes = empreintes
 
-    def archive(self, nom: str) -> str:
+    def archive(self, nom: str, paquet: str = "bonk") -> str:
         ext = "zip" if nom.startswith("windows") else "tar.gz"
-        return f"bonk-{self.version}-{nom}.{ext}"
+        return f"{paquet}-{self.version}-{nom}.{ext}"
 
-    def url(self, nom: str) -> str:
-        return f"https://github.com/{DEPOT}/releases/download/{self.tag}/{self.archive(nom)}"
+    def url(self, nom: str, paquet: str = "bonk") -> str:
+        return f"https://github.com/{DEPOT}/releases/download/{self.tag}/{self.archive(nom, paquet)}"
 
-    def sha(self, nom: str) -> str:
-        archive = self.archive(nom)
+    def sha(self, nom: str, paquet: str = "bonk") -> str:
+        archive = self.archive(nom, paquet)
         if archive not in self.empreintes:
             raise SystemExit(f"archive absente de SHA256SUMS : {archive}")
         return self.empreintes[archive]
@@ -100,24 +100,36 @@ end
 '''
 
 
-def aur(r: Release) -> str:
-    def source(arch: str, nom: str) -> str:
-        return f'source_{arch}=("{r.url(nom)}")\nsha256sums_{arch}=("{r.sha(nom)}")\n'
+# The AUR names bonk, bonk-bin and bonk-cli-bin belong to unrelated projects that also install /usr/bin/bonk.
+AUR_CONFLICTS = "'bonk' 'bonk-bin' 'bonk-cli-bin'"
+
+
+def aur(r: Release, paquet: str) -> str:
+    """`paquet`: `bonk` (window and command line) or `bonk-cli` (command line only, static)."""
+    cli = paquet == "bonk-cli"
+    nom = "bonkos-cli-bin" if cli else "bonkos-bin"
+    autre = "bonkos-bin" if cli else "bonkos-cli-bin"
+    description = "Bootable media writer for USB drives and external disks, command line only." if cli else DESCRIPTION
+
+    def source(arch: str, archive: str) -> str:
+        return f'source_{arch}=("{r.url(archive, paquet)}")\nsha256sums_{arch}=("{r.sha(archive, paquet)}")\n'
 
     return f'''# Maintainer: FantasmaGlad
-pkgname=bonk-bin
+pkgname={nom}
 pkgver={r.version}
 pkgrel=1
-pkgdesc="{DESCRIPTION}"
+pkgdesc="{description}"
 arch=('x86_64' 'aarch64')
 url="https://github.com/{DEPOT}"
 license=('{LICENCE}')
-provides=('bonk')
-conflicts=('bonk')
+# Built and stripped by the release: no debug package to split off.
+options=('!debug')
+provides=('bonkos')
+conflicts=({AUR_CONFLICTS} '{autre}')
 {source("x86_64", "linux-x86_64")}{source("aarch64", "linux-aarch64")}
 package() {{
-  install -Dm755 "$srcdir/bonk-$pkgver-linux-$CARCH/bonk" "$pkgdir/usr/bin/bonk"
-  install -Dm644 "$srcdir/bonk-$pkgver-linux-$CARCH/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm755 "$srcdir/{paquet}-$pkgver-linux-$CARCH/bonk" "$pkgdir/usr/bin/bonk"
+  install -Dm644 "$srcdir/{paquet}-$pkgver-linux-$CARCH/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }}
 '''
 
@@ -175,7 +187,8 @@ def main() -> None:
     sortie.mkdir(parents=True, exist_ok=True)
     (sortie / "bonk.json").write_text(scoop(r), encoding="utf-8")
     (sortie / "bonk.rb").write_text(homebrew(r), encoding="utf-8")
-    (sortie / "PKGBUILD").write_text(aur(r), encoding="utf-8")
+    (sortie / "bonkos-bin.PKGBUILD").write_text(aur(r, "bonk"), encoding="utf-8")
+    (sortie / "bonkos-cli-bin.PKGBUILD").write_text(aur(r, "bonk-cli"), encoding="utf-8")
     for nom, contenu in winget(r).items():
         (sortie / nom).write_text(contenu, encoding="utf-8")
     print(f"manifestes écrits dans {sortie}")
