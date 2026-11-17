@@ -217,6 +217,7 @@ mod tests {
             source: ChoiceSource::NotForUsb,
             desktop: Some("kde".to_owned()),
             media: Some("usb".to_owned()),
+            arch: "x86_64".to_owned(),
         };
         Model {
             lang: Lang::Fr,

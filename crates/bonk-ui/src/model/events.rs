@@ -28,9 +28,12 @@ pub fn ui_event(message: &Message) -> Option<(&'static str, String)> {
         ),
         Message::ToggleMenu => ("click_menu", String::new()),
         Message::RequestImage(id) => ("open_link", id.clone()),
-        Message::MenuCategory(value) | Message::MenuBase(value) | Message::MenuSystem(value) => {
-            ("menu_filter", value.clone().unwrap_or_default())
-        }
+        Message::MenuCategory(value)
+        | Message::MenuBase(value)
+        | Message::MenuSystem(value)
+        | Message::MenuArch(value) => ("menu_filter", value.clone().unwrap_or_default()),
+        // One line per keystroke would drown the log: the text itself says nothing useful.
+        Message::MenuSearch(_) => ("menu_search", String::new()),
         Message::MenuChose(choice) => ("menu_chose", choice.label.clone()),
         Message::ToggleAdvanced => ("click_advanced", String::new()),
         Message::StartWrite => ("click_write", String::new()),

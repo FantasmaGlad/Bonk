@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 
 use bonk_hal::Lang;
-use iced::widget::{button, column, container, image, pick_list, row, scrollable, text};
+use iced::widget::{
+    button, column, container, image, pick_list, row, scrollable, text, text_input,
+};
 use iced::{Element, Length};
 
 pub(crate) use bonk_ui::catalog::*;
@@ -144,6 +146,16 @@ fn menu_filters<'a>(
     let base = shown(filter.base.as_deref(), bases, all_base);
     let names = with_all(lists.systems, all_sys);
     let system = filter.system.clone().unwrap_or_else(|| all_sys.to_owned());
+    let all_arch = all_arches(lang);
+    let arch_names = with_all(
+        lists.arches.iter().map(|a| arch_label(a, lang)).collect(),
+        all_arch,
+    );
+    let arch = filter
+        .arch
+        .as_deref()
+        .map_or_else(|| all_arch.to_owned(), |a| arch_label(a, lang));
+    let arch_ids = lists.arches;
     // The lists outlive this borrow of the window state: each choice keeps its own copy of the labels.
     let (for_uses, for_bases) = (terms.clone(), terms.clone());
     row![
@@ -159,8 +171,31 @@ fn menu_filters<'a>(
             Message::MenuSystem((value != all_sys).then_some(value))
         })
         .text_size(13),
+        pick_list(arch_names, Some(arch), move |value: String| {
+            Message::MenuArch(
+                arch_ids
+                    .iter()
+                    .find(|id| arch_label(id, lang) == value)
+                    .cloned(),
+            )
+        })
+        .text_size(13),
     ]
     .spacing(8)
+    .into()
+}
+
+fn menu_search<'a>(filter: &MenuFilter, lang: Lang) -> Element<'a, Message> {
+    text_input(
+        lang.pick(
+            "Search by name: Ubuntu, Kubuntu, Windows…",
+            "Rechercher par nom : Ubuntu, Kubuntu, Windows…",
+        ),
+        &filter.search,
+    )
+    .on_input(Message::MenuSearch)
+    .padding(6)
+    .size(13)
     .into()
 }
 
@@ -209,7 +244,7 @@ pub(crate) fn menu_list<'a>(
     let mut index = 0;
     let mut lines = column![].spacing(2);
     for system in filter.apply(systems) {
-        for choice in &system.choices {
+        for choice in filter.choices(system) {
             let writable = matches!(choice.source, ChoiceSource::Download { .. });
             lines = lines.push(menu_row(
                 system,
@@ -222,6 +257,7 @@ pub(crate) fn menu_list<'a>(
     }
     // Right margin: the scrollbar must not cover a row's text.
     column![
+        menu_search(filter, lang),
         menu_filters(systems, filter, terms, lang),
         scrollable(lines.padding(iced::Padding::ZERO.right(16)))
             .id(MENU)

@@ -28,6 +28,14 @@ impl Model {
                 self.menu_filter.system = system;
                 self.menu_index = 0;
             }
+            Message::MenuSearch(text) => {
+                self.menu_filter.search = text;
+                self.menu_index = 0;
+            }
+            Message::MenuArch(arch) => {
+                self.menu_filter.arch = arch;
+                self.menu_index = 0;
+            }
             _ => {}
         }
         Vec::new()

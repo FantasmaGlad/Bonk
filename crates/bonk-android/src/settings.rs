@@ -78,10 +78,11 @@ pub(crate) fn state(model: &Model) -> Value {
             "Ne jamais se connecter à Internet : le catalogue est masqué, seules les images présentes sur cet appareil s'écrivent.",
         ),
         "incognito_at_start": model.incognito_at_start,
+        "incognito_available": model.can_start_incognito(),
         "incognito_label": lang.pick("Start in incognito", "Démarrer en mode incognito"),
         "incognito_note": lang.pick(
-            "From the next start, everything goes through Orbot; until it answers, nothing reaches the network. The round button still turns it off.",
-            "Dès le prochain démarrage, tout passe par Orbot ; tant qu'il ne répond pas, rien ne part sur le réseau. Le bouton rond le coupe toujours.",
+            "From the next start, everything goes through Orbot; until it answers, nothing reaches the network. The round button still turns it off. Available once Orbot runs.",
+            "Dès le prochain démarrage, tout passe par Orbot ; tant qu'il ne répond pas, rien ne part sur le réseau. Le bouton rond le coupe toujours. Disponible quand Orbot tourne.",
         ),
     })
 }

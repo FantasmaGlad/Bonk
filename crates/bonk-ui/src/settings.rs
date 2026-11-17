@@ -175,6 +175,9 @@ impl Model {
             SettingsMessage::Offline(on) => self.set_offline(on),
             SettingsMessage::IncognitoAtStart(on) => {
                 self.focus = Some(Focus::IncognitoAtStart);
+                if on && !self.can_start_incognito() {
+                    return Vec::new();
+                }
                 self.incognito_at_start = on;
                 vec![Effect::SaveSetting {
                     key: "network.incognito",

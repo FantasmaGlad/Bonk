@@ -91,6 +91,7 @@ mod tests {
             source: ChoiceSource::NotForUsb,
             desktop: Some(desktop.to_owned()),
             media: Some(media.to_owned()),
+            arch: "x86_64".to_owned(),
         }
     }
 

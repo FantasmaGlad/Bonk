@@ -1,6 +1,6 @@
 use bonk_core::write::Phase;
 use bonk_ui::browse::BrowseMessage;
-use bonk_ui::catalog::{CatalogState, writable};
+use bonk_ui::catalog::CatalogState;
 use bonk_ui::event::{Event, Outcome};
 use bonk_ui::model::{Message, Model};
 use bonk_ui::vault::VaultMessage;
@@ -58,6 +58,8 @@ pub(super) fn message_of(input: &Value, model: &Model) -> Option<Message> {
             text_of("value").and_then(|shown| model.terms.bases().id_of(&shown, model.lang)),
         ),
         "system" => Message::MenuSystem(text_of("value")),
+        "menu_search" => Message::MenuSearch(text_of("value").unwrap_or_default()),
+        "arch" => Message::MenuArch(text_of("value").and_then(|shown| arch_of(model, &shown))),
         "catalog_failed" => Message::CatalogLoaded(Err(text_of("message")?)),
         "choose" => chosen(input, model)?,
         "advanced" => Message::ToggleAdvanced,
@@ -91,15 +93,26 @@ fn starts_vault_work(input: &Value) -> bool {
     )
 }
 
+/// The processor whose label the app shows: labels are translated, the filter keeps the identifier.
+fn arch_of(model: &Model, shown: &str) -> Option<String> {
+    let CatalogState::Ready(systems) = &model.catalog else {
+        return None;
+    };
+    systems
+        .iter()
+        .flat_map(|system| &system.choices)
+        .map(|choice| choice.arch.as_str())
+        .find(|arch| bonk_ui::catalog::arch_label(arch, model.lang) == shown)
+        .map(str::to_owned)
+}
+
 /// The writable menu row the user touched, by its position.
 fn chosen(input: &Value, model: &Model) -> Option<Message> {
     let CatalogState::Ready(systems) = &model.catalog else {
         return None;
     };
     let index = usize::try_from(input["index"].as_u64()?).ok()?;
-    let choice = writable(&model.menu_filter.apply(systems))
-        .get(index)
-        .copied()?;
+    let choice = model.menu_filter.writable(systems).get(index).copied()?;
     Some(Message::MenuChose(choice.clone()))
 }
 

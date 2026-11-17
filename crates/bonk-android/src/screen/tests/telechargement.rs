@@ -21,6 +21,7 @@ fn on_debian_page() -> Model {
         },
         desktop: None,
         media: None,
+        arch: "x86_64".to_owned(),
     };
     let mut model = loaded();
     model.lang = Lang::Fr;

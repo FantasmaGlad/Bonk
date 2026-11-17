@@ -84,6 +84,8 @@ pub enum Message {
     MenuCategory(Option<String>),
     MenuBase(Option<String>),
     MenuSystem(Option<String>),
+    MenuSearch(String),
+    MenuArch(Option<String>),
     CatalogLoaded(Result<crate::catalog::Shelf, String>),
     /// Address, hash and automatic settings.
     MenuChose(crate::catalog::Choice),
