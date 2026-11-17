@@ -56,7 +56,7 @@ impl SystemNotifier {
             data.uFlags = NIF_ICON | NIF_TIP;
             // SAFETY: IDI_APPLICATION is a system icon, loaded without a module.
             data.hIcon = unsafe { LoadIconW(std::ptr::null_mut(), IDI_APPLICATION) };
-            copy(&mut data.szTip, "Bonk");
+            data.szTip = utf16("Bonk");
             // SAFETY: `data` is initialised above and names this thread's window.
             if unsafe { Shell_NotifyIconW(NIM_ADD, &raw const data) } == 0 {
                 log::info!(target: "bonk::hal", "notification icon refused");
@@ -87,8 +87,8 @@ impl Notifier for SystemNotifier {
         } else {
             NIIF_INFO | NIIF_NOSOUND
         };
-        copy(&mut data.szInfoTitle, &notice.title);
-        copy(&mut data.szInfo, &notice.body);
+        data.szInfoTitle = utf16(&notice.title);
+        data.szInfo = utf16(&notice.body);
         // SAFETY: `data` names the icon added for this window.
         if unsafe { Shell_NotifyIconW(NIM_MODIFY, &raw const data) } == 0 {
             log::info!(target: "bonk::hal", "notification refused");
@@ -112,13 +112,15 @@ fn wide(text: &str) -> Vec<u16> {
     text.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-/// Truncated to the field, always NUL-terminated.
-fn copy(field: &mut [u16], text: &str) {
-    let room = field.len().saturating_sub(1);
-    let mut length = 0;
-    for (slot, unit) in field.iter_mut().zip(text.encode_utf16().take(room)) {
+/// Truncated to the field, always NUL-terminated. Built by value: on 32-bit Windows the structure is packed and
+/// its fields cannot be borrowed.
+fn utf16<const N: usize>(text: &str) -> [u16; N] {
+    let mut field = [0u16; N];
+    for (slot, unit) in field
+        .iter_mut()
+        .zip(text.encode_utf16().take(N.saturating_sub(1)))
+    {
         *slot = unit;
-        length += 1;
     }
-    field[length] = 0;
+    field
 }
