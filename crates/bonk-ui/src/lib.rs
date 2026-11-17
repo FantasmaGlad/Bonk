@@ -8,6 +8,7 @@ pub mod incognito;
 pub mod library;
 pub mod model;
 mod navigation;
+mod notice;
 pub mod recap;
 pub mod settings;
 pub mod source;

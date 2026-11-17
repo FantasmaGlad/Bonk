@@ -9,6 +9,8 @@ pub struct ViewOptions {
     pub offline: bool,
     /// Window only: start in incognito, nothing on the network until Tor answers.
     pub incognito: bool,
+    /// Window and phone app: each step of a write shown in the system's notifications.
+    pub notify: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -140,6 +142,7 @@ mod tests {
             show_all: true,
             offline: false,
             incognito: false,
+            notify: false,
         };
         assert_eq!(
             equivalent_commands(options, Some("usb-SanDisk_Cruzer_4C53-0:0"), None),

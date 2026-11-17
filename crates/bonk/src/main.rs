@@ -12,6 +12,7 @@ fn main() -> ExitCode {
                     show_all: view.show_all,
                     offline: view.offline,
                     incognito: view.incognito,
+                    notify: view.notify,
                 },
                 view.lang,
                 bonk_gui::ThemeChoice::from_config(Some(view.theme)),

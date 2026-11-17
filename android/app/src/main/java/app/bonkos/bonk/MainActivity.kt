@@ -218,6 +218,7 @@ class MainActivity : ComponentActivity() {
         )
         val filter =
             IntentFilter().apply {
+            preferences.getString("notifications", "true") == "true",
                 addAction(ACTION_PERMISSION)
                 addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
                 addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)

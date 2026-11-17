@@ -113,6 +113,7 @@ pub enum SettingsMessage {
     Offline(bool),
     /// Kept for the next starts; the header button switches the current one.
     IncognitoAtStart(bool),
+    Notify(bool),
 }
 
 impl Model {
@@ -184,6 +185,14 @@ impl Model {
                     value: if on { "true" } else { "false" },
                 }]
             }
+            SettingsMessage::Notify(on) => {
+                self.focus = Some(Focus::Notify);
+                self.notify = on;
+                vec![Effect::SaveSetting {
+                    key: "notifications",
+                    value: if on { "true" } else { "false" },
+                }]
+            }
         }
     }
 
@@ -221,6 +230,7 @@ impl Model {
             Focus::All,
             Focus::Offline,
             Focus::IncognitoAtStart,
+            Focus::Notify,
         ]);
         order
     }

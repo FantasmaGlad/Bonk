@@ -67,6 +67,12 @@ pub(crate) const KEYS: &[Key] = &[
         default: "false",
         help: "window: start in incognito; nothing reaches the network until a local Tor answers",
     },
+    Key {
+        name: "notifications",
+        kind: Kind::Bool,
+        default: "true",
+        help: "window: each step of a write shown in the system's notifications",
+    },
 ];
 
 /// Display settings shared by the window and read commands.
@@ -79,6 +85,8 @@ pub struct ViewDefaults {
     pub offline: bool,
     /// The window starts in incognito and waits for Tor before any network use.
     pub incognito: bool,
+    /// Each step of a write in the system's notifications.
+    pub notify: bool,
     /// `None`: the system's.
     pub lang: Option<bonk_hal::Lang>,
     /// As stored: `auto`, `light` or `dark`; the window reads it.

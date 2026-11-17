@@ -198,6 +198,10 @@ pub(crate) struct WriteArgs {
     #[arg(long)]
     pub(super) no_repair_gpt: bool,
 
+    /// Show each step and the end in the system's notifications (Linux, Windows)
+    #[arg(long)]
+    pub(super) notify: bool,
+
     /// Confirm like --yes, and allow an internal disk admitted by --show-internal, without a question.
     /// Never a system disk: the safety filter stays in charge
     #[arg(long)]

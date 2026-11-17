@@ -64,6 +64,17 @@ internal fun SettingsPage(settings: SettingsView, send: (ToRust) -> Unit) {
             }
             Small(settings.incognitoNote)
         }
+        Column(verticalArrangement = Arrangement.spacedBy(Tokens.SPACE_SMALL.dp)) {
+            Body(settings.notificationsTitle)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp),
+            ) {
+                Switch(settings.notify, { send(SettingsAction("notifications", it.toString())) })
+                Small(settings.notifyLabel, LocalPalette.current.ink)
+            }
+            Small(settings.notifyNote)
+        }
     }
 }
 

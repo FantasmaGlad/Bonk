@@ -15,7 +15,11 @@ object Native {
         showAll: Boolean,
         offline: Boolean,
         incognito: Boolean,
+        notify: Boolean,
     )
+
+    /** The running write or download as its notification says it, `{title, body, percent, last}`, or `null`. */
+    external fun notice(): String
 
     /** Where the catalog and its signature are published, as `{"catalog", "signature"}`. */
     external fun catalogAddresses(): String

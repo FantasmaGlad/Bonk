@@ -55,7 +55,8 @@ impl App {
             self.theme_section(),
             self.disks_section(),
             self.network_section(),
-            self.incognito_section()
+            self.incognito_section(),
+            self.notify_section()
         ]
         .spacing(28);
         column![title, scrollable(sections).height(Fill)]
@@ -151,6 +152,25 @@ impl App {
                 "Ne jamais se connecter à Internet : le catalogue est masqué, seules les images présentes sur cet ordinateur s'écrivent.",
             ),
             ring(switch, self.has_focus(Focus::Offline)),
+        )
+    }
+
+    fn notify_section(&self) -> Element<'_, Message> {
+        let lang = self.lang;
+        let switch = toggler(self.notify)
+            .label(lang.pick(
+                "Show the progress in notifications",
+                "Suivre la progression dans les notifications",
+            ))
+            .on_toggle(|on| Message::Settings(SettingsMessage::Notify(on)))
+            .size(20);
+        section(
+            lang.pick("Notifications", "Notifications"),
+            lang.pick(
+                "Each step of a write, then its end, in the system's notifications: download, image check, writing, verification. Nothing leaves this computer.",
+                "Chaque étape d'une écriture, puis sa fin, dans les notifications du système : téléchargement, contrôle de l'image, écriture, relecture. Rien ne quitte cet ordinateur.",
+            ),
+            ring(switch, self.has_focus(Focus::Notify)),
         )
     }
 

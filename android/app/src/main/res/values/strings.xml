@@ -15,4 +15,5 @@
     <string name="writing_notification">Bonk is writing to a drive</string>
     <string name="do_not_unplug">Do not unplug the drive before the result. You can leave the app.</string>
     <string name="chromeos_share">On a Chromebook, a USB drive reaches Android apps only once shared: ChromeOS settings, Apps, Google Play Store, USB preferences.</string>
+    <string name="cancel">Cancel</string>
 </resources>

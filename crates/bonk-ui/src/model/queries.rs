@@ -29,6 +29,7 @@ impl Model {
             show_all: self.show_all,
             offline: self.offline,
             incognito: self.incognito_at_start,
+            notify: self.notify,
         }
     }
 

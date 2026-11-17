@@ -23,6 +23,7 @@ pub(crate) fn message_of(input: &Value) -> Option<Message> {
         ),
         "offline" => SettingsMessage::Offline(value? == "true"),
         "incognito_at_start" => SettingsMessage::IncognitoAtStart(value? == "true"),
+        "notifications" => SettingsMessage::Notify(value? == "true"),
         _ => return None,
     };
     Some(Message::Settings(settings))
@@ -84,6 +85,13 @@ pub(crate) fn state(model: &Model) -> Value {
             "From the next start, everything goes through Orbot; until it answers, nothing reaches the network. The round button still turns it off. Available once Orbot runs.",
             "Dès le prochain démarrage, tout passe par Orbot ; tant qu'il ne répond pas, rien ne part sur le réseau. Le bouton rond le coupe toujours. Disponible quand Orbot tourne.",
         ),
+        "notifications_title": lang.pick("Notifications", "Notifications"),
+        "notify": model.notify,
+        "notify_label": lang.pick("Show the progress in the notification", "Suivre la progression dans la notification"),
+        "notify_note": lang.pick(
+            "Each step of a write or a download, then its end. Turned off, Android still shows that Bonk is working, without the progress.",
+            "Chaque étape d'une écriture ou d'un téléchargement, puis sa fin. Coupé, Android montre toujours que Bonk travaille, sans la progression.",
+        ),
     })
 }
 
@@ -95,6 +103,7 @@ pub fn start(
     show_all: bool,
     offline: bool,
     incognito: bool,
+    notify: bool,
 ) {
     let mut model = lock(&MODEL);
     model.lang_choice = LangChoice::ALL
@@ -113,6 +122,25 @@ pub fn start(
     model.advanced |= offline;
     model.incognito_at_start = incognito;
     model.use_tor = incognito && !offline;
+    model.notify = notify;
+}
+
+/// What the notification of the running write or download says, as `{title, body, percent, last}`, or null.
+#[must_use]
+pub fn notice() -> String {
+    let model = lock(&MODEL);
+    model.notice().map_or_else(
+        || "null".to_owned(),
+        |notice| {
+            json!({
+                "title": notice.title,
+                "body": notice.body,
+                "percent": notice.percent,
+                "last": notice.last,
+            })
+            .to_string()
+        },
+    )
 }
 
 #[cfg(test)]
@@ -136,6 +164,19 @@ mod tests {
             .map(|option| &option["value"])
             .collect();
         assert_eq!(chosen, [&json!("dark")]);
+    }
+
+    #[test]
+    fn le_reglage_des_notifications_passe_par_le_modele() {
+        let input = json!({"type": "settings", "action": "notifications", "value": "false"});
+        assert!(matches!(
+            message_of(&input),
+            Some(Message::Settings(SettingsMessage::Notify(false)))
+        ));
+        let mut model = Model::new(ViewOptions::default(), Lang::Fr).0;
+        model.notify = true;
+        model.screen = Screen::Settings;
+        assert_eq!(state(&model)["notify"], true);
     }
 
     #[test]
