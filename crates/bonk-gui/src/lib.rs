@@ -105,6 +105,11 @@ fn system_theme() -> Option<bool> {
     dark
 }
 
+/// Wayland `app_id` and X11 `WM_CLASS`: the desktop shell finds the icon through the `.desktop` file of that
+/// name.
+#[cfg(target_os = "linux")]
+const APPLICATION_ID: &str = "bonk";
+
 fn launch(start: Start) -> Result<(), String> {
     theme::choose(start.dark);
     #[cfg(target_os = "macos")]
@@ -121,6 +126,11 @@ fn launch(start: Start) -> Result<(), String> {
             icon: window_icon(),
             // Below this the write panel's buttons no longer fit on one line.
             min_size: Some(Size::new(480.0, 480.0)),
+            #[cfg(target_os = "linux")]
+            platform_specific: iced::window::settings::PlatformSpecific {
+                application_id: APPLICATION_ID.to_owned(),
+                ..Default::default()
+            },
             ..iced::window::Settings::default()
         })
         .window_size(Size::new(960.0, 640.0))
@@ -317,5 +327,20 @@ mod icon_tests {
     #[test]
     fn l_icone_de_la_fenetre_est_valide() {
         assert!(super::window_icon().is_some());
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod application_id_tests {
+    /// Under Wayland the shell matches the window to its `.desktop` file by this name alone.
+    #[test]
+    fn l_identifiant_de_la_fenetre_nomme_le_fichier_desktop_installe() {
+        let desktop = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("bonk")
+            .join("assets")
+            .join(format!("{}.desktop", super::APPLICATION_ID));
+        let text = std::fs::read_to_string(&desktop).unwrap_or_default();
+        assert!(text.contains("Icon=bonk"), "{}", desktop.display());
     }
 }
