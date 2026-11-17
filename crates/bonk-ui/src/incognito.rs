@@ -282,6 +282,7 @@ mod tests {
     fn started_incognito() -> Model {
         let options = crate::command::ViewOptions {
             incognito: true,
+            notify: false,
             ..crate::command::ViewOptions::default()
         };
         let (mut model, _) = Model::new(options, bonk_hal::Lang::En);

@@ -10,6 +10,7 @@ use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::time::Duration;
 
+use bonk_hal::notify::Notifications;
 use bonk_hal::{Lang, enumerate_disks};
 #[cfg(test)]
 use iced::Size;
@@ -54,6 +55,8 @@ pub(crate) struct App {
     model: Model,
     /// `bonk` itself, except in tests.
     program: Option<PathBuf>,
+    /// Started at the first notice.
+    notifications: Option<Notifications>,
 }
 
 impl Deref for App {
@@ -87,6 +90,7 @@ impl App {
         let app = Self {
             model,
             program: None,
+            notifications: None,
         };
         theme::set_incognito(app.incognito());
         let task = app.run(effects);
@@ -99,7 +103,20 @@ impl App {
             effects.extend(self.model.update(Message::RequestImage(id)));
         }
         theme::set_incognito(self.incognito());
+        self.notify();
         self.run(effects)
+    }
+
+    /// Tests never reach the desktop.
+    fn notify(&mut self) {
+        if cfg!(test) {
+            return;
+        }
+        if let Some(notice) = self.model.notice() {
+            self.notifications
+                .get_or_insert_with(Notifications::start)
+                .send(notice);
+        }
     }
 
     fn program(&self) -> PathBuf {

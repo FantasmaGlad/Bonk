@@ -190,6 +190,7 @@ impl Model {
             Some(Focus::IncognitoAtStart) => {
                 Message::Settings(SettingsMessage::IncognitoAtStart(!self.incognito_at_start))
             }
+            Some(Focus::Notify) => Message::Settings(SettingsMessage::Notify(!self.notify)),
             Some(Focus::Disk(id)) => Message::Select(id),
             Some(Focus::Details) => Message::ToggleDetails,
             Some(Focus::Copy) => Message::Copy,

@@ -169,7 +169,10 @@ class MainActivity : ComponentActivity() {
                 recreate()
             }
             PickVaultIso -> pickVaultIso.launch(arrayOf("*/*"))
-            is DownloadImage -> ImageDownload(this, Bridge::send).start(effect)
+            is DownloadImage -> {
+                askNotificationsIfNeeded()
+                DownloadService.start(this, effect)
+            }
             is VaultRun -> {
                 if (effect.action != "list") askNotificationsIfNeeded()
                 actions.vault(effect)
@@ -215,6 +218,7 @@ class MainActivity : ComponentActivity() {
             preferences.getString("view.show_all", "false") == "true",
             preferences.getString("network.offline", "false") == "true",
             preferences.getString("network.incognito", "false") == "true",
+            preferences.getString("notifications", "true") == "true",
         )
         val filter =
             IntentFilter().apply {

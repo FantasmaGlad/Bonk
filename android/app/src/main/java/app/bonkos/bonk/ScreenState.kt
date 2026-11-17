@@ -70,6 +70,10 @@ data class SettingsView(
     @SerialName("incognito_available") val incognitoAvailable: Boolean = false,
     @SerialName("incognito_label") val incognitoLabel: String = "",
     @SerialName("incognito_note") val incognitoNote: String = "",
+    @SerialName("notifications_title") val notificationsTitle: String = "",
+    val notify: Boolean = true,
+    @SerialName("notify_label") val notifyLabel: String = "",
+    @SerialName("notify_note") val notifyNote: String = "",
 )
 
 @Serializable

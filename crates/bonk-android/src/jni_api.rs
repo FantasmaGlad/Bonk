@@ -133,14 +133,32 @@ pub extern "system" fn Java_app_bonkos_bonk_Native_start<'caller>(
     show_all: jboolean,
     offline: jboolean,
     incognito: jboolean,
+    notify: jboolean,
 ) {
     env.with_env(|env| -> Result<_, Error> {
         let lang = text_of(env, &lang)?;
         let theme = text_of(env, &theme)?;
-        crate::settings::start(&lang, &theme, system_french, show_all, offline, incognito);
+        crate::settings::start(
+            &lang,
+            &theme,
+            system_french,
+            show_all,
+            offline,
+            incognito,
+            notify,
+        );
         Ok(())
     })
     .resolve::<jni::errors::ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_app_bonkos_bonk_Native_notice<'caller>(
+    mut env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+) -> JString<'caller> {
+    env.with_env(|env| -> Result<_, Error> { env.new_string(crate::settings::notice()) })
+        .resolve::<jni::errors::ThrowRuntimeExAndDefault>()
 }
 
 #[unsafe(no_mangle)]

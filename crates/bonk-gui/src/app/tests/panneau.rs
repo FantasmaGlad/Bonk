@@ -80,6 +80,7 @@ pub(super) fn app_sur_disque_interne() -> App {
             ..Model::default()
         },
         program: Some(PathBuf::from("/bonk-programme-inexistant")),
+        notifications: None,
     };
     let _ = app.update(Message::Loaded(Ok(vec![disk(
         "sata-x",

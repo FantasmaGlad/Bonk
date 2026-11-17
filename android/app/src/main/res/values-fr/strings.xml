@@ -14,4 +14,6 @@
     <string name="writing_notification">Bonk écrit sur un disque</string>
     <string name="do_not_unplug">Ne débranchez pas le disque avant le résultat. Vous pouvez quitter l\'application.</string>
     <string name="chromeos_share">Sur Chromebook, une clé USB n\'arrive aux applications Android qu\'une fois partagée : paramètres de ChromeOS, Applications, Google Play Store, préférences USB.</string>
+    <string name="downloading_notification">Bonk télécharge une image</string>
+    <string name="cancel">Annuler</string>
 </resources>

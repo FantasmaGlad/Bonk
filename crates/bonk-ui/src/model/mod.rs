@@ -147,6 +147,7 @@ pub enum Focus {
     All,
     Offline,
     IncognitoAtStart,
+    Notify,
     Disk(String),
     /// The technical details disclosure of the selected disk.
     Details,
@@ -221,6 +222,8 @@ pub struct Model {
     pub tor: Option<String>,
     /// Kept setting: start in incognito, and wait for Tor rather than reach the network without it.
     pub incognito_at_start: bool,
+    /// Kept setting: each step of a write in the system's notifications.
+    pub notify: bool,
     pub lang: Lang,
     pub use_tor: bool,
     pub menu_open: bool,
@@ -278,6 +281,7 @@ impl Model {
             offline: initial.offline,
             advanced: initial.offline,
             incognito_at_start: initial.incognito,
+            notify: initial.notify,
             use_tor: initial.incognito && !initial.offline,
             ..Self::default()
         };

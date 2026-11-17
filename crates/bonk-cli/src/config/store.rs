@@ -113,6 +113,7 @@ pub(crate) fn view_defaults(effective: &[Effective]) -> ViewDefaults {
         allow_virtual: on("view.allow_virtual"),
         offline: on("network.offline"),
         incognito: on("network.incognito"),
+        notify: on("notifications"),
         lang: match value_of(effective, "lang") {
             Some("en") => Some(bonk_hal::Lang::En),
             Some("fr") => Some(bonk_hal::Lang::Fr),

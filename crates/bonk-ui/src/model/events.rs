@@ -80,6 +80,7 @@ pub(super) fn settings_event(
         SettingsMessage::Theme(choice) => ("choose_theme", choice.config_value().to_owned()),
         SettingsMessage::Offline(on) => ("toggle_offline", on.to_string()),
         SettingsMessage::IncognitoAtStart(on) => ("toggle_incognito_at_start", on.to_string()),
+        SettingsMessage::Notify(on) => ("toggle_notifications", on.to_string()),
     })
 }
 

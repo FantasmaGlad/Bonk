@@ -119,6 +119,7 @@ mod tests {
             show_all: true,
             offline: false,
             incognito: false,
+            notify: false,
         };
         let args = write_args(
             "usb-a",

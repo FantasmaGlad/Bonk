@@ -10,6 +10,10 @@ class BonkFailure(val code: String, message: String) : Exception(message)
 @Serializable
 data class Outcome(val error: String? = null)
 
+/** What the notification of a running operation says, from Rust. */
+@Serializable
+data class Notice(val title: String, val body: String, val percent: Int? = null, val last: Boolean = false)
+
 @Serializable
 data class CatalogAddresses(val catalog: String, val signature: String)
 
@@ -42,7 +46,10 @@ object Protocol {
 
     fun icons(text: String): List<IconDownload> = fromRust.decodeFromString(text)
 
-    /** A write or a vault action, handed to the service. */
+    /** `null` when nothing runs or the setting is off. */
+    fun notice(text: String): Notice? = fromRust.decodeFromString(text)
+
+    /** A write, a vault action or a download, handed to its service. */
     fun encodeTask(task: Effect): String = fromRust.encodeToString(Effect.serializer(), task)
 
     fun decodeTask(text: String): Effect = fromRust.decodeFromString(Effect.serializer(), text)

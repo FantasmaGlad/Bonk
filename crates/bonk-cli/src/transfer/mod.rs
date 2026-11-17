@@ -1,4 +1,5 @@
 mod args;
+mod notify;
 mod output;
 mod repair;
 mod verify;

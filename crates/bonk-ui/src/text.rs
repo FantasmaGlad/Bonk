@@ -79,17 +79,7 @@ pub fn requested_line(
 
 #[must_use]
 pub fn step(lang: Lang, phase: Phase) -> &'static str {
-    match phase {
-        Phase::Download => lang.pick("Download", "Téléchargement"),
-        Phase::Source => lang.pick("Checking the image", "Contrôle de l'image"),
-        Phase::Authorize => lang.pick(
-            "Waiting for the system's authorization",
-            "En attente de l'autorisation du système",
-        ),
-        Phase::Write => lang.pick("Writing", "Écriture"),
-        Phase::Flush => lang.pick("Flushing buffers", "Vidage des tampons"),
-        Phase::Verify => lang.pick("Verifying", "Vérification"),
-    }
+    bonk_hal::notify::step_label(lang, phase)
 }
 
 #[must_use]

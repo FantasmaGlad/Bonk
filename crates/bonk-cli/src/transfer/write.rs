@@ -6,6 +6,7 @@ use bonk_core::write::VerifyReport;
 use bonk_hal::format_size;
 
 use super::args::*;
+use super::notify::Notices;
 use super::output::*;
 use crate::fetch;
 use bonk_ops::job::{self, Deps, TraceIo, WriteJob, WriteOutcome};
@@ -30,12 +31,17 @@ pub(crate) fn run_write(
     };
     let mut job = write_job(args, source.clone(), expected_sha256);
     log::debug!(target: "bonk::cli", target_kind = if args.common.simulate { "image" } else { "disk" }, dry_run = args.dry_run; "command write");
+    let mut notices = Notices::new(args.notify);
     let result = {
-        let mut progress = sink(
+        let mut shown = sink(
             progress_mode(args.common.progress, quiet),
             &mut *out,
             &mut *err,
         );
+        let mut progress = |update: &bonk_core::write::Progress| {
+            notices.progress(update);
+            shown(update)
+        };
         let request = fetch::Request {
             source: &source,
             sha256_file: args.sha256_file.as_deref(),
@@ -43,6 +49,7 @@ pub(crate) fn run_write(
         };
         fetch::write(&request, &mut job, deps, &mut progress)
     };
+    notices.end(&result);
     let no_repair_gpt = args.no_repair_gpt;
     let code = finish(
         result,

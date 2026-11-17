@@ -79,6 +79,7 @@ fn priorite_variable_fichier_defaut() {
             allow_virtual: false,
             offline: false,
             incognito: false,
+            notify: true,
             lang: None,
             theme: "auto",
         }
