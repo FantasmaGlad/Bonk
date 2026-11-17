@@ -178,11 +178,15 @@ private fun MenuSheet(menu: MenuView, send: (ToRust) -> Unit) {
             Modifier.padding(horizontal = Tokens.SPACE_PAGE.dp),
             verticalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp),
         ) {
+            TextInput(menu.search, { send(MenuSearch(it)) }, Modifier.fillMaxWidth(), placeholder = menu.searchHint)
             Row(horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp)) {
                 Picker(menu.category.orEmpty(), menu.categories, menu.allCategories, ::CategoryFilter, send)
                 Picker(menu.base.orEmpty(), menu.bases, menu.allBases, ::BaseFilter, send)
             }
-            Picker(menu.system.orEmpty(), menu.systems, menu.allSystems, ::SystemFilter, send)
+            Row(horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp)) {
+                Picker(menu.system.orEmpty(), menu.systems, menu.allSystems, ::SystemFilter, send)
+                Picker(menu.arch.orEmpty(), menu.arches, menu.allArches, ::ArchFilter, send)
+            }
             val rows = menu.rows
             // Only visible rows are drawn: the catalog has over 300.
             LazyColumn(

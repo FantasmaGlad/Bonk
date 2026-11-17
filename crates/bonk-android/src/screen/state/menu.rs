@@ -1,6 +1,7 @@
 use bonk_hal::Lang;
 use bonk_ui::catalog::{
-    CatalogState, ChoiceSource, System, all_bases, all_categories, all_systems, official_page_note,
+    CatalogState, ChoiceSource, System, all_arches, all_bases, all_categories, all_systems,
+    arch_label, official_page_note,
 };
 use bonk_ui::model::{Model, WriteState};
 use serde_json::{Value, json};
@@ -32,6 +33,11 @@ pub(in crate::screen) fn menu_state(model: &Model) -> Value {
         "categories": categories,
         "bases": base_names,
         "systems": lists.systems,
+        "search": model.menu_filter.search,
+        "search_hint": lang.pick("Search by name", "Rechercher par nom"),
+        "all_arches": all_arches(lang),
+        "arch": model.menu_filter.arch.as_deref().map(|id| arch_label(id, lang)),
+        "arches": lists.arches.iter().map(|id| arch_label(id, lang)).collect::<Vec<_>>(),
         "rows": rows(model, systems),
     })
 }
@@ -66,7 +72,7 @@ fn rows(model: &Model, systems: &[System]) -> Vec<Value> {
     let mut index = 0;
     let mut rows = Vec::new();
     for system in model.menu_filter.apply(systems) {
-        for choice in &system.choices {
+        for choice in model.menu_filter.choices(system) {
             let usable = matches!(choice.source, ChoiceSource::Download { .. });
             rows.push(row(model.lang, choice, usable.then_some(index)));
             index += usize::from(usable);

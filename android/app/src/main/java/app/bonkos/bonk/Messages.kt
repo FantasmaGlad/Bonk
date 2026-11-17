@@ -43,6 +43,13 @@ data class BaseFilter(val value: String? = null) : ToRust
 @Serializable @SerialName("system")
 data class SystemFilter(val value: String? = null) : ToRust
 
+/** Part of a system or image name; empty shows them all. */
+@Serializable @SerialName("menu_search")
+data class MenuSearch(val value: String) : ToRust
+
+@Serializable @SerialName("arch")
+data class ArchFilter(val value: String? = null) : ToRust
+
 @Serializable @SerialName("choose")
 data class Choose(val index: Int) : ToRust
 

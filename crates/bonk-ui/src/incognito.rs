@@ -81,6 +81,12 @@ impl Model {
         })
     }
 
+    /// Turned on only with a Tor answering now: a setting nothing could honour would hold every start.
+    #[must_use]
+    pub fn can_start_incognito(&self) -> bool {
+        self.incognito_at_start || self.tor.is_some()
+    }
+
     #[must_use]
     pub fn incognito_label(&self) -> &'static str {
         match (&self.tor, self.use_tor) {
@@ -88,9 +94,10 @@ impl Model {
                 "Incognito: waiting for Tor",
                 "Incognito : en attente de Tor",
             ),
-            (None, false) => self
-                .lang
-                .pick("Incognito: no Tor", "Incognito : Tor absent"),
+            (None, false) => self.lang.pick(
+                "Incognito: no Tor running. Open Tor Browser and connect, or start Orbot or the tor service.",
+                "Incognito : aucun Tor en marche. Ouvrez le navigateur Tor et connectez-le, ou lancez Orbot ou le service tor.",
+            ),
             (Some(_), true) => self
                 .lang
                 .pick("Incognito on (Tor)", "Incognito activé (Tor)"),
@@ -320,7 +327,7 @@ mod tests {
 
     #[test]
     fn le_reglage_se_garde_pour_les_demarrages_suivants() {
-        let mut model = Model::default();
+        let mut model = with_tor();
         assert_eq!(
             model.update(Message::Settings(
                 crate::settings::SettingsMessage::IncognitoAtStart(true)
@@ -332,5 +339,25 @@ mod tests {
         );
         assert!(model.incognito_at_start && !model.use_tor);
         assert!(model.view_options().incognito);
+    }
+
+    /// A setting nothing could honour would hold every start: it needs a Tor answering now.
+    #[test]
+    fn demarrer_en_incognito_exige_un_tor_qui_repond() {
+        let set = |model: &mut Model, on| {
+            model.update(Message::Settings(
+                crate::settings::SettingsMessage::IncognitoAtStart(on),
+            ))
+        };
+        let mut model = Model::default();
+        assert!(!model.can_start_incognito());
+        assert!(set(&mut model, true).is_empty());
+        assert!(!model.incognito_at_start);
+        let mut model = with_tor();
+        assert!(!set(&mut model, true).is_empty());
+        let _ = model.update(Message::TorDetected(None));
+        assert!(model.can_start_incognito(), "le couper reste possible");
+        assert!(!set(&mut model, false).is_empty());
+        assert!(!model.incognito_at_start);
     }
 }

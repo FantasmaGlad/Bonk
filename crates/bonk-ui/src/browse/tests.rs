@@ -16,6 +16,7 @@ fn debian() -> System {
         },
         desktop: Some("gnome".to_owned()),
         media: Some("usb".to_owned()),
+        arch: "x86_64".to_owned(),
     };
     let dvd = Choice {
         id: "debian-dvd".to_owned(),

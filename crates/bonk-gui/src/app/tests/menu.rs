@@ -19,6 +19,7 @@ pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
                 },
                 desktop: None,
                 media: None,
+                arch: "x86_64".to_owned(),
             },
             catalog::Choice {
                 id: "ubuntu-24.04-desktop-x86_64".to_owned(),
@@ -32,6 +33,7 @@ pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
                 },
                 desktop: None,
                 media: None,
+                arch: "x86_64".to_owned(),
             },
             catalog::Choice {
                 id: "ubuntu-11".to_owned(),
@@ -42,6 +44,7 @@ pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
                 source: catalog::ChoiceSource::OfficialPage("https://p/".to_owned()),
                 desktop: None,
                 media: None,
+                arch: "x86_64".to_owned(),
             },
         ],
     }]

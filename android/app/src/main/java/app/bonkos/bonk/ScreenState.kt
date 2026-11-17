@@ -67,6 +67,7 @@ data class SettingsView(
     @SerialName("offline_label") val offlineLabel: String = "",
     @SerialName("offline_note") val offlineNote: String = "",
     @SerialName("incognito_at_start") val incognitoAtStart: Boolean = false,
+    @SerialName("incognito_available") val incognitoAvailable: Boolean = false,
     @SerialName("incognito_label") val incognitoLabel: String = "",
     @SerialName("incognito_note") val incognitoNote: String = "",
 )
@@ -144,6 +145,11 @@ data class MenuView(
     val categories: List<String> = emptyList(),
     val bases: List<String> = emptyList(),
     val systems: List<String> = emptyList(),
+    val search: String = "",
+    @SerialName("search_hint") val searchHint: String = "",
+    @SerialName("all_arches") val allArches: String = "",
+    val arch: String? = null,
+    val arches: List<String> = emptyList(),
     val rows: List<MenuRow> = emptyList(),
 )
 

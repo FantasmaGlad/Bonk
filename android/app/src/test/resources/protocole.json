@@ -141,6 +141,22 @@
       "value": "debian"
     },
     {
+      "type": "menu_search",
+      "value": "kubuntu"
+    },
+    {
+      "type": "arch",
+      "value": "aarch64 (ARM, 64 bits)"
+    },
+    {
+      "type": "arch"
+    },
+    {
+      "action": "incognito_at_start",
+      "type": "settings",
+      "value": "true"
+    },
+    {
       "index": 0,
       "type": "choose"
     },
@@ -282,7 +298,7 @@
       "empty": "Aucun disque proposé. Branchez une clé USB ou une carte SD avec un adaptateur.",
       "incognito": {
         "available": false,
-        "label": "Incognito : Tor absent",
+        "label": "Incognito : aucun Tor en marche. Ouvrez le navigateur Tor et connectez-le, ou lancez Orbot ou le service tor.",
         "link": "torproject.org",
         "on": false
       },
@@ -334,9 +350,14 @@
         "mbr": true,
         "mbr_label": "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
         "menu": {
+          "all_arches": "Tous les processeurs",
           "all_bases": "Toutes les bases",
           "all_categories": "Toutes les catégories",
           "all_systems": "Tous les systèmes",
+          "arch": null,
+          "arches": [
+            "x86_64 (Intel, AMD)"
+          ],
           "base": null,
           "bases": [
             "Debian"
@@ -361,6 +382,8 @@
               "title": "Debian DVD"
             }
           ],
+          "search": "",
+          "search_hint": "Rechercher par nom",
           "system": null,
           "systems": [
             "Debian"
@@ -492,9 +515,14 @@
         "mbr": true,
         "mbr_label": "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
         "menu": {
+          "all_arches": "Tous les processeurs",
           "all_bases": "Toutes les bases",
           "all_categories": "Toutes les catégories",
           "all_systems": "Tous les systèmes",
+          "arch": null,
+          "arches": [
+            "x86_64 (Intel, AMD)"
+          ],
           "base": null,
           "bases": [
             "Debian"
@@ -519,6 +547,8 @@
               "title": "Debian DVD"
             }
           ],
+          "search": "",
+          "search_hint": "Rechercher par nom",
           "system": null,
           "systems": [
             "Debian"
@@ -605,9 +635,14 @@
         "mbr": true,
         "mbr_label": "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
         "menu": {
+          "all_arches": "Tous les processeurs",
           "all_bases": "Toutes les bases",
           "all_categories": "Toutes les catégories",
           "all_systems": "Tous les systèmes",
+          "arch": null,
+          "arches": [
+            "x86_64 (Intel, AMD)"
+          ],
           "base": null,
           "bases": [
             "Debian"
@@ -632,6 +667,8 @@
               "title": "Debian DVD"
             }
           ],
+          "search": "",
+          "search_hint": "Rechercher par nom",
           "system": null,
           "systems": [
             "Debian"
@@ -757,9 +794,14 @@
         "mbr": true,
         "mbr_label": "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
         "menu": {
+          "all_arches": "Tous les processeurs",
           "all_bases": "Toutes les bases",
           "all_categories": "Toutes les catégories",
           "all_systems": "Tous les systèmes",
+          "arch": null,
+          "arches": [
+            "x86_64 (Intel, AMD)"
+          ],
           "base": null,
           "bases": [
             "Debian"
@@ -784,6 +826,8 @@
               "title": "Debian DVD"
             }
           ],
+          "search": "",
+          "search_hint": "Rechercher par nom",
           "system": null,
           "systems": [
             "Debian"
@@ -885,9 +929,14 @@
         "mbr": true,
         "mbr_label": "Clé Windows : table MBR, démarre en BIOS et en UEFI jusqu'à 2 Tio (décochée : GPT, UEFI seul)",
         "menu": {
+          "all_arches": "Tous les processeurs",
           "all_bases": "Toutes les bases",
           "all_categories": "Toutes les catégories",
           "all_systems": "Tous les systèmes",
+          "arch": null,
+          "arches": [
+            "x86_64 (Intel, AMD)"
+          ],
           "base": null,
           "bases": [
             "Debian"
@@ -912,6 +961,8 @@
               "title": "Debian DVD"
             }
           ],
+          "search": "",
+          "search_hint": "Rechercher par nom",
           "system": null,
           "systems": [
             "Debian"

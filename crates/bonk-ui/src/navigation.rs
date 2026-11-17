@@ -1,5 +1,5 @@
 use crate::browse::BrowseMessage;
-use crate::catalog::{CatalogState, writable};
+use crate::catalog::CatalogState;
 use crate::library::LibraryMessage;
 use crate::model::{Effect, Effects, Focus, Message, Model, Nav, WriteState};
 use crate::settings::{Screen, SettingsMessage};
@@ -140,7 +140,7 @@ impl Model {
         let CatalogState::Ready(systems) = &self.catalog else {
             return Vec::new();
         };
-        let count = writable(&self.menu_filter.apply(systems)).len();
+        let count = self.menu_filter.writable(systems).len();
         if count == 0 {
             return Vec::new();
         }
@@ -196,7 +196,7 @@ impl Model {
             Some(Focus::Advanced) => Message::ToggleAdvanced,
             Some(Focus::Menu) => match (&self.catalog, self.menu_open) {
                 (CatalogState::Ready(systems), true) => {
-                    match writable(&self.menu_filter.apply(systems)).get(self.menu_index) {
+                    match self.menu_filter.writable(systems).get(self.menu_index) {
                         Some(choice) => Message::MenuChose((*choice).clone()),
                         None => return Vec::new(),
                     }

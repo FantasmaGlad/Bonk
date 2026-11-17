@@ -159,13 +159,16 @@ impl App {
         let lang = self.lang;
         let switch = toggler(self.incognito_at_start)
             .label(lang.pick("Start in incognito", "Démarrer en mode incognito"))
-            .on_toggle(|on| Message::Settings(SettingsMessage::IncognitoAtStart(on)))
+            .on_toggle_maybe(
+                self.can_start_incognito()
+                    .then_some(|on| Message::Settings(SettingsMessage::IncognitoAtStart(on))),
+            )
             .size(20);
         section(
             lang.pick("Incognito", "Incognito"),
             lang.pick(
-                "From the next start, everything goes through a local Tor (Tor Browser open, or the tor service); until it answers, nothing reaches the network. The round button still turns it off.",
-                "Dès le prochain démarrage, tout passe par un Tor local (navigateur Tor ouvert, ou service tor) ; tant qu'il ne répond pas, rien ne part sur le réseau. Le bouton rond le coupe toujours.",
+                "From the next start, everything goes through a local Tor (Tor Browser open and connected, or the tor service); until it answers, nothing reaches the network. The round button still turns it off. Available once a Tor answers.",
+                "Dès le prochain démarrage, tout passe par un Tor local (navigateur Tor ouvert et connecté, ou service tor) ; tant qu'il ne répond pas, rien ne part sur le réseau. Le bouton rond le coupe toujours. Disponible quand un Tor répond.",
             ),
             ring(switch, self.has_focus(Focus::IncognitoAtStart)),
         )

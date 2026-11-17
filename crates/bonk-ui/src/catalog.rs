@@ -18,6 +18,8 @@ pub struct Choice {
     pub desktop: Option<String>,
     /// Catalog medium id: `usb`, `sd`, `optical`.
     pub media: Option<String>,
+    /// Processor the image boots on: `x86_64`, `aarch64`, `riscv64`.
+    pub arch: String,
 }
 
 impl Choice {
@@ -67,12 +69,16 @@ pub struct Shelf {
     pub saved_copy: bool,
 }
 
-/// A usage category, a base, or a single system and its versions. Empty: everything.
+/// A usage category, a base, or a single system and its versions, narrowed by name and processor. Empty:
+/// everything.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct MenuFilter {
     pub category: Option<String>,
     pub base: Option<String>,
     pub system: Option<String>,
+    /// Part of a system or image name, any case: `kubuntu` finds Kubuntu under Ubuntu.
+    pub search: String,
+    pub arch: Option<String>,
 }
 
 /// What the menu lists offer, in their order and without doubles.
@@ -82,15 +88,44 @@ pub struct MenuLists {
     pub bases: Vec<String>,
     /// The systems of the chosen category and base, sorted by name.
     pub systems: Vec<String>,
+    /// Processors of the catalog, the most common first.
+    pub arches: Vec<String>,
 }
 
 impl MenuFilter {
+    /// Systems with at least one image left once every filter applies.
     pub fn apply<'a>(&self, systems: &'a [System]) -> Vec<&'a System> {
         systems
             .iter()
             .filter(|s| self.category.as_ref().is_none_or(|c| s.uses.contains(c)))
             .filter(|s| self.base.is_none() || s.base == self.base)
             .filter(|s| self.system.as_ref().is_none_or(|n| &s.name == n))
+            .filter(|s| !self.narrows_images() || !self.choices(s).is_empty())
+            .collect()
+    }
+
+    fn narrows_images(&self) -> bool {
+        self.arch.is_some() || !self.search.trim().is_empty()
+    }
+
+    /// The images of `system` the menu lists: of the chosen processor, and named like the search.
+    pub fn choices<'a>(&self, system: &'a System) -> Vec<&'a Choice> {
+        let wanted = self.search.trim().to_lowercase();
+        let named = |name: &str| wanted.is_empty() || name.to_lowercase().contains(&wanted);
+        system
+            .choices
+            .iter()
+            .filter(|c| self.arch.as_ref().is_none_or(|a| &c.arch == a))
+            .filter(|c| named(&system.name) || named(&c.name))
+            .collect()
+    }
+
+    /// In menu order: the keyboard index and the app's touched row refer to it.
+    pub fn writable<'a>(&self, systems: &'a [System]) -> Vec<&'a Choice> {
+        self.apply(systems)
+            .into_iter()
+            .flat_map(|system| self.choices(system))
+            .filter(|choice| matches!(choice.source, ChoiceSource::Download { .. }))
             .collect()
     }
 
@@ -107,7 +142,14 @@ impl MenuFilter {
             .collect();
         names.sort();
         names.dedup();
+        let mut arches: Vec<String> = systems
+            .iter()
+            .flat_map(|s| s.choices.iter().map(|c| c.arch.clone()))
+            .collect();
+        arches.sort_by_key(|arch| (arch_rank(arch), arch.clone()));
+        arches.dedup();
         MenuLists {
+            arches,
             categories: terms.uses().ordered(systems.iter().flat_map(|s| &s.uses)),
             bases: terms
                 .bases()
@@ -115,6 +157,35 @@ impl MenuFilter {
             systems: names,
         }
     }
+}
+
+fn arch_rank(arch: &str) -> u8 {
+    match arch {
+        "x86_64" => 0,
+        "aarch64" => 1,
+        _ => 2,
+    }
+}
+
+/// A processor as people know it; unknown ones keep their identifier.
+#[must_use]
+pub fn arch_label(arch: &str, lang: Lang) -> String {
+    match arch {
+        "x86_64" => "x86_64 (Intel, AMD)".to_owned(),
+        "aarch64" => lang
+            .pick("aarch64 (ARM, 64-bit)", "aarch64 (ARM, 64 bits)")
+            .to_owned(),
+        "i686" => lang
+            .pick("i686 (Intel, AMD, 32-bit)", "i686 (Intel, AMD, 32 bits)")
+            .to_owned(),
+        "riscv64" => "riscv64 (RISC-V)".to_owned(),
+        other => other.to_owned(),
+    }
+}
+
+#[must_use]
+pub fn all_arches(lang: Lang) -> &'static str {
+    lang.pick("All processors", "Tous les processeurs")
 }
 
 /// For an image published only on its editor's page: Bonk cannot download it itself.
@@ -172,6 +243,7 @@ fn choice(image: &Image) -> Choice {
         source,
         desktop: image.desktop.clone(),
         media: image.media.clone(),
+        arch: image.arch.clone(),
     }
 }
 
@@ -208,15 +280,6 @@ pub fn shelf(report: &CatalogReport) -> Shelf {
         terms: crate::terms::Terms::from_catalog(report.taxonomy.as_ref()),
         saved_copy: report.saved_copy,
     }
-}
-
-/// In menu order: the keyboard index refers to it.
-pub fn writable<'a>(systems: &[&'a System]) -> Vec<&'a Choice> {
-    systems
-        .iter()
-        .flat_map(|system| &system.choices)
-        .filter(|choice| matches!(choice.source, ChoiceSource::Download { .. }))
-        .collect()
 }
 
 pub fn find_url<'a>(systems: &'a [System], url: &str) -> Option<(&'a System, &'a Choice)> {
@@ -392,8 +455,12 @@ mod tests {
     #[test]
     fn le_menu_clavier_ne_compte_que_ce_qui_s_ecrit_et_retrouve_un_choix() {
         let systems = parse(&report());
-        let all = MenuFilter::default().apply(&systems);
-        assert_eq!(writable(&all).len(), 2, "une image de CD ne s'écrit pas");
+
+        assert_eq!(
+            MenuFilter::default().writable(&systems).len(),
+            2,
+            "une image de CD ne s'écrit pas"
+        );
         assert!(matches!(
             find_url(&systems, "https://u/20.iso"),
             Some((system, choice)) if system.name == "Ubuntu" && choice.end_of_life
@@ -427,5 +494,55 @@ mod tests {
     #[test]
     fn rapport_illisible_rien_a_proposer() {
         assert!(parse(&json!({"autre": 1})).is_empty());
+    }
+
+    #[test]
+    fn la_recherche_trouve_une_image_par_son_nom_ou_par_son_systeme() {
+        let systems = parse(&report());
+        let filter = |search: &str| MenuFilter {
+            search: search.to_owned(),
+            ..MenuFilter::default()
+        };
+        let names = |f: &MenuFilter| -> Vec<String> {
+            f.apply(&systems)
+                .into_iter()
+                .flat_map(|s| f.choices(s))
+                .map(|c| c.name.clone())
+                .collect()
+        };
+        assert_eq!(names(&filter("KUBUNTU")), ["Kubuntu"]);
+        assert_eq!(names(&filter("ubuntu")).len(), 3);
+        assert_eq!(names(&filter("WINDOWS")), ["windows"]);
+        assert!(filter("rien").apply(&systems).is_empty());
+    }
+
+    /// The rows shown and the keyboard index count the same images: one filter decides both.
+    #[test]
+    fn le_processeur_retient_ses_images_et_l_index_clavier_suit() {
+        let systems = parse(&report());
+        let arm = MenuFilter {
+            arch: Some("aarch64".to_owned()),
+            ..MenuFilter::default()
+        };
+        let shown: Vec<&str> = arm
+            .apply(&systems)
+            .into_iter()
+            .flat_map(|s| arm.choices(s))
+            .map(|c| c.arch.as_str())
+            .collect();
+        assert_eq!(shown, ["aarch64"]);
+        assert!(arm.writable(&systems).is_empty(), "l'image ARM est un CD");
+        let x86 = MenuFilter {
+            arch: Some("x86_64".to_owned()),
+            ..MenuFilter::default()
+        };
+        assert_eq!(x86.writable(&systems).len(), 2);
+        assert_eq!(
+            MenuFilter::default()
+                .lists(&systems, &crate::terms::Terms::default())
+                .arches,
+            ["x86_64", "aarch64"]
+        );
+        assert_eq!(arch_label("aarch64", Lang::Fr), "aarch64 (ARM, 64 bits)");
     }
 }

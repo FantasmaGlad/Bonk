@@ -43,6 +43,8 @@ impl Model {
             | Message::MenuCategory(_)
             | Message::MenuBase(_)
             | Message::MenuSystem(_)
+            | Message::MenuSearch(_)
+            | Message::MenuArch(_)
             | Message::CatalogLoaded(_)
             | Message::MenuChose(_)) => self.apply_menu(message),
             message @ (Message::Clock

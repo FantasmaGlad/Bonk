@@ -68,6 +68,10 @@ class ProtocolTest {
                 CategoryFilter(),
                 BaseFilter("Debian"),
                 SystemFilter("debian"),
+                MenuSearch("kubuntu"),
+                ArchFilter("aarch64 (ARM, 64 bits)"),
+                ArchFilter(),
+                SettingsAction("incognito_at_start", "true"),
                 Choose(0),
                 ToggleAdvanced,
                 ImageInput("/x.iso"),
@@ -131,7 +135,7 @@ class ProtocolTest {
         assertEquals(null, draft.notice)
         assertTrue(states.all { it.lang in setOf("fr", "en") })
         assertEquals(emptyList(), idle.disks)
-        assertEquals(IncognitoView(false, false, "Incognito : Tor absent", "torproject.org"), idle.incognito)
+        assertEquals(IncognitoView(false, false, "Incognito : aucun Tor en marche. Ouvrez le navigateur Tor et connectez-le, ou lancez Orbot ou le service tor.", "torproject.org"), idle.incognito)
         assertTrue(checkNotNull(draft.incognito).on)
 
         val panel = assertIs<DraftPanel>(draft.panel)

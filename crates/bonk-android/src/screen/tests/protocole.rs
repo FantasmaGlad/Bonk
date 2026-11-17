@@ -51,6 +51,7 @@ fn debian_catalog() -> CatalogState {
                 },
                 desktop: Some("gnome".to_owned()),
                 media: Some("usb".to_owned()),
+                arch: "x86_64".to_owned(),
             },
             Choice {
                 id: "debian-13-dvd-x86_64".to_owned(),
@@ -61,6 +62,7 @@ fn debian_catalog() -> CatalogState {
                 source: ChoiceSource::OfficialPage("https://www.debian.org/".to_owned()),
                 desktop: None,
                 media: None,
+                arch: "x86_64".to_owned(),
             },
         ],
     }])
@@ -218,6 +220,10 @@ fn message_samples() -> Vec<Value> {
         json!({"type": "category"}),
         json!({"type": "base", "value": "Debian"}),
         json!({"type": "system", "value": "debian"}),
+        json!({"type": "menu_search", "value": "kubuntu"}),
+        json!({"type": "arch", "value": "aarch64 (ARM, 64 bits)"}),
+        json!({"type": "arch"}),
+        json!({"type": "settings", "action": "incognito_at_start", "value": "true"}),
         json!({"type": "choose", "index": 0}),
         json!({"type": "advanced"}),
         json!({"type": "image", "value": "/x.iso"}),
