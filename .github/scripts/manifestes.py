@@ -122,6 +122,8 @@ pkgdesc="{description}"
 arch=('x86_64' 'aarch64')
 url="https://github.com/{DEPOT}"
 license=('{LICENCE}')
+# Built and stripped by the release: no debug package to split off.
+options=('!debug')
 provides=('bonkos')
 conflicts=({AUR_CONFLICTS} '{autre}')
 {source("x86_64", "linux-x86_64")}{source("aarch64", "linux-aarch64")}
