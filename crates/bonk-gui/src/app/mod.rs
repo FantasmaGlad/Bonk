@@ -94,15 +94,10 @@ impl App {
     }
 
     pub(crate) fn update(&mut self, message: Message) -> Task<Message> {
-        let effects = self.model.update(message);
-        #[cfg(target_os = "macos")]
-        let effects = {
-            let mut effects = effects;
-            for id in crate::link_macos::take() {
-                effects.extend(self.model.update(Message::RequestImage(id)));
-            }
-            effects
-        };
+        let mut effects = self.model.update(message);
+        for id in crate::link_macos::take() {
+            effects.extend(self.model.update(Message::RequestImage(id)));
+        }
         theme::set_incognito(self.incognito());
         self.run(effects)
     }

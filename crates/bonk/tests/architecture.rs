@@ -112,10 +112,25 @@ fn test_only(file: &Path) -> bool {
         .iter()
         .filter(|parent| parent.as_path() != file)
         .any(|parent| {
-            let text = read(parent);
-            text.contains(&format!("#[cfg(test)]\nmod {name};"))
-                || (text.contains(&format!("\nmod {name};")) && test_only(parent))
+            declaration(&read(parent), &name)
+                .is_some_and(|under_test| under_test || test_only(parent))
         })
+}
+
+/// Whether `text` declares module `name` (`pub` or not), and if so whether under `#[cfg(test)]`.
+fn declaration(text: &str, name: &str) -> Option<bool> {
+    let wanted = format!("mod {name};");
+    let mut previous = "";
+    for line in text.lines().map(str::trim) {
+        if line
+            .strip_suffix(wanted.as_str())
+            .is_some_and(|visibility| visibility.is_empty() || visibility.starts_with("pub"))
+        {
+            return Some(previous == "#[cfg(test)]");
+        }
+        previous = line;
+    }
+    None
 }
 
 fn production(file: &Path) -> String {
@@ -123,7 +138,7 @@ fn production(file: &Path) -> String {
         return String::new();
     }
     read(file)
-        .split("#[cfg(test)]\nmod tests")
+        .split("#[cfg(test)]\nmod tests {")
         .next()
         .unwrap_or_default()
         .to_owned()
@@ -247,7 +262,7 @@ fn aucun_fichier_de_production_ne_depasse_le_plafond() {
                     .unwrap_or_default()
                     .replace("\r\n", "\n");
                 let production = texte
-                    .split("#[cfg(test)]\nmod tests")
+                    .split("#[cfg(test)]\nmod tests {")
                     .next()
                     .unwrap_or_default();
                 let lignes = production.lines().count();
@@ -268,6 +283,12 @@ fn un_module_de_tests_a_part_n_est_pas_du_code_de_production() {
     let cli = crates_dir().join("bonk-cli").join("src");
     assert!(test_only(&cli.join("config").join("tests.rs")));
     assert!(test_only(&cli.join("job_tests").join("write.rs")));
+    assert!(test_only(&cli.join("job_tests").join("vault.rs")));
+    let catalog = crates_dir()
+        .join("bonk-catalog")
+        .join("src")
+        .join("manifest");
+    assert!(production(&catalog.join("mod.rs")).contains("DEFAULT_BASE"));
     assert!(!test_only(&cli.join("config").join("store.rs")));
     assert!(!test_only(&cli.join("lib.rs")));
 }
@@ -303,8 +324,99 @@ fn l_adresse_du_catalogue_n_est_ecrite_qu_une_fois() {
     let host = ["catalog", "bonk-os", "app"].join(".");
     let written: Vec<PathBuf> = files
         .into_iter()
-        .filter(|file| *file != definition && read(file).contains(&host))
+        .filter(|file| {
+            *file != definition
+                && !file.ends_with("tests/architecture.rs")
+                && read(file).contains(&host)
+        })
         .collect();
     assert!(written.is_empty(), "{written:?}");
     assert!(read(&definition).contains(&host));
+}
+
+/// Every host written in production code, with its use; image hosts come only from the signed catalog or the user.
+const KNOWN_HOSTS: &[(&str, &str)] = &[
+    ("catalog.bonk-os.app", "catalog, its signature and logos"),
+    (
+        "www.torproject.org",
+        "link shown to the user, never fetched by Bonk",
+    ),
+];
+
+/// Hosts of the `http` and `https` addresses in `text`, comments left out; a bare scheme or prefix is no host.
+fn written_hosts(text: &str) -> Vec<String> {
+    let mut hosts = Vec::new();
+    for line in text.lines().filter(|l| !l.trim_start().starts_with("//")) {
+        for (start, _) in line.match_indices("://") {
+            if !(line[..start].ends_with("http") || line[..start].ends_with("https")) {
+                continue;
+            }
+            let host: String = line[start + 3..]
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '-')
+                .collect();
+            if host.contains('.') && !host.ends_with('.') {
+                hosts.push(host);
+            }
+        }
+    }
+    hosts
+}
+
+#[test]
+fn seuls_les_hotes_connus_sont_ecrits_dans_le_code() {
+    let crates = crates_dir();
+    let mut rust = Vec::new();
+    sources(&crates, &mut rust);
+    let mut texts: Vec<(PathBuf, String)> = rust
+        .into_iter()
+        .filter(|file| !file.components().any(|part| part.as_os_str() == "tests"))
+        .map(|file| (file.clone(), production(&file)))
+        .collect();
+    let kotlin = crates
+        .join("..")
+        .join("android")
+        .join("app")
+        .join("src")
+        .join("main");
+    let mut stack = vec![kotlin];
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|e| e == "kt") {
+                texts.push((path.clone(), read(&path)));
+            }
+        }
+    }
+    assert!(
+        texts
+            .iter()
+            .any(|(file, _)| file.extension().is_some_and(|e| e == "kt"))
+    );
+    let unknown: Vec<String> = texts
+        .iter()
+        .flat_map(|(file, text)| {
+            written_hosts(text)
+                .into_iter()
+                .map(move |host| (host, file))
+        })
+        .filter(|(host, _)| !KNOWN_HOSTS.iter().any(|(known, _)| known == host))
+        .map(|(host, file)| format!("{host} : {}", file.display()))
+        .collect();
+    assert!(
+        unknown.is_empty(),
+        "hôte absent de KNOWN_HOSTS : {unknown:#?}"
+    );
+}
+
+#[test]
+fn une_adresse_ecrite_donne_son_hote() {
+    let text = "let a = \"https://a.example.org/x\";\n// https://b.org\nhttps:// www. ftp://c.org";
+    assert_eq!(written_hosts(text), ["a.example.org"]);
+    assert_eq!(
+        written_hosts("trim(\"https://www.\")"),
+        Vec::<String>::new()
+    );
 }
