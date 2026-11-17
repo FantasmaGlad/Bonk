@@ -14,7 +14,6 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.Proxy
 import java.security.MessageDigest
-import kotlin.concurrent.thread
 
 /** Copies until the end or a cancel, and reports progress about every 16 MiB. */
 internal fun copyReporting(
@@ -50,12 +49,9 @@ internal fun copyReporting(
  * own download folder, which needs no storage permission. The hash is checked while the bytes arrive.
  */
 class ImageDownload(private val context: Context, private val send: (ToRust) -> Unit) {
-    fun start(request: DownloadImage) {
+    /** Blocks; the download service runs it. */
+    fun run(request: DownloadImage) {
         Bridge.cancelled = false
-        thread { run(request) }
-    }
-
-    private fun run(request: DownloadImage) {
         try {
             val connection = open(request.url, request.proxy?.let(::socks) ?: Proxy.NO_PROXY, compressed = false)
             val total = connection.contentLengthLong
