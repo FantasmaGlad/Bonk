@@ -134,10 +134,19 @@ package() {{
 '''
 
 
+WINGET_SCHEMA = "1.12.0"
+
+
+def schema(type_manifeste: str) -> str:
+    """winget-pkgs validation rejects a manifest without this header."""
+    url = f"https://aka.ms/winget-manifest.{type_manifeste}.{WINGET_SCHEMA}.schema.json"
+    return f"# yaml-language-server: $schema={url}\n\n"
+
+
 def winget(r: Release) -> dict[str, str]:
     ident = "FantasmaGlad.Bonk"
     entete = f"PackageIdentifier: {ident}\nPackageVersion: {r.version}\n"
-    pied = "ManifestVersion: 1.12.0\n"
+    pied = f"ManifestVersion: {WINGET_SCHEMA}\n"
     fiche = (
         "PublisherUrl: https://github.com/FantasmaGlad\nPackageName: Bonk\nPackageUrl: https://bonk-os.app\n"
         f"License: {LICENCE}\nLicenseUrl: https://github.com/{DEPOT}/blob/main/LICENSE\n"
@@ -154,21 +163,24 @@ def winget(r: Release) -> dict[str, str]:
         )
 
     return {
-        f"{ident}.yaml": entete + "DefaultLocale: en-US\nManifestType: version\n" + pied,
-        f"{ident}.installer.yaml": entete
+        f"{ident}.yaml": schema("version") + entete + "DefaultLocale: en-US\nManifestType: version\n" + pied,
+        f"{ident}.installer.yaml": schema("installer")
+        + entete
         + "InstallerType: zip\nNestedInstallerType: portable\nInstallers:\n"
         + installateur("x64", "windows-x86_64")
         + installateur("arm64", "windows-aarch64")
         + installateur("x86", "windows-i686")
         + "ManifestType: installer\n"
         + pied,
-        f"{ident}.locale.en-US.yaml": entete
+        f"{ident}.locale.en-US.yaml": schema("defaultLocale")
+        + entete
         + "PackageLocale: en-US\nPublisher: FantasmaGlad\n"
         + fiche
         + f"ShortDescription: {DESCRIPTION}\n"
         + "ManifestType: defaultLocale\n"
         + pied,
-        f"{ident}.locale.fr-FR.yaml": entete
+        f"{ident}.locale.fr-FR.yaml": schema("locale")
+        + entete
         + "PackageLocale: fr-FR\nPublisher: FantasmaGlad\n"
         + fiche
         + f"ShortDescription: {DESCRIPTION_FR}\n"
