@@ -14,7 +14,11 @@ pub type FetchSized<'a> = dyn Fn(&str, u64) -> Result<Vec<u8>, String> + 'a;
 /// The bytes carry the signed hash of `asset`.
 #[must_use]
 pub fn asset_matches(asset: &Asset, bytes: &[u8]) -> bool {
-    hex(digest(&SHA256, bytes).as_ref()).eq_ignore_ascii_case(&asset.sha256)
+    hash_matches(&asset.sha256, bytes)
+}
+
+pub(crate) fn hash_matches(sha256: &str, bytes: &[u8]) -> bool {
+    hex(digest(&SHA256, bytes).as_ref()).eq_ignore_ascii_case(sha256)
 }
 
 /// In the cache under `folder`, named by its signed hash, downloaded when missing, up to its signed size.

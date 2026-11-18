@@ -3,9 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use ring::digest::{SHA256, digest};
-
-use crate::manifest::{Family, hex, replace};
+use crate::manifest::{Family, replace};
 
 /// Named by the signed hash: a new logo never reuses an old file.
 fn file(dir: &Path, family: &Family) -> Option<PathBuf> {
@@ -17,7 +15,7 @@ fn file(dir: &Path, family: &Family) -> Option<PathBuf> {
 }
 
 fn matches(family: &Family, bytes: &[u8]) -> bool {
-    hex(digest(&SHA256, bytes).as_ref()).eq_ignore_ascii_case(&family.icon_sha256)
+    crate::manifest::hash_matches(&family.icon_sha256, bytes)
 }
 
 /// The cached logo, checked again by its signed hash at each read.
@@ -102,7 +100,10 @@ fn fetch_all(
 
 #[cfg(test)]
 mod tests {
+    use ring::digest::{SHA256, digest};
+
     use super::*;
+    use crate::manifest::hex;
 
     fn family(icon_sha256: String) -> Family {
         serde_json::from_value(serde_json::json!({

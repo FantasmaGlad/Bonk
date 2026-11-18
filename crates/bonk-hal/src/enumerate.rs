@@ -63,6 +63,23 @@ pub struct SourceRead {
     pub content: Option<String>,
 }
 
+/// The JSON a replayed capture recorded for `source`, if the capture read it.
+pub(crate) fn captured<T: serde::de::DeserializeOwned>(
+    reads: &[SourceRead],
+    source: &str,
+) -> Option<Result<T, EnumerateError>> {
+    let read = reads.iter().find(|read| read.path == source)?;
+    let parsed = read
+        .content
+        .as_deref()
+        .ok_or_else(|| "no content".to_owned())
+        .and_then(|text| serde_json::from_str(text).map_err(|e| e.to_string()));
+    Some(parsed.map_err(|detail| EnumerateError::Malformed {
+        what: source.to_owned(),
+        detail,
+    }))
+}
+
 /// Also returns every system source read with its content, for `bonk debug sources`.
 pub fn enumerate_disks_recorded() -> (Result<Vec<Disk>, EnumerateError>, Vec<SourceRead>) {
     crate::platform::current().enumerate_recorded()
