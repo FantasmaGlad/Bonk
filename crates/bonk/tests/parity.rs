@@ -61,3 +61,53 @@ fn toutes_les_commandes_equivalentes_sont_acceptees_par_la_cli() -> Result<(), S
     assert_eq!(verifiees, 8 * IMAGES.len() * (6 + 5 * 2));
     Ok(())
 }
+
+#[test]
+fn les_options_d_ecriture_de_la_fenetre_sont_acceptees_par_la_cli() -> Result<(), String> {
+    let hex = "a".repeat(64);
+    let cas: [(WriteView<'_>, &[&str]); 5] = [
+        (WriteView::image("x.iso"), &[]),
+        (
+            WriteView {
+                hash: &hex,
+                ..WriteView::image("x.iso")
+            },
+            &["--sha256", &hex],
+        ),
+        (
+            WriteView {
+                hash: "https://a.org/SHA256SUMS",
+                ..WriteView::image("x.iso")
+            },
+            &["--sha256-file", "https://a.org/SHA256SUMS"],
+        ),
+        (
+            WriteView {
+                raw: true,
+                mbr: false,
+                ..WriteView::image("x.img")
+            },
+            &["--mode", "raw", "--table", "gpt"],
+        ),
+        (
+            WriteView {
+                force: true,
+                ..WriteView::image("x.iso")
+            },
+            &["--force"],
+        ),
+    ];
+    for (vue, attendus) in cas {
+        let commandes = equivalent_commands(ViewOptions::default(), Some("ata-a"), Some(vue));
+        let mots = bonk_cli::check_command_line(&commandes[2])
+            .map_err(|e| format!("{:?} refusée : {e}", commandes[2]))?;
+        for attendu in attendus {
+            assert!(
+                mots.iter().any(|m| m == attendu),
+                "{attendu} absent de {:?}",
+                commandes[2]
+            );
+        }
+    }
+    Ok(())
+}

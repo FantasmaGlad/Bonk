@@ -101,7 +101,6 @@ mod tests {
                 "usb-a",
                 WriteView::image("/tmp/x.img"),
                 ViewOptions::default(),
-                false,
                 None
             ),
             [
@@ -123,9 +122,11 @@ mod tests {
         };
         let args = write_args(
             "usb-a",
-            WriteView::image("x"),
+            WriteView {
+                force: true,
+                ..WriteView::image("x")
+            },
             options,
-            true,
             Some("socks5h://t"),
         );
         assert!(

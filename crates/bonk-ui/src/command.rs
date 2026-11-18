@@ -21,6 +21,8 @@ pub struct WriteView<'a> {
     pub raw: bool,
     /// MBR for a Windows drive, the `bonk write` default; GPT otherwise.
     pub mbr: bool,
+    /// An internal disk, confirmed in the window: `bonk write` requires `--force` for it.
+    pub force: bool,
 }
 
 impl Default for WriteView<'_> {
@@ -30,6 +32,7 @@ impl Default for WriteView<'_> {
             hash: "",
             raw: false,
             mbr: TableKind::WINDOWS_DEFAULT == TableKind::Mbr,
+            force: false,
         }
     }
 }
@@ -66,6 +69,9 @@ impl<'a> WriteView<'a> {
         if !self.mbr {
             flags.push("--table".to_owned());
             flags.push("gpt".to_owned());
+        }
+        if self.force {
+            flags.push("--force".to_owned());
         }
         flags
     }
@@ -213,6 +219,7 @@ mod tests_write {
             hash: &hex,
             raw: true,
             mbr: true,
+            force: false,
         };
         let commands = equivalent_commands(ViewOptions::default(), Some("usb-a"), Some(view));
         assert_eq!(
@@ -224,6 +231,7 @@ mod tests_write {
             hash: "https://a.org/SHA256SUMS",
             raw: false,
             mbr: false,
+            force: false,
         };
         assert_eq!(
             view.flags(),
@@ -233,6 +241,20 @@ mod tests_write {
                 "--table",
                 "gpt"
             ]
+        );
+    }
+
+    #[test]
+    fn un_disque_interne_confirme_porte_force_comme_la_commande_lancee() {
+        let view = WriteView {
+            force: true,
+            ..WriteView::image("x.iso")
+        };
+        let commands = equivalent_commands(ViewOptions::default(), Some("ata-a"), Some(view));
+        assert_eq!(commands[2], "bonk write ata-a x.iso --force --yes");
+        assert!(
+            crate::event::write_args("ata-a", view, ViewOptions::default(), None)
+                .contains(&"--force".to_owned())
         );
     }
 }

@@ -89,7 +89,6 @@ pub fn write_args(
     disk_id: &str,
     write: WriteView<'_>,
     options: ViewOptions,
-    internal_confirmed: bool,
     proxy: Option<&str>,
 ) -> Vec<String> {
     let mut args: Vec<String> = ["write", disk_id, write.image, "--yes", "--progress", "json"]
@@ -105,10 +104,6 @@ pub fn write_args(
     }
     if options.allow_virtual {
         args.push("--allow-virtual".to_owned());
-    }
-    // Confirmed in the window: `bonk write` then requires `--force`.
-    if internal_confirmed {
-        args.push("--force".to_owned());
     }
     args
 }

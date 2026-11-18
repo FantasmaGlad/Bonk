@@ -45,6 +45,7 @@ impl Model {
         }
         let write = match &self.write {
             WriteState::Draft {
+                disk_id,
                 image,
                 hash,
                 raw,
@@ -55,6 +56,7 @@ impl Model {
                 hash,
                 raw: *raw,
                 mbr: *mbr,
+                force: self.is_internal(disk_id),
             }),
             _ => None,
         };
