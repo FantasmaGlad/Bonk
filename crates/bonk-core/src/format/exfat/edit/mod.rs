@@ -1,12 +1,12 @@
 use std::io::Read;
 
-use super::FormatError;
-use super::exfat::{END_OF_CHAIN, ENTRY, FIRST_CLUSTER, upcase_map};
-use super::exfat_read::Reader;
-use super::exfat_tree::{entries_for, name_units};
-use super::tree::Placed;
-use super::tree::{verify_contiguous, write_contiguous};
 use crate::block::BlockDevice;
+use crate::format::FormatError;
+use crate::format::exfat::read::Reader;
+use crate::format::exfat::tree::{entries_for, name_units};
+use crate::format::exfat::{END_OF_CHAIN, ENTRY, FIRST_CLUSTER, upcase_map};
+use crate::format::tree::Placed;
+use crate::format::tree::{verify_contiguous, write_contiguous};
 
 #[cfg(test)]
 mod tests;
@@ -221,7 +221,7 @@ fn find_root_file(slots: &[[u8; ENTRY]], wanted: &[u16]) -> Option<Found> {
             return None;
         }
         let secondary = usize::from(entry[1]);
-        if entry[0] != super::exfat::ENTRY_FILE || index + 1 + secondary > slots.len() {
+        if entry[0] != crate::format::exfat::ENTRY_FILE || index + 1 + secondary > slots.len() {
             index += 1;
             continue;
         }

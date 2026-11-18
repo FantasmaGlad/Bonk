@@ -1,9 +1,11 @@
+pub mod tree;
+
 use crate::bytes::{put_u16, put_u32};
 use schemars::JsonSchema;
 use serde::Serialize;
 
-use super::{ALIGNMENT, FormatError, zero_range};
 use crate::block::BlockDevice;
+use crate::format::{ALIGNMENT, FormatError, zero_range};
 use crate::partition::read_range;
 
 /// Minimum reserved sectors (specification).
@@ -87,7 +89,7 @@ pub(super) fn narrow<T: TryFrom<u64>>(value: u64) -> Result<T, FormatError> {
     T::try_from(value).map_err(|_| FormatError::TooLarge(format!("{value}: too large for FAT32")))
 }
 
-/// Space-padded; already checked by [`super::normalize_label`].
+/// Space-padded; already checked by [`crate::format::normalize_label`].
 pub(super) fn label_field(label: Option<&str>) -> [u8; 11] {
     let mut field = *NO_LABEL;
     if let Some(label) = label {

@@ -1,5 +1,5 @@
 use bonk_core::format::FormatError;
-use bonk_core::format::exfat_read::FileEntry;
+use bonk_core::format::exfat::read::FileEntry;
 use bonk_core::vault::{self, VaultPlan};
 use bonk_hal::{Elevation, FilterOptions};
 use schemars::JsonSchema;

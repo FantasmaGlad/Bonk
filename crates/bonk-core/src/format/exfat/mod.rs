@@ -1,10 +1,13 @@
+pub mod edit;
+pub mod read;
+pub mod tree;
+
 use crate::bytes::{put_u16, put_u32, put_u64};
 use schemars::JsonSchema;
 use serde::Serialize;
 
-use super::exfat_tree;
-use super::{ALIGNMENT, FormatError};
 use crate::block::BlockDevice;
+use crate::format::{ALIGNMENT, FormatError};
 
 pub(super) const BOOT_REGION: u64 = 12;
 const CHECKSUM_SECTOR: usize = 11;
@@ -27,7 +30,7 @@ const REVISION: u16 = 0x0100;
 
 /// Recommended up-case table of the exFAT specification, compressed, as Windows writes it. Its published
 /// checksum `E619D30D` is checked by a test.
-pub(super) const UPCASE: &[u8; 5836] = include_bytes!("exfat_upcase.bin");
+pub(super) const UPCASE: &[u8; 5836] = include_bytes!("upcase.bin");
 
 /// Volume shape, computed without touching the drive. Offsets and lengths in volume sectors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
@@ -118,7 +121,7 @@ impl Geometry {
 pub struct Volume<'a> {
     pub first_lba: u64,
     pub sectors: u64,
-    /// Already checked by [`super::normalize_label`]: at most 11 UTF-16 units.
+    /// Already checked by [`crate::format::normalize_label`]: at most 11 UTF-16 units.
     pub label: Option<&'a str>,
     pub volume_id: u32,
 }
@@ -216,14 +219,14 @@ pub(super) fn boot_region(
 /// Writes the empty volume; a refused shape writes nothing. Boot regions go last, so an interrupted write
 /// never looks like a valid volume. Flushing is the caller's job.
 pub fn write(dev: &mut dyn BlockDevice, volume: &Volume<'_>) -> Result<Geometry, FormatError> {
-    let layout = exfat_tree::layout(volume, dev.block_size(), &[], &[])?;
+    let layout = tree::layout(volume, dev.block_size(), &[], &[])?;
     layout.write_structures(dev)?;
     layout.finish(dev, volume)?;
     Ok(*layout.geometry())
 }
 
 pub fn verify(dev: &dyn BlockDevice, volume: &Volume<'_>) -> Result<(), FormatError> {
-    exfat_tree::layout(volume, dev.block_size(), &[], &[])?.verify_structures(dev, volume)
+    tree::layout(volume, dev.block_size(), &[], &[])?.verify_structures(dev, volume)
 }
 
 #[cfg(test)]

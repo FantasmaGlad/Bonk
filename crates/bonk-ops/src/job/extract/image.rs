@@ -2,7 +2,7 @@ use std::io::{self, Read};
 
 use bonk_core::format::NewFile;
 use bonk_core::format::fat32::Volume;
-use bonk_core::format::fat32_tree::{self, MAX_FILE_BYTES};
+use bonk_core::format::fat32::tree::{self, MAX_FILE_BYTES};
 use bonk_core::format::table::TableKind;
 use bonk_core::pe::{self, Machine, Signer};
 use bonk_core::udf::{self, Content, ReadAt, Tree, Udf};
@@ -270,7 +270,7 @@ impl WindowsImage {
             volume_id: 0,
             bios_boot: false,
         };
-        fat32_tree::layout(&volume, block, &self.new_files(), &self.directories)
+        tree::layout(&volume, block, &self.new_files(), &self.directories)
             .map(drop)
             .map_err(|e| format_failure(Code::WriteFailed, e))
     }

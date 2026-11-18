@@ -1,6 +1,7 @@
 use crate::block::BlockDevice;
-use crate::format::exfat_read::{FileEntry, Reader};
-use crate::format::{FormatError, exfat_edit};
+use crate::format::FormatError;
+use crate::format::exfat;
+use crate::format::exfat::read::{FileEntry, Reader};
 
 use super::*;
 
@@ -8,7 +9,7 @@ use super::*;
 /// [`verify_image`].
 ///
 /// # Errors
-/// See [`exfat_edit::add_file`].
+/// See [`exfat::edit::add_file`].
 pub fn add_image(
     dev: &mut dyn BlockDevice,
     plan: &VaultPlan,
@@ -17,13 +18,13 @@ pub fn add_image(
     family: IsoFamily,
     reader: &mut dyn std::io::Read,
     advance: &mut dyn FnMut(u64) -> bool,
-) -> Result<exfat_edit::Added, FormatError> {
+) -> Result<exfat::edit::Added, FormatError> {
     let span = vault_span(plan);
-    let added = exfat_edit::add_file(dev, span, name, size, false, reader, advance)?;
+    let added = exfat::edit::add_file(dev, span, name, size, false, reader, advance)?;
     if family == IsoFamily::Ubuntu {
         let location = location_file(added.volume_offset);
         let size = location.len() as u64;
-        exfat_edit::add_file(
+        exfat::edit::add_file(
             dev,
             span,
             &format!("{name}{LOCATION_SUFFIX}"),
@@ -40,8 +41,8 @@ pub fn add_image(
 /// menu passes this offset and Bonk's iso-scan step maps the ISO straight from the partition.
 pub const LOCATION_SUFFIX: &str = ".bonk";
 
-pub(super) fn vault_span(plan: &VaultPlan) -> exfat_edit::Span {
-    exfat_edit::Span {
+pub(super) fn vault_span(plan: &VaultPlan) -> exfat::edit::Span {
+    exfat::edit::Span {
         first_lba: plan.vault.first_lba,
         sectors: plan.vault.sectors(),
     }
@@ -53,7 +54,7 @@ pub(super) fn location_file(volume_offset: u64) -> Vec<u8> {
 }
 
 /// # Errors
-/// See [`exfat_edit::verify_file`].
+/// See [`exfat::edit::verify_file`].
 pub fn verify_image(
     dev: &dyn BlockDevice,
     plan: &VaultPlan,
@@ -61,22 +62,22 @@ pub fn verify_image(
     sha256: &str,
     advance: &mut dyn FnMut(u64) -> bool,
 ) -> Result<(), FormatError> {
-    exfat_edit::verify_file(dev, vault_span(plan), name, sha256, advance)
+    exfat::edit::verify_file(dev, vault_span(plan), name, sha256, advance)
 }
 
 /// Removes an ISO from the root of the data partition; returns its size.
 ///
 /// # Errors
-/// See [`exfat_edit::remove_file`].
+/// See [`exfat::edit::remove_file`].
 pub fn remove_image(
     dev: &mut dyn BlockDevice,
     plan: &VaultPlan,
     name: &str,
 ) -> Result<u64, FormatError> {
     let span = vault_span(plan);
-    let freed = exfat_edit::remove_file(dev, span, name)?;
+    let freed = exfat::edit::remove_file(dev, span, name)?;
     // Only Ubuntu ISOs have one: its absence is the usual case.
-    match exfat_edit::remove_file(dev, span, &format!("{name}{LOCATION_SUFFIX}")) {
+    match exfat::edit::remove_file(dev, span, &format!("{name}{LOCATION_SUFFIX}")) {
         Ok(_) | Err(FormatError::Name(_)) => Ok(freed),
         Err(other) => Err(other),
     }

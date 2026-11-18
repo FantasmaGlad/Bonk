@@ -1,8 +1,8 @@
 use sha2::{Digest, Sha256};
 
 use crate::block::BlockDevice;
+use crate::format::NewFile;
 use crate::format::{FormatError, Ids, fat32, guid};
-use crate::format::{NewFile, fat32_tree};
 
 use super::*;
 
@@ -55,7 +55,7 @@ pub(super) fn boot_layout(
     dev_block: u32,
     volume: &fat32::Volume<'_>,
     files: &[BootFile],
-) -> Result<fat32_tree::Layout, FormatError> {
+) -> Result<fat32::tree::Layout, FormatError> {
     let new: Vec<NewFile> = files
         .iter()
         .map(|file| NewFile {
@@ -63,7 +63,7 @@ pub(super) fn boot_layout(
             size: file.data.len() as u64,
         })
         .collect();
-    fat32_tree::layout(volume, dev_block, &new, &[])
+    fat32::tree::layout(volume, dev_block, &new, &[])
 }
 
 /// GUID and volume id of the boot partition, derived from the drive ids.

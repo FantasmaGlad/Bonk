@@ -1,6 +1,6 @@
 #![no_main]
 use bonk_core::MemoryDevice;
-use bonk_core::format::exfat_read::Reader;
+use bonk_core::format::exfat::read::Reader;
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {

@@ -1,13 +1,13 @@
 use schemars::JsonSchema;
 use serde::Serialize;
 
-use super::FormatError;
-use super::exfat::checksum16;
 use crate::block::BlockDevice;
 use crate::bytes::{u32_le, u64_le};
+use crate::format::FormatError;
+use crate::format::exfat::checksum16;
 use crate::partition::read_range;
 
-use super::exfat::{
+use crate::format::exfat::{
     ATTR_DIRECTORY, END_OF_CHAIN, ENTRY, ENTRY_FILE, ENTRY_LABEL, ENTRY_NAME, ENTRY_STREAM,
     FIRST_CLUSTER, MAX_DIRECTORY_BYTES, NAME_UNITS, NO_FAT_CHAIN,
 };
@@ -338,8 +338,8 @@ mod tests {
     use super::*;
     use crate::block::MemoryDevice;
     use crate::format::NewFile;
+    use crate::format::exfat::tree;
     use crate::format::exfat::{self, Volume};
-    use crate::format::exfat_tree;
 
     fn file(path: &str, size: u64) -> NewFile {
         NewFile {
@@ -379,7 +379,7 @@ mod tests {
             file("linux/arch/archlinux-x86_64.iso", 5000),
             file("linux/notes.txt", 0),
         ];
-        let layout = exfat_tree::layout(&vol, 512, &files, &[])?;
+        let layout = tree::layout(&vol, 512, &files, &[])?;
         layout.write_structures(&mut dev)?;
         layout.finish(&mut dev, &vol)?;
         let found = Reader::open(&dev, vol.first_lba, vol.sectors)?.files()?;
