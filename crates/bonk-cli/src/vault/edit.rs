@@ -10,6 +10,7 @@ use crate::vault::{arch_name, family_name};
 pub(super) fn run_add(
     args: &AddArgs,
     deps: &Deps<'_>,
+    quiet: bool,
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> u8 {
@@ -24,7 +25,7 @@ pub(super) fn run_add(
     };
     let result = {
         let mut progress = sink(
-            progress_mode(args.common.progress, false),
+            progress_mode(args.common.progress, quiet),
             &mut *out,
             &mut *err,
         );

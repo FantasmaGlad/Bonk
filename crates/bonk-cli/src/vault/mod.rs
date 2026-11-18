@@ -178,6 +178,7 @@ pub(crate) fn run(
     view: &ViewDefaults,
     access: &catalog::Access,
     deps: &Deps<'_>,
+    quiet: bool,
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> u8 {
@@ -185,7 +186,7 @@ pub(crate) fn run(
     match action {
         VaultAction::Init(args) => run_init(args, access, deps, out, err),
         VaultAction::List(args) => run_list(args, view, deps, out, err),
-        VaultAction::Add(args) => run_add(args, deps, out, err),
+        VaultAction::Add(args) => run_add(args, deps, quiet, out, err),
         VaultAction::Remove(args) => run_remove(args, deps, out, err),
         VaultAction::Update(args) => run_update(args, access, deps, out, err),
     }

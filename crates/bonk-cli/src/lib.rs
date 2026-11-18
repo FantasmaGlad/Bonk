@@ -278,7 +278,9 @@ where
         Some(Command::Verify(args)) => transfer::run_verify(&args, &view, deps, quiet, out, err),
         Some(Command::RepairGpt(args)) => transfer::run_repair(&args, deps, out, err),
         Some(Command::Format(args)) => format::run_format(&args, deps, out, err),
-        Some(Command::Vault { action }) => vault::run(&action, &view, &env.catalog, deps, out, err),
+        Some(Command::Vault { action }) => {
+            vault::run(&action, &view, &env.catalog, deps, quiet, out, err)
+        }
         Some(Command::Capabilities(args)) => format::run_capabilities(&args, deps, out, err),
         Some(Command::List(args)) => run_list(&args, &view, out, err, enumerate),
         Some(Command::Info(args)) => run_info(&args, &view, out, err, enumerate),
