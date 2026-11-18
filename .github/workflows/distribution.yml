@@ -38,7 +38,7 @@ jobs:
           python3 -c 'import json; json.load(open("manifestes/bonk.json"))'
           test -s manifestes/bonk.rb && test -s manifestes/bonkos-bin.PKGBUILD && test -s manifestes/bonkos-cli-bin.PKGBUILD
           for f in manifestes/FantasmaGlad.Bonk*.yaml; do
-            head -n 1 "$f" | grep -q '^# yaml-language-server: \$schema=https://aka.ms/winget-manifest\.' || { echo "en-tête de schéma absent : $f"; exit 1; }
+            head -n 1 "$f" | grep -q '^# yaml-language-server: [$]schema=https://aka[.]ms/winget-manifest[.]' || { echo "en-tête de schéma absent : $f"; exit 1; }
           done
 
   manifestes:
