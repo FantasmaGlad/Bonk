@@ -159,6 +159,35 @@ pub(super) fn encode_names(children: &Children) -> Result<Encoded, FormatError> 
     Ok(encoded)
 }
 
+/// The volume label in the root, `.` and `..` elsewhere.
+fn directory_head(
+    path: &[String],
+    label: Option<&str>,
+    placed_dirs: &PlacedDirs,
+    first: u32,
+) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    if path.is_empty() {
+        if let Some(label) = label {
+            bytes.extend_from_slice(&short_entry(
+                &fat32::label_field(Some(label)),
+                ATTR_LABEL,
+                0,
+                0,
+            ));
+        }
+    } else {
+        let parent_first = match placed_dirs[&path[..path.len() - 1]].0 {
+            // `..` pointing to the root is written 0.
+            ROOT_CLUSTER => 0,
+            other => other,
+        };
+        bytes.extend_from_slice(&short_entry(&DOT, ATTR_DIRECTORY, first, 0));
+        bytes.extend_from_slice(&short_entry(&DOT_DOT, ATTR_DIRECTORY, parent_first, 0));
+    }
+    bytes
+}
+
 pub(super) fn directory_bytes(
     label: Option<&str>,
     files: &[NewFile],
@@ -170,25 +199,7 @@ pub(super) fn directory_bytes(
     let mut directories = Vec::with_capacity(encoded.len());
     for (path, rows) in encoded {
         let (first, clusters) = placed_dirs[path];
-        let mut bytes = Vec::new();
-        if path.is_empty() {
-            if let Some(label) = label {
-                bytes.extend_from_slice(&short_entry(
-                    &fat32::label_field(Some(label)),
-                    ATTR_LABEL,
-                    0,
-                    0,
-                ));
-            }
-        } else {
-            let parent_first = match placed_dirs[&path[..path.len() - 1]].0 {
-                // `..` pointing to the root is written 0.
-                ROOT_CLUSTER => 0,
-                other => other,
-            };
-            bytes.extend_from_slice(&short_entry(&DOT, ATTR_DIRECTORY, first, 0));
-            bytes.extend_from_slice(&short_entry(&DOT_DOT, ATTR_DIRECTORY, parent_first, 0));
-        }
+        let mut bytes = directory_head(path, label, placed_dirs, first);
         let list = &children[path];
         for (long, short, position) in rows {
             for entry in long {

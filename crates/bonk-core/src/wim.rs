@@ -247,14 +247,15 @@ fn pack(items: Vec<Entry>, fixed: u64, part_limit: u64) -> Result<Vec<Part>, Wim
     Ok(parts)
 }
 
-fn part_file(
-    header: &[u8],
-    part: &Part,
-    number: u16,
-    total: u16,
-    xml: Resource,
+/// The part's resources laid out after the header, their lookup table, and where the boot metadata landed.
+struct Placed {
+    sources: Vec<Segment>,
+    table: Vec<u8>,
+    end: u64,
     boot: Resource,
-) -> Vec<Segment> {
+}
+
+fn place_entries(part: &Part, number: u16, boot: Resource) -> Placed {
     let mut position = HEADER_LEN as u64;
     let mut sources = Vec::new();
     let mut table = Vec::with_capacity(part.entries.len() * ENTRY_LEN);
@@ -280,20 +281,37 @@ fn part_file(
         });
         position += resource.stored;
     }
+    Placed {
+        sources,
+        table,
+        end: position,
+        boot: new_boot,
+    }
+}
+
+fn part_file(
+    header: &[u8],
+    part: &Part,
+    number: u16,
+    total: u16,
+    xml: Resource,
+    boot: Resource,
+) -> Vec<Segment> {
+    let placed = place_entries(part, number, boot);
     let lookup = Resource {
-        stored: table.len() as u64,
+        stored: placed.table.len() as u64,
         flags: 0,
-        offset: position,
-        original: table.len() as u64,
+        offset: placed.end,
+        original: placed.table.len() as u64,
     };
     let xml_placed = Resource {
-        offset: position + table.len() as u64,
+        offset: placed.end + placed.table.len() as u64,
         ..xml
     };
-    let head = part_header(header, number, total, lookup, xml_placed, new_boot);
+    let head = part_header(header, number, total, lookup, xml_placed, placed.boot);
     let mut segments = vec![Segment::Bytes(head)];
-    segments.extend(sources);
-    segments.push(Segment::Bytes(table));
+    segments.extend(placed.sources);
+    segments.push(Segment::Bytes(placed.table));
     segments.push(Segment::Source {
         offset: xml.offset,
         len: xml.stored,

@@ -25,6 +25,31 @@ pub(super) fn invalid(what: impl Into<String>) -> FormatError {
     FormatError::Invalid(what.into())
 }
 
+/// Disk offsets of a cluster chain, every `step` bytes.
+fn offsets<'a>(
+    reader: &'a Reader<'_>,
+    chain: &'a [u32],
+    cluster_bytes: u64,
+    step: u64,
+) -> impl Iterator<Item = u64> + 'a {
+    chain.iter().flat_map(move |cluster| {
+        let base = reader.offset(*cluster);
+        (0..cluster_bytes / step).map(move |index| base + index * step)
+    })
+}
+
+fn bitmap_cluster(root_bytes: &[u8]) -> Result<u32, FormatError> {
+    let entry = root_bytes
+        .as_chunks::<ENTRY>()
+        .0
+        .iter()
+        .find(|entry| entry[0] == ENTRY_BITMAP)
+        .ok_or_else(|| invalid("exFAT volume without an allocation bitmap"))?;
+    Ok(u32::from_le_bytes([
+        entry[20], entry[21], entry[22], entry[23],
+    ]))
+}
+
 impl Volume {
     pub(super) fn read(
         dev: &dyn BlockDevice,
@@ -34,39 +59,21 @@ impl Volume {
         let reader = Reader::open(dev, first_lba, sectors)?;
         let start = first_lba * u64::from(dev.block_size());
         let cluster_bytes = reader.cluster_bytes();
-        let root_chain = reader.chain(reader.root())?;
-        let slots_per_cluster = cluster_bytes / ENTRY as u64;
-        let root_slots: Vec<u64> = root_chain
-            .iter()
-            .flat_map(|cluster| {
-                let base = reader.offset(*cluster);
-                (0..slots_per_cluster).map(move |slot| base + slot * ENTRY as u64)
-            })
-            .collect();
+        let root_slots: Vec<u64> = offsets(
+            &reader,
+            &reader.chain(reader.root())?,
+            cluster_bytes,
+            ENTRY as u64,
+        )
+        .collect();
         let root_bytes = reader.read(reader.root(), None, false)?;
-        let bitmap_entry = root_bytes
-            .as_chunks::<ENTRY>()
-            .0
-            .iter()
-            .find(|entry| entry[0] == ENTRY_BITMAP)
-            .ok_or_else(|| invalid("exFAT volume without an allocation bitmap"))?;
-        let bitmap_first = u32::from_le_bytes([
-            bitmap_entry[20],
-            bitmap_entry[21],
-            bitmap_entry[22],
-            bitmap_entry[23],
-        ]);
+        let bitmap_first = bitmap_cluster(&root_bytes)?;
         let clusters = reader.clusters();
         let bitmap_len = u64::from(clusters).div_ceil(8);
-        let bitmap_chain = reader.chain(bitmap_first)?;
-        let bitmap_offsets: Vec<u64> = bitmap_chain
-            .iter()
-            .flat_map(|cluster| {
-                let base = reader.offset(*cluster);
-                (0..cluster_bytes).map(move |byte| base + byte)
-            })
-            .take(usize::try_from(bitmap_len).map_err(|_| invalid("exFAT bitmap too large"))?)
-            .collect();
+        let bitmap_offsets: Vec<u64> =
+            offsets(&reader, &reader.chain(bitmap_first)?, cluster_bytes, 1)
+                .take(usize::try_from(bitmap_len).map_err(|_| invalid("exFAT bitmap too large"))?)
+                .collect();
         if (bitmap_offsets.len() as u64) < bitmap_len {
             return Err(invalid("exFAT allocation bitmap shorter than the volume"));
         }

@@ -54,6 +54,68 @@ fn units(bytes: &[u8]) -> impl Iterator<Item = u16> + '_ {
         .map(|pair| u16::from_le_bytes(*pair))
 }
 
+/// Volume layout read from the boot sector, offsets relative to the volume.
+struct Fields {
+    fat: u64,
+    heap: u64,
+    cluster_bytes: u64,
+    clusters: u32,
+    root: u32,
+}
+
+/// Start and length of the partition in bytes, checked against the drive.
+fn partition_span(
+    dev: &dyn BlockDevice,
+    first_lba: u64,
+    sectors: u64,
+) -> Result<(u64, u64), FormatError> {
+    let block = u64::from(dev.block_size());
+    let start = first_lba
+        .checked_mul(block)
+        .ok_or_else(|| invalid("partition beyond the drive"))?;
+    let span = sectors.saturating_mul(block);
+    if start.saturating_add(span) > dev.size() || span < 512 {
+        return Err(invalid("partition beyond the drive"));
+    }
+    Ok((start, span))
+}
+
+fn fields(boot: &[u8], span: u64) -> Result<Fields, FormatError> {
+    if &boot[3..11] != b"EXFAT   " || boot[510..512] != [0x55, 0xAA] {
+        return Err(invalid("not an exFAT volume"));
+    }
+    let sector_shift = boot[108];
+    let cluster_shift = boot[109];
+    if !(9..=12).contains(&sector_shift) || cluster_shift > 25 - sector_shift {
+        return Err(invalid("exFAT sector or cluster size out of range"));
+    }
+    let sector = 1u64 << sector_shift;
+    let volume = u64_le(boot, 72).saturating_mul(sector);
+    if volume > span {
+        return Err(invalid("exFAT volume larger than its partition"));
+    }
+    let fats = boot[110];
+    let fat_length = u64::from(u32_le(boot, 84)) * sector;
+    // TexFAT: the second FAT is the active one when the flag says so.
+    let active = u64::from(fats == 2 && boot[106] & 1 == 1);
+    let fat = u64::from(u32_le(boot, 80)) * sector + active * fat_length;
+    let heap = u64::from(u32_le(boot, 88)) * sector;
+    let cluster_bytes = sector << cluster_shift;
+    let clusters = u32_le(boot, 92);
+    let heap_end = heap.saturating_add(u64::from(clusters).saturating_mul(cluster_bytes));
+    let fat_end = fat.saturating_add((u64::from(clusters) + 2) * 4);
+    if !(1..=2).contains(&fats) || heap_end > volume || fat_end > volume {
+        return Err(invalid("exFAT fields point outside the volume"));
+    }
+    Ok(Fields {
+        fat,
+        heap,
+        cluster_bytes,
+        clusters,
+        root: u32_le(boot, 96),
+    })
+}
+
 impl<'a> Reader<'a> {
     /// `first_lba` and `sectors` in device sectors: the partition holding the volume.
     pub fn open(
@@ -61,42 +123,15 @@ impl<'a> Reader<'a> {
         first_lba: u64,
         sectors: u64,
     ) -> Result<Self, FormatError> {
-        let block = u64::from(dev.block_size());
-        let start = first_lba
-            .checked_mul(block)
-            .ok_or_else(|| invalid("partition beyond the drive"))?;
-        let span = sectors.saturating_mul(block);
-        if start.saturating_add(span) > dev.size() || span < 512 {
-            return Err(invalid("partition beyond the drive"));
-        }
+        let (start, span) = partition_span(dev, first_lba, sectors)?;
         let boot = read_range(dev, start, 512)?;
-        if &boot[3..11] != b"EXFAT   " || boot[510..512] != [0x55, 0xAA] {
-            return Err(invalid("not an exFAT volume"));
-        }
-        let sector_shift = boot[108];
-        let cluster_shift = boot[109];
-        if !(9..=12).contains(&sector_shift) || cluster_shift > 25 - sector_shift {
-            return Err(invalid("exFAT sector or cluster size out of range"));
-        }
-        let sector = 1u64 << sector_shift;
-        let volume = u64_le(&boot, 72).saturating_mul(sector);
-        if volume > span {
-            return Err(invalid("exFAT volume larger than its partition"));
-        }
-        let fats = boot[110];
-        let fat_length = u64::from(u32_le(&boot, 84)) * sector;
-        // TexFAT: the second FAT is the active one when the flag says so.
-        let active = u64::from(fats == 2 && boot[106] & 1 == 1);
-        let fat = u64::from(u32_le(&boot, 80)) * sector + active * fat_length;
-        let heap = u64::from(u32_le(&boot, 88)) * sector;
-        let cluster_bytes = sector << cluster_shift;
-        let clusters = u32_le(&boot, 92);
-        let root = u32_le(&boot, 96);
-        let heap_end = heap.saturating_add(u64::from(clusters).saturating_mul(cluster_bytes));
-        let fat_end = fat.saturating_add((u64::from(clusters) + 2) * 4);
-        if !(1..=2).contains(&fats) || heap_end > volume || fat_end > volume {
-            return Err(invalid("exFAT fields point outside the volume"));
-        }
+        let Fields {
+            fat,
+            heap,
+            cluster_bytes,
+            clusters,
+            root,
+        } = fields(&boot, span)?;
         let reader = Self {
             dev,
             fat: start + fat,

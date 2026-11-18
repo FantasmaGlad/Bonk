@@ -245,48 +245,60 @@ impl<'a, R: ReadAt + ?Sized> Udf<'a, R> {
                 return Err(UdfError::Malformed("directory expected"));
             }
             let bytes = self.directory_bytes(&directory)?;
-            let mut position = 0;
-            while position + 38 <= bytes.len() {
-                let record = &bytes[position..];
-                if tag_id(record) != Some(TAG_FILE_ID) {
-                    return Err(UdfError::Malformed("directory entry"));
-                }
-                let characteristics = record[18];
-                let name_len = usize::from(record[19]);
-                let use_len = usize::from(u16_at(record, 36)?);
-                let total = (38 + use_len + name_len + 3) & !3;
-                if total > record.len() {
-                    return Err(UdfError::Malformed("truncated directory entry"));
-                }
-                position += total;
-                if characteristics & (FID_PARENT | FID_DELETED) != 0 {
-                    continue;
-                }
-                if tree.files.len() + tree.directories.len() >= MAX_ENTRIES {
-                    return Err(UdfError::Malformed("too many files"));
-                }
-                let mut child = path.clone();
-                child.push(decode_name(&record[38 + use_len..38 + use_len + name_len])?);
-                let icb = long_ad(record, 20)?;
-                if characteristics & FID_DIRECTORY != 0 {
-                    if child.len() > MAX_DEPTH {
-                        return Err(UdfError::Malformed("directories too deep"));
-                    }
-                    tree.directories.push(child.clone());
-                    pending.push((icb, child));
-                } else {
-                    let entry = self.read_entry(icb)?;
-                    tree.files.push(File {
-                        path: child,
-                        size: entry.size,
-                        content: entry.content,
-                    });
-                }
-            }
+            self.collect_directory(&bytes, &path, &mut tree, &mut pending)?;
         }
         tree.files.sort_by(|a, b| a.path.cmp(&b.path));
         tree.directories.sort();
         Ok(tree)
+    }
+
+    /// Adds a directory's children to `tree`; its subdirectories go to `pending`.
+    fn collect_directory(
+        &self,
+        bytes: &[u8],
+        path: &[String],
+        tree: &mut Tree,
+        pending: &mut Vec<(LongAd, Vec<String>)>,
+    ) -> Result<(), UdfError> {
+        let mut position = 0;
+        while position + 38 <= bytes.len() {
+            let record = &bytes[position..];
+            if tag_id(record) != Some(TAG_FILE_ID) {
+                return Err(UdfError::Malformed("directory entry"));
+            }
+            let characteristics = record[18];
+            let name_len = usize::from(record[19]);
+            let use_len = usize::from(u16_at(record, 36)?);
+            let total = (38 + use_len + name_len + 3) & !3;
+            if total > record.len() {
+                return Err(UdfError::Malformed("truncated directory entry"));
+            }
+            position += total;
+            if characteristics & (FID_PARENT | FID_DELETED) != 0 {
+                continue;
+            }
+            if tree.files.len() + tree.directories.len() >= MAX_ENTRIES {
+                return Err(UdfError::Malformed("too many files"));
+            }
+            let mut child = path.to_vec();
+            child.push(decode_name(&record[38 + use_len..38 + use_len + name_len])?);
+            let icb = long_ad(record, 20)?;
+            if characteristics & FID_DIRECTORY != 0 {
+                if child.len() > MAX_DEPTH {
+                    return Err(UdfError::Malformed("directories too deep"));
+                }
+                tree.directories.push(child.clone());
+                pending.push((icb, child));
+            } else {
+                let entry = self.read_entry(icb)?;
+                tree.files.push(File {
+                    path: child,
+                    size: entry.size,
+                    content: entry.content,
+                });
+            }
+        }
+        Ok(())
     }
 }
 

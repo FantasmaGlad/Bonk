@@ -52,7 +52,11 @@ pub(super) fn check_mbr(
     if mbr.protective {
         return;
     }
-    let total = size / block;
+    check_bounds(mbr, size / block, note);
+    check_overlaps(mbr, note);
+}
+
+fn check_bounds(mbr: &Mbr, total: u64, note: &mut impl FnMut(Severity, &'static str, String)) {
     for entry in &mbr.entries {
         let end = u64::from(entry.start_lba) + u64::from(entry.sectors);
         if end > total {
@@ -66,6 +70,9 @@ pub(super) fn check_mbr(
             );
         }
     }
+}
+
+fn check_overlaps(mbr: &Mbr, note: &mut impl FnMut(Severity, &'static str, String)) {
     for (i, a) in mbr.entries.iter().enumerate() {
         for b in &mbr.entries[i + 1..] {
             let (a_end, b_end) = (

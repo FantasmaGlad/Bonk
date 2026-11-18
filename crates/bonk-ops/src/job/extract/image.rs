@@ -161,16 +161,16 @@ pub(super) fn plan_items(
     tree: &Tree,
     wim_file: &udf::File,
 ) -> Result<(Vec<Item>, usize), JobError> {
-    let mut items = Vec::with_capacity(tree.files.len());
-    for file in &tree.files {
-        if file.path != wim_file.path {
-            items.push(Item {
-                path: file.path.clone(),
-                size: file.size,
-                from: From::Iso(file.content.clone()),
-            });
-        }
-    }
+    let mut items: Vec<Item> = tree
+        .files
+        .iter()
+        .filter(|file| file.path != wim_file.path)
+        .map(|file| Item {
+            path: file.path.clone(),
+            size: file.size,
+            from: From::Iso(file.content.clone()),
+        })
+        .collect();
     if wim_file.size <= MAX_FILE_BYTES {
         items.push(Item {
             path: wim_file.path.clone(),
@@ -179,6 +179,14 @@ pub(super) fn plan_items(
         });
         return Ok((items, 0));
     }
+    let parts = wim_parts(image, wim_file)?;
+    let count = parts.len();
+    items.extend(parts);
+    Ok((items, count))
+}
+
+/// `install.swm`, `install2.swm`, … in the folder of the WIM they split.
+fn wim_parts(image: &ImageFile, wim_file: &udf::File) -> Result<Vec<Item>, JobError> {
     let read = |offset, len: u64| -> Result<Vec<u8>, JobError> {
         let mut bytes = vec![0; len as usize];
         udf::read_content(image, &wim_file.content, offset, &mut bytes)
@@ -189,26 +197,28 @@ pub(super) fn plan_items(
     let info = wim::read_header(&header, wim_file.size).map_err(wim_error)?;
     let lookup = read(info.lookup_offset, info.lookup_len)?;
     let parts = wim::split(&header, &lookup, wim_file.size, PART_LIMIT).map_err(wim_error)?;
-    let count = parts.len();
     let (_, parent) = wim_file
         .path
         .split_last()
         .ok_or_else(|| wim_error("empty path"))?;
-    for (index, segments) in parts.into_iter().enumerate() {
-        let file = if index == 0 {
-            "install.swm".to_owned()
-        } else {
-            format!("install{}.swm", index + 1)
-        };
-        let mut path = parent.to_vec();
-        path.push(file);
-        items.push(Item {
-            path,
-            size: segments.iter().map(Segment::len).sum(),
-            from: From::Part(segments, wim_file.content.clone()),
-        });
-    }
-    Ok((items, count))
+    Ok(parts
+        .into_iter()
+        .enumerate()
+        .map(|(index, segments)| {
+            let file = if index == 0 {
+                "install.swm".to_owned()
+            } else {
+                format!("install{}.swm", index + 1)
+            };
+            let mut path = parent.to_vec();
+            path.push(file);
+            Item {
+                path,
+                size: segments.iter().map(Segment::len).sum(),
+                from: From::Part(segments, wim_file.content.clone()),
+            }
+        })
+        .collect())
 }
 
 impl WindowsImage {

@@ -13,12 +13,7 @@ pub(super) fn read_header(
     lba: u64,
     block: u64,
 ) -> Result<Option<HeaderAndEntries>, BlockError> {
-    // `lba` may come from the primary header: no assumption on its size.
-    let Some(offset) = lba.checked_mul(block).filter(|offset| {
-        offset
-            .checked_add(block)
-            .is_some_and(|end| end <= dev.size())
-    }) else {
+    let Some(offset) = sector_offset(dev, lba, block) else {
         return Ok(None);
     };
     let sector = read_range(dev, offset, block)?;
@@ -26,12 +21,7 @@ pub(super) fn read_header(
         return Ok(None);
     }
     let header_size = u32_le(&sector, 12);
-    let header_len = usize::try_from(header_size).unwrap_or(usize::MAX);
-    let header_crc_ok = (GPT_HEADER_MIN..=sector.len()).contains(&header_len) && {
-        let mut copy = sector[..header_len].to_vec();
-        copy[16..20].fill(0);
-        crc32(&copy) == u32_le(&sector, 16)
-    };
+    let header_crc_ok = header_crc_ok(&sector, header_size);
     let entries_lba = u64_le(&sector, 72);
     let entry_count = u32_le(&sector, 80);
     let entry_size = u32_le(&sector, 84);
@@ -64,6 +54,24 @@ pub(super) fn read_header(
         },
         entries,
     )))
+}
+
+/// `lba` may come from the primary header: no assumption on its size.
+fn sector_offset(dev: &dyn BlockDevice, lba: u64, block: u64) -> Option<u64> {
+    lba.checked_mul(block).filter(|offset| {
+        offset
+            .checked_add(block)
+            .is_some_and(|end| end <= dev.size())
+    })
+}
+
+fn header_crc_ok(sector: &[u8], header_size: u32) -> bool {
+    let header_len = usize::try_from(header_size).unwrap_or(usize::MAX);
+    (GPT_HEADER_MIN..=sector.len()).contains(&header_len) && {
+        let mut copy = sector[..header_len].to_vec();
+        copy[16..20].fill(0);
+        crc32(&copy) == u32_le(sector, 16)
+    }
 }
 
 /// An implausible table is not read: its fields may point anywhere.
