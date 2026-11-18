@@ -39,7 +39,7 @@ pub(crate) fn default_path(var: &dyn Fn(&str) -> Option<String>) -> Option<PathB
     if let Some(explicit) = var("BONK_CONFIG").filter(|p| !p.is_empty()) {
         return Some(PathBuf::from(explicit));
     }
-    bonk_hal::platform::config_file(var)
+    bonk_hal::paths::config_file(var)
 }
 
 /// A missing file gives an empty configuration.
