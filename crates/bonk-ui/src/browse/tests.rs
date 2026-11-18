@@ -7,6 +7,7 @@ fn debian() -> System {
     let download = |id: &str| Choice {
         id: id.to_owned(),
         name: "Debian".to_owned(),
+        edition: None,
         label: "13".to_owned(),
         end_of_life: false,
         note: None,
@@ -15,7 +16,7 @@ fn debian() -> System {
             sha256: "ab".repeat(32),
         },
         desktop: Some("gnome".to_owned()),
-        media: Some("usb".to_owned()),
+        media: "usb".to_owned(),
         arch: "x86_64".to_owned(),
     };
     let dvd = Choice {
@@ -24,6 +25,7 @@ fn debian() -> System {
         ..download("debian-dvd")
     };
     System {
+        id: String::new(),
         name: "Debian".to_owned(),
         uses: vec!["office".to_owned()],
         base: Some("debian".to_owned()),

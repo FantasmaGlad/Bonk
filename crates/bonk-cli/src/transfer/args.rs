@@ -147,7 +147,7 @@ pub(crate) struct WriteArgs {
     pub(super) common: CommonArgs,
 
     /// Image to write: a file (.img, .iso, .gz, .xz, .zst; the format is recognized by its content) or
-    /// an https:// address to download, with its hash
+    /// an https:// address to download (http:// only on this computer: localhost, 127.0.0.1, [::1]), with its hash
     #[arg(required_unless_present = "image", conflicts_with = "image")]
     pub(super) source: Option<PathBuf>,
 

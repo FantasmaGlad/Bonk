@@ -25,7 +25,7 @@ pub(crate) struct LogArgs {
     #[arg(short = 'v', long = "verbose", action = clap::ArgAction::Count, global = true)]
     verbose: u8,
 
-    /// Keep only the result: no progress line, and only errors in the log
+    /// Keep only the result: no automatic progress line (`--progress json` still applies), and only errors in the log
     #[arg(short = 'q', long, global = true, conflicts_with = "verbose")]
     quiet: bool,
 

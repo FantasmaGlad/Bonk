@@ -2,6 +2,7 @@ mod download;
 pub mod icons;
 pub mod link;
 pub mod manifest;
+pub mod search;
 mod sums;
 pub mod tor;
 

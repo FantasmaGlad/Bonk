@@ -118,7 +118,7 @@ fn system_page(model: &Model, system: &System) -> Value {
     let variants: Vec<Value> = system
         .choices
         .iter()
-        .filter(|choice| model.browse.filter.keeps_choice(choice))
+        .filter(|choice| model.browse.filter.keeps_choice(system, choice))
         .map(|choice| variant(choice, lang))
         .collect();
     json!({
@@ -211,17 +211,19 @@ mod tests {
         let choice = Choice {
             id: "debian-live".to_owned(),
             name: "Debian".to_owned(),
+            edition: None,
             label: "13".to_owned(),
             end_of_life: false,
             note: None,
             source: ChoiceSource::NotForUsb,
             desktop: Some("kde".to_owned()),
-            media: Some("usb".to_owned()),
+            media: "usb".to_owned(),
             arch: "x86_64".to_owned(),
         };
         Model {
             lang: Lang::Fr,
             catalog: CatalogState::Ready(vec![System {
+                id: String::new(),
                 name: "Debian".to_owned(),
                 uses: Vec::new(),
                 base: None,
