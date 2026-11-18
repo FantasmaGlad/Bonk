@@ -1,5 +1,6 @@
 mod blocking;
 mod catalog;
+mod command;
 mod navigation;
 mod settings;
 #[cfg(test)]
@@ -161,7 +162,7 @@ impl App {
                 Task::none()
             }
             Effect::ScrollList(y) => snap(LIST, y),
-            Effect::ScrollMenu(y) => snap(catalog::MENU, y),
+            Effect::ScrollMenu(y) => snap(view::menu::MENU, y),
             Effect::RunVault(args) => Task::run(transfer::spawn(&self.program(), &args), |event| {
                 Message::Vault(VaultMessage::Event(event))
             }),
@@ -208,7 +209,7 @@ impl App {
                 let program = self.program();
                 Task::perform(
                     off_thread_result(move || {
-                        catalog::run_json(&program, &["cache", "list", "--json"])
+                        command::run_json(&program, &["cache", "list", "--json"])
                             .and_then(|output| library::parse(&output))
                     }),
                     |listed| Message::Library(LibraryMessage::Listed(listed)),
@@ -218,7 +219,7 @@ impl App {
                 let program = self.program();
                 Task::perform(
                     off_thread_result(move || {
-                        catalog::run_json(&program, &["cache", "clean", &sha256, "--json"])
+                        command::run_json(&program, &["cache", "clean", &sha256, "--json"])
                             .map(drop)
                     }),
                     |removed| Message::Library(LibraryMessage::Removed(removed)),

@@ -12,8 +12,9 @@ use bonk_ui::errors::technical;
 use bonk_ui::recap;
 use bonk_ui::text as phrases;
 
-use super::super::catalog::{CatalogState, find_url, menu_button, menu_list};
+use super::super::catalog::{CatalogState, find_url};
 use super::super::{App, Focus, Message, VaultMessage, WRITE_DELAY, WriteState};
+use super::menu::{menu_button, menu_list};
 use super::{boxed, ring};
 
 impl App {

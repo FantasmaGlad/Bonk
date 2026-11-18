@@ -4,7 +4,7 @@ use iced::{Element, Fill};
 use bonk_ui::browse::{BrowseMessage, DownloadState, variant_facts};
 use bonk_ui::catalog::{Choice, ChoiceSource, System, official_page_note};
 
-use crate::app::catalog::sized_logo;
+use crate::app::view::menu::sized_logo;
 use crate::theme;
 
 use super::super::super::{App, Focus, Message};

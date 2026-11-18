@@ -16,6 +16,7 @@ mod header;
 mod incognito;
 mod library;
 mod list;
+pub(super) mod menu;
 mod panel;
 mod settings;
 mod vault;
