@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.content.res.Configuration
 import android.hardware.usb.UsbManager
 import android.net.Uri
 import android.os.Build
@@ -15,9 +14,7 @@ import android.provider.OpenableColumns
 import android.util.Log
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
-import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -38,7 +35,6 @@ import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -180,30 +176,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** System icons follow the page, not the phone theme. */
-    private fun showBars(palette: Palette) {
-        val bars =
-            if (palette.dark) {
-                SystemBarStyle.dark(palette.paper.toInt())
-            } else {
-                SystemBarStyle.light(palette.paper.toInt(), palette.ink.toInt())
-            }
-        enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
-    }
-
-    /** Read once per start: the screen relaunches to change it. */
-    private fun dark(theme: String): Boolean =
-        when (theme) {
-            "dark" -> true
-            "light" -> false
-            else -> resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
-        }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val preferences = getPreferences(MODE_PRIVATE)
         val theme = preferences.getString("theme", "auto") ?: "auto"
-        val dark = dark(theme)
         actions =
             Actions(this, Bridge::send) { device, error ->
                 runOnUiThread {
@@ -211,15 +187,15 @@ class MainActivity : ComponentActivity() {
                 }
             }
         Bridge.listener = answered
-        Native.start(
-            preferences.getString("lang", "auto") ?: "auto",
-            theme,
-            Locale.getDefault().language == "fr",
-            preferences.getString("view.show_all", "false") == "true",
-            preferences.getString("network.offline", "false") == "true",
-            preferences.getString("network.incognito", "false") == "true",
-            preferences.getString("notifications", "true") == "true",
-        )
+        startNative(preferences, theme)
+        registerUsbEvents()
+        actions.enumerate()
+        openLink(intent)
+        startClock()
+        showScreen(getSystemService(UsbManager::class.java), isDark(theme))
+    }
+
+    private fun registerUsbEvents() {
         val filter =
             IntentFilter().apply {
                 addAction(ACTION_PERMISSION)
@@ -227,10 +203,10 @@ class MainActivity : ComponentActivity() {
                 addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
             }
         ContextCompat.registerReceiver(this, usbEvents, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
-        val usb = getSystemService(UsbManager::class.java)
-        actions.enumerate()
-        openLink(intent)
-        // In the background the clock would wake Rust and USB for nothing.
+    }
+
+    /** In the background the clock would wake Rust and USB for nothing. */
+    private fun startClock() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 var ticks = 0
@@ -241,6 +217,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun showScreen(usb: UsbManager, dark: Boolean) {
         setContent {
             // The other family is never built: only incognito switches while the screen runs.
             val incognito = screen.incognito?.on == true
