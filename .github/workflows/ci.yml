@@ -54,17 +54,20 @@ jobs:
       - name: Lint
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       # Without linking, ring's C is unused: `true` stands in for the compiler.
-      - name: Lint croisé (Windows et macOS, compilation seulement)
+      - name: Lint croisé (Windows, macOS, Android ; compilation seulement)
         env:
           CC_x86_64_pc_windows_gnu: "true"
           AR_x86_64_pc_windows_gnu: "true"
+          CC_i686_pc_windows_gnu: "true"
+          AR_i686_pc_windows_gnu: "true"
           CC_x86_64_apple_darwin: "true"
           AR_x86_64_apple_darwin: "true"
           CC_aarch64_linux_android: "true"
           AR_aarch64_linux_android: "true"
         run: |
-          rustup target add x86_64-pc-windows-gnu x86_64-apple-darwin aarch64-linux-android
+          rustup target add x86_64-pc-windows-gnu i686-pc-windows-gnu x86_64-apple-darwin aarch64-linux-android
           cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-gnu -- -D warnings
+          cargo clippy --workspace --all-targets --locked --target i686-pc-windows-gnu -- -D warnings
           cargo clippy --workspace --all-targets --locked --target x86_64-apple-darwin -- -D warnings
           cargo clippy -p bonk-core -p bonk-ops -p bonk-cli -p bonk-android -p bonk-ui --all-targets --locked --target aarch64-linux-android -- -D warnings
       - name: Tests
