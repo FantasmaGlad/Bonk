@@ -2,14 +2,12 @@
 import argparse
 import os
 import re
-import shutil
-import socket
 import subprocess
 import sys
 import time
 
-OVMF = "/usr/share/OVMF"
-AAVMF = "/usr/share/AAVMF"
+from qemu_machine import connect_monitor, firmware
+
 # The BIOS loader only writes to the screen: fixed wait, shorter than the menu countdown.
 BIOS_MENU_SECONDS = 25
 # The GRUB menu shows shortly after the firmware banner.
@@ -19,37 +17,6 @@ KEY_GAP_SECONDS = 0.15
 CONSOLE_KEYS = "spc i g n o r e shift-minus l o g l e v e l spc c o n s o l e equal t t y shift-s 0".split()
 MONITOR = "moniteur.sock"
 SERIAL = "serie.log"
-
-
-def firmware(mode, processor):
-    if processor == "aarch64":
-        if mode != "uefi":
-            raise SystemExit("aarch64 : UEFI seulement")
-        shutil.copy(os.path.join(AAVMF, "AAVMF_VARS.fd"), "vars.fd")
-        # Emulated: `max` adds features whose emulation is too slow to reach the menu in minutes.
-        # No network: `virt` would add a virtio card whose boot ROM is not installed.
-        return [
-            "-machine", "virt", "-cpu", "cortex-a72", "-nic", "none",
-            "-drive", f"if=pflash,format=raw,readonly=on,file={AAVMF}/AAVMF_CODE.no-secboot.fd",
-            "-drive", "if=pflash,format=raw,file=vars.fd",
-        ]
-    if mode == "bios":
-        return ["-machine", "q35"]
-    code, variables, machine, extra = {
-        "uefi": ("OVMF_CODE_4M.fd", "OVMF_VARS_4M.fd", "q35", []),
-        "secureboot": (
-            "OVMF_CODE_4M.secboot.fd",
-            "OVMF_VARS_4M.ms.fd",
-            "q35,smm=on",
-            ["-global", "driver=cfi.pflash01,property=secure,value=on"],
-        ),
-    }[mode]
-    shutil.copy(os.path.join(OVMF, variables), "vars.fd")
-    return [
-        "-machine", machine, *extra,
-        "-drive", f"if=pflash,format=raw,readonly=on,file={OVMF}/{code}",
-        "-drive", "if=pflash,format=raw,file=vars.fd",
-    ]
 
 
 def serial_text():
@@ -88,14 +55,7 @@ def wait_for(pattern, limit, qemu):
 
 class Monitor:
     def __init__(self):
-        self.sock = socket.socket(socket.AF_UNIX)
-        for _ in range(100):
-            try:
-                self.sock.connect(MONITOR)
-                return
-            except OSError:
-                time.sleep(0.1)
-        raise SystemExit("moniteur QEMU injoignable")
+        self.sock = connect_monitor(MONITOR)
 
     def screen(self, name):
         self.sock.sendall(f"screendump {name} -f png\n".encode())

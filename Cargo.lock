@@ -385,7 +385,6 @@ dependencies = [
  "bonk-cli",
  "bonk-core",
  "bonk-gui",
- "bonk-hal",
  "serde_json",
  "winresource",
 ]

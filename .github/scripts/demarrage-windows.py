@@ -6,13 +6,12 @@ blue frame of the setup window, measured on Windows 10, 11 and Server 2022 boots
 """
 import argparse
 import os
-import shutil
-import socket
 import subprocess
 import sys
 import time
 
-OVMF = "/usr/share/OVMF"
+from qemu_machine import connect_monitor, firmware
+
 MONITOR = "moniteur.sock"
 # Purple for the client editions, navy for Server.
 SETUP_BACKGROUNDS = {(24, 0, 82), (0, 25, 64)}
@@ -21,26 +20,6 @@ BACKGROUND_SHARE = 0.30
 # The frame is about 0.5% of the screen; Windows 10 draws the window inside purple, Windows 11 in white.
 FRAME_SHARE = 0.002
 LOOK_SECONDS = 10
-
-
-def firmware(mode):
-    if mode == "bios":
-        return ["-machine", "q35"]
-    code, variables, machine, extra = {
-        "uefi": ("OVMF_CODE_4M.fd", "OVMF_VARS_4M.fd", "q35", []),
-        "secureboot": (
-            "OVMF_CODE_4M.secboot.fd",
-            "OVMF_VARS_4M.ms.fd",
-            "q35,smm=on",
-            ["-global", "driver=cfi.pflash01,property=secure,value=on"],
-        ),
-    }[mode]
-    shutil.copy(os.path.join(OVMF, variables), "vars.fd")
-    return [
-        "-machine", machine, *extra,
-        "-drive", f"if=pflash,format=raw,readonly=on,file={OVMF}/{code}",
-        "-drive", "if=pflash,format=raw,file=vars.fd",
-    ]
 
 
 def read_ppm(path):
@@ -84,14 +63,7 @@ def setup_shown(path):
 
 class Monitor:
     def __init__(self):
-        self.sock = socket.socket(socket.AF_UNIX)
-        for _ in range(100):
-            try:
-                self.sock.connect(MONITOR)
-                return
-            except OSError:
-                time.sleep(0.1)
-        raise SystemExit("moniteur QEMU injoignable")
+        self.sock = connect_monitor(MONITOR)
 
     def screen(self, name):
         if os.path.exists(name):

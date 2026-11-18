@@ -315,19 +315,8 @@ pub fn helper_refuses(reasons: &[Exclusion], fresh: FreshTable) -> bool {
 }
 
 pub(crate) fn from_capture(reads: &[SourceRead]) -> Option<Result<Vec<Disk>, EnumerateError>> {
-    let read = reads.iter().find(|read| read.path == SOURCE)?;
-    let parsed: Result<WindowsFacts, String> = read
-        .content
-        .as_deref()
-        .ok_or_else(|| "no content".to_owned())
-        .and_then(|text| serde_json::from_str(text).map_err(|e| e.to_string()));
-    Some(match parsed {
-        Ok(facts) => normalize(&facts),
-        Err(detail) => Err(EnumerateError::Malformed {
-            what: SOURCE.to_owned(),
-            detail,
-        }),
-    })
+    crate::enumerate::captured::<WindowsFacts>(reads, SOURCE)
+        .map(|facts| facts.and_then(|facts| normalize(&facts)))
 }
 
 /// Capture content without what identifies a hardware unit or its owner. Unreadable content is dropped: its

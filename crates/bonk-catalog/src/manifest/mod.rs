@@ -7,6 +7,8 @@ mod tests;
 mod types;
 mod verify;
 
+pub(crate) use cache::hash_matches;
+#[cfg(test)]
 pub(crate) use cache::hex;
 pub use cache::{FetchSized, asset_matches, asset_path, icon_path};
 pub(crate) use load::replace;
