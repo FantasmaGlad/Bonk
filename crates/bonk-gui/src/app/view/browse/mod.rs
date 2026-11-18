@@ -1,5 +1,5 @@
 mod download;
-mod filters;
+mod filter;
 mod system;
 
 use iced::widget::{Row, button, column, row, scrollable, text, text_input};
@@ -8,7 +8,7 @@ use iced::{Element, Fill, Length};
 use bonk_ui::browse::{BrowseMessage, writable_count};
 use bonk_ui::catalog::{CatalogState, System};
 
-use crate::app::catalog::sized_logo;
+use crate::app::view::menu::sized_logo;
 use crate::theme;
 
 use super::super::{App, Focus, Message};
