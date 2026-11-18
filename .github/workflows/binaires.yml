@@ -1,6 +1,6 @@
 name: binaires
 
-# Thirteen targets, two of them macOS: built for a release, once a week and on demand, not at every merge.
+# Built for a release, once a week and on demand, not at every merge: the full matrix is the costliest run.
 on:
   push:
     tags: ["v*.*.*"]

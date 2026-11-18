@@ -321,7 +321,7 @@ fn redact(value: &mut Value, serials: &[&str], user: Option<&str>) {
     }
 }
 
-/// For the service.
+/// The report as a JSON value, for the service's diagnose method; an enumeration failure is part of it.
 pub(crate) fn report_value(
     include_serials: bool,
     env: &Environment,

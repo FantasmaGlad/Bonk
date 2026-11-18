@@ -15,8 +15,6 @@ use crate::errors::{Code, report};
 pub(crate) mod download;
 use bonk_ops::job::{self, JobError};
 
-/// Up to the format version directory.
-
 #[derive(Debug, Subcommand)]
 pub(crate) enum CatalogAction {
     /// List the images offered, newest version of each system first

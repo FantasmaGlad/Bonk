@@ -1,8 +1,6 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// Bus connecting the disk to the host.
-///
 /// Safety relies on the bus and not on the "removable" flag: on Windows, a USB hard disk is often reported as "fixed".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
