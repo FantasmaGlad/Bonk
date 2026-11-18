@@ -124,17 +124,15 @@ jobs:
         with:
           name: qemu-paquets
           path: ${{ runner.temp }}/qemu-paquets
-      # The packages match this runner image; after an image change apt falls back to the mirror.
+      # apt reuses a cached archive whose hash matches the index; only a package changed since is fetched.
       - name: Installer QEMU, SeaBIOS et OVMF
         timeout-minutes: 10
         env:
           PAQUETS: ${{ runner.temp }}/qemu-paquets
         run: |
-          if ! sudo apt-get install -y --no-install-recommends "$PAQUETS"/*.deb; then
-            echo "::warning::paquets partagés refusés, installation depuis le miroir"
-            sudo apt-get update
-            sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf
-          fi
+          sudo apt-get update
+          sudo cp "$PAQUETS"/*.deb /var/cache/apt/archives/
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf
       # Without KVM, software emulation would exceed the timeout on a desktop image.
       - name: Ouvrir KVM à l'exécuteur
         run: |
@@ -229,17 +227,15 @@ jobs:
         with:
           name: qemu-paquets
           path: ${{ runner.temp }}/qemu-paquets
-      # The packages match this runner image; after an image change apt falls back to the mirror.
+      # apt reuses a cached archive whose hash matches the index; only a package changed since is fetched.
       - name: Installer QEMU, SeaBIOS et OVMF
         timeout-minutes: 10
         env:
           PAQUETS: ${{ runner.temp }}/qemu-paquets
         run: |
-          if ! sudo apt-get install -y --no-install-recommends "$PAQUETS"/*.deb; then
-            echo "::warning::paquets partagés refusés, installation depuis le miroir"
-            sudo apt-get update
-            sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf
-          fi
+          sudo apt-get update
+          sudo cp "$PAQUETS"/*.deb /var/cache/apt/archives/
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf
       - name: Ouvrir KVM à l'exécuteur
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
@@ -307,17 +303,15 @@ jobs:
         with:
           name: qemu-paquets
           path: ${{ runner.temp }}/qemu-paquets
-      # The packages match this runner image; after an image change apt falls back to the mirror.
+      # apt reuses a cached archive whose hash matches the index; only a package changed since is fetched.
       - name: Installer QEMU, SeaBIOS et OVMF
         timeout-minutes: 10
         env:
           PAQUETS: ${{ runner.temp }}/qemu-paquets
         run: |
-          if ! sudo apt-get install -y --no-install-recommends "$PAQUETS"/*.deb; then
-            echo "::warning::paquets partagés refusés, installation depuis le miroir"
-            sudo apt-get update
-            sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf
-          fi
+          sudo apt-get update
+          sudo cp "$PAQUETS"/*.deb /var/cache/apt/archives/
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf
       - name: Ouvrir KVM à l'exécuteur
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
