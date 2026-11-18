@@ -127,9 +127,9 @@ impl Model {
                 hash,
                 raw: *raw,
                 mbr: *mbr,
+                force: internal_confirmed,
             },
             self.view_options(),
-            internal_confirmed,
             self.proxy(),
         );
         log::info!(target: "bonk::gui", disk = disk_id.as_str(); "starting the write");
