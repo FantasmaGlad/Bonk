@@ -13,16 +13,18 @@ use bonk_ops::job::{
     Deps, VaultAddDone, VaultInitDone, VaultListDone, VaultRemoveDone, VaultUpdateDone,
 };
 
-mod edit;
+mod add;
 mod grub;
 mod init;
 mod list;
+mod remove;
 mod update;
 
-use edit::*;
+use add::run_add;
 pub(crate) use grub::grub;
 use init::*;
 use list::*;
+use remove::run_remove;
 use update::*;
 
 #[derive(Debug, Subcommand)]
