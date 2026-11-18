@@ -127,8 +127,14 @@ fn catalog_list(params: &Value) -> Result<Value, Failure> {
         p.cache_dir.as_deref(),
         &crate::catalog::Query {
             family: p.family,
-            category: p.category,
-            arch: p.arch,
+            filter: bonk_catalog::search::Query {
+                text: p.search.unwrap_or_default(),
+                uses: p.uses,
+                base: p.category,
+                desktop: p.desktop,
+                media: p.media,
+                arch: p.arch,
+            },
             channel: p.channel,
             sort: p.sort,
         },

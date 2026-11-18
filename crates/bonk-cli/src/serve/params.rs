@@ -62,7 +62,12 @@ pub(super) struct WatchParams {
 #[serde(deny_unknown_fields, default)]
 pub(super) struct CatalogParams {
     pub(super) family: Option<String>,
+    pub(super) search: Option<String>,
+    #[serde(rename = "use")]
+    pub(super) uses: Option<String>,
     pub(super) category: Option<String>,
+    pub(super) desktop: Option<String>,
+    pub(super) media: Option<String>,
     pub(super) arch: Option<String>,
     pub(super) channel: Option<bonk_catalog::manifest::Channel>,
     pub(super) sort: crate::catalog::SortBy,

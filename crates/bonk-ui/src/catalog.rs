@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use bonk_catalog::manifest::{CatalogReport, Channel, Image, ImageSource};
+use bonk_catalog::search::{self, FamilyFacts, ImageFacts};
 use bonk_hal::Lang;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -9,6 +10,7 @@ pub struct Choice {
     pub id: String,
     /// May differ from the system: Kubuntu is filed under Ubuntu.
     pub name: String,
+    pub edition: Option<String>,
     pub label: String,
     pub end_of_life: bool,
     /// What to know before choosing it (evaluation, CD only).
@@ -17,12 +19,23 @@ pub struct Choice {
     /// Catalog desktop id: `gnome`, `none`, `choice`.
     pub desktop: Option<String>,
     /// Catalog medium id: `usb`, `sd`, `optical`.
-    pub media: Option<String>,
+    pub media: String,
     /// Processor the image boots on: `x86_64`, `aarch64`, `riscv64`.
     pub arch: String,
 }
 
 impl Choice {
+    #[must_use]
+    pub fn facts(&self) -> ImageFacts<'_> {
+        ImageFacts {
+            name: &self.name,
+            edition: self.edition.as_deref(),
+            desktop: self.desktop.as_deref(),
+            media: &self.media,
+            arch: &self.arch,
+        }
+    }
+
     /// The label comes from the catalog; what Bonk adds follows the window language.
     pub fn title(&self, lang: Lang) -> String {
         if self.end_of_life {
@@ -51,6 +64,8 @@ pub enum ChoiceSource {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct System {
+    /// Catalog family identifier: `ubuntu`.
+    pub id: String,
     pub name: String,
     /// Usage categories of the catalog: `office`, `server`.
     pub uses: Vec<String>,
@@ -58,6 +73,18 @@ pub struct System {
     pub base: Option<String>,
     pub icon: Option<PathBuf>,
     pub choices: Vec<Choice>,
+}
+
+impl System {
+    #[must_use]
+    pub fn facts(&self) -> FamilyFacts<'_> {
+        FamilyFacts {
+            id: &self.id,
+            name: &self.name,
+            uses: &self.uses,
+            base: self.base.as_deref(),
+        }
+    }
 }
 
 /// The catalog as the window shows it: its systems and the labels of its menus.
@@ -76,7 +103,7 @@ pub struct MenuFilter {
     pub category: Option<String>,
     pub base: Option<String>,
     pub system: Option<String>,
-    /// Part of a system or image name, any case: `kubuntu` finds Kubuntu under Ubuntu.
+    /// Words of a system or image name, any case or accent: `kubuntu` finds Kubuntu under Ubuntu.
     pub search: String,
     pub arch: Option<String>,
 }
@@ -93,13 +120,23 @@ pub struct MenuLists {
 }
 
 impl MenuFilter {
+    fn query(&self) -> search::Query {
+        search::Query {
+            text: self.search.clone(),
+            uses: self.category.clone(),
+            base: self.base.clone(),
+            arch: self.arch.clone(),
+            ..search::Query::default()
+        }
+    }
+
     /// Systems with at least one image left once every filter applies.
     pub fn apply<'a>(&self, systems: &'a [System]) -> Vec<&'a System> {
+        let query = self.query();
         systems
             .iter()
-            .filter(|s| self.category.as_ref().is_none_or(|c| s.uses.contains(c)))
-            .filter(|s| self.base.is_none() || s.base == self.base)
             .filter(|s| self.system.as_ref().is_none_or(|n| &s.name == n))
+            .filter(|s| query.keeps_family(s.facts()))
             .filter(|s| !self.narrows_images() || !self.choices(s).is_empty())
             .collect()
     }
@@ -110,13 +147,11 @@ impl MenuFilter {
 
     /// The images of `system` the menu lists: of the chosen processor, and named like the search.
     pub fn choices<'a>(&self, system: &'a System) -> Vec<&'a Choice> {
-        let wanted = self.search.trim().to_lowercase();
-        let named = |name: &str| wanted.is_empty() || name.to_lowercase().contains(&wanted);
+        let query = self.query();
         system
             .choices
             .iter()
-            .filter(|c| self.arch.as_ref().is_none_or(|a| &c.arch == a))
-            .filter(|c| named(&system.name) || named(&c.name))
+            .filter(|c| query.keeps_image(system.facts(), c.facts()))
             .collect()
     }
 
@@ -236,13 +271,14 @@ fn choice(image: &Image) -> Choice {
     Choice {
         id: image.id.clone(),
         name: image.name.clone(),
+        edition: image.edition.clone(),
         label: label_of(image),
         // An archived version is no longer maintained either: the interface says so the same way.
         end_of_life: matches!(image.channel, Channel::EndOfLife | Channel::Archive),
         note: image.note.clone(),
         source,
         desktop: image.desktop.clone(),
-        media: image.media.clone(),
+        media: search::media_of(image.media.as_deref(), image.usb_boot).to_owned(),
         arch: image.arch.clone(),
     }
 }
@@ -263,6 +299,7 @@ pub fn systems(report: &CatalogReport) -> Vec<System> {
             // What Bonk can write comes first: a CD-only file is listed, never offered ahead.
             choices.sort_by_key(|c| matches!(c.source, ChoiceSource::NotForUsb));
             (!choices.is_empty()).then(|| System {
+                id: family.id.clone(),
                 name: family.name.clone(),
                 uses: family.uses.clone(),
                 base: family.category.clone(),
@@ -387,6 +424,7 @@ mod tests {
     #[test]
     fn listes_du_menu_triees_sans_doublons() {
         let system = |name: &str, used: &str, base: &str| System {
+            id: String::new(),
             name: name.to_owned(),
             uses: vec![used.to_owned()],
             base: Some(base.to_owned()),

@@ -130,6 +130,7 @@ mod tests {
         .map_err(|e| e.to_string())?;
         *screen::lock(&FAMILIES) = vec![family];
         screen::lock(&screen::MODEL).catalog = CatalogState::Ready(vec![System {
+            id: String::new(),
             name: "Debian".to_owned(),
             uses: Vec::new(),
             base: None,

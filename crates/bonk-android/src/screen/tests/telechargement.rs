@@ -12,6 +12,7 @@ fn on_debian_page() -> Model {
     let choice = Choice {
         id: "debian-live".to_owned(),
         name: "Debian".to_owned(),
+        edition: None,
         label: "13".to_owned(),
         end_of_life: false,
         note: None,
@@ -20,12 +21,13 @@ fn on_debian_page() -> Model {
             sha256: SHA256.to_owned(),
         },
         desktop: None,
-        media: None,
+        media: "usb".to_owned(),
         arch: "x86_64".to_owned(),
     };
     let mut model = loaded();
     model.lang = Lang::Fr;
     model.catalog = CatalogState::Ready(vec![System {
+        id: String::new(),
         name: "Debian".to_owned(),
         uses: Vec::new(),
         base: None,

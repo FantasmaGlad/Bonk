@@ -34,6 +34,7 @@ fn debian_catalog() -> CatalogState {
     use bonk_ui::catalog::{Choice, System};
 
     CatalogState::Ready(vec![System {
+        id: String::new(),
         name: "Debian".to_owned(),
         uses: vec!["office".to_owned(), "server".to_owned()],
         base: Some("debian".to_owned()),
@@ -42,6 +43,7 @@ fn debian_catalog() -> CatalogState {
             Choice {
                 id: "debian-13-netinst-x86_64".to_owned(),
                 name: "Debian".to_owned(),
+                edition: None,
                 label: "13.7.0 netinst".to_owned(),
                 end_of_life: false,
                 note: None,
@@ -50,18 +52,19 @@ fn debian_catalog() -> CatalogState {
                     sha256: "ab".repeat(32),
                 },
                 desktop: Some("gnome".to_owned()),
-                media: Some("usb".to_owned()),
+                media: "usb".to_owned(),
                 arch: "x86_64".to_owned(),
             },
             Choice {
                 id: "debian-13-dvd-x86_64".to_owned(),
                 name: "Debian".to_owned(),
+                edition: None,
                 label: "DVD".to_owned(),
                 end_of_life: false,
                 note: Some("évaluation".to_owned()),
                 source: ChoiceSource::OfficialPage("https://www.debian.org/".to_owned()),
                 desktop: None,
-                media: None,
+                media: "usb".to_owned(),
                 arch: "x86_64".to_owned(),
             },
         ],

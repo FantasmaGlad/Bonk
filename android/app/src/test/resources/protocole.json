@@ -882,7 +882,7 @@
               "title": "Debian 13.7.0 netinst"
             },
             {
-              "facts": "évaluation",
+              "facts": "Clé USB · évaluation",
               "id": null,
               "note": "à télécharger sur https://www.debian.org/, puis Autre image",
               "title": "Debian DVD"
