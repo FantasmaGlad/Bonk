@@ -6,29 +6,131 @@
     { "id": "freedos", "name": "FreeDOS", "uses": ["retro"], "category": null }
   ],
   "images": [
-    { "id": "ubuntu-desktop", "family": "ubuntu", "name": "Ubuntu", "edition": "desktop", "desktop": "gnome", "media": "usb", "usb_boot": true, "arch": "x86_64" },
-    { "id": "ubuntu-server-arm", "family": "ubuntu", "name": "Ubuntu", "edition": "server", "desktop": "none", "media": "usb", "usb_boot": true, "arch": "aarch64" },
-    { "id": "kubuntu", "family": "ubuntu", "name": "Kubuntu", "edition": null, "desktop": "kde", "media": "usb", "usb_boot": true, "arch": "x86_64" },
-    { "id": "rpi-lite", "family": "rpi", "name": "Raspberry Pi OS", "edition": "Lite", "desktop": "none", "media": "sd", "usb_boot": true, "arch": "aarch64" },
-    { "id": "elan", "family": "elan", "name": "Élan", "edition": null, "desktop": "xfce", "media": null, "usb_boot": true, "arch": "x86_64" },
-    { "id": "freedos-cd", "family": "freedos", "name": "FreeDOS", "edition": "LiveCD", "desktop": null, "media": null, "usb_boot": false, "arch": "x86_64" }
+    {
+      "id": "ubuntu-desktop",
+      "family": "ubuntu",
+      "name": "Ubuntu",
+      "edition": "desktop",
+      "desktop": "gnome",
+      "media": "usb",
+      "usb_boot": true,
+      "arch": "x86_64"
+    },
+    {
+      "id": "ubuntu-server-arm",
+      "family": "ubuntu",
+      "name": "Ubuntu",
+      "edition": "server",
+      "desktop": "none",
+      "media": "usb",
+      "usb_boot": true,
+      "arch": "aarch64"
+    },
+    {
+      "id": "kubuntu",
+      "family": "ubuntu",
+      "name": "Kubuntu",
+      "edition": null,
+      "desktop": "kde",
+      "media": "usb",
+      "usb_boot": true,
+      "arch": "x86_64"
+    },
+    {
+      "id": "rpi-lite",
+      "family": "rpi",
+      "name": "Raspberry Pi OS",
+      "edition": "Lite",
+      "desktop": "none",
+      "media": "sd",
+      "usb_boot": true,
+      "arch": "aarch64"
+    },
+    {
+      "id": "elan",
+      "family": "elan",
+      "name": "Élan",
+      "edition": null,
+      "desktop": "xfce",
+      "media": null,
+      "usb_boot": true,
+      "arch": "x86_64"
+    },
+    {
+      "id": "freedos-cd",
+      "family": "freedos",
+      "name": "FreeDOS",
+      "edition": "LiveCD",
+      "desktop": null,
+      "media": null,
+      "usb_boot": false,
+      "arch": "x86_64"
+    }
   ],
   "cases": [
-    { "name": "empty query keeps everything", "query": {}, "images": ["ubuntu-desktop", "ubuntu-server-arm", "kubuntu", "rpi-lite", "elan", "freedos-cd"] },
-    { "name": "a variant is found under its family", "query": { "text": " KUBU " }, "images": ["kubuntu"] },
-    { "name": "the family name keeps its variants", "query": { "text": "ubuntu" }, "images": ["ubuntu-desktop", "ubuntu-server-arm", "kubuntu"] },
-    { "name": "every word must appear", "query": { "text": "ubuntu server" }, "images": ["ubuntu-server-arm"] },
+    {
+      "name": "empty query keeps everything",
+      "query": {},
+      "images": ["ubuntu-desktop", "ubuntu-server-arm", "kubuntu", "rpi-lite", "elan", "freedos-cd"]
+    },
+    {
+      "name": "a variant is found under its family",
+      "query": { "text": " KUBU " },
+      "images": ["kubuntu"]
+    },
+    {
+      "name": "the family name keeps its variants",
+      "query": { "text": "ubuntu" },
+      "images": ["ubuntu-desktop", "ubuntu-server-arm", "kubuntu"]
+    },
+    {
+      "name": "every word must appear",
+      "query": { "text": "ubuntu server" },
+      "images": ["ubuntu-server-arm"]
+    },
     { "name": "the family id counts", "query": { "text": "rpi" }, "images": ["rpi-lite"] },
-    { "name": "accents and case are ignored both ways", "query": { "text": "systeme ELAN" }, "images": ["elan"] },
+    {
+      "name": "accents and case are ignored both ways",
+      "query": { "text": "systeme ELAN" },
+      "images": ["elan"]
+    },
     { "name": "accents in the query are ignored", "query": { "text": "élan" }, "images": ["elan"] },
-    { "name": "use", "query": { "uses": "office" }, "images": ["ubuntu-desktop", "ubuntu-server-arm", "kubuntu", "elan"] },
-    { "name": "base", "query": { "base": "debian" }, "images": ["ubuntu-desktop", "ubuntu-server-arm", "kubuntu", "rpi-lite"] },
-    { "name": "processor", "query": { "arch": "aarch64" }, "images": ["ubuntu-server-arm", "rpi-lite"] },
-    { "name": "desktop and medium hold on one image", "query": { "desktop": "kde", "media": "sd" }, "images": [] },
+    {
+      "name": "use",
+      "query": { "uses": "office" },
+      "images": ["ubuntu-desktop", "ubuntu-server-arm", "kubuntu", "elan"]
+    },
+    {
+      "name": "base",
+      "query": { "base": "debian" },
+      "images": ["ubuntu-desktop", "ubuntu-server-arm", "kubuntu", "rpi-lite"]
+    },
+    {
+      "name": "processor",
+      "query": { "arch": "aarch64" },
+      "images": ["ubuntu-server-arm", "rpi-lite"]
+    },
+    {
+      "name": "desktop and medium hold on one image",
+      "query": { "desktop": "kde", "media": "sd" },
+      "images": []
+    },
     { "name": "medium alone", "query": { "media": "sd" }, "images": ["rpi-lite"] },
-    { "name": "a missing medium is usb when the image boots from a drive", "query": { "media": "usb" }, "images": ["ubuntu-desktop", "ubuntu-server-arm", "kubuntu", "elan"] },
-    { "name": "a missing medium is optical otherwise", "query": { "media": "optical" }, "images": ["freedos-cd"] },
-    { "name": "criteria combine", "query": { "text": "ubuntu", "uses": "server", "arch": "x86_64" }, "images": ["ubuntu-desktop", "kubuntu"] },
+    {
+      "name": "a missing medium is usb when the image boots from a drive",
+      "query": { "media": "usb" },
+      "images": ["ubuntu-desktop", "ubuntu-server-arm", "kubuntu", "elan"]
+    },
+    {
+      "name": "a missing medium is optical otherwise",
+      "query": { "media": "optical" },
+      "images": ["freedos-cd"]
+    },
+    {
+      "name": "criteria combine",
+      "query": { "text": "ubuntu", "uses": "server", "arch": "x86_64" },
+      "images": ["ubuntu-desktop", "kubuntu"]
+    },
     { "name": "no match", "query": { "text": "windows" }, "images": [] }
   ]
 }
