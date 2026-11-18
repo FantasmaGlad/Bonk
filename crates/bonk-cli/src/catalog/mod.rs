@@ -5,6 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use bonk_catalog::manifest::{
     self, Catalog, CatalogReport, Channel, FamilyEntry, Image, ImageSource, Loaded, TRUSTED_KEYS,
 };
+use bonk_catalog::search::{self, FamilyFacts, ImageFacts};
 use bonk_hal::{Lang, format_size};
 use clap::{Args, Subcommand, ValueEnum};
 use serde::Deserialize;
@@ -29,9 +30,21 @@ pub(crate) struct ListArgs {
     /// Keep one system only (`ubuntu`)
     #[arg(long, value_name = "ID")]
     family: Option<String>,
-    /// Keep one base (`debian`, `ubuntu`, `arch`, `fedora`, `opensuse`, `independent`, `bsd`, `windows`)
+    /// Keep the images whose system or image name holds every word, any case or accent (`kubuntu`)
+    #[arg(long, value_name = "TEXT")]
+    search: Option<String>,
+    /// Keep one usage category of the catalog (`office`, `server`)
+    #[arg(long = "use", value_name = "ID")]
+    uses: Option<String>,
+    /// Keep one base of the catalog (`debian`, `arch`)
     #[arg(long, value_name = "BASE")]
     category: Option<String>,
+    /// Keep one desktop (`gnome`, `kde`, `none`)
+    #[arg(long, value_name = "ID")]
+    desktop: Option<String>,
+    /// Keep one medium (`usb`, `sd`, `optical`)
+    #[arg(long, value_name = "ID")]
+    media: Option<String>,
     /// Keep one architecture (`x86_64`, `aarch64`)
     #[arg(long, value_name = "ARCH")]
     arch: Option<String>,
@@ -79,8 +92,7 @@ pub(crate) enum SortBy {
 #[derive(Debug, Default, Clone)]
 pub(crate) struct Query {
     pub(crate) family: Option<String>,
-    pub(crate) category: Option<String>,
-    pub(crate) arch: Option<String>,
+    pub(crate) filter: search::Query,
     pub(crate) channel: Option<Channel>,
     pub(crate) sort: SortBy,
 }
@@ -200,28 +212,18 @@ pub(crate) fn image_source(
     resolve_image(&loaded.catalog, id)
 }
 
-fn family_category<'a>(catalog: &'a Catalog, image: &Image) -> Option<&'a str> {
-    catalog
-        .families
-        .iter()
-        .find(|f| f.id == image.family)
-        .and_then(|f| f.category.as_deref())
-}
-
 fn selected(catalog: &Catalog, query: &Query, image: &Image) -> bool {
-    query
-        .family
-        .as_ref()
-        .is_none_or(|wanted| &image.family == wanted)
-        && query
-            .category
-            .as_deref()
-            .is_none_or(|wanted| family_category(catalog, image) == Some(wanted))
-        && query
-            .arch
+    let family = catalog.families.iter().find(|f| f.id == image.family);
+    family.is_some_and(|family| {
+        let facts = FamilyFacts::of(family);
+        query
+            .family
             .as_ref()
-            .is_none_or(|wanted| &image.arch == wanted)
-        && query.channel.is_none_or(|wanted| image.channel == wanted)
+            .is_none_or(|wanted| &family.id == wanted)
+            && query.channel.is_none_or(|wanted| image.channel == wanted)
+            && query.filter.keeps_family(facts)
+            && query.filter.keeps_image(facts, ImageFacts::of(image))
+    })
 }
 
 /// By default systems in catalog order, newest version first.
@@ -360,8 +362,14 @@ fn run_list(args: &ListArgs, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let cache = args.cache_dir.as_deref();
     let query = Query {
         family: args.family.clone(),
-        category: args.category.clone(),
-        arch: args.arch.clone(),
+        filter: search::Query {
+            text: args.search.clone().unwrap_or_default(),
+            uses: args.uses.clone(),
+            base: args.category.clone(),
+            desktop: args.desktop.clone(),
+            media: args.media.clone(),
+            arch: args.arch.clone(),
+        },
         channel: args.channel.map(|channel| match channel {
             ChannelArg::Lts => Channel::Lts,
             ChannelArg::Stable => Channel::Stable,
@@ -487,18 +495,55 @@ mod tests {
         assert_eq!(
             ids(
                 &catalog,
-                &query(|q| q.category = Some("Debian derivatives".to_owned()))
+                &query(|q| q.filter.base = Some("Debian derivatives".to_owned()))
             ),
             ["u22", "u26"]
         );
         assert_eq!(
-            ids(&catalog, &query(|q| q.arch = Some("aarch64".to_owned()))),
+            ids(
+                &catalog,
+                &query(|q| q.filter.arch = Some("aarch64".to_owned()))
+            ),
             ["u22"]
         );
         assert_eq!(
             ids(&catalog, &query(|q| q.channel = Some(Channel::EndOfLife))),
             ["u26"]
         );
+    }
+
+    #[test]
+    fn recherche_par_mots_usage_bureau_et_support_comme_la_fenetre() {
+        let mut catalog = catalog();
+        catalog.families[0].uses = vec!["office".to_owned()];
+        catalog.images[1].name = "Kubuntu".to_owned();
+        catalog.images[1].desktop = Some("kde".to_owned());
+        catalog.images[2].usb_boot = false;
+        let query = |filter: search::Query| Query {
+            filter,
+            ..Query::default()
+        };
+        let text = |text: &str| search::Query {
+            text: text.to_owned(),
+            ..search::Query::default()
+        };
+        assert_eq!(ids(&catalog, &query(text(" KUBU "))), ["u22"]);
+        assert_eq!(ids(&catalog, &query(text("ubuntu"))), ["u22", "u26"]);
+        let office = search::Query {
+            uses: Some("office".to_owned()),
+            ..search::Query::default()
+        };
+        assert_eq!(ids(&catalog, &query(office)), ["u22", "u26"]);
+        let kde = search::Query {
+            desktop: Some("kde".to_owned()),
+            ..search::Query::default()
+        };
+        assert_eq!(ids(&catalog, &query(kde)), ["u22"]);
+        let optical = search::Query {
+            media: Some("optical".to_owned()),
+            ..search::Query::default()
+        };
+        assert_eq!(ids(&catalog, &query(optical)), ["u26"]);
     }
 
     #[test]

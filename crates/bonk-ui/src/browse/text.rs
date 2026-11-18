@@ -24,7 +24,7 @@ pub fn writable_count(system: &System, lang: Lang) -> String {
 pub fn variant_facts(choice: &Choice, lang: Lang) -> String {
     [
         choice.desktop.as_deref().map(|id| desktop_label(id, lang)),
-        choice.media.as_deref().map(|id| media_label(id, lang)),
+        Some(media_label(&choice.media, lang)),
         choice.note.clone(),
     ]
     .into_iter()

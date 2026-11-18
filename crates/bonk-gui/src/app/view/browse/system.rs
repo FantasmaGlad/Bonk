@@ -31,7 +31,7 @@ impl App {
         let variants = system
             .choices
             .iter()
-            .filter(|choice| self.browse.filter.keeps_choice(choice))
+            .filter(|choice| self.browse.filter.keeps_choice(system, choice))
             .map(|choice| self.variant_row(choice));
         let list =
             scrollable(Column::with_children(variants).spacing(8).padding([0, 4])).height(Fill);

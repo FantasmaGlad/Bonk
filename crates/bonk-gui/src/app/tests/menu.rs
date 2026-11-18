@@ -2,6 +2,7 @@ use super::*;
 
 pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
     vec![catalog::System {
+        id: String::new(),
         name: "Ubuntu".to_owned(),
         uses: vec!["office".to_owned(), "server".to_owned()],
         base: Some("ubuntu".to_owned()),
@@ -10,6 +11,7 @@ pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
             catalog::Choice {
                 id: "ubuntu-26.04-desktop-x86_64".to_owned(),
                 name: "Ubuntu".to_owned(),
+                edition: None,
                 label: "26.04.1 desktop LTS".to_owned(),
                 end_of_life: false,
                 note: None,
@@ -18,12 +20,13 @@ pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
                     sha256: "a".repeat(64),
                 },
                 desktop: None,
-                media: None,
+                media: "usb".to_owned(),
                 arch: "x86_64".to_owned(),
             },
             catalog::Choice {
                 id: "ubuntu-24.04-desktop-x86_64".to_owned(),
                 name: "Ubuntu".to_owned(),
+                edition: None,
                 label: "24.04.5 desktop LTS".to_owned(),
                 end_of_life: false,
                 note: None,
@@ -32,18 +35,19 @@ pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
                     sha256: "b".repeat(64),
                 },
                 desktop: None,
-                media: None,
+                media: "usb".to_owned(),
                 arch: "x86_64".to_owned(),
             },
             catalog::Choice {
                 id: "ubuntu-11".to_owned(),
                 name: "Ubuntu".to_owned(),
+                edition: None,
                 label: "11".to_owned(),
                 end_of_life: false,
                 note: None,
                 source: catalog::ChoiceSource::OfficialPage("https://p/".to_owned()),
                 desktop: None,
-                media: None,
+                media: "usb".to_owned(),
                 arch: "x86_64".to_owned(),
             },
         ],

@@ -142,7 +142,7 @@ impl Model {
                     system
                         .choices
                         .iter()
-                        .filter(|choice| self.browse.filter.keeps_choice(choice))
+                        .filter(|choice| self.browse.filter.keeps_choice(system, choice))
                         .filter(|choice| matches!(choice.source, ChoiceSource::Download { .. }))
                         .flat_map(|choice| {
                             [

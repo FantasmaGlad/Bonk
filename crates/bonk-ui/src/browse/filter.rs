@@ -1,3 +1,5 @@
+use bonk_catalog::search;
+
 use crate::catalog::{Choice, System};
 use crate::terms::Terms;
 
@@ -23,41 +25,35 @@ pub struct Options {
 }
 
 impl BrowseFilter {
-    pub fn apply<'a>(&self, systems: &'a [System]) -> Vec<&'a System> {
-        systems.iter().filter(|system| self.keeps(system)).collect()
+    fn query(&self) -> search::Query {
+        search::Query {
+            text: self.search.clone(),
+            uses: self.uses.clone(),
+            base: self.base.clone(),
+            desktop: self.desktop.clone(),
+            media: self.media.clone(),
+            arch: None,
+        }
     }
 
-    /// A variant of the system must match the desktop and the medium together.
-    fn keeps(&self, system: &System) -> bool {
-        self.uses.as_ref().is_none_or(|id| system.uses.contains(id))
-            && (self.base.is_none() || system.base == self.base)
-            && self.matches_search(system)
-            && system
-                .choices
-                .iter()
-                .any(|choice| self.keeps_choice(choice))
+    pub fn apply<'a>(&self, systems: &'a [System]) -> Vec<&'a System> {
+        let query = self.query();
+        systems
+            .iter()
+            .filter(|system| {
+                query.keeps_family(system.facts())
+                    && system
+                        .choices
+                        .iter()
+                        .any(|choice| self.keeps_choice(system, choice))
+            })
+            .collect()
     }
 
     #[must_use]
-    pub fn keeps_choice(&self, choice: &Choice) -> bool {
-        same(self.desktop.as_ref(), choice.desktop.as_ref())
-            && same(self.media.as_ref(), choice.media.as_ref())
+    pub fn keeps_choice(&self, system: &System, choice: &Choice) -> bool {
+        self.query().keeps_image(system.facts(), choice.facts())
     }
-
-    /// Kubuntu is filed under Ubuntu: the variants' names count as much as the system's.
-    fn matches_search(&self, system: &System) -> bool {
-        let wanted = self.search.trim().to_lowercase();
-        wanted.is_empty()
-            || system.name.to_lowercase().contains(&wanted)
-            || system
-                .choices
-                .iter()
-                .any(|choice| choice.name.to_lowercase().contains(&wanted))
-    }
-}
-
-fn same(wanted: Option<&String>, value: Option<&String>) -> bool {
-    wanted.is_none_or(|wanted| value == Some(wanted))
 }
 
 #[must_use]
@@ -72,7 +68,7 @@ pub fn options(systems: &[System], terms: &Terms) -> Options {
             choices().filter_map(|c| c.desktop.as_deref()),
             Order::Desktops,
         ),
-        media: ordered(choices().filter_map(|c| c.media.as_deref()), Order::Media),
+        media: ordered(choices().map(|c| c.media.as_str()), Order::Media),
     }
 }
 
@@ -85,18 +81,20 @@ mod tests {
         Choice {
             id: format!("{name}-{desktop}-{media}"),
             name: name.to_owned(),
+            edition: None,
             label: "1".to_owned(),
             end_of_life: false,
             note: None,
             source: ChoiceSource::NotForUsb,
             desktop: Some(desktop.to_owned()),
-            media: Some(media.to_owned()),
+            media: media.to_owned(),
             arch: "x86_64".to_owned(),
         }
     }
 
     fn system(name: &str, uses: &[&str], choices: Vec<Choice>) -> System {
         System {
+            id: String::new(),
             name: name.to_owned(),
             uses: uses.iter().map(|u| (*u).to_owned()).collect(),
             base: Some("debian".to_owned()),
