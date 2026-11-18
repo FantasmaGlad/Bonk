@@ -104,7 +104,6 @@ impl ViewDefaults {
     }
 }
 
-/// What the window opens on.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WindowRequest {
     pub view: ViewDefaults,

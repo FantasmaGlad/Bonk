@@ -18,7 +18,6 @@ data object Clock : ToRust
 @Serializable @SerialName("select")
 data class Select(val id: String) : ToRust
 
-/** Shows or hides the technical details of the selected disk. */
 @Serializable @SerialName("details")
 data object ToggleDetails : ToRust
 

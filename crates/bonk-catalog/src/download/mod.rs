@@ -71,7 +71,7 @@ pub struct Advance {
     pub total: Option<u64>,
 }
 
-/// Delays are short in tests.
+/// Progress, cancel and retry pacing, supplied by the caller so tests can run without waiting.
 pub struct Hooks<'a> {
     pub progress: &'a mut dyn FnMut(Advance),
     pub cancelled: &'a dyn Fn() -> bool,

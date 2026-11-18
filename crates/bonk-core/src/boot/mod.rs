@@ -1,5 +1,4 @@
-//! BIOS boot code written by Bonk. Sources in `boot/`, assembled by `boot/assemble.sh` with the Rust
-//! toolchain only; CI reassembles and compares these bytes.
+// Assembled from boot/ by boot/assemble.sh with the Rust toolchain only; CI reassembles and compares these bytes.
 
 /// First 440 bytes of the disk, before the signature and the partition table.
 pub const MBR: &[u8; 440] = include_bytes!("mbr.bin");

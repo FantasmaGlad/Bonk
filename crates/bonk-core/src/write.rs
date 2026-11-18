@@ -427,7 +427,6 @@ mod tests {
     -> Result<(), Box<dyn std::error::Error>> {
         let image = data(10_000);
         let mut dev = MemoryDevice::new(8 * 4096, 4096)?;
-        // A 100-byte chunk is raised to the sector.
         let report = write_image(
             &mut Cursor::new(image.clone()),
             &mut dev,
