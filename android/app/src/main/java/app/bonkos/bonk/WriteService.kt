@@ -16,11 +16,11 @@ class WriteService : OperationService() {
     override val cancel: ToRust = Cancel
 
     override fun perform(request: Effect) {
-        val actions = Actions(this, Bridge::send) { _, _ -> }
+        val operations = Operations(this, Bridge::send)
         try {
             when (request) {
-                is Write -> actions.runWrite(request)
-                is VaultRun -> actions.runVault(request)
+                is Write -> operations.runWrite(request)
+                is VaultRun -> operations.runVault(request)
                 else -> {}
             }
         } finally {
