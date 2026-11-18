@@ -65,7 +65,7 @@ impl GuiArgs {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum Command {
-    /// Disks: list and detail
+    /// Disks: list, detail, write, verify, repair the GPT
     Disk {
         #[command(subcommand)]
         action: DiskAction,
@@ -92,7 +92,7 @@ pub(crate) enum Command {
     RepairGpt(RepairArgs),
     /// Return a disk to storage use: table, partition, filesystem
     Format(format::FormatArgs),
-    /// Disk carrying several ISO images: prepare, list
+    /// Disk carrying several ISO images: prepare, list, add, remove, update
     Vault {
         #[command(subcommand)]
         action: vault::VaultAction,
@@ -113,7 +113,7 @@ pub(crate) enum Command {
         #[command(subcommand)]
         action: ConfigAction,
     },
-    /// JSON Schema of a command's `--json` output
+    /// JSON Schema of a command's JSON output or of a service event
     Schema(SchemaArgs),
     /// Shell completions: bash, zsh, fish, powershell, elvish
     Completions {
@@ -144,6 +144,6 @@ pub(crate) enum DiskAction {
     Write(WriteArgs),
     /// Compare a disk to an image, writing nothing
     Verify(VerifyArgs),
-    /// Repair the GPT of a disk
+    /// Repair the GPT of a disk or an image
     RepairGpt(RepairArgs),
 }

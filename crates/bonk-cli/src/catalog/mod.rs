@@ -45,7 +45,7 @@ pub(crate) struct ListArgs {
     /// Keep one medium (`usb`, `sd`, `optical`)
     #[arg(long, value_name = "ID")]
     media: Option<String>,
-    /// Keep one architecture (`x86_64`, `aarch64`)
+    /// Keep one architecture, as the catalog names it (`x86_64`, `aarch64`, `i686`, `riscv64`)
     #[arg(long, value_name = "ARCH")]
     arch: Option<String>,
     /// Keep one life cycle
