@@ -12,7 +12,7 @@ on:
       - ".github/scripts/demarrage-qemu.py"
       - ".github/scripts/demarrage-vault.sh"
       - ".github/scripts/demarrage-windows.py"
-      - "crates/bonk-core/src/vault.rs"
+      - "crates/bonk-core/src/vault/**"
       - "crates/bonk-core/src/vault_menu.cfg"
       - "crates/bonk-core/src/vault_casper_exfat.sh"
   workflow_dispatch:
