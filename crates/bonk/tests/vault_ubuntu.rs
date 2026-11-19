@@ -5,7 +5,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 
-use bonk_core::vault::CASPER_EXFAT;
+use bonk_core::vault::CASPER_SCRIPT;
 
 type Res = Result<(), Box<dyn std::error::Error>>;
 
@@ -43,7 +43,7 @@ fn run_step(
         &root.join("bin/sleep"),
         &format!("#!/bin/sh\necho sleep >> {at}/sleeps\n"),
     )?;
-    let step = CASPER_EXFAT
+    let step = CASPER_SCRIPT
         .replace("/scripts/", &format!("{at}/scripts/"))
         .replace("/sbin/blkid", &format!("{at}/sbin/blkid"))
         .replace("/proc/cmdline", &format!("{at}/cmdline"))

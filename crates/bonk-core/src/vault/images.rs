@@ -21,7 +21,7 @@ pub fn add_image(
 ) -> Result<exfat::edit::Added, FormatError> {
     let span = vault_span(plan);
     let added = exfat::edit::add_file(dev, span, name, size, false, reader, advance)?;
-    if family == IsoFamily::Ubuntu {
+    if family.needs_location() {
         let location = location_file(added.volume_offset);
         let size = location.len() as u64;
         exfat::edit::add_file(
@@ -37,8 +37,8 @@ pub fn add_image(
     Ok(added)
 }
 
-/// Next to an Ubuntu ISO, hidden: where it starts on the data partition. casper cannot read exFAT, so the
-/// menu passes this offset and Bonk's iso-scan step maps the ISO straight from the partition.
+/// Next to an ISO whose initramfs cannot read exFAT, hidden: where it starts on the data partition. The menu
+/// passes this offset and Bonk's initrd step maps the ISO straight from the partition.
 pub const LOCATION_SUFFIX: &str = ".bonk";
 
 pub(super) fn vault_span(plan: &VaultPlan) -> exfat::edit::Span {

@@ -23,8 +23,14 @@ const ESP_GUID_TEXT: &str = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B";
 pub const MENU: &str = include_str!("menu.cfg");
 /// The path the GRUB image searches for.
 pub const MENU_PATH: &str = "bonk/grub.cfg";
-/// Ubuntu's iso-scan step, put into its initrd by the menu: it maps the ISO from the partition, which casper
-/// cannot read. Kept apart, as it follows casper's own scripts.
-pub const CASPER_EXFAT: &str = include_str!("casper_exfat.sh");
-/// Next to the menu, which keeps GRUB's `config_directory` to name it.
-pub const CASPER_EXFAT_PATH: &str = "bonk/casper/20iso_scan";
+/// Ubuntu's iso-scan step, in place of casper's own.
+pub const CASPER_SCRIPT: &str = include_str!("initrd/casper.sh");
+/// A udev rule for the installers of the Red Hat family: their dracut hooks moved between versions, udev's
+/// rules folder did not.
+pub const VAULT_ISO_RULE: &str = include_str!("initrd/vault-iso.rules");
+/// Scripts the menu puts into an initrd, by their path next to the menu: each maps an ISO from the partition,
+/// which the system started cannot read. Kept apart, as each follows its initramfs's own scripts.
+pub const INITRD_SCRIPTS: [(&str, &str); 2] = [
+    ("bonk/casper/20iso_scan", CASPER_SCRIPT),
+    ("bonk/udev/99-bonk-vault-iso.rules", VAULT_ISO_RULE),
+];
