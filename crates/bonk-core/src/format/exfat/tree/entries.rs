@@ -1,8 +1,8 @@
-use super::{
-    ALLOCATION_POSSIBLE, ATTR_ARCHIVE, ENTRY_BITMAP, ENTRY_UPCASE, FIXED_TIMESTAMP, MAX_NAME_UNITS,
-};
 use crate::bytes::{put_u16, put_u32, put_u64};
 use crate::format::FormatError;
+use crate::format::exfat::tree::{
+    ALLOCATION_POSSIBLE, ATTR_ARCHIVE, ENTRY_BITMAP, ENTRY_UPCASE, FIXED_TIMESTAMP, MAX_NAME_UNITS,
+};
 use crate::format::exfat::{
     ATTR_DIRECTORY, ENTRY, ENTRY_FILE, ENTRY_LABEL, ENTRY_NAME, ENTRY_STREAM, Geometry, NAME_UNITS,
     NO_FAT_CHAIN, UPCASE, checksum16, checksum32,

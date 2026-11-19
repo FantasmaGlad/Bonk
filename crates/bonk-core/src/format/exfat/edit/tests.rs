@@ -1,5 +1,5 @@
-use super::*;
 use crate::block::MemoryDevice;
+use crate::format::exfat::edit::*;
 use crate::format::exfat::{self, Volume as NewVolume};
 use crate::partition::read_range;
 

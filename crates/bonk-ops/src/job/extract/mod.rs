@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use bonk_core::DEFAULT_BLOCK_SIZE;
 use bonk_core::format::FormatError;
-use bonk_core::format::fat32_tree::MAX_FILE_BYTES;
+use bonk_core::format::fat32::tree::MAX_FILE_BYTES;
 use bonk_core::format::table::{self, PartitionPlan, TableKind};
 use bonk_core::pe::{Machine, Signer};
 use bonk_core::write::{Control, Progress};

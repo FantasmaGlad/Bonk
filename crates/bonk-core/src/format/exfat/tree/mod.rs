@@ -1,18 +1,18 @@
 use std::collections::BTreeMap;
 use std::io::Read;
 
-use super::exfat::{
+use crate::block::BlockDevice;
+use crate::format::exfat::{
     BOOT_REGION, FIRST_CLUSTER, Geometry, UPCASE, Volume, boot_region, geometry, upcase_map,
 };
-use super::tree::{
+use crate::format::tree::{
     Children, NewFile, Placed, check_room, collect_children, place_files, verify_contiguous,
     write_contiguous,
 };
-use super::{FormatError, zero_range};
-use crate::block::BlockDevice;
+use crate::format::{FormatError, zero_range};
 use crate::partition::read_range;
 
-use super::exfat::END_OF_CHAIN;
+use crate::format::exfat::END_OF_CHAIN;
 
 mod entries;
 mod plan;

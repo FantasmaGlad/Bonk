@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use bonk_core::BlockDevice;
 use bonk_core::format::fat32::Volume;
-use bonk_core::format::fat32_tree::{self, Layout};
+use bonk_core::format::fat32::tree::{self, Layout};
 use bonk_core::format::table::{self, TableKind};
 use bonk_core::format::{Filesystem, Ids};
 use bonk_core::write::{Control, Phase, Progress};
@@ -36,7 +36,7 @@ pub(super) fn write_volume<'a>(
     };
     let write_failure = |e| format_failure(Code::WriteFailed, e);
     let layout =
-        fat32_tree::layout(&volume, block, &files, &prepared.directories).map_err(write_failure)?;
+        tree::layout(&volume, block, &files, &prepared.directories).map_err(write_failure)?;
     table::write_table(device, kind, Filesystem::Fat32, Some(LABEL), ids, bios_boot)
         .map_err(write_failure)?;
     layout.write_structures(device).map_err(write_failure)?;

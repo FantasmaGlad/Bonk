@@ -7,7 +7,7 @@ use std::process::Command;
 use bonk_core::MemoryDevice;
 use bonk_core::format::NewFile;
 use bonk_core::format::exfat::Volume;
-use bonk_core::format::exfat_tree::layout;
+use bonk_core::format::exfat::tree::layout;
 
 mod common;
 
@@ -102,7 +102,7 @@ fn fsck(image: &[u8], label: &str) -> String {
 /// clean, files and free space included.
 #[test]
 fn un_ajout_et_un_retrait_sont_acceptes_par_fsck_exfat() {
-    use bonk_core::format::exfat_edit::{Span, add_file, remove_file};
+    use bonk_core::format::exfat::edit::{Span, add_file, remove_file};
 
     if !common::outil_disponible("fsck.exfat") || !common::outil_disponible("mkfs.exfat") {
         return;

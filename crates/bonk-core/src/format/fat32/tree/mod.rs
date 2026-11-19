@@ -1,11 +1,13 @@
 use std::io::Read;
 
-use super::fat32::{self, FAT_HEAD, FATS, Geometry, ROOT_CLUSTER, Volume, narrow, write_boot};
-use super::tree::{
+use crate::block::BlockDevice;
+use crate::format::fat32::{
+    self, FAT_HEAD, FATS, Geometry, ROOT_CLUSTER, Volume, narrow, write_boot,
+};
+use crate::format::tree::{
     NewFile, Placed, check_room, collect_children, place_files, verify_contiguous, write_contiguous,
 };
-use super::{FormatError, zero_range};
-use crate::block::BlockDevice;
+use crate::format::{FormatError, zero_range};
 use crate::partition::read_range;
 
 mod dirent;

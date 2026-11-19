@@ -1,13 +1,13 @@
 use crate::block::BlockDevice;
 use crate::format::NewFile;
-use crate::format::exfat_read::Reader;
+use crate::format::exfat::read::Reader;
 use crate::format::table::{self, TableKind};
 use crate::format::{Filesystem, FormatError, Ids, exfat, fat32};
 use crate::partition::{Severity, inspect};
 
 use super::*;
 use crate::block::MemoryDevice;
-use crate::format::exfat_tree;
+use crate::format::exfat::tree;
 use crate::partition::read_range;
 
 const MIB: u64 = 1 << 20;
@@ -287,7 +287,7 @@ fn liste_les_iso_sans_les_autres_fichiers() -> Result<(), Box<dyn std::error::Er
         size,
     };
     let volume = exfat_volume(&plan, &ids());
-    let layout = exfat_tree::layout(
+    let layout = tree::layout(
         &volume,
         512,
         &[

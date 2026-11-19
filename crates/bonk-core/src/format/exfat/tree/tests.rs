@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
-use super::*;
 use crate::block::MemoryDevice;
+use crate::format::exfat::tree::*;
 use crate::format::exfat::{ENTRY, NO_FAT_CHAIN};
 
 fn volume() -> Volume<'static> {

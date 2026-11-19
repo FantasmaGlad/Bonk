@@ -2,8 +2,8 @@
 
 use std::collections::BTreeSet;
 
-use super::*;
 use crate::block::MemoryDevice;
+use crate::format::fat32::tree::*;
 
 fn volume() -> Volume<'static> {
     Volume {

@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::block::BlockDevice;
-use crate::format::exfat_read::Reader;
+use crate::format::exfat::read::Reader;
 use crate::format::table::{
     self, GUID_ESP, MBR_ESP, PartitionPlan, Slot, TableKind, gpt_type, mbr_type, usable_end,
 };
