@@ -76,10 +76,15 @@ fn download(
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<Downloaded, JobError> {
     let cache_dir = args.cache_dir.as_deref();
-    let (url, sha256) = super::image_source(&args.id, args.catalog_url.as_deref(), cache_dir)?;
-    let url = url.to_string_lossy().into_owned();
+    let source = super::image_source(&args.id, args.catalog_url.as_deref(), cache_dir)?;
+    let url = source.url.to_string_lossy();
+    let sha256 = source.sha256;
+    let named = crate::fetch::Named {
+        url: &url,
+        file_name: source.file_name.as_deref(),
+    };
     let (dest, already_kept) =
-        crate::fetch::kept_or_fetched(&url, cache_dir, &sha256, deps, progress)?;
+        crate::fetch::kept_or_fetched(named, cache_dir, &sha256, deps, progress)?;
     let bytes = check(&dest, &sha256, progress)?;
     Ok(Downloaded {
         id: args.id.clone(),

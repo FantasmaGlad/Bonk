@@ -30,18 +30,6 @@ pub fn is_url(text: &str) -> bool {
     text.starts_with("https://") || text.starts_with("http://")
 }
 
-/// Last path segment, without query or fragment. `None` if empty or encoded: a name from the network must not
-/// escape the cache directory.
-#[must_use]
-pub fn file_name(url: &str) -> Option<&str> {
-    let path = url.split(['?', '#']).next()?;
-    let (_, after_scheme) = path.split_once("://")?;
-    let (_, path) = after_scheme.split_once('/')?;
-    let name = path.rsplit('/').next()?;
-    let safe = !name.is_empty() && name != ".." && name != "." && !name.contains(['%', '\\', '\0']);
-    safe.then_some(name)
-}
-
 /// One setting for the whole process: no download can forget it.
 static PROXY: RwLock<Option<Proxy>> = RwLock::new(None);
 

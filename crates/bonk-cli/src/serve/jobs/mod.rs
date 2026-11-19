@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::thread::JoinHandle;
@@ -72,7 +71,7 @@ pub(super) fn progress_event(p: &Progress, request: &Value) -> Value {
 }
 
 pub(super) enum Task {
-    Write(Box<WriteJob>, Option<String>, Option<PathBuf>),
+    Write(Box<WriteJob>, fetch::Fetch),
     Verify(VerifyJob),
     Repair(RepairJob),
     Format(FormatJob),
@@ -157,14 +156,9 @@ impl Task {
         progress: &mut dyn FnMut(&Progress) -> Control,
     ) -> Result<Value, job::JobError> {
         match self {
-            Self::Write(mut j, sha256_file, cache_dir) => {
+            Self::Write(mut j, download) => {
                 let source = j.source.clone();
-                let request = fetch::Request {
-                    source: &source,
-                    sha256_file: sha256_file.as_deref(),
-                    cache_dir: cache_dir.as_deref(),
-                };
-                fetch::write(&request, &mut j, deps, progress).and_then(to_json)
+                fetch::write(&download.request(&source), &mut j, deps, progress).and_then(to_json)
             }
             Self::Verify(j) => job::verify(&j, deps, progress).and_then(to_json),
             Self::Repair(j) => job::repair(&j, deps).and_then(to_json),

@@ -15,6 +15,34 @@ pub(crate) struct Request<'a> {
     pub(crate) source: &'a Path,
     pub(crate) sha256_file: Option<&'a str>,
     pub(crate) cache_dir: Option<&'a Path>,
+    /// Name to keep a downloaded address under, when the address does not end with it.
+    pub(crate) file_name: Option<&'a str>,
+}
+
+/// The same request, owned, for a write the service runs later.
+#[derive(Debug, Default)]
+pub(crate) struct Fetch {
+    pub(crate) sha256_file: Option<String>,
+    pub(crate) cache_dir: Option<PathBuf>,
+    pub(crate) file_name: Option<String>,
+}
+
+impl Fetch {
+    pub(crate) fn request<'a>(&'a self, source: &'a Path) -> Request<'a> {
+        Request {
+            source,
+            sha256_file: self.sha256_file.as_deref(),
+            cache_dir: self.cache_dir.as_deref(),
+            file_name: self.file_name.as_deref(),
+        }
+    }
+}
+
+/// An address and the name the catalog gives its file, if any.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Named<'a> {
+    pub(crate) url: &'a str,
+    pub(crate) file_name: Option<&'a str>,
 }
 
 /// A cache file to forget if it proves wrong: downloading it again is the only remedy.
@@ -85,7 +113,13 @@ fn resolve(
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<Option<Downloaded>, JobError> {
     let source = request.source.to_str().filter(|s| bonk_catalog::is_url(s));
-    let name = source_name(request.source, source)?;
+    let name = source_name(
+        request.source,
+        source.map(|url| Named {
+            url,
+            file_name: request.file_name,
+        }),
+    )?;
     if let Some(expected) = &job.expected_sha256 {
         job::normalize_sha256(expected)?;
     }
@@ -112,19 +146,23 @@ fn resolve(
     Ok(Some(Downloaded(dest)))
 }
 
-fn source_name(path: &Path, url: Option<&str>) -> Result<String, JobError> {
-    let Some(url) = url else {
+fn source_name(path: &Path, named: Option<Named<'_>>) -> Result<String, JobError> {
+    let Some(Named { url, file_name }) = named else {
         return Ok(path
             .file_name()
             .map_or_else(String::new, |name| name.to_string_lossy().into_owned()));
     };
-    bonk_catalog::file_name(url)
+    bonk_catalog::download_name(url, file_name)
         .map(str::to_owned)
-        .ok_or_else(|| {
-            error(
+        .ok_or_else(|| match file_name {
+            Some(name) => error(
+                Code::InvalidArgument,
+                format!("{name}: a file name is one path segment, without / \\ or %"),
+            ),
+            None => error(
                 Code::InvalidArgument,
                 format!("{url}: no readable file name in the address"),
-            )
+            ),
         })
 }
 
@@ -147,16 +185,16 @@ fn cached_download(
 
 /// Where the image is kept, and whether it already is. Downloaded when missing.
 pub(crate) fn kept_or_fetched(
-    url: &str,
+    named: Named<'_>,
     cache_dir: Option<&Path>,
     sha256: &str,
     deps: &Deps<'_>,
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<(PathBuf, bool), JobError> {
-    let name = source_name(Path::new(url), Some(url))?;
+    let name = source_name(Path::new(named.url), Some(named))?;
     let (dest, already_kept) = cache_entry(cache_dir, sha256, &name)?;
     if !already_kept {
-        fetch_to(url, &dest, deps, progress)?;
+        fetch_to(named.url, &dest, deps, progress)?;
     }
     Ok((dest, already_kept))
 }

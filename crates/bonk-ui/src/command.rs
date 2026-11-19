@@ -23,6 +23,8 @@ pub struct WriteView<'a> {
     pub mbr: bool,
     /// An internal disk, confirmed in the window: `bonk write` requires `--force` for it.
     pub force: bool,
+    /// The catalog's name for a file its address does not name.
+    pub file_name: Option<&'a str>,
 }
 
 impl Default for WriteView<'_> {
@@ -33,6 +35,7 @@ impl Default for WriteView<'_> {
             raw: false,
             mbr: TableKind::WINDOWS_DEFAULT == TableKind::Mbr,
             force: false,
+            file_name: None,
         }
     }
 }
@@ -72,6 +75,10 @@ impl<'a> WriteView<'a> {
         }
         if self.force {
             flags.push("--force".to_owned());
+        }
+        if let Some(name) = self.file_name {
+            flags.push("--file-name".to_owned());
+            flags.push(name.to_owned());
         }
         flags
     }
@@ -237,6 +244,7 @@ mod tests_write {
             raw: true,
             mbr: true,
             force: false,
+            file_name: None,
         };
         let commands = equivalent_commands(ViewOptions::default(), Some("usb-a"), Some(view));
         assert_eq!(
@@ -249,6 +257,7 @@ mod tests_write {
             raw: false,
             mbr: false,
             force: false,
+            file_name: None,
         };
         assert_eq!(
             view.flags(),

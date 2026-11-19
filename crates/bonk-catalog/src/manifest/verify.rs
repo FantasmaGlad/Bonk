@@ -80,6 +80,13 @@ pub(super) fn check_image(image: &Image) -> Result<(), &'static str> {
     if !image.mirrors.iter().all(|mirror| is_mirror(mirror)) {
         return Err("mirror must be https or an onion address");
     }
+    if image
+        .file_name
+        .as_deref()
+        .is_some_and(|name| !crate::is_plain_file_name(name))
+    {
+        return Err("file name must be one plain path segment");
+    }
     match &image.source {
         ImageSource::Download { url, sha256, .. } => {
             if !url.starts_with("https://") {

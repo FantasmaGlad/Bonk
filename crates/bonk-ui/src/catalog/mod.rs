@@ -58,6 +58,8 @@ pub enum ChoiceSource {
     Download {
         url: String,
         sha256: String,
+        /// Set only when the address does not end with the file's name.
+        file_name: Option<String>,
     },
     /// No stable link at the publisher: the address of its page, to open oneself.
     OfficialPage(String),
@@ -117,6 +119,20 @@ pub enum CatalogState {
     Failed(String),
 }
 
+impl CatalogState {
+    /// The name the catalog gives the file at this address, when the address does not end with it.
+    #[must_use]
+    pub fn file_name_of(&self, address: &str) -> Option<&str> {
+        let Self::Ready(systems) = self else {
+            return None;
+        };
+        match &find_url(systems, address)?.1.source {
+            ChoiceSource::Download { file_name, .. } => file_name.as_deref(),
+            _ => None,
+        }
+    }
+}
+
 fn label_of(image: &Image) -> String {
     let mut label = image.version.clone();
     if let Some(edition) = &image.edition {
@@ -139,6 +155,7 @@ fn choice(image: &Image) -> Choice {
         ImageSource::Download { url, sha256, .. } => ChoiceSource::Download {
             url: url.clone(),
             sha256: sha256.clone(),
+            file_name: image.file_name.clone(),
         },
         ImageSource::OfficialPage { official_page } => {
             ChoiceSource::OfficialPage(official_page.clone())
@@ -444,5 +461,24 @@ mod tests {
             ["x86_64", "aarch64"]
         );
         assert_eq!(arch_label("aarch64", Lang::Fr), "aarch64 (ARM, 64 bits)");
+    }
+
+    #[test]
+    fn le_nom_donne_par_le_catalogue_suit_son_adresse_dans_la_commande() {
+        let partage = "https://share.example/files/686/download";
+        let mut report = report();
+        report["images"][0]["url"] = json!(partage);
+        report["images"][0]["file_name"] = json!("GLF-OS-STABLE.iso");
+        let catalog = CatalogState::Ready(parse(&report));
+        assert_eq!(catalog.file_name_of(partage), Some("GLF-OS-STABLE.iso"));
+        assert_eq!(catalog.file_name_of("https://u/20.iso"), None);
+        assert_eq!(catalog.file_name_of("https://ailleurs/download"), None);
+        assert_eq!(CatalogState::Loading.file_name_of(partage), None);
+        let flags = crate::command::WriteView {
+            file_name: catalog.file_name_of(partage),
+            ..crate::command::WriteView::image(partage)
+        }
+        .flags();
+        assert!(flags.ends_with(&["--file-name".to_owned(), "GLF-OS-STABLE.iso".to_owned()]));
     }
 }

@@ -19,6 +19,7 @@ fn on_debian_page() -> Model {
         source: ChoiceSource::Download {
             url: "https://d/debian-live.iso".to_owned(),
             sha256: SHA256.to_owned(),
+            file_name: None,
         },
         desktop: None,
         media: "usb".to_owned(),
@@ -60,6 +61,19 @@ fn l_adresse_et_l_empreinte_viennent_du_catalogue_signe() {
         })]
     );
     assert!(start(&mut model).is_empty(), "un seul à la fois");
+}
+
+#[test]
+fn une_adresse_de_partage_prend_le_nom_donne_par_le_catalogue() {
+    let mut model = on_debian_page();
+    if let CatalogState::Ready(systems) = &mut model.catalog {
+        systems[0].choices[0].source = ChoiceSource::Download {
+            url: "https://share.example/files/686/download".to_owned(),
+            sha256: SHA256.to_owned(),
+            file_name: Some("GLF-OS-STABLE.iso".to_owned()),
+        };
+    }
+    assert_eq!(start(&mut model)[0]["name"], "GLF-OS-STABLE.iso");
 }
 
 #[test]

@@ -56,6 +56,32 @@ fn un_identifiant_hors_de_la_regle_des_liens_est_refuse() -> Result<(), serde_js
     Ok(())
 }
 
+#[test]
+fn le_nom_de_fichier_du_catalogue_sert_au_telechargement_et_reste_un_seul_segment()
+-> Result<(), serde_json::Error> {
+    let partage = debian().replace(
+        r#""url":"https://cdimage.debian.org/x.iso""#,
+        r#""url":"https://share.example/files/686/download","file_name":"GLF-OS-STABLE.iso""#,
+    );
+    let image: Image = serde_json::from_str(&partage)?;
+    assert_eq!(check_image(&image), Ok(()));
+    assert_eq!(image.download_name(), Some("GLF-OS-STABLE.iso"));
+    let sans_nom: Image = serde_json::from_str(&debian())?;
+    assert_eq!(
+        (sans_nom.file_name.as_deref(), sans_nom.download_name()),
+        (None, Some("x.iso"))
+    );
+    for nom in ["../x.iso", "a/b.iso", "%2e.iso", ""] {
+        let image: Image = serde_json::from_str(&partage.replace("GLF-OS-STABLE.iso", nom))?;
+        assert_eq!(
+            check_image(&image),
+            Err("file name must be one plain path segment"),
+            "{nom}"
+        );
+    }
+    Ok(())
+}
+
 fn windows() -> String {
     r#"{"id":"windows-11-x86_64","family":"windows","name":"Windows","version":"11","channel":"stable","released":"2021-10-05","arch":"x86_64","homepage":"https://www.microsoft.com/","official_page":"https://www.microsoft.com/software-download/windows11"}"#.to_owned()
 }

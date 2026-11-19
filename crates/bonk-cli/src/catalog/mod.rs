@@ -93,6 +93,7 @@ mod tests {
             media: None,
             ram_mb: None,
             ram_source: None,
+            file_name: None,
             source,
         }
     }
@@ -272,8 +273,11 @@ mod tests {
     #[test]
     fn une_image_se_resout_ou_se_refuse_en_disant_pourquoi() -> Result<(), JobError> {
         let catalog = catalog();
-        let (url, sha) = resolve_image(&catalog, "u26")?;
-        assert_eq!((url.to_str(), sha.len()), (Some("https://h/x.iso"), 64));
+        let source = resolve_image(&catalog, "u26")?;
+        assert_eq!(
+            (source.url.to_str(), source.sha256.len()),
+            (Some("https://h/x.iso"), 64)
+        );
         let inconnue = resolve_image(&catalog, "absente").err().map(|e| e.code);
         assert_eq!(inconnue, Some(Code::InvalidArgument));
         let page = resolve_image(&catalog, "w")
