@@ -62,17 +62,23 @@ def scoop(r: Release) -> str:
     return json.dumps(manifeste, indent=2) + "\n"
 
 
-def homebrew(r: Release) -> str:
-    def bloc(nom: str) -> str:
-        return f'      url "{r.url(nom)}"\n      sha256 "{r.sha(nom)}"\n'
+HOMEBREW_CLI_DESCRIPTION = "Bonk without a window: bootable media writer, command line only"
 
-    return f'''class Bonk < Formula
-  desc "{HOMEBREW_DESCRIPTION}"
+
+def homebrew(r: Release, paquet: str = "bonk") -> str:
+    """`paquet`: `bonk` (window and command line) or `bonk-cli` (command line only)."""
+    cli = paquet == "bonk-cli"
+
+    def bloc(nom: str) -> str:
+        return f'      url "{r.url(nom, paquet)}"\n      sha256 "{r.sha(nom, paquet)}"\n'
+
+    return f'''class {"BonkCli" if cli else "Bonk"} < Formula
+  desc "{HOMEBREW_CLI_DESCRIPTION if cli else HOMEBREW_DESCRIPTION}"
   homepage "https://bonk-os.app"
   version "{r.version}"
   license "{LICENCE}"
 
-  conflicts_with "bonk-cli", because: "both install the bonk command"
+  conflicts_with "{"bonk" if cli else "bonk-cli"}", because: "both install the bonk command"
 
   on_macos do
     depends_on macos: :monterey
@@ -199,6 +205,7 @@ def main() -> None:
     sortie.mkdir(parents=True, exist_ok=True)
     (sortie / "bonk.json").write_text(scoop(r), encoding="utf-8")
     (sortie / "bonk.rb").write_text(homebrew(r), encoding="utf-8")
+    (sortie / "bonk-cli.rb").write_text(homebrew(r, "bonk-cli"), encoding="utf-8")
     (sortie / "bonkos-bin.PKGBUILD").write_text(aur(r, "bonk"), encoding="utf-8")
     (sortie / "bonkos-cli-bin.PKGBUILD").write_text(aur(r, "bonk-cli"), encoding="utf-8")
     for nom, contenu in winget(r).items():
