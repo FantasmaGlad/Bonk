@@ -32,7 +32,13 @@ android {
         // Shown, never failing: an AndroidX library's own lint rules, targetSdk held until an Android 17
         // device exists, and newer Gradle or library versions, which Dependabot proposes.
         informational +=
-            setOf("ObsoleteLintCustomCheck", "OldTargetApi", "AndroidGradlePluginVersion", "NewerVersionAvailable")
+            setOf(
+                "ObsoleteLintCustomCheck",
+                "OldTargetApi",
+                "AndroidGradlePluginVersion",
+                "NewerVersionAvailable",
+                "GradleDependency",
+            )
     }
     namespace = "app.bonkos.bonk"
     compileSdk = 37

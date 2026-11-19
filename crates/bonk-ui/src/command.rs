@@ -77,6 +77,23 @@ impl<'a> WriteView<'a> {
     }
 }
 
+#[must_use]
+pub fn cache_list_args() -> Vec<String> {
+    ["cache", "list", "--json"].map(str::to_owned).into()
+}
+
+#[must_use]
+pub fn cache_clean_args(sha256: &str) -> Vec<String> {
+    ["cache", "clean", sha256, "--json"]
+        .map(str::to_owned)
+        .into()
+}
+
+#[must_use]
+pub fn config_set_args(key: &str, value: &str) -> Vec<String> {
+    ["config", "set", key, value].map(str::to_owned).into()
+}
+
 /// Commands giving what the window shows: the list, the selected disk's detail and, when an image is entered,
 /// the write itself.
 #[must_use]

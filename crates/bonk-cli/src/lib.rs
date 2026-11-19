@@ -29,7 +29,7 @@ mod slot;
 mod transfer;
 mod vault;
 
-pub use command_line::check_command_line;
+pub use command_line::{check_args, check_command_line};
 pub use config::{ViewDefaults, WindowRequest};
 use fixture_guard::fixture_reads;
 use grammar::{Cli, Command, DiskAction};

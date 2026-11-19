@@ -1,5 +1,8 @@
 /// Standard output of a `bonk` command, or its last error line.
-pub(crate) fn run_json(program: &std::path::Path, args: &[&str]) -> Result<Vec<u8>, String> {
+pub(crate) fn run_json<S: AsRef<std::ffi::OsStr>>(
+    program: &std::path::Path,
+    args: &[S],
+) -> Result<Vec<u8>, String> {
     let mut command = std::process::Command::new(program);
     bonk_hal::console::hide_child_console(&mut command);
     let output = command
