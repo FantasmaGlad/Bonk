@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""Boots a Windows installation drive image under QEMU until the setup screen shows.
-
-Windows setup writes nothing on the serial console: the proof is the screen, a solid background and the light
-blue frame of the setup window, measured on Windows 10, 11 and Server 2022 boots.
-"""
 import argparse
 import os
 import subprocess
@@ -13,7 +8,9 @@ import time
 from qemu_machine import connect_monitor, firmware
 
 MONITOR = "moniteur.sock"
-# Purple for the client editions, navy for Server.
+# Windows setup writes nothing on the serial console: the proof is the screen, a solid background and the light
+# blue frame of the setup window, measured on Windows 10, 11 and Server 2022 boots. Purple for the client
+# editions, navy for Server.
 SETUP_BACKGROUNDS = {(24, 0, 82), (0, 25, 64)}
 WINDOW_FRAME = (185, 209, 234)
 BACKGROUND_SHARE = 0.30
