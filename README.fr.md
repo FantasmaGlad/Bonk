@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://github.com/FantasmaGlad/Bonk/releases/latest"><b>Téléchargements</b></a> &nbsp;·&nbsp;
   <a href="https://bonk-os.app"><b>Site</b></a> &nbsp;·&nbsp;
-  <a href="https://bonk-os.app/reference/"><b>Commandes</b></a> &nbsp;·&nbsp;
+  <a href="https://bonk-os.app/commands/"><b>Commandes</b></a> &nbsp;·&nbsp;
   <a href="README.md"><b>English</b></a>
 </p>
 
@@ -32,66 +32,79 @@ Bonk avec sa fenêtre et la commande `bonk` ; sur Android, l'application.
 
 | Plateforme | Téléchargement | État |
 | :--- | :--- | :--- |
-| <img src="docs/icons/debian.svg" width="20" height="20" valign="middle" alt="debian">&nbsp;**Debian,&nbsp;Ubuntu** | [x86_64&nbsp;.deb](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk_0.0.8-1_amd64.deb)&nbsp;·&nbsp;[ARM64&nbsp;.deb](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk_0.0.8-1_arm64.deb) | Écrit les clés USB |
-| <img src="docs/icons/fedora.svg" width="20" height="20" valign="middle" alt="fedora">&nbsp;**Fedora,&nbsp;RHEL** | [x86_64&nbsp;.rpm](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-0.0.8-1.x86_64.rpm)&nbsp;·&nbsp;[ARM64&nbsp;.rpm](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-0.0.8-1.aarch64.rpm) | Écrit les clés USB |
-| <img src="docs/icons/opensuse.svg" width="20" height="20" valign="middle" alt="opensuse">&nbsp;**openSUSE,&nbsp;SLES** | [x86_64&nbsp;.rpm](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-0.0.8-1.x86_64.rpm)&nbsp;·&nbsp;[ARM64&nbsp;.rpm](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-0.0.8-1.aarch64.rpm) | Écrit les clés USB |
-| <img src="docs/icons/arch.svg" width="20" height="20" valign="middle" alt="arch">&nbsp;**Arch&nbsp;Linux** | [x86_64&nbsp;.pkg.tar.zst](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-0.0.8-1-x86_64.pkg.tar.zst) | Écrit les clés USB |
-| <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="linux">&nbsp;**Tout&nbsp;Linux** | [x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-0.0.8-linux-x86_64.tar.gz)&nbsp;·&nbsp;[ARM64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-0.0.8-linux-aarch64.tar.gz)&nbsp;·&nbsp;[x86](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-0.0.8-linux-i686.tar.gz) | Écrit les clés USB ; x86 non essayé |
-| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Windows&nbsp;10+** | [x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-0.0.8-windows-x86_64-setup.exe)&nbsp;·&nbsp;[ARM64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-0.0.8-windows-aarch64-setup.exe)&nbsp;·&nbsp;[x86](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-0.0.8-windows-i686-setup.exe) | Écrit les clés USB |
-| <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [Universal&nbsp;.dmg](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-0.0.8-macos-universal.dmg) | Fenêtre et ligne de commande ; CI seulement, jamais lancée sur un Mac |
-| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Android&nbsp;8+** | [ARM64&nbsp;.apk](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-0.0.8-android-arm64.apk)&nbsp;·&nbsp;[x86_64&nbsp;.apk](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-0.0.8-android-x86_64.apk) | Bêta, un téléphone essayé |
-
-Mêmes paquets sur les dérivées : <img src="docs/icons/linuxmint.svg" width="16" height="16" valign="middle" alt="linuxmint" title="Linux Mint"> Linux Mint · <img src="docs/icons/popos.svg" width="16" height="16" valign="middle" alt="popos" title="Pop!_OS"> Pop!_OS · <img src="docs/icons/zorin.svg" width="16" height="16" valign="middle" alt="zorin" title="Zorin OS"> Zorin OS · <img src="docs/icons/raspberrypi.svg" width="16" height="16" valign="middle" alt="raspberrypi" title="Raspberry Pi OS"> Raspberry Pi OS · <img src="docs/icons/rockylinux.svg" width="16" height="16" valign="middle" alt="rockylinux" title="Rocky Linux"> Rocky Linux · <img src="docs/icons/almalinux.svg" width="16" height="16" valign="middle" alt="almalinux" title="AlmaLinux"> AlmaLinux · <img src="docs/icons/manjaro.svg" width="16" height="16" valign="middle" alt="manjaro" title="Manjaro"> Manjaro · <img src="docs/icons/endeavouros.svg" width="16" height="16" valign="middle" alt="endeavouros" title="EndeavourOS"> EndeavourOS · <img src="docs/icons/cachyos.svg" width="16" height="16" valign="middle" alt="cachyos" title="CachyOS"> CachyOS
-
-Chromebook : dans l'environnement de développement Linux (Crostini, Debian), le paquet Debian ou le [dépôt APT](https://bonk-os.app/install/). Activer d'abord la clé USB pour Linux dans les paramètres de ChromeOS (environnement de développement Linux, Gérer les périphériques USB) ; pour l'application Android, l'activer pour Google Play Store.
-
-Fichiers portables `.exe`, `.zip` et `.tar.gz` : [dernière version](https://github.com/FantasmaGlad/Bonk/releases/latest).
-
-Empreintes : [`SHA256SUMS`](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/SHA256SUMS). Provenance : `gh attestation verify <fichier> --repo FantasmaGlad/Bonk`.
+| <img src="docs/icons/debian.svg" width="20" height="20" valign="middle" alt="debian">&nbsp;**Debian,&nbsp;Ubuntu** | [x86_64 .deb](https://packages.bonk-os.app/download/bonk_amd64.deb) · [ARM64 .deb](https://packages.bonk-os.app/download/bonk_arm64.deb) | Écrit les clés USB |
+| <img src="docs/icons/fedora.svg" width="20" height="20" valign="middle" alt="fedora">&nbsp;**Fedora,&nbsp;RHEL** | [x86_64 .rpm](https://packages.bonk-os.app/download/bonk.x86_64.rpm) · [ARM64 .rpm](https://packages.bonk-os.app/download/bonk.aarch64.rpm) | Écrit les clés USB |
+| <img src="docs/icons/opensuse.svg" width="20" height="20" valign="middle" alt="opensuse">&nbsp;**openSUSE,&nbsp;SLES** | [x86_64 .rpm](https://packages.bonk-os.app/download/bonk.x86_64.rpm) · [ARM64 .rpm](https://packages.bonk-os.app/download/bonk.aarch64.rpm) | Écrit les clés USB |
+| <img src="docs/icons/arch.svg" width="20" height="20" valign="middle" alt="arch">&nbsp;**Arch&nbsp;Linux** | [x86_64 .pkg.tar.zst](https://packages.bonk-os.app/download/bonk-x86_64.pkg.tar.zst) | Écrit les clés USB |
+| <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="linux">&nbsp;**Tout&nbsp;Linux** | [x86_64](https://packages.bonk-os.app/download/bonk-linux-x86_64.tar.gz) · [ARM64](https://packages.bonk-os.app/download/bonk-linux-aarch64.tar.gz) · [x86](https://packages.bonk-os.app/download/bonk-linux-i686.tar.gz) | Écrit les clés USB ; x86 non essayé |
+| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Windows&nbsp;10+** | [x86_64](https://packages.bonk-os.app/download/bonk-windows-x86_64-setup.exe) · [ARM64](https://packages.bonk-os.app/download/bonk-windows-aarch64-setup.exe) · [x86](https://packages.bonk-os.app/download/bonk-windows-i686-setup.exe) | Écrit les clés USB |
+| <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [Universal .dmg](https://packages.bonk-os.app/download/bonk-macos-universal.dmg) | CI seulement, jamais lancée sur un Mac |
+| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Android&nbsp;8+** | [ARM64 .apk](https://packages.bonk-os.app/download/bonk-android-arm64.apk) · [x86_64 .apk](https://packages.bonk-os.app/download/bonk-android-x86_64.apk) | Bêta, un téléphone essayé |
 
 ## Ligne de commande seule
 
 Sans fenêtre ni bibliothèque graphique, pour les serveurs et les scripts. S'installe sans droits d'administrateur ; écrire sur une clé demande l'autorisation du système.
 
+| Plateforme | Téléchargement | État |
+| :--- | :--- | :--- |
+| <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="linux">&nbsp;**Tout&nbsp;Linux** | [x86_64](https://packages.bonk-os.app/download/bonk-cli-linux-x86_64.tar.gz) · [ARM64](https://packages.bonk-os.app/download/bonk-cli-linux-aarch64.tar.gz) · [x86](https://packages.bonk-os.app/download/bonk-cli-linux-i686.tar.gz) | Écrit les clés USB ; x86 non essayé |
+| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Windows&nbsp;10+** | [x86_64](https://packages.bonk-os.app/download/bonk-cli-windows-x86_64.zip) · [ARM64](https://packages.bonk-os.app/download/bonk-cli-windows-aarch64.zip) · [x86](https://packages.bonk-os.app/download/bonk-cli-windows-i686.zip) | Écrit les clés USB |
+| <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [x86_64](https://packages.bonk-os.app/download/bonk-cli-macos-x86_64.tar.gz) · [ARM64](https://packages.bonk-os.app/download/bonk-cli-macos-aarch64.tar.gz) · [Universal](https://packages.bonk-os.app/download/bonk-cli-macos-universal.tar.gz) | CI seulement, sans vraie clé |
+| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Termux** | [ARM64](https://packages.bonk-os.app/download/bonk-cli-android-aarch64.tar.gz) · [x86_64](https://packages.bonk-os.app/download/bonk-cli-android-x86_64.tar.gz) | CI seulement, jamais sur un téléphone |
+
+## Gestionnaires de paquets
+
+Ajouter d'abord le dépôt signé de Bonk, comme indiqué sur [bonk-os.app/install](https://bonk-os.app/install/).
+
+| Gestionnaire | Bonk | Ligne de commande seule |
+| :--- | :--- | :--- |
+| <img src="docs/icons/debian.svg" width="20" height="20" valign="middle" alt="debian">&nbsp;**APT** | `sudo apt install bonk` | `sudo apt install bonk-cli` |
+| <img src="docs/icons/fedora.svg" width="20" height="20" valign="middle" alt="fedora">&nbsp;**DNF** | `sudo dnf install bonk` | `sudo dnf install --allowerasing bonk-cli` |
+| <img src="docs/icons/opensuse.svg" width="20" height="20" valign="middle" alt="opensuse">&nbsp;**Zypper** | `sudo zypper install bonk` | `sudo zypper install bonk-cli` |
+| <img src="docs/icons/arch.svg" width="20" height="20" valign="middle" alt="arch">&nbsp;**pacman** | `sudo pacman -S bonk` | `sudo pacman -S bonk-cli` |
+| <img src="docs/icons/homebrew.svg" width="20" height="20" valign="middle" alt="homebrew">&nbsp;**Homebrew** | `brew install fantasmaglad/bonk/bonk` | `brew install fantasmaglad/bonk/bonk-cli` |
+| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Scoop** | `scoop install` [bonk.json](https://packages.bonk-os.app/scoop/bonk.json) | `scoop install` [bonk-cli.json](https://packages.bonk-os.app/scoop/bonk-cli.json) |
+
+Avec APT, DNF (`--allowerasing`), Zypper et pacman, installer `bonk-cli` remplace `bonk` (Zypper et pacman demandent d'abord) ; avec Homebrew et Scoop, retirer `bonk` d'abord. Pour revenir, retirer `bonk-cli`, puis installer `bonk`.
+
+## Installer
+
+### Script Linux et macOS
+
+La ligne de commande seule, dans `~/.local/bin`, son empreinte contrôlée contre la version publiée.
+
 ```bash
 curl -fsSL https://packages.bonk-os.app/install.sh | sh
 ```
+
+### Windows
+
+La ligne de commande seule, pour cet utilisateur. Scoop installe l'un ou l'autre paquet depuis son manifeste.
 
 ```powershell
 irm https://packages.bonk-os.app/install.ps1 | iex
 ```
 
-Termux sous Android, sans root : l'application Termux:API de la même source que Termux (F-Droid ou GitHub), puis
+### Termux
 
-```bash
-pkg install termux-api
-curl -fsSL https://packages.bonk-os.app/install.sh | sh
-```
-
-Chromebook, dans l'environnement de développement Linux (Crostini, Debian), avec la clé USB activée pour Linux dans les paramètres de ChromeOS.
+Sous Android, sans root : l'application Termux:API de la même source que Termux (F-Droid ou GitHub). Le script ajoute le dépôt de Bonk à `pkg`, puis `pkg upgrade` le tient à jour.
 
 ```bash
 curl -fsSL https://packages.bonk-os.app/install.sh | sh
 ```
 
-Chaque gestionnaire de paquets la propose aussi sous le nom `bonk-cli`, dans les [mêmes dépôts](https://bonk-os.app/install/) que `bonk`.
+### Chromebook
 
-| Gestionnaire | Installer |
-| :--- | :--- |
-| <img src="docs/icons/debian.svg" width="20" height="20" valign="middle" alt="debian">&nbsp;**APT** | `sudo apt install bonk-cli` |
-| <img src="docs/icons/fedora.svg" width="20" height="20" valign="middle" alt="fedora">&nbsp;**DNF** | `sudo dnf install --allowerasing bonk-cli` |
-| <img src="docs/icons/opensuse.svg" width="20" height="20" valign="middle" alt="opensuse">&nbsp;**Zypper** | `sudo zypper install bonk-cli` |
-| <img src="docs/icons/arch.svg" width="20" height="20" valign="middle" alt="arch">&nbsp;**pacman** | `sudo pacman -S bonk-cli` |
-| <img src="docs/icons/homebrew.svg" width="20" height="20" valign="middle" alt="homebrew">&nbsp;**Homebrew** | `brew uninstall bonk && brew install fantasmaglad/bonk/bonk-cli` |
-| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Scoop** | `scoop uninstall bonk`, puis `scoop install` et l'adresse ci-dessous |
+Dans l'environnement de développement Linux (Crostini, Debian), le paquet Debian, le dépôt APT ou le script. Activer d'abord la clé USB pour Linux dans les paramètres de ChromeOS (environnement de développement Linux, Gérer les périphériques USB) ; pour l'application Android, l'activer plutôt pour Google Play Store.
 
-Scoop : `scoop install https://packages.bonk-os.app/scoop/bonk-cli.json`.
+### Dérivées
 
-Avec APT, DNF, Zypper et pacman, installer `bonk-cli` remplace `bonk` (Zypper et pacman demandent d'abord) ; avec Homebrew et Scoop, retirer `bonk` d'abord. Pour revenir, retirer `bonk-cli`, puis installer `bonk`.
+Les mêmes paquets et dépôts servent <img src="docs/icons/linuxmint.svg" width="16" height="16" valign="middle" alt="linuxmint"> Linux Mint · <img src="docs/icons/popos.svg" width="16" height="16" valign="middle" alt="popos"> Pop!_OS · <img src="docs/icons/zorin.svg" width="16" height="16" valign="middle" alt="zorin"> Zorin OS · <img src="docs/icons/raspberrypi.svg" width="16" height="16" valign="middle" alt="raspberrypi"> Raspberry Pi OS · <img src="docs/icons/rockylinux.svg" width="16" height="16" valign="middle" alt="rockylinux"> Rocky Linux · <img src="docs/icons/almalinux.svg" width="16" height="16" valign="middle" alt="almalinux"> AlmaLinux · <img src="docs/icons/manjaro.svg" width="16" height="16" valign="middle" alt="manjaro"> Manjaro · <img src="docs/icons/endeavouros.svg" width="16" height="16" valign="middle" alt="endeavouros"> EndeavourOS · <img src="docs/icons/cachyos.svg" width="16" height="16" valign="middle" alt="cachyos"> CachyOS.
 
-| Plateforme | Téléchargement | État |
-| :--- | :--- | :--- |
-| <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="linux">&nbsp;**Tout&nbsp;Linux** | [x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-cli-0.0.8-linux-x86_64.tar.gz)&nbsp;·&nbsp;[ARM64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-cli-0.0.8-linux-aarch64.tar.gz)&nbsp;·&nbsp;[x86](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-cli-0.0.8-linux-i686.tar.gz) | Écrit les clés USB |
-| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Windows&nbsp;10+** | [x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-cli-0.0.8-windows-x86_64.zip)&nbsp;·&nbsp;[ARM64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-cli-0.0.8-windows-aarch64.zip)&nbsp;·&nbsp;[x86](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-cli-0.0.8-windows-i686.zip) | Écrit les clés USB |
-| <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-cli-0.0.8-macos-x86_64.tar.gz)&nbsp;·&nbsp;[ARM64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-cli-0.0.8-macos-aarch64.tar.gz)&nbsp;·&nbsp;[Universal](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-cli-0.0.8-macos-universal.tar.gz) | CI seulement, pas de vraie clé |
-| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Termux** | [ARM64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-cli-0.0.8-android-aarch64.tar.gz)&nbsp;·&nbsp;[x86_64](https://github.com/FantasmaGlad/Bonk/releases/download/v0.0.8/bonk-cli-0.0.8-android-x86_64.tar.gz) | CI seulement, pas encore essayé sur un téléphone |
+### Fichiers portables
+
+Fichiers portables `.exe`, `.zip` et `.tar.gz` : [dernière version](https://github.com/FantasmaGlad/Bonk/releases/latest).
+
+### Empreintes et provenance
+
+Empreintes : [`SHA256SUMS`](https://packages.bonk-os.app/download/SHA256SUMS). Provenance : `gh attestation verify <fichier> --repo FantasmaGlad/Bonk`.
