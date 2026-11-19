@@ -1,6 +1,5 @@
 #![allow(clippy::too_many_lines, reason = "a scenario test reads in one piece")]
 
-use std::path::Path;
 use std::process::Command;
 
 mod common;
@@ -327,7 +326,11 @@ fn sans_secret(capture: &str, direct: &serde_json::Value) {
 
 #[cfg(target_os = "linux")]
 /// Replaying must never be able to write to a real disk, nor read the system's sources.
-fn rejeu_sans_ecriture(capture: &Path, direct: &serde_json::Value, dossier: &Path) -> Resultat {
+fn rejeu_sans_ecriture(
+    capture: &std::path::Path,
+    direct: &serde_json::Value,
+    dossier: &std::path::Path,
+) -> Resultat {
     let id = direct["disks"][0]["id"].as_str().unwrap_or("x").to_owned();
     let refus = bonk()
         .arg("--fixture")
