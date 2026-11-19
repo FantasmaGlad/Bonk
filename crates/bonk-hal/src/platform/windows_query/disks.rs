@@ -58,6 +58,25 @@ pub(super) fn layout(handle: &Handle) -> io::Result<Vec<RawPartition>> {
         .collect())
 }
 
+/// Size and sector size; `None` without a medium (empty card reader).
+fn geometry(handle: &Handle) -> io::Result<Option<(i64, u32)>> {
+    let geometry = match ioctl(
+        handle,
+        IOCTL_DISK_GET_DRIVE_GEOMETRY_EX,
+        &[],
+        size_of::<DISK_GEOMETRY_EX>() + 512,
+    ) {
+        Ok(geometry) => geometry,
+        Err(error) if has_code(&error, &[ERROR_NOT_READY, ERROR_NO_MEDIA_IN_DRIVE]) => {
+            return Ok(None);
+        }
+        Err(error) => return Err(error),
+    };
+    // SAFETY: the call succeeded and wrote the geometry into this aligned buffer.
+    let geometry = unsafe { &*geometry.as_ptr().cast::<DISK_GEOMETRY_EX>() };
+    Ok(Some((geometry.DiskSize, geometry.Geometry.BytesPerSector)))
+}
+
 /// `None` if it does not exist or has no medium (empty card reader).
 pub(super) fn read_disk(number: u32, instance: Option<String>) -> io::Result<Option<RawDisk>> {
     let handle = match open_for_query(&format!(r"\\.\PhysicalDrive{number}")) {
@@ -84,22 +103,8 @@ pub(super) fn read_disk(number: u32, instance: Option<String>) -> io::Result<Opt
     let descriptor = unsafe { &*property.as_ptr().cast::<STORAGE_DEVICE_DESCRIPTOR>() };
     let raw = as_bytes(&property);
 
-    let geometry = match ioctl(
-        &handle,
-        IOCTL_DISK_GET_DRIVE_GEOMETRY_EX,
-        &[],
-        size_of::<DISK_GEOMETRY_EX>() + 512,
-    ) {
-        Ok(geometry) => geometry,
-        Err(error) if has_code(&error, &[ERROR_NOT_READY, ERROR_NO_MEDIA_IN_DRIVE]) => {
-            return Ok(None);
-        }
-        Err(error) => return Err(error),
-    };
-    // SAFETY: the call succeeded and wrote the geometry into this aligned buffer.
-    let (size, bytes_per_sector) = unsafe {
-        let geometry = &*geometry.as_ptr().cast::<DISK_GEOMETRY_EX>();
-        (geometry.DiskSize, geometry.Geometry.BytesPerSector)
+    let Some((size, bytes_per_sector)) = geometry(&handle)? else {
+        return Ok(None);
     };
     let partitions = layout(&handle)?;
     Ok(Some(RawDisk {

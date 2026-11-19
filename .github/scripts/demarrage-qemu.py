@@ -86,7 +86,7 @@ def add_console(monitor, loader, entry, line):
         monitor.keys("ret")
 
 
-def main():
+def arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument("image")
     parser.add_argument("mode", choices=["bios", "uefi", "secureboot"])
@@ -99,7 +99,11 @@ def main():
     parser.add_argument("--delai", type=int, default=600)
     parser.add_argument("--attente", type=int, help="secondes avant le menu, en remplacement du défaut")
     parser.add_argument("--processeur", choices=["x86_64", "aarch64"], default="x86_64")
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main():
+    args = arguments()
 
     image = os.path.abspath(args.image)
     os.makedirs(args.dossier, exist_ok=True)

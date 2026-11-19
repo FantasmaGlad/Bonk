@@ -145,6 +145,37 @@ fn read_full(src: &mut dyn Read, buf: &mut [u8]) -> io::Result<usize> {
     Ok(filled)
 }
 
+fn ensure_room(dev: &dyn BlockDevice, size_hint: Option<u64>) -> Result<(), WriteError> {
+    match size_hint {
+        Some(needed) if needed > dev.size() => Err(WriteError::TooLarge {
+            device_size: dev.size(),
+            needed: Some(needed),
+        }),
+        _ => Ok(()),
+    }
+}
+
+/// Writes the first `n` bytes of `buf` zero-padded to whole blocks; returns the padded length.
+fn write_padded(
+    dev: &mut dyn BlockDevice,
+    offset: u64,
+    buf: &mut [u8],
+    n: usize,
+    block: u64,
+) -> Result<u64, WriteError> {
+    let padded = (n as u64).div_ceil(block) * block;
+    let end = usize::try_from(padded).unwrap_or(n);
+    buf[n..end].fill(0);
+    if offset + padded > dev.size() {
+        return Err(WriteError::TooLarge {
+            device_size: dev.size(),
+            needed: None,
+        });
+    }
+    dev.write_at(offset, &buf[..end])?;
+    Ok(padded)
+}
+
 /// If `size_hint` exceeds the drive, nothing is touched.
 ///
 /// # Errors
@@ -156,14 +187,7 @@ pub fn write_image(
     chunk: usize,
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<WriteReport, WriteError> {
-    if let Some(needed) = size_hint
-        && needed > dev.size()
-    {
-        return Err(WriteError::TooLarge {
-            device_size: dev.size(),
-            needed: Some(needed),
-        });
-    }
+    ensure_room(dev, size_hint)?;
     let block = u64::from(dev.block_size());
     let mut buf = vec![0u8; chunk_for(chunk, dev.block_size())];
     let mut hasher = Sha256::new();
@@ -178,15 +202,7 @@ pub fn write_image(
         if n == 0 {
             break;
         }
-        let padded = (n as u64).div_ceil(block) * block;
-        buf[n..usize::try_from(padded).unwrap_or(n)].fill(0);
-        if offset + padded > dev.size() {
-            return Err(WriteError::TooLarge {
-                device_size: dev.size(),
-                needed: None,
-            });
-        }
-        dev.write_at(offset, &buf[..usize::try_from(padded).unwrap_or(n)])?;
+        let padded = write_padded(dev, offset, &mut buf, n, block)?;
         hasher.update(&buf[..n]);
         written += n as u64;
         offset += padded;
