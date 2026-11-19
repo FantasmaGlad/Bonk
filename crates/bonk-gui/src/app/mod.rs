@@ -209,7 +209,7 @@ impl App {
                 let program = self.program();
                 Task::perform(
                     off_thread_result(move || {
-                        command::run_json(&program, &["cache", "list", "--json"])
+                        command::run_json(&program, &bonk_ui::command::cache_list_args())
                             .and_then(|output| library::parse(&output))
                     }),
                     |listed| Message::Library(LibraryMessage::Listed(listed)),
@@ -219,7 +219,7 @@ impl App {
                 let program = self.program();
                 Task::perform(
                     off_thread_result(move || {
-                        command::run_json(&program, &["cache", "clean", &sha256, "--json"])
+                        command::run_json(&program, &bonk_ui::command::cache_clean_args(&sha256))
                             .map(drop)
                     }),
                     |removed| Message::Library(LibraryMessage::Removed(removed)),

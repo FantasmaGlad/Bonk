@@ -6,7 +6,7 @@ pub(super) fn save(program: &Path, key: &str, value: &str) -> bool {
     let mut command = Command::new(program);
     bonk_hal::console::hide_child_console(&mut command);
     let saved = command
-        .args(["config", "set", key, value])
+        .args(bonk_ui::command::config_set_args(key, value))
         .stdin(Stdio::null())
         .output()
         .is_ok_and(|output| output.status.success());
