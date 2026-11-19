@@ -50,6 +50,7 @@ fn debian_catalog() -> CatalogState {
                 source: ChoiceSource::Download {
                     url: "https://cdimage.debian.org/x.iso".to_owned(),
                     sha256: "ab".repeat(32),
+                    file_name: None,
                 },
                 desktop: Some("gnome".to_owned()),
                 media: "usb".to_owned(),

@@ -18,16 +18,20 @@ pub(crate) fn run_write(
     err: &mut dyn Write,
 ) -> u8 {
     bonk_hal::interrupt::install();
-    let (source, expected_sha256) = match &args.image {
+    let (source, expected_sha256, file_name) = match &args.image {
         Some(id) => match crate::catalog::image_source(
             id,
             args.catalog_url.as_deref(),
             args.cache_dir.as_deref(),
         ) {
-            Ok((source, sha256)) => (source, Some(sha256)),
+            Ok(found) => (found.url, Some(found.sha256), found.file_name),
             Err(error) => return finish::<()>(Err(error), &args.common, out, err, |_, _| Ok(())),
         },
-        None => (args.source.clone().unwrap_or_default(), args.sha256.clone()),
+        None => (
+            args.source.clone().unwrap_or_default(),
+            args.sha256.clone(),
+            args.file_name.clone(),
+        ),
     };
     let mut job = write_job(args, source.clone(), expected_sha256);
     log::debug!(target: "bonk::cli", target_kind = if args.common.simulate { "image" } else { "disk" }, dry_run = args.dry_run; "command write");
@@ -46,6 +50,7 @@ pub(crate) fn run_write(
             source: &source,
             sha256_file: args.sha256_file.as_deref(),
             cache_dir: args.cache_dir.as_deref(),
+            file_name: file_name.as_deref(),
         };
         fetch::write(&request, &mut job, deps, &mut progress)
     };

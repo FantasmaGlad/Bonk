@@ -19,6 +19,7 @@ pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
     let download = |url: &str, digit: &str| catalog::ChoiceSource::Download {
         url: url.to_owned(),
         sha256: digit.repeat(64),
+        file_name: None,
     };
     vec![catalog::System {
         id: String::new(),

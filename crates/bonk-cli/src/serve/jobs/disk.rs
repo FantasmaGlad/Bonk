@@ -7,6 +7,7 @@ use bonk_hal::{Elevation, FilterOptions};
 use crate::errors::Code;
 use bonk_ops::job::{FormatJob, RepairJob, Target, TraceIo, VerifyJob, WriteJob, WriteMode};
 
+use crate::fetch;
 use crate::serve::Config;
 use crate::serve::params::TransferParams;
 use crate::serve::protocol::{Failure, failure};
@@ -87,27 +88,26 @@ pub(in crate::serve) fn prepare_disk(
     })
 }
 
-/// A catalog image takes its hash from the signed catalog; no client hash may replace it.
+/// A catalog image takes its hash and file name from the signed catalog; no client value may replace them.
 pub(in crate::serve) fn write_source(
     p: &TransferParams,
-) -> Result<(PathBuf, Option<String>), Failure> {
+) -> Result<(PathBuf, Option<String>, Option<String>), Failure> {
     let Some(id) = &p.image else {
-        return Ok((p.source()?, p.sha256.clone()));
+        return Ok((p.source()?, p.sha256.clone(), p.file_name.clone()));
     };
-    if p.sha256.is_some() || p.sha256_file.is_some() {
+    if p.sha256.is_some() || p.sha256_file.is_some() || p.file_name.is_some() {
         return Err(failure(
             Code::InvalidArgument,
-            "image takes its hash from the signed catalog: sha256 and sha256_file are refused",
+            "image takes its hash and file name from the signed catalog: sha256, sha256_file and file_name are refused",
         ));
     }
-    let (source, hash) =
-        crate::catalog::image_source(id, p.catalog_url.as_deref(), p.cache_dir.as_deref())
-            .map_err(|e| failure(e.code, e.message))?;
-    Ok((source, Some(hash)))
+    let found = crate::catalog::image_source(id, p.catalog_url.as_deref(), p.cache_dir.as_deref())
+        .map_err(|e| failure(e.code, e.message))?;
+    Ok((found.url, Some(found.sha256), found.file_name))
 }
 
 pub(in crate::serve) fn write_task(a: DiskArgs, p: TransferParams) -> Result<Task, Failure> {
-    let (source, expected_sha256) = write_source(&p)?;
+    let (source, expected_sha256, file_name) = write_source(&p)?;
     Ok(Task::Write(
         Box::new(WriteJob {
             target: a.target,
@@ -124,7 +124,10 @@ pub(in crate::serve) fn write_task(a: DiskArgs, p: TransferParams) -> Result<Tas
             elevation: a.elevation,
             force: p.force,
         }),
-        p.sha256_file,
-        p.cache_dir,
+        fetch::Fetch {
+            sha256_file: p.sha256_file,
+            cache_dir: p.cache_dir,
+            file_name,
+        },
     ))
 }

@@ -79,8 +79,16 @@ pub(crate) fn load(
     load_from(&Access::default(), url, cache_dir).map(|(loaded, dir, _)| (loaded, dir))
 }
 
-/// Address and hash of a catalog image.
-pub(crate) fn resolve_image(catalog: &Catalog, id: &str) -> Result<(PathBuf, String), JobError> {
+/// What a catalog image gives a download.
+#[derive(Debug)]
+pub(crate) struct CatalogSource {
+    pub(crate) url: PathBuf,
+    pub(crate) sha256: String,
+    /// Set only when the address does not end with the file's name.
+    pub(crate) file_name: Option<String>,
+}
+
+pub(crate) fn resolve_image(catalog: &Catalog, id: &str) -> Result<CatalogSource, JobError> {
     let image = catalog
         .images
         .iter()
@@ -101,7 +109,11 @@ pub(crate) fn resolve_image(catalog: &Catalog, id: &str) -> Result<(PathBuf, Str
         });
     }
     match &image.source {
-        ImageSource::Download { url, sha256, .. } => Ok((PathBuf::from(url), sha256.clone())),
+        ImageSource::Download { url, sha256, .. } => Ok(CatalogSource {
+            url: PathBuf::from(url),
+            sha256: sha256.clone(),
+            file_name: image.file_name.clone(),
+        }),
         ImageSource::OfficialPage { official_page } => Err(JobError {
             code: Code::InvalidArgument,
             message: format!(
@@ -116,7 +128,7 @@ pub(crate) fn image_source(
     id: &str,
     url: Option<&str>,
     cache_dir: Option<&Path>,
-) -> Result<(PathBuf, String), JobError> {
+) -> Result<CatalogSource, JobError> {
     let (loaded, _) = load(url, cache_dir)?;
     resolve_image(&loaded.catalog, id)
 }

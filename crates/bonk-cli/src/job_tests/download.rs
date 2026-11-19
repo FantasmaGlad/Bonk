@@ -180,3 +180,42 @@ fn le_flux_json_finit_par_un_evenement_d_erreur_avec_son_code() {
     assert_eq!(last["code"], "E3005", "{out}");
     assert!(err.contains("E3005"), "{err}");
 }
+
+#[test]
+fn une_adresse_de_partage_se_garde_sous_le_nom_donne() {
+    let body = vec![0xAB; 1 << 20];
+    let (url, hits) = serve_file(body.clone());
+    let sha = sha256_of(&body);
+    let scenario = Scenario::new();
+    // (given name, exit code, file kept in the cache)
+    for (nom, attendu, garde) in [
+        ("GLF-OS-STABLE.iso", 0, Some("GLF-OS-STABLE.iso")),
+        ("../evade.iso", EXIT_USAGE, None),
+    ] {
+        let cache = TempSource::dir("cache-nom");
+        let (code, out, err) = scenario.run(&[
+            "write",
+            "usb-a",
+            &url,
+            "--sha256",
+            &sha,
+            "--file-name",
+            nom,
+            "--cache-dir",
+            &cache.arg(),
+            "--yes",
+            "--mode",
+            "raw",
+            "--progress",
+            "none",
+        ]);
+        assert_eq!(code, attendu, "{nom}: {out}{err}");
+        if let Some(garde) = garde {
+            let chemin = crate::cache::image_path(std::path::Path::new(&cache.arg()), &sha, garde);
+            assert!(chemin.is_file(), "{}", chemin.display());
+        } else {
+            assert!(err.contains("one path segment"), "{err}");
+        }
+    }
+    assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 1);
+}

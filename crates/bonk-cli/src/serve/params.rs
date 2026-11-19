@@ -96,6 +96,8 @@ pub(super) struct TransferParams {
     pub(super) sha256: Option<String>,
     pub(super) sha256_file: Option<String>,
     pub(super) cache_dir: Option<PathBuf>,
+    /// Name to keep a downloaded address under, when the address does not end with it.
+    pub(super) file_name: Option<String>,
     /// `auto` (default), `raw` or `extract`.
     pub(super) mode: Option<String>,
     /// `never` (default: nobody at the screen) or `auto`.

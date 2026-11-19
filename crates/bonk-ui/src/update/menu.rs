@@ -85,7 +85,7 @@ impl Model {
         let Some((_, crate::model::Requested::Ready(choice))) = self.requested() else {
             return;
         };
-        let ChoiceSource::Download { url, sha256 } = choice.source.clone() else {
+        let ChoiceSource::Download { url, sha256, .. } = choice.source.clone() else {
             return;
         };
         if matches!(&self.write, WriteState::Draft { image, .. } if image.is_empty()) {
@@ -94,7 +94,7 @@ impl Model {
     }
 
     pub(super) fn on_menu_chosen(&mut self, choice: catalog::Choice) -> Effects {
-        if let (WriteState::Draft { .. }, ChoiceSource::Download { url, sha256 }) =
+        if let (WriteState::Draft { .. }, ChoiceSource::Download { url, sha256, .. }) =
             (&self.write, choice.source)
         {
             self.fill_draft(&ImageSource::Catalog { url, sha256 });

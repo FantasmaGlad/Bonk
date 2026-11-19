@@ -9,9 +9,7 @@ use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use bonk_catalog::{
-    Advance, DownloadError, Hooks, download, fetch_limited, fetch_text, file_name, is_url,
-};
+use bonk_catalog::{Advance, DownloadError, Hooks, download, fetch_limited, fetch_text, is_url};
 
 const ETAG: &str = "\"v1\"";
 
@@ -463,20 +461,7 @@ fn un_fichier_publie_se_lit_jusqu_a_sa_taille_signee() {
 }
 
 #[test]
-fn le_nom_de_fichier_d_une_url_ne_sort_pas_du_dossier() {
-    assert_eq!(
-        file_name("https://a.org/x/debian.iso?y=1#z"),
-        Some("debian.iso")
-    );
-    for url in [
-        "https://a.org/",
-        "https://a.org",
-        "https://a.org/x/..",
-        "https://a.org/x/%2e%2e%2fetc",
-        "https://a.org/a\\b",
-    ] {
-        assert_eq!(file_name(url), None, "{url}");
-    }
+fn une_adresse_web_se_reconnait_a_son_schema() {
     assert!(is_url("https://a.org/x") && is_url("http://a.org/x"));
     assert!(!is_url("/home/a/https://x") && !is_url("image.iso"));
 }

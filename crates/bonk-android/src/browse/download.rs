@@ -68,14 +68,19 @@ pub(crate) fn effect(model: &Model, args: &[String]) -> Option<Value> {
         .choices
         .iter()
         .find(|choice| &choice.id == id)?;
-    let ChoiceSource::Download { url, sha256 } = &choice.source else {
+    let ChoiceSource::Download {
+        url,
+        sha256,
+        file_name,
+    } = &choice.source
+    else {
         return None;
     };
     Some(json!({
         "do": "download_image",
         "url": url,
         "sha256": sha256,
-        "name": bonk_catalog::file_name(url)?,
+        "name": bonk_catalog::download_name(url, file_name.as_deref())?,
         "proxy": model.proxy(),
     }))
 }

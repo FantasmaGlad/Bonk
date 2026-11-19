@@ -181,6 +181,10 @@ pub(crate) struct WriteArgs {
     #[arg(long, value_name = "DIR")]
     pub(super) cache_dir: Option<PathBuf>,
 
+    /// Name to keep a downloaded address under, when the address does not end with it (a share link)
+    #[arg(long, value_name = "NAME", conflicts_with = "image")]
+    pub(super) file_name: Option<String>,
+
     /// auto: analyze the image, extract a Windows ISO and refuse what would not boot; raw: write the
     /// bytes as they are; extract: require a Windows ISO
     #[arg(long, value_enum, default_value_t = ModeArg::Auto)]

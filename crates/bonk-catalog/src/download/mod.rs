@@ -12,7 +12,7 @@ mod partial;
 mod stream;
 
 use http::*;
-pub use http::{fetch_bytes, fetch_limited, fetch_text, file_name, is_url, set_proxy};
+pub use http::{fetch_bytes, fetch_limited, fetch_text, is_url, set_proxy};
 use partial::*;
 use stream::*;
 

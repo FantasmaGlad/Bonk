@@ -103,8 +103,24 @@ pub struct Image {
     pub ram_mb: Option<u32>,
     #[serde(default)]
     pub ram_source: Option<String>,
+    /// Name to save the file under, when the address does not end with it (a share link).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_name: Option<String>,
     #[serde(flatten)]
     pub source: ImageSource,
+}
+
+impl Image {
+    /// `None` for an official page, or a name that would leave the cache directory.
+    #[must_use]
+    pub fn download_name(&self) -> Option<&str> {
+        match &self.source {
+            ImageSource::Download { url, .. } => {
+                crate::download_name(url, self.file_name.as_deref())
+            }
+            ImageSource::OfficialPage { .. } => None,
+        }
+    }
 }
 
 pub(super) fn boots_from_usb() -> bool {

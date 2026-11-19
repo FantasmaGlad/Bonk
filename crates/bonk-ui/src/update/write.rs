@@ -128,6 +128,7 @@ impl Model {
                 raw: *raw,
                 mbr: *mbr,
                 force: internal_confirmed,
+                file_name: self.catalog.file_name_of(image.trim()),
             },
             self.view_options(),
             self.proxy(),

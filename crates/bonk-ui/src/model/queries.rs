@@ -57,6 +57,7 @@ impl Model {
                 raw: *raw,
                 mbr: *mbr,
                 force: self.is_internal(disk_id),
+                file_name: self.catalog.file_name_of(image.trim()),
             }),
             _ => None,
         };
