@@ -191,7 +191,9 @@ fn menu_row<'a>(
                 .color(theme::muted());
             container(column![line, note]).padding([4, 8]).into()
         }
-        ChoiceSource::NotForUsb => container(line).padding([4, 8]).into(),
+        ChoiceSource::NotForUsb | ChoiceSource::Vault { .. } => {
+            container(line).padding([4, 8]).into()
+        }
     }
 }
 

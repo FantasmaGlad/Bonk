@@ -103,6 +103,10 @@ pub struct Image {
     pub ram_mb: Option<u32>,
     #[serde(default)]
     pub ram_source: Option<String>,
+    /// Starts from a Bonk vault (`bonk vault add`), checked by a boot, even when it does not start written to a
+    /// drive.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub vault: bool,
     /// Name to save the file under, when the address does not end with it (a share link).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub file_name: Option<String>,

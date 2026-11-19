@@ -61,7 +61,11 @@ impl Model {
             .is_some_and(DownloadState::running);
         let downloadable = self.opened_system().is_some_and(|system| {
             system.choices.iter().any(|choice| {
-                choice.id == id && matches!(choice.source, ChoiceSource::Download { .. })
+                choice.id == id
+                    && matches!(
+                        choice.source,
+                        ChoiceSource::Download { .. } | ChoiceSource::Vault { .. }
+                    )
             })
         });
         if busy || !downloadable || self.network_closed() {

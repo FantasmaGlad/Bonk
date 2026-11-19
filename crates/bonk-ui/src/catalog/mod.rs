@@ -65,6 +65,12 @@ pub enum ChoiceSource {
     OfficialPage(String),
     /// Does not boot from a key: shown, not writable.
     NotForUsb,
+    /// Does not boot written to a key, but from a Bonk vault: downloaded, then added to one.
+    Vault {
+        url: String,
+        sha256: String,
+        file_name: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,6 +105,15 @@ pub struct Shelf {
     pub terms: crate::terms::Terms,
     /// The last verified copy: the network did not answer.
     pub saved_copy: bool,
+}
+
+/// For an image that starts only from a vault: where to take it once downloaded.
+#[must_use]
+pub fn vault_note(lang: Lang) -> &'static str {
+    lang.pick(
+        "Starts from a Bonk vault: download it, then Add an ISO in the vault panel",
+        "Démarre depuis un coffre Bonk : téléchargez-la, puis Ajouter une ISO dans le panneau du coffre",
+    )
 }
 
 /// For an image published only on its editor's page: Bonk cannot download it itself.
@@ -151,12 +166,18 @@ fn label_of(image: &Image) -> String {
 
 fn choice(image: &Image) -> Choice {
     let source = match &image.source {
-        _ if !image.usb_boot => ChoiceSource::NotForUsb,
-        ImageSource::Download { url, sha256, .. } => ChoiceSource::Download {
+        ImageSource::Download { url, sha256, .. } if image.usb_boot => ChoiceSource::Download {
             url: url.clone(),
             sha256: sha256.clone(),
             file_name: image.file_name.clone(),
         },
+        ImageSource::Download { url, sha256, .. } if image.vault => ChoiceSource::Vault {
+            url: url.clone(),
+            sha256: sha256.clone(),
+            file_name: image.file_name.clone(),
+        },
+        ImageSource::Download { .. } => ChoiceSource::NotForUsb,
+        ImageSource::OfficialPage { .. } if !image.usb_boot => ChoiceSource::NotForUsb,
         ImageSource::OfficialPage { official_page } => {
             ChoiceSource::OfficialPage(official_page.clone())
         }
@@ -189,8 +210,12 @@ pub fn systems(report: &CatalogReport) -> Vec<System> {
                 .filter(|image| image.family == family.id)
                 .map(choice)
                 .collect();
-            // What Bonk can write comes first: a CD-only file is listed, never offered ahead.
-            choices.sort_by_key(|c| matches!(c.source, ChoiceSource::NotForUsb));
+            // What Bonk can write comes first, then what starts from a vault: a CD-only file is listed last.
+            choices.sort_by_key(|c| match c.source {
+                ChoiceSource::NotForUsb => 2,
+                ChoiceSource::Vault { .. } => 1,
+                _ => 0,
+            });
             (!choices.is_empty()).then(|| System {
                 id: family.id.clone(),
                 name: family.name.clone(),

@@ -2,7 +2,7 @@ use iced::widget::{Column, button, column, row, scrollable, text};
 use iced::{Element, Fill};
 
 use bonk_ui::browse::{BrowseMessage, DownloadState, variant_facts};
-use bonk_ui::catalog::{Choice, ChoiceSource, System, official_page_note};
+use bonk_ui::catalog::{Choice, ChoiceSource, System, official_page_note, vault_note};
 
 use crate::app::view::menu::sized_logo;
 use crate::theme;
@@ -58,6 +58,13 @@ impl App {
                 .size(12)
                 .color(theme::muted())
                 .into(),
+            ChoiceSource::Vault { .. } => row![
+                text(vault_note(lang)).size(12).color(theme::muted()),
+                self.download_button(&choice.id),
+            ]
+            .spacing(8)
+            .align_y(iced::Center)
+            .into(),
             ChoiceSource::NotForUsb => text(lang.pick(
                 "Does not start from a drive",
                 "Ne démarre pas depuis une clé",
@@ -69,14 +76,8 @@ impl App {
         super::super::boxed(row![about, action].spacing(12).align_y(iced::Center).into())
     }
 
-    /// Downloading waits while another download runs: one at a time.
     fn variant_buttons<'a>(&self, id: &str) -> Element<'a, Message> {
         let lang = self.lang;
-        let busy = self
-            .browse
-            .download
-            .as_ref()
-            .is_some_and(DownloadState::running);
         let write = ring(
             button(text(lang.pick("Write this image", "Écrire cette image")).size(13))
                 .on_press(Message::Browse(BrowseMessage::Write(id.to_owned())))
@@ -84,15 +85,24 @@ impl App {
                 .style(theme::primary_button),
             self.has_focus(Focus::Variant(id.to_owned())),
         );
-        let download = ring(
-            button(text(lang.pick("Download", "Télécharger")).size(13))
+        row![self.download_button(id), write].spacing(8).into()
+    }
+
+    /// Downloading waits while another download runs: one at a time.
+    fn download_button<'a>(&self, id: &str) -> Element<'a, Message> {
+        let busy = self
+            .browse
+            .download
+            .as_ref()
+            .is_some_and(DownloadState::running);
+        ring(
+            button(text(self.lang.pick("Download", "Télécharger")).size(13))
                 .on_press_maybe(
                     (!busy).then(|| Message::Browse(BrowseMessage::Download(id.to_owned()))),
                 )
                 .padding([6, 12])
                 .style(theme::card_button(false)),
             self.has_focus(Focus::Download(id.to_owned())),
-        );
-        row![download, write].spacing(8).into()
+        )
     }
 }
