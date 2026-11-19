@@ -10,6 +10,13 @@ pub fn check_command_line(command: &str) -> Result<Vec<String>, String> {
     Ok(words)
 }
 
+/// Checks the arguments an interface passes to `bonk` are accepted by the CLI, without running it.
+pub fn check_args(args: &[String]) -> Result<(), String> {
+    Cli::try_parse_from(std::iter::once("bonk").chain(args.iter().map(String::as_str)))
+        .map(drop)
+        .map_err(|erreur| erreur.to_string())
+}
+
 /// POSIX-shell-like splitting: spaces, single quotes, double quotes. Variables and substitutions are not
 /// interpreted (the window produces none).
 pub(crate) fn split_words(line: &str) -> Result<Vec<String>, String> {

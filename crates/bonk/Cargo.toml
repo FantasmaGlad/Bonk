@@ -26,6 +26,8 @@ winresource.workspace = true
 
 [dev-dependencies]
 bonk-core = { workspace = true, features = ["testing"] }
+bonk-hal.workspace = true
+bonk-ui.workspace = true
 serde_json.workspace = true
 
 [lints]
