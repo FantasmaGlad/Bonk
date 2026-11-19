@@ -15,7 +15,7 @@ const IMAGES: &str = "images";
 pub(crate) fn directory(given: Option<&Path>) -> Option<PathBuf> {
     given
         .map(Path::to_path_buf)
-        .or_else(|| bonk_hal::platform::cache_dir(&|name| std::env::var(name).ok()))
+        .or_else(|| bonk_hal::paths::cache_dir(&|name| std::env::var(name).ok()))
 }
 
 /// Stored under its hash: a new version with the same name never resumes the old one.

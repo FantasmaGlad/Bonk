@@ -12,6 +12,7 @@ pub mod macos_facts;
 #[cfg(target_os = "linux")]
 pub mod node;
 pub mod notify;
+pub mod paths;
 pub mod platform;
 pub mod safety;
 pub mod target;
