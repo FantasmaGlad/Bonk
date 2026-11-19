@@ -99,15 +99,21 @@ def fat32(spc, payload=None, fragmented=False, truncated=False):
     if payload is not None:
         entries.append(entry("BOOTMGR", 0x21, chain[0] if chain else 0, len(payload)))
     directory = b"".join(entries)
-    for index, cluster in enumerate(root):
+    write_chain(volume, root, directory, data_lba, spc)
+    write_chain(volume, chain, payload or b"", data_lba, spc)
+    return with_mbr(volume, total)
+
+
+def write_chain(volume, clusters, data, data_lba, spc):
+    cluster_bytes = spc * 512
+    for index, cluster in enumerate(clusters):
         at = (data_lba + (cluster - 2) * spc) * 512
-        piece = directory[index * cluster_bytes : (index + 1) * cluster_bytes]
-        volume[at : at + len(piece)] = piece
-    for index, cluster in enumerate(chain):
-        at = (data_lba + (cluster - 2) * spc) * 512
-        piece = payload[index * cluster_bytes : (index + 1) * cluster_bytes]
+        piece = data[index * cluster_bytes : (index + 1) * cluster_bytes]
         volume[at : at + len(piece)] = piece
 
+
+def with_mbr(volume, total):
+    """The volume behind an MBR whose single active FAT32 LBA partition starts at START."""
     image = bytearray(START * 512) + volume
     image[:440] = MBR.read_bytes()
     image[440:444] = b"BONK"

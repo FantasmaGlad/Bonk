@@ -43,38 +43,29 @@ internal fun SettingsPage(settings: SettingsView, send: (ToRust) -> Unit) {
         }
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.SPACE_SMALL.dp)) {
             Body(settings.networkTitle)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp),
-            ) {
-                Switch(settings.offline, { send(SettingsAction("offline", it.toString())) })
-                Small(settings.offlineLabel, LocalPalette.current.ink)
-            }
+            Toggle(settings.offline, settings.offlineLabel) { send(SettingsAction("offline", it.toString())) }
             Small(settings.offlineNote)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp),
-            ) {
-                Switch(
-                    settings.incognitoAtStart,
-                    { send(SettingsAction("incognito_at_start", it.toString())) },
-                    enabled = settings.incognitoAvailable,
-                )
-                Small(settings.incognitoLabel, LocalPalette.current.ink)
+            Toggle(settings.incognitoAtStart, settings.incognitoLabel, settings.incognitoAvailable) {
+                send(SettingsAction("incognito_at_start", it.toString()))
             }
             Small(settings.incognitoNote)
         }
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.SPACE_SMALL.dp)) {
             Body(settings.notificationsTitle)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp),
-            ) {
-                Switch(settings.notify, { send(SettingsAction("notifications", it.toString())) })
-                Small(settings.notifyLabel, LocalPalette.current.ink)
-            }
+            Toggle(settings.notify, settings.notifyLabel) { send(SettingsAction("notifications", it.toString())) }
             Small(settings.notifyNote)
         }
+    }
+}
+
+@Composable
+private fun Toggle(on: Boolean, label: String, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp),
+    ) {
+        Switch(on, onChange, enabled = enabled)
+        Small(label, LocalPalette.current.ink)
     }
 }
 

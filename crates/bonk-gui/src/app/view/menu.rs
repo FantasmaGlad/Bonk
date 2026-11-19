@@ -88,6 +88,22 @@ fn with_all(mut values: Vec<String>, all: &str) -> Vec<String> {
     values
 }
 
+fn arch_filter<'a>(arches: Vec<String>, chosen: Option<&str>, lang: Lang) -> Element<'a, Message> {
+    let all = all_arches(lang);
+    let names = with_all(arches.iter().map(|a| arch_label(a, lang)).collect(), all);
+    let shown = chosen.map_or_else(|| all.to_owned(), |a| arch_label(a, lang));
+    pick_list(names, Some(shown), move |value: String| {
+        Message::MenuArch(
+            arches
+                .iter()
+                .find(|id| arch_label(id, lang) == value)
+                .cloned(),
+        )
+    })
+    .text_size(13)
+    .into()
+}
+
 /// A category, a base, or a single system and its versions.
 fn menu_filters<'a>(
     systems: &[System],
@@ -110,16 +126,6 @@ fn menu_filters<'a>(
     let base = shown(filter.base.as_deref(), bases, all_base);
     let names = with_all(lists.systems, all_sys);
     let system = filter.system.clone().unwrap_or_else(|| all_sys.to_owned());
-    let all_arch = all_arches(lang);
-    let arch_names = with_all(
-        lists.arches.iter().map(|a| arch_label(a, lang)).collect(),
-        all_arch,
-    );
-    let arch = filter
-        .arch
-        .as_deref()
-        .map_or_else(|| all_arch.to_owned(), |a| arch_label(a, lang));
-    let arch_ids = lists.arches;
     // The lists outlive this borrow of the window state: each choice keeps its own copy of the labels.
     let (for_uses, for_bases) = (terms.clone(), terms.clone());
     row![
@@ -135,15 +141,7 @@ fn menu_filters<'a>(
             Message::MenuSystem((value != all_sys).then_some(value))
         })
         .text_size(13),
-        pick_list(arch_names, Some(arch), move |value: String| {
-            Message::MenuArch(
-                arch_ids
-                    .iter()
-                    .find(|id| arch_label(id, lang) == value)
-                    .cloned(),
-            )
-        })
-        .text_size(13),
+        arch_filter(lists.arches, filter.arch.as_deref(), lang),
     ]
     .spacing(8)
     .into()

@@ -33,14 +33,10 @@ fn option(label: &str, action: &str, value: &str, chosen: bool) -> Value {
     json!({"label": label, "action": action, "value": value, "chosen": chosen})
 }
 
-/// The settings page, or null on the main page.
-pub(crate) fn state(model: &Model) -> Value {
-    if model.screen != Screen::Settings {
-        return Value::Null;
-    }
+/// Language and theme options, the current one marked.
+fn choices(model: &Model) -> (Vec<Value>, Vec<Value>) {
     let lang = model.lang;
-    let note = model.relaunch_note();
-    let languages: Vec<Value> = LangChoice::ALL
+    let languages = LangChoice::ALL
         .map(|c| {
             option(
                 c.label(lang),
@@ -50,7 +46,7 @@ pub(crate) fn state(model: &Model) -> Value {
             )
         })
         .into();
-    let themes: Vec<Value> = ThemeChoice::ALL
+    let themes = ThemeChoice::ALL
         .map(|c| {
             option(
                 c.label(lang),
@@ -60,6 +56,17 @@ pub(crate) fn state(model: &Model) -> Value {
             )
         })
         .into();
+    (languages, themes)
+}
+
+/// The settings page, or null on the main page.
+pub(crate) fn state(model: &Model) -> Value {
+    if model.screen != Screen::Settings {
+        return Value::Null;
+    }
+    let lang = model.lang;
+    let note = model.relaunch_note();
+    let (languages, themes) = choices(model);
     json!({
         "title": lang.pick("Settings", "Paramètres"),
         "back": lang.pick("Back", "Retour"),

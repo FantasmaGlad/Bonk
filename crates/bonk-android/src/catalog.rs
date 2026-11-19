@@ -48,15 +48,24 @@ pub(crate) fn load(dir: &str, json: Vec<u8>, signature: Vec<u8>) -> Result<(), S
     let mut catalog = loaded.catalog;
     vault::set_grub(manifest::DEFAULT_BASE, catalog.grub.take());
     *screen::lock(&FAMILIES) = catalog.families.clone();
+    let report = report(catalog, loaded.saved_copy, dir);
+    let shelf = bonk_ui::catalog::shelf(&report);
+    let mut model = screen::lock(&screen::MODEL);
+    let _ = model.update(bonk_ui::model::Message::CatalogLoaded(Ok(shelf)));
+    Ok(())
+}
+
+/// The report the window would read from `bonk catalog list --json`: newest versions first.
+fn report(catalog: manifest::Catalog, saved_copy: bool, dir: &str) -> CatalogReport {
     let mut images = catalog.images;
     images.sort_by(|a, b| {
         manifest::version_numbers(&b.version).cmp(&manifest::version_numbers(&a.version))
     });
-    let report = CatalogReport {
+    CatalogReport {
         schema_version: catalog.schema_version,
         sequence: catalog.sequence,
         expires_unix: catalog.expires_unix,
-        saved_copy: loaded.saved_copy,
+        saved_copy,
         families: catalog
             .families
             .into_iter()
@@ -70,11 +79,7 @@ pub(crate) fn load(dir: &str, json: Vec<u8>, signature: Vec<u8>) -> Result<(), S
             .collect(),
         images,
         taxonomy: catalog.taxonomy,
-    };
-    let shelf = bonk_ui::catalog::shelf(&report);
-    let mut model = screen::lock(&screen::MODEL);
-    let _ = model.update(bonk_ui::model::Message::CatalogLoaded(Ok(shelf)));
-    Ok(())
+    }
 }
 
 /// Logos not yet in the cache, for Kotlin to download: Rust checks each against its signed hash.
