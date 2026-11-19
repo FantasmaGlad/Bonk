@@ -99,57 +99,36 @@ fn l_empreinte_se_lit_dans_un_fichier_d_empreintes_local_ou_distant() {
     let body = vec![0xEF; 1 << 20];
     let (url, _) = serve_file(body.clone());
     let sha = sha256_of(&body);
-    let sums = TempSource::from_bytes("sommes", format!("{sha}  image.img\n").as_bytes());
-    let cache = TempSource::dir("cache-sommes");
-    let scenario = Scenario::new();
-    let (code, out, err) = scenario.run(&[
-        "write",
-        "usb-a",
-        &url,
-        "--sha256-file",
-        &sums.arg(),
-        "--cache-dir",
-        &cache.arg(),
-        "--yes",
-        "--mode",
-        "raw",
-        "--progress",
-        "none",
-    ]);
-    assert_eq!((code, err.as_str()), (0, ""), "{out}");
-    assert_eq!(scenario.written(1 << 20), body);
-
-    let (sums_url, _) = serve_file(format!("{sha}  image.img\n").into_bytes());
-    let cache = TempSource::dir("cache-sommes-url");
-    let (code, _, err) = scenario.run(&[
-        "write",
-        "usb-a",
-        &url,
-        "--sha256-file",
-        &sums_url,
-        "--cache-dir",
-        &cache.arg(),
-        "--yes",
-        "--mode",
-        "raw",
-        "--progress",
-        "none",
-    ]);
-    assert_eq!((code, err.as_str()), (0, ""));
-
+    let line = format!("{sha}  image.img\n");
+    let local = TempSource::from_bytes("sommes", line.as_bytes());
+    let (distant, _) = serve_file(line.into_bytes());
     let vide = TempSource::from_bytes("sommes-vides", b"# rien\n");
-    let (code, _, err) = scenario.run(&[
-        "write",
-        "usb-a",
-        &url,
-        "--sha256-file",
-        &vide.arg(),
-        "--cache-dir",
-        &cache.arg(),
-        "--yes",
-    ]);
-    assert_eq!(code, EXIT_USAGE, "{err}");
-    assert!(err.contains("image.img"), "{err}");
+    let scenario = Scenario::new();
+    // (checksum file, expected exit code); an empty file names the image it misses.
+    for (sums, attendu) in [(local.arg(), 0), (distant, 0), (vide.arg(), EXIT_USAGE)] {
+        let cache = TempSource::dir("cache-sommes");
+        let (code, out, err) = scenario.run(&[
+            "write",
+            "usb-a",
+            &url,
+            "--sha256-file",
+            &sums,
+            "--cache-dir",
+            &cache.arg(),
+            "--yes",
+            "--mode",
+            "raw",
+            "--progress",
+            "none",
+        ]);
+        assert_eq!(code, attendu, "{sums}: {out}{err}");
+        if attendu == 0 {
+            assert_eq!(err, "", "{sums}");
+            assert_eq!(scenario.written(1 << 20), body);
+        } else {
+            assert!(err.contains("image.img"), "{err}");
+        }
+    }
 }
 
 #[test]

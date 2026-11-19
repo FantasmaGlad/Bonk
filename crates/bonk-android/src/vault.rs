@@ -321,33 +321,20 @@ mod tests {
         }
     }
 
-    /// Prepare, add an ISO read through a nameless descriptor path, list, update: the phone's whole vault.
-    #[test]
-    fn le_telephone_prepare_remplit_et_met_a_jour_un_coffre() {
-        let size = 256 << 20;
-        let drive = Rc::new(RefCell::new(MemoryDevice::new(size, 512).expect("disque")));
-        let disks = vec![key(size)];
-        let mut offered: Option<(String, Grub)> = None;
-        let run = |offered: &Option<(String, Grub)>, request: &Request<'_>| {
-            let drive = Rc::clone(&drive);
-            let grub = offered.as_ref().map(|(_, grub)| grub);
-            outcome(disks.clone(), grub, request, move || {
-                Ok(Box::new(Shared(Rc::clone(&drive))) as Box<dyn BlockDevice>)
-            })
+    /// GRUB as Kotlin lays it out, one file per processor named by it, then a forged copy.
+    fn grub_dirs(dir: &std::path::Path) -> (String, String) {
+        let write = |name: &str, arm: &[u8]| {
+            let folder = dir.join(name);
+            std::fs::create_dir_all(&folder).expect("dossier");
+            std::fs::write(folder.join("x86_64"), GRUB_BYTES).expect("GRUB");
+            std::fs::write(folder.join("aarch64"), arm).expect("GRUB");
+            folder.display().to_string()
         };
-        let dir = std::env::temp_dir().join(format!("bonk-android-coffre-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("dossier");
-        // As Kotlin lays them out: one file per processor, named by it.
-        let grub = dir.join("grub");
-        std::fs::create_dir_all(&grub).expect("dossier");
-        std::fs::write(grub.join("x86_64"), GRUB_BYTES).expect("GRUB");
-        std::fs::write(grub.join("aarch64"), ARM_BYTES).expect("GRUB");
-        let grub = grub.display().to_string();
-        let forged = dir.join("forged");
-        std::fs::create_dir_all(&forged).expect("dossier");
-        std::fs::write(forged.join("x86_64"), GRUB_BYTES).expect("GRUB");
-        std::fs::write(forged.join("aarch64"), b"MZ autre GRUB").expect("GRUB");
-        let forged = forged.display().to_string();
+        (write("grub", ARM_BYTES), write("forged", b"MZ autre GRUB"))
+    }
+
+    /// An Arch ISO behind a nameless path, as a descriptor reads.
+    fn arch_iso(dir: &std::path::Path) -> (String, Vec<u8>) {
         let iso = dir.join("42");
         let image = bonk_core::iso9660::testing::image(
             "ARCH_202611",
@@ -357,13 +344,10 @@ mod tests {
             ],
         );
         std::fs::write(&iso, &image).expect("ISO");
-        let iso = iso.display().to_string();
+        (iso.display().to_string(), image)
+    }
 
-        assert_eq!(downloads(offered.as_ref()), []);
-        assert_eq!(
-            failed_code(&run(&offered, &request("init", "", "", &grub))),
-            Some(Code::CatalogRefused.id())
-        );
+    fn offered_grub() -> (String, Grub) {
         let fake = asset("grub/x.tar.xz", b"x");
         let mut efi = BTreeMap::new();
         efi.insert(
@@ -376,19 +360,22 @@ mod tests {
         );
         // A processor Bonk cannot name yet: nothing to download for it.
         efi.insert("mips64".to_owned(), asset("grub/2.14/X.EFI", b"x"));
-        offered = Some((
-            "https://catalog.test/v1/".to_owned(),
-            Grub {
-                version: "2.14".to_owned(),
-                released: "2026-01-14".to_owned(),
-                build: "6e330c761ee82877".to_owned(),
-                efi,
-                source: fake.clone(),
-                source_signature: fake,
-            },
-        ));
+        let grub = Grub {
+            version: "2.14".to_owned(),
+            released: "2026-01-14".to_owned(),
+            build: "6e330c761ee82877".to_owned(),
+            efi,
+            source: fake.clone(),
+            source_signature: fake,
+        };
+        ("https://catalog.test/v1/".to_owned(), grub)
+    }
+
+    #[test]
+    fn le_grub_du_catalogue_se_telecharge_par_processeur_connu() {
+        assert_eq!(downloads(None), []);
         assert_eq!(
-            downloads(offered.as_ref()),
+            downloads(Some(&offered_grub())),
             [
                 Download {
                     arch: "aarch64".to_owned(),
@@ -402,22 +389,65 @@ mod tests {
                 },
             ]
         );
+    }
 
-        assert_eq!(
-            failed_code(&run(&offered, &request("list", "", "", ""))),
-            Some(Code::NotAVault.id())
-        );
-        // A GRUB that is not the catalog's is refused before the drive is touched.
-        assert_eq!(
-            failed_code(&run(&offered, &request("init", "", "", &forged))),
-            Some(Code::CatalogRefused.id())
-        );
-        assert!(drive.borrow().as_bytes().iter().all(|&byte| byte == 0));
+    type Drive = Rc<RefCell<MemoryDevice>>;
 
+    fn drive() -> Drive {
+        Rc::new(RefCell::new(
+            MemoryDevice::new(256 << 20, 512).expect("disque"),
+        ))
+    }
+
+    /// The vault action on the drive, as the phone runs it with the catalog's GRUB when offered.
+    fn run(drive: &Drive, offered: &Option<(String, Grub)>, request: &Request<'_>) -> Event {
+        let drive = Rc::clone(drive);
+        let disks = vec![key(256 << 20)];
+        let grub = offered.as_ref().map(|(_, grub)| grub);
+        outcome(disks, grub, request, move || {
+            Ok(Box::new(Shared(Rc::clone(&drive))) as Box<dyn BlockDevice>)
+        })
+    }
+
+    fn scratch(label: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("bonk-android-{label}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dossier");
+        dir
+    }
+
+    /// Without the catalog, or with a GRUB that is not the catalog's, nothing touches the drive.
+    #[test]
+    fn un_coffre_ne_se_prepare_qu_avec_le_grub_du_catalogue() {
+        let (key, dir) = (drive(), scratch("refus"));
+        let (grub, forged) = grub_dirs(&dir);
+        let refused = |code: Code| Some(code.id());
+        assert_eq!(
+            failed_code(&run(&key, &None, &request("init", "", "", &grub))),
+            refused(Code::CatalogRefused)
+        );
+        let offered = Some(offered_grub());
+        assert_eq!(
+            failed_code(&run(&key, &offered, &request("list", "", "", ""))),
+            refused(Code::NotAVault)
+        );
+        assert_eq!(
+            failed_code(&run(&key, &offered, &request("init", "", "", &forged))),
+            refused(Code::CatalogRefused)
+        );
+        assert!(key.borrow().as_bytes().iter().all(|&byte| byte == 0));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Prepare, add an ISO read through a nameless descriptor path, list, update: the phone's whole vault.
+    #[test]
+    fn le_telephone_prepare_remplit_et_met_a_jour_un_coffre() {
+        let (key, dir) = (drive(), scratch("coffre"));
+        let ((grub, _), (iso, image)) = (grub_dirs(&dir), arch_iso(&dir));
+        let offered = Some(offered_grub());
         // The new partitions are read on the drive: the engine does not wait for the system to show them.
         let started = Instant::now();
         assert_eq!(
-            run(&offered, &request("init", "", "", &grub)),
+            run(&key, &offered, &request("init", "", "", &grub)),
             Event::Finished(Outcome::Vault(VaultDone::Prepared))
         );
         assert!(
@@ -425,31 +455,27 @@ mod tests {
             "{:?}",
             started.elapsed()
         );
-
+        let (name, bytes) = ("archlinux-x86_64.iso".to_owned(), image.len() as u64);
         assert_eq!(
-            run(&offered, &request("add", &iso, "archlinux-x86_64.iso", "")),
+            run(&key, &offered, &request("add", &iso, &name, "")),
             Event::Finished(Outcome::Vault(VaultDone::Added {
-                name: "archlinux-x86_64.iso".to_owned(),
-                bytes: image.len() as u64,
+                name: name.clone(),
+                bytes
             }))
         );
         assert_eq!(
-            run(&offered, &request("list", "", "", "")),
-            Event::Finished(Outcome::Vault(VaultDone::Listed(vec![(
-                "archlinux-x86_64.iso".to_owned(),
-                image.len() as u64
-            )])))
+            run(&key, &offered, &request("list", "", "", "")),
+            Event::Finished(Outcome::Vault(VaultDone::Listed(vec![(name, bytes)])))
         );
         assert_eq!(
-            run(&offered, &request("update", "", "", &grub)),
+            run(&key, &offered, &request("update", "", "", &grub)),
             Event::Finished(Outcome::Vault(VaultDone::Updated { changed: false }))
         );
-
         // Another key at the chosen place: nothing runs.
         let mut other = request("list", "", "", "");
         other.serial = "S2";
         assert_eq!(
-            failed_code(&run(&offered, &other)),
+            failed_code(&run(&key, &offered, &other)),
             Some(Code::IdentityChanged.id())
         );
         let _ = std::fs::remove_dir_all(&dir);

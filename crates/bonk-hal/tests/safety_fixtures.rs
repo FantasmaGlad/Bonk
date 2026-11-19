@@ -41,70 +41,80 @@ fn fixture_paths() -> Result<Vec<PathBuf>, Box<dyn Error>> {
     Ok(paths)
 }
 
+type Verdicts = BTreeMap<String, Value>;
+
+/// The verdicts a scenario expects, its own or another's through `same_as`.
+fn expected_of<'a>(fixture: &'a Fixture, scenario: &'a Scenario) -> Result<&'a Verdicts, String> {
+    match (&scenario.expected, &scenario.same_as) {
+        (Some(map), None) => Ok(map),
+        (None, Some(other)) => fixture
+            .scenarios
+            .iter()
+            .find(|s| &s.name == other)
+            .and_then(|s| s.expected.as_ref())
+            .ok_or_else(|| format!("same_as \"{other}\" introuvable")),
+        _ => Err("exactement un de expected ou same_as".to_owned()),
+    }
+}
+
+/// Each disk's verdict under the scenario's options against the expected one.
+fn check_scenario(
+    fixture: &Fixture,
+    scenario: &Scenario,
+    expected: &Verdicts,
+    label: &str,
+    failures: &mut Vec<String>,
+) -> Result<(), Box<dyn Error>> {
+    for disk in &fixture.disks {
+        let verdict = evaluate(disk, scenario.options);
+        // The rule-by-rule check always gives the filter's verdict.
+        let (traced, trace) = evaluate_traced(disk, scenario.options);
+        if traced != verdict || trace.is_empty() {
+            failures.push(format!(
+                "{label} / {} : évaluation tracée différente",
+                disk.id
+            ));
+        }
+        let actual = serde_json::to_value(verdict)?;
+        match expected.get(&disk.id) {
+            Some(want) if want != &actual => {
+                failures.push(format!(
+                    "{label} / {} : attendu {want}, obtenu {actual}",
+                    disk.id
+                ));
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
 fn check_fixture(path: &PathBuf) -> Result<Vec<String>, Box<dyn Error>> {
     let fixture: Fixture = serde_json::from_str(&fs::read_to_string(path)?)?;
     let file = path
         .file_name()
         .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
     let mut failures = Vec::new();
-
     let ids: BTreeSet<&str> = fixture.disks.iter().map(|d| d.id.as_str()).collect();
     if ids.len() != fixture.disks.len() {
         failures.push(format!("{file} : identifiants de disque en double"));
     }
-
     for scenario in &fixture.scenarios {
         let label = format!("{file} / {}", scenario.name);
-        let expected = match (&scenario.expected, &scenario.same_as) {
-            (Some(map), None) => map,
-            (None, Some(other)) => {
-                let found = fixture
-                    .scenarios
-                    .iter()
-                    .find(|s| &s.name == other)
-                    .and_then(|s| s.expected.as_ref());
-                match found {
-                    Some(map) => map,
-                    None => {
-                        failures.push(format!("{label} : same_as \"{other}\" introuvable"));
-                        continue;
-                    }
-                }
-            }
-            _ => {
-                failures.push(format!("{label} : exactement un de expected ou same_as"));
+        let expected = match expected_of(&fixture, scenario) {
+            Ok(map) => map,
+            Err(reason) => {
+                failures.push(format!("{label} : {reason}"));
                 continue;
             }
         };
-
         let expected_ids: BTreeSet<&str> = expected.keys().map(String::as_str).collect();
         if expected_ids != ids {
             failures.push(format!(
                 "{label} : verdicts attendus et disques différents (disques {ids:?}, attendus {expected_ids:?})"
             ));
         }
-
-        for disk in &fixture.disks {
-            let verdict = evaluate(disk, scenario.options);
-            // The rule-by-rule check always gives the filter's verdict.
-            let (traced, trace) = evaluate_traced(disk, scenario.options);
-            if traced != verdict || trace.is_empty() {
-                failures.push(format!(
-                    "{label} / {} : évaluation tracée différente",
-                    disk.id
-                ));
-            }
-            let actual = serde_json::to_value(verdict)?;
-            match expected.get(&disk.id) {
-                Some(want) if want != &actual => {
-                    failures.push(format!(
-                        "{label} / {} : attendu {want}, obtenu {actual}",
-                        disk.id
-                    ));
-                }
-                _ => {}
-            }
-        }
+        check_scenario(&fixture, scenario, expected, &label, &mut failures)?;
     }
     Ok(failures)
 }

@@ -169,6 +169,17 @@ impl Drop for Dossier {
     }
 }
 
+/// Serves the manifest, and its signature at the `.sig` address.
+fn serveur(manifeste: Vec<u8>, signature: Vec<u8>) -> impl Fn(&str) -> Result<Vec<u8>, String> {
+    move |url: &str| {
+        Ok(if url.ends_with(".sig") {
+            signature.clone()
+        } else {
+            manifeste.clone()
+        })
+    }
+}
+
 #[test]
 fn la_copie_sert_si_le_reseau_manque_jamais_si_le_fichier_est_refuse()
 -> Result<(), Box<dyn std::error::Error>> {
@@ -176,14 +187,7 @@ fn la_copie_sert_si_le_reseau_manque_jamais_si_le_fichier_est_refuse()
     let dossier = Dossier::new("copie");
     let bytes = manifest(5, NOW + 1, &debian());
     let signature = key.sign(&bytes).as_ref().to_vec();
-    let (m, s) = (bytes.clone(), signature.clone());
-    let bon = move |url: &str| {
-        Ok(if url.ends_with(".sig") {
-            s.clone()
-        } else {
-            m.clone()
-        })
-    };
+    let bon = serveur(bytes.clone(), signature.clone());
     let hors_ligne = |_: &str| Err("coupure".to_owned());
     let lire = |now, fetch: &dyn Fn(&str) -> Result<Vec<u8>, String>| {
         load("https://c/", &dossier.0, now, &[public], fetch)
@@ -197,27 +201,15 @@ fn la_copie_sert_si_le_reseau_manque_jamais_si_le_fichier_est_refuse()
     assert!(lire(NOW, &hors_ligne)?.saved_copy);
 
     // Received but tampered: refused, even with a good copy.
-    let (mut f, s2) = (bytes.clone(), signature.clone());
+    let mut f = bytes.clone();
     f[20] ^= 1;
-    let falsifie = move |url: &str| {
-        Ok(if url.ends_with(".sig") {
-            s2.clone()
-        } else {
-            f.clone()
-        })
-    };
+    let falsifie = serveur(f, signature.clone());
     assert_eq!(lire(NOW, &falsifie), Err(CatalogError::BadSignature));
 
     // An older manifest, even well signed, does not pass after a newer one.
     let ancien = manifest(4, NOW + 1, &debian());
     let s3 = key.sign(&ancien).as_ref().to_vec();
-    let retour = move |url: &str| {
-        Ok(if url.ends_with(".sig") {
-            s3.clone()
-        } else {
-            ancien.clone()
-        })
-    };
+    let retour = serveur(ancien, s3);
     assert!(matches!(
         lire(NOW, &retour),
         Err(CatalogError::Rollback { .. })

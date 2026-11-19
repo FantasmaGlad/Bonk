@@ -91,6 +91,11 @@ fn le_service_repond_et_s_arrete_a_la_fermeture_de_l_entree() -> Resultat {
     Ok(())
 }
 
+/// `disk.verify` of a simulated target against its source.
+fn verification(cible: &std::path::Path, source: &std::path::Path) -> serde_json::Value {
+    json!({"target": cible.display().to_string(), "simulate": true, "source": source.display().to_string()})
+}
+
 #[test]
 fn ecriture_simulee_par_le_service() -> Resultat {
     let dir = std::env::temp_dir().join(format!("bonk-serve-e2e-{}", std::process::id()));
@@ -119,12 +124,12 @@ fn ecriture_simulee_par_le_service() -> Resultat {
     );
     assert_eq!(&fs::read(&cible)?[..data.len()], data.as_slice());
 
-    let ok = client.call(11, "disk.verify", &json!({"target": cible.display().to_string(), "simulate": true, "source": source.display().to_string()}))?;
+    let ok = client.call(11, "disk.verify", &verification(&cible, &source))?;
     assert_eq!(ok.last().ok_or("réponse")?["result"]["event"], "result");
     let mut abime = fs::read(&cible)?;
     abime[777] ^= 1;
     fs::write(&cible, abime)?;
-    let ko = client.call(12, "disk.verify", &json!({"target": cible.display().to_string(), "simulate": true, "source": source.display().to_string()}))?;
+    let ko = client.call(12, "disk.verify", &verification(&cible, &source))?;
     let erreur = &ko.last().ok_or("réponse")?["error"];
     assert_eq!(
         (erreur["code"].as_str(), erreur["exit_code"].as_u64()),

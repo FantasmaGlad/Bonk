@@ -49,6 +49,18 @@ fn texte(octets: &[u8]) -> String {
     String::from_utf8_lossy(octets).into_owned()
 }
 
+/// `bonk verify` of a simulated target against its source, writing nothing.
+fn verifier(cible: &Path, source: &Path) -> Result<Output, std::io::Error> {
+    bonk(&[
+        "verify",
+        "--simulate",
+        &chemin(cible),
+        &chemin(source),
+        "--progress",
+        "none",
+    ])
+}
+
 fn chemin(p: &Path) -> String {
     p.display().to_string()
 }
@@ -82,27 +94,13 @@ fn ecriture_simulee_d_une_image_brute_puis_verification() -> Resultat {
     );
 
     // Later comparison, writing nothing.
-    let verify = bonk(&[
-        "verify",
-        "--simulate",
-        &chemin(&cible),
-        &chemin(&source),
-        "--progress",
-        "none",
-    ])?;
+    let verify = verifier(&cible, &source)?;
     assert_eq!(verify.status.code(), Some(0), "{}", texte(&verify.stderr));
     // A changed byte: code 4 and its id.
     let mut tampered = ecrit;
     tampered[1000] ^= 1;
     fs::write(&cible, tampered)?;
-    let mismatch = bonk(&[
-        "verify",
-        "--simulate",
-        &chemin(&cible),
-        &chemin(&source),
-        "--progress",
-        "none",
-    ])?;
+    let mismatch = verifier(&cible, &source)?;
     assert_eq!(mismatch.status.code(), Some(4));
     assert!(texte(&mismatch.stderr).trim_end().ends_with("[E4002]"));
     Ok(())
@@ -166,18 +164,47 @@ fn formats_compresses_produits_par_les_outils_du_systeme() -> Resultat {
     Ok(())
 }
 
+/// A refused write leaves the target untouched: (label, extra arguments, exit code, error code).
+const REFUS: [(&str, &[&str], i32, &str); 3] = [
+    ("sans --yes", &["--size", "2097152"], 2, "[E2004]"),
+    (
+        "cible trop petite",
+        &["--size", "524288", "--yes"],
+        6,
+        "[E3003]",
+    ),
+    ("source absente", &["--yes"], 6, "[E3001]"),
+];
+
 #[test]
 fn garde_fous_de_la_ligne_de_commande() -> Resultat {
-    let dir = Dossier::new("gardes")?;
+    for (cas, extra, code, erreur) in REFUS {
+        let dir = Dossier::new("gardes")?;
+        let (source, cible) = (dir.file("src.img"), dir.file("out.img"));
+        fs::write(&source, image(1 << 20))?;
+        let source = if cas == "source absente" {
+            "/n/existe/pas.img".to_owned()
+        } else {
+            chemin(&source)
+        };
+        let mut args = vec!["write", "--simulate"];
+        let c = chemin(&cible);
+        args.extend([c.as_str(), source.as_str()]);
+        args.extend(extra);
+        let sortie = bonk(&args)?;
+        assert_eq!(sortie.status.code(), Some(code), "{cas}");
+        assert!(texte(&sortie.stderr).trim_end().ends_with(erreur), "{cas}");
+        assert!(!cible.exists(), "{cas}");
+    }
+    Ok(())
+}
+
+#[test]
+fn le_plan_a_blanc_n_ecrit_rien_et_l_ecriture_confirmee_ecrit_tout() -> Resultat {
+    let dir = Dossier::new("plan")?;
     let (source, cible) = (dir.file("src.img"), dir.file("out.img"));
     fs::write(&source, image(1 << 20))?;
     let (s, c) = (chemin(&source), chemin(&cible));
-
-    let sortie = bonk(&["write", "--simulate", &c, &s, "--size", "2097152"])?;
-    assert_eq!(sortie.status.code(), Some(2));
-    assert!(texte(&sortie.stderr).trim_end().ends_with("[E2004]"));
-    assert!(!cible.exists());
-
     let sortie = bonk(&[
         "write",
         "--simulate",
@@ -193,22 +220,22 @@ fn garde_fous_de_la_ligne_de_commande() -> Resultat {
     assert_eq!(plan["event"], "plan");
     assert_eq!(plan["steps"][0], "write");
     assert!(!cible.exists());
-
-    let sortie = bonk(&["write", "--simulate", &c, &s, "--size", "524288", "--yes"])?;
-    assert_eq!(sortie.status.code(), Some(6));
-    assert!(texte(&sortie.stderr).trim_end().ends_with("[E3003]"));
-    assert!(!cible.exists());
-
     let sortie = bonk(&["write", "--simulate", &c, &s, "--yes"])?;
     assert_eq!(sortie.status.code(), Some(0), "{}", texte(&sortie.stderr));
     assert_eq!(fs::metadata(&cible)?.len(), 1 << 20);
+    Ok(())
+}
 
-    let bz = dir.file("src.bz2");
+#[test]
+fn une_image_bzip2_et_un_disque_nomme_par_son_chemin_sont_refuses() -> Resultat {
+    let dir = Dossier::new("refus")?;
+    let (source, bz) = (dir.file("src.img"), dir.file("src.bz2"));
+    fs::write(&source, image(1 << 20))?;
     fs::write(&bz, b"BZh91AY&SYxxxxxxxxxxxxxxxx")?;
     let sortie = bonk(&[
         "write",
         "--simulate",
-        &dir.file("o2.img").display().to_string(),
+        &chemin(&dir.file("o2.img")),
         &chemin(&bz),
         "--size",
         "1048576",
@@ -220,13 +247,8 @@ fn garde_fous_de_la_ligne_de_commande() -> Resultat {
         err.contains("decompress the image") && err.trim_end().ends_with("[E3002]"),
         "{err}"
     );
-
-    let sortie = bonk(&["write", "--simulate", &c, "/n/existe/pas.img", "--yes"])?;
-    assert_eq!(sortie.status.code(), Some(6));
-    assert!(texte(&sortie.stderr).trim_end().ends_with("[E3001]"));
-
     // A disk is never named by its path: no disk answers to /dev/sda.
-    let sortie = bonk(&["write", "/dev/sda", &s, "--yes"])?;
+    let sortie = bonk(&["write", "/dev/sda", &chemin(&source), "--yes"])?;
     assert_ne!(sortie.status.code(), Some(0));
     Ok(())
 }
@@ -261,24 +283,29 @@ fn progression_json_puis_resultat() -> Resultat {
     Ok(())
 }
 
-#[test]
-fn trace_io_journalise_les_acces_sans_les_donnees() -> Resultat {
-    let dir = Dossier::new("trace")?;
-    let (source, cible) = (dir.file("src.img"), dir.file("out.img"));
-    fs::write(&source, image(1 << 20))?;
-    let sortie = bonk(&[
+/// A simulated write with the access log as JSON on standard error.
+fn ecrire_trace(cible: &Path, source: &Path, trace: &str) -> Result<Output, std::io::Error> {
+    bonk(&[
         "-vv",
         "--log-format",
         "json",
         "write",
         "--simulate",
-        &chemin(&cible),
-        &chemin(&source),
+        &chemin(cible),
+        &chemin(source),
         "--yes",
         "--progress",
         "none",
-        "--trace-io",
-    ])?;
+        trace,
+    ])
+}
+
+#[test]
+fn trace_io_journalise_les_acces_sans_les_donnees() -> Resultat {
+    let dir = Dossier::new("trace")?;
+    let (source, cible) = (dir.file("src.img"), dir.file("out.img"));
+    fs::write(&source, image(1 << 20))?;
+    let sortie = ecrire_trace(&cible, &source, "--trace-io")?;
     assert_eq!(sortie.status.code(), Some(0));
     let journal = texte(&sortie.stderr);
     let acces: Vec<serde_json::Value> = journal
@@ -300,19 +327,7 @@ fn trace_io_journalise_les_acces_sans_les_donnees() -> Resultat {
     );
     // By default no image byte in the log; with =data, only the head.
     assert!(acces.iter().all(|e| e["fields"]["head"] == ""));
-    let avec = bonk(&[
-        "-vv",
-        "--log-format",
-        "json",
-        "write",
-        "--simulate",
-        &chemin(&dir.file("o2.img")),
-        &chemin(&source),
-        "--yes",
-        "--progress",
-        "none",
-        "--trace-io=data",
-    ])?;
+    let avec = ecrire_trace(&dir.file("o2.img"), &source, "--trace-io=data")?;
     assert!(
         texte(&avec.stderr).contains("\"head\":\"00070e151c23"),
         "début de l'image attendu"
@@ -346,28 +361,9 @@ fn trace_io_suit_aussi_les_lectures_de_debug() -> Resultat {
 #[test]
 fn reparation_du_gpt_apres_ecriture_sur_un_support_plus_grand() -> Resultat {
     let dir = Dossier::new("gpt")?;
-    let (source, cible) = (dir.file("gpt.img"), dir.file("out.img"));
-    fs::write(
-        &source,
-        gpt_image(
-            4096,
-            &[(2048, 2559, ESP, "EFI"), (2560, 4000, LINUX, "racine")],
-        ),
-    )?;
-    let (s, c) = (chemin(&source), chemin(&cible));
-    // Target twice the image size: the backup GPT is no longer at the end.
-    let sortie = bonk(&[
-        "write",
-        "--simulate",
-        &c,
-        &s,
-        "--size",
-        "4194304",
-        "--yes",
-        "--progress",
-        "none",
-        "--json",
-    ])?;
+    let (source, cible) = (source_gpt(&dir)?, dir.file("out.img"));
+    let c = chemin(&cible);
+    let sortie = ecrire_gpt(&cible, &source, "--json")?;
     assert_eq!(sortie.status.code(), Some(0), "{}", texte(&sortie.stderr));
     let json: serde_json::Value = serde_json::from_slice(&sortie.stdout)?;
     assert!(
@@ -385,41 +381,26 @@ fn reparation_du_gpt_apres_ecriture_sur_un_support_plus_grand() -> Resultat {
     });
     assert!(graves.is_empty(), "{graves:?}");
     assert_eq!(layout["gpt"]["backup"]["read_at_lba"], 8191);
+    Ok(())
+}
 
-    // Without the repair the anomaly stays visible, and `repair-gpt` fixes it afterwards.
-    let brute = dir.file("brute.img");
-    let sortie = bonk(&[
-        "write",
-        "--simulate",
-        &chemin(&brute),
-        &s,
-        "--size",
-        "4194304",
-        "--yes",
-        "--progress",
-        "none",
-        "--no-repair-gpt",
-    ])?;
-    assert_eq!(sortie.status.code(), Some(0));
-    let plan = bonk(&[
-        "repair-gpt",
-        "--simulate",
-        &chemin(&brute),
-        "--dry-run",
-        "--json",
-    ])?;
+/// Without the repair the anomaly stays visible, and `repair-gpt` fixes it afterwards, once.
+#[test]
+fn repair_gpt_repare_apres_coup_une_ecriture_sans_reparation() -> Resultat {
+    let dir = Dossier::new("gpt-brut")?;
+    let (source, brute) = (source_gpt(&dir)?, dir.file("brute.img"));
+    let b = chemin(&brute);
+    assert_eq!(
+        ecrire_gpt(&brute, &source, "--no-repair-gpt")?
+            .status
+            .code(),
+        Some(0)
+    );
+    let plan = bonk(&["repair-gpt", "--simulate", &b, "--dry-run", "--json"])?;
     let plan: serde_json::Value = serde_json::from_slice(&plan.stdout)?;
     assert_eq!(plan["needs_repair"], true);
-    assert!(
-        texte(&bonk(&["repair-gpt", "--simulate", &chemin(&brute)])?.stderr).contains("[E2004]")
-    );
-    let fait = bonk(&[
-        "repair-gpt",
-        "--simulate",
-        &chemin(&brute),
-        "--yes",
-        "--json",
-    ])?;
+    assert!(texte(&bonk(&["repair-gpt", "--simulate", &b])?.stderr).contains("[E2004]"));
+    let fait = bonk(&["repair-gpt", "--simulate", &b, "--yes", "--json"])?;
     assert_eq!(fait.status.code(), Some(0));
     let fait: serde_json::Value = serde_json::from_slice(&fait.stdout)?;
     assert_eq!(fait["needs_repair"], true);
@@ -427,16 +408,39 @@ fn reparation_du_gpt_apres_ecriture_sur_un_support_plus_grand() -> Resultat {
         a.iter()
             .all(|c| c != "gpt_backup_not_at_end" && c != "gpt_backup_missing")
     }));
-    let encore = bonk(&[
-        "repair-gpt",
-        "--simulate",
-        &chemin(&brute),
-        "--yes",
-        "--json",
-    ])?;
+    let encore = bonk(&["repair-gpt", "--simulate", &b, "--yes", "--json"])?;
     let encore: serde_json::Value = serde_json::from_slice(&encore.stdout)?;
     assert_eq!(encore["needs_repair"], false);
     Ok(())
+}
+
+/// A two-partition GPT image of 2 MiB.
+fn source_gpt(dir: &Dossier) -> Result<PathBuf, std::io::Error> {
+    let source = dir.file("gpt.img");
+    fs::write(
+        &source,
+        gpt_image(
+            4096,
+            &[(2048, 2559, ESP, "EFI"), (2560, 4000, LINUX, "racine")],
+        ),
+    )?;
+    Ok(source)
+}
+
+/// Written to a target twice the image size: the backup GPT is no longer at the end.
+fn ecrire_gpt(cible: &Path, source: &Path, option: &str) -> Result<Output, std::io::Error> {
+    bonk(&[
+        "write",
+        "--simulate",
+        &chemin(cible),
+        &chemin(source),
+        "--size",
+        "4194304",
+        "--yes",
+        "--progress",
+        "none",
+        option,
+    ])
 }
 
 #[test]

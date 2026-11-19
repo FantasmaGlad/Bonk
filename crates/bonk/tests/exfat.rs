@@ -13,6 +13,64 @@ mod common;
 
 const MIB: u64 = 1 << 20;
 
+fn vault_volume() -> Volume<'static> {
+    Volume {
+        first_lba: 0,
+        sectors: 64 * MIB / 512,
+        label: Some("BonkVault"),
+        volume_id: 0xB0B0,
+    }
+}
+
+fn made_by_bonk() -> Vec<u8> {
+    let mut dev = MemoryDevice::new(64 * MIB, 512).expect("support");
+    bonk_core::format::exfat::write(&mut dev, &vault_volume()).expect("volume");
+    dev.as_bytes().to_vec()
+}
+
+fn made_by_mkfs() -> Vec<u8> {
+    let path = std::env::temp_dir().join(format!("bonk-mkfs-exfat-{}.img", std::process::id()));
+    std::fs::write(&path, vec![0u8; 64 * MIB as usize]).expect("image");
+    let made = Command::new("mkfs.exfat")
+        .args(["-L", "BonkVault"])
+        .arg(&path)
+        .output()
+        .expect("mkfs.exfat");
+    assert!(
+        made.status.success(),
+        "{}",
+        String::from_utf8_lossy(&made.stderr)
+    );
+    let bytes = std::fs::read(&path).expect("relecture");
+    let _ = std::fs::remove_file(&path);
+    bytes
+}
+
+/// A file over many clusters, one with a long accented name, an empty one.
+fn add_three(dev: &mut MemoryDevice, span: bonk_core::format::exfat::edit::Span) {
+    let big: Vec<u8> = (0..5_000_000u32).map(|i| (i * 13) as u8).collect();
+    for (name, data) in [
+        ("archlinux-x86_64.iso", big.as_slice()),
+        (
+            "Un nom assez long pour plusieurs entrées, été.iso",
+            b"bonk\n".as_slice(),
+        ),
+        ("vide.iso", [].as_slice()),
+    ] {
+        let mut reader = data;
+        bonk_core::format::exfat::edit::add_file(
+            dev,
+            span,
+            name,
+            data.len() as u64,
+            false,
+            &mut reader,
+            &mut |_| true,
+        )
+        .expect("ajout");
+    }
+}
+
 fn file(path: &str, size: u64) -> NewFile {
     NewFile {
         path: path.split('/').map(str::to_owned).collect(),
@@ -31,12 +89,7 @@ fn une_arborescence_exfat_est_acceptee_par_fsck_exfat() {
         file("isos/vide.txt", 0),
         file("LISEZ-MOI.txt", 5),
     ];
-    let volume = Volume {
-        first_lba: 0,
-        sectors: 64 * MIB / 512,
-        label: Some("BonkVault"),
-        volume_id: 0xB0B0,
-    };
+    let volume = vault_volume();
     let plan = layout(&volume, 512, &files, &[vec!["boot".to_owned()]]).expect("layout");
     let mut dev = MemoryDevice::new(64 * MIB, 512).expect("support");
     plan.write_structures(&mut dev).expect("structures");
@@ -59,22 +112,7 @@ fn une_arborescence_exfat_est_acceptee_par_fsck_exfat() {
     if !common::outil_disponible("fsck.exfat") {
         return;
     }
-    let path = std::env::temp_dir().join(format!("bonk-exfat-arbo-{}.img", std::process::id()));
-    std::fs::write(&path, dev.as_bytes()).expect("image");
-    let fsck = Command::new("fsck.exfat")
-        .arg("-n")
-        .arg("-v")
-        .arg(&path)
-        .output()
-        .expect("fsck.exfat");
-    let _ = std::fs::remove_file(&path);
-    let text = String::from_utf8_lossy(&fsck.stdout);
-    assert_eq!(
-        fsck.status.code(),
-        Some(0),
-        "{text}{}",
-        String::from_utf8_lossy(&fsck.stderr)
-    );
+    let text = fsck(dev.as_bytes(), "arbo");
     assert!(text.contains("directories 4, files 3"), "{text}");
 }
 
@@ -102,69 +140,18 @@ fn fsck(image: &[u8], label: &str) -> String {
 /// clean, files and free space included.
 #[test]
 fn un_ajout_et_un_retrait_sont_acceptes_par_fsck_exfat() {
-    use bonk_core::format::exfat::edit::{Span, add_file, remove_file};
+    use bonk_core::format::exfat::edit::{Span, remove_file};
 
     if !common::outil_disponible("fsck.exfat") || !common::outil_disponible("mkfs.exfat") {
         return;
     }
-    let made_by_bonk = {
-        let mut dev = MemoryDevice::new(64 * MIB, 512).expect("support");
-        bonk_core::format::exfat::write(
-            &mut dev,
-            &Volume {
-                first_lba: 0,
-                sectors: 64 * MIB / 512,
-                label: Some("BonkVault"),
-                volume_id: 0xB0B0,
-            },
-        )
-        .expect("volume");
-        dev.as_bytes().to_vec()
-    };
-    let made_by_mkfs = {
-        let path = std::env::temp_dir().join(format!("bonk-mkfs-exfat-{}.img", std::process::id()));
-        std::fs::write(&path, vec![0u8; 64 * MIB as usize]).expect("image");
-        let made = Command::new("mkfs.exfat")
-            .args(["-L", "BonkVault"])
-            .arg(&path)
-            .output()
-            .expect("mkfs.exfat");
-        assert!(
-            made.status.success(),
-            "{}",
-            String::from_utf8_lossy(&made.stderr)
-        );
-        let bytes = std::fs::read(&path).expect("relecture");
-        let _ = std::fs::remove_file(&path);
-        bytes
-    };
-    for (label, image) in [("bonk", made_by_bonk), ("mkfs", made_by_mkfs)] {
+    for (label, image) in [("bonk", made_by_bonk()), ("mkfs", made_by_mkfs())] {
         let mut dev = MemoryDevice::from_bytes(image, 512).expect("support");
         let span = Span {
             first_lba: 0,
             sectors: 64 * MIB / 512,
         };
-        let big: Vec<u8> = (0..5_000_000u32).map(|i| (i * 13) as u8).collect();
-        for (name, data) in [
-            ("archlinux-x86_64.iso", big.as_slice()),
-            (
-                "Un nom assez long pour plusieurs entrées, été.iso",
-                b"bonk\n".as_slice(),
-            ),
-            ("vide.iso", [].as_slice()),
-        ] {
-            let mut reader = data;
-            add_file(
-                &mut dev,
-                span,
-                name,
-                data.len() as u64,
-                false,
-                &mut reader,
-                &mut |_| true,
-            )
-            .expect("ajout");
-        }
+        add_three(&mut dev, span);
         let text = fsck(dev.as_bytes(), label);
         assert!(text.contains("files 3"), "{label}: {text}");
         remove_file(&mut dev, span, "archlinux-x86_64.iso").expect("retrait");
