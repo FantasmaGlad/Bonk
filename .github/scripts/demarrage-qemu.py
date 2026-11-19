@@ -14,7 +14,14 @@ BIOS_MENU_SECONDS = 25
 UEFI_BOOT_LIMIT_SECONDS = 180
 GRUB_MENU_SECONDS = 8
 KEY_GAP_SECONDS = 0.15
-CONSOLE_KEYS = "spc i g n o r e shift-minus l o g l e v e l spc c o n s o l e equal t t y shift-s 0".split()
+# The serial port is ttyS0 on a PC, ttyAMA0 on the `virt` ARM machine.
+SERIAL_CONSOLE = {"x86_64": "ttyS0", "aarch64": "ttyAMA0"}
+KEY_NAMES = {" ": "spc", ".": "dot", "=": "equal", "-": "minus", "_": "shift-minus", "/": "slash", ":": "shift-semicolon"}
+
+
+def keys_of(text):
+    """QEMU monitor key names typing `text` on a US layout."""
+    return [KEY_NAMES.get(c) or (f"shift-{c.lower()}" if c.isupper() else c) for c in text]
 MONITOR = "moniteur.sock"
 SERIAL = "serie.log"
 
@@ -67,13 +74,13 @@ class Monitor:
             time.sleep(KEY_GAP_SECONDS)
 
 
-def add_console(monitor, loader, entry, line):
-    """Official images are silent on the serial console: add `console=ttyS0` to the kernel line, as a person would in the boot menu."""
+def add_console(monitor, loader, entry, line, console_keys):
+    """Official images are silent on the serial console: add the serial console to the kernel line, as a person would in the boot menu."""
     monitor.keys(*["down"] * entry)
     if loader == "grub":
         monitor.keys("e")
         time.sleep(1)
-        monitor.keys(*["down"] * line, "end", *CONSOLE_KEYS)
+        monitor.keys(*["down"] * line, "end", *console_keys)
         monitor.screen("edition.png")
         monitor.keys("ctrl-x")
     else:
@@ -81,7 +88,7 @@ def add_console(monitor, loader, entry, line):
         time.sleep(1)
         if loader == "systemd-boot":
             monitor.keys("end")
-        monitor.keys(*CONSOLE_KEYS)
+        monitor.keys(*console_keys)
         monitor.screen("edition.png")
         monitor.keys("ret")
 
@@ -99,6 +106,7 @@ def arguments():
     parser.add_argument("--delai", type=int, default=600)
     parser.add_argument("--attente", type=int, help="secondes avant le menu, en remplacement du défaut")
     parser.add_argument("--processeur", choices=["x86_64", "aarch64"], default="x86_64")
+    parser.add_argument("--noyau", default="", help="options ajoutées à la ligne du noyau")
     return parser.parse_args()
 
 
@@ -123,6 +131,8 @@ def main():
             "-monitor", f"unix:{MONITOR},server,nowait",
             "-drive", f"if=none,id=cle,format=raw,readonly=on,file={image}",
             "-device", "qemu-xhci", "-device", "usb-storage,drive=cle,bootindex=1",
+            # The ARM machine has no keyboard of its own: the boot menu is edited through this one.
+            *(["-device", "usb-kbd"] if args.processeur == "aarch64" else []),
         ],
         stdin=subprocess.DEVNULL,
     )
@@ -136,7 +146,8 @@ def main():
         # ARM64 firmware names its serial port to the kernel (SPCR): nothing to add, and no screen to dump.
         if native:
             monitor.screen("menu.png")
-            add_console(monitor, args.chargeur, args.entree, args.ligne)
+            console = f" ignore_loglevel console={SERIAL_CONSOLE[args.processeur]} {args.noyau}".rstrip()
+            add_console(monitor, args.chargeur, args.entree, args.ligne, keys_of(console))
         if wait_for(args.preuve, args.delai, qemu):
             monitor.screen("atteint.png")
             print(f"OK ({args.mode}) : vu sur la console série : {args.preuve}")
