@@ -286,8 +286,10 @@ fn une_capture_rejouee_donne_les_memes_verdicts() -> Resultat {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
 type Verdict = (String, String, String, String);
 
+#[cfg(target_os = "linux")]
 /// Path, bus, kind and eligibility of each listed disk.
 fn verdicts(octets: &[u8]) -> Result<Vec<Verdict>, serde_json::Error> {
     let json: serde_json::Value = serde_json::from_slice(octets)?;
@@ -305,6 +307,7 @@ fn verdicts(octets: &[u8]) -> Result<Vec<Verdict>, serde_json::Error> {
     }))
 }
 
+#[cfg(target_os = "linux")]
 /// No secret leaves in the capture: the serials read here, the user's name.
 fn sans_secret(capture: &str, direct: &serde_json::Value) {
     for disk in direct["disks"].as_array().into_iter().flatten() {
@@ -322,6 +325,7 @@ fn sans_secret(capture: &str, direct: &serde_json::Value) {
     }
 }
 
+#[cfg(target_os = "linux")]
 /// Replaying must never be able to write to a real disk, nor read the system's sources.
 fn rejeu_sans_ecriture(capture: &Path, direct: &serde_json::Value, dossier: &Path) -> Resultat {
     let id = direct["disks"][0]["id"].as_str().unwrap_or("x").to_owned();

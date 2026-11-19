@@ -91,6 +91,7 @@ fn auto_reconnait_une_iso_windows_et_annonce_l_extraction() {
     assert!(!PathBuf::from(&cle).exists());
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn auto_ecrit_un_volume_fat32_valide() {
     if !common::outil_disponible("fsck.vfat") {
