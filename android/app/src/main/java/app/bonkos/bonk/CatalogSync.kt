@@ -39,10 +39,7 @@ internal class CatalogSync(private val context: Context, private val send: (ToRu
         }
     }
 
-    /**
-     * After the list: the cards show at once, their logos as they arrive, [ICON_WORKERS] at a time. One by one,
-     * a cold cache took about 20 s. A logo that fails stays absent.
-     */
+    /** After the list: the cards show at once, their logos as they arrive, [ICON_WORKERS] at a time. A logo that fails stays absent. */
     private fun icons(directory: String, proxy: String?) {
         val wanted = runCatching { Protocol.icons(Native.missingIcons(directory)) }.getOrDefault(emptyList())
         if (wanted.isEmpty()) return

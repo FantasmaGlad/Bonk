@@ -49,8 +49,8 @@ pub fn store(dir: &Path, family: &Family, bytes: &[u8]) -> Result<PathBuf, Strin
 /// Fetches a logo by its full address.
 pub type Fetch<'a> = dyn Fn(&str) -> Result<Vec<u8>, String> + Sync + 'a;
 
-/// Every family's logo, `workers` downloads at a time: one by one, a cold cache took 20 s for 96 logos. A
-/// logo shared by two families is fetched once, so two threads never write the same file.
+/// Every family's logo, `workers` downloads at a time. A logo shared by two families is fetched once, so two
+/// threads never write the same file.
 pub fn paths(
     base: &str,
     dir: &Path,
