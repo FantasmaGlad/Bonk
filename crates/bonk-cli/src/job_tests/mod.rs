@@ -196,104 +196,8 @@ impl Scenario {
     }
 
     fn run(&self, args: &[&str]) -> (u8, String, String) {
-        let calls = Cell::new(0usize);
-        let enumerations = self.enumerations.clone();
-        let hook = self.on_first_enumeration.clone();
-        let enumerate = move || {
-            let n = calls.get();
-            calls.set(n + 1);
-            if let (0, Some(hook)) = (n, &hook) {
-                hook();
-            }
-            Ok(enumerations[n.min(enumerations.len() - 1)].clone())
-        };
-        let log = Rc::clone(&self.log);
-        let unmount = self.unmount.clone();
-        let log_unmount = Rc::clone(&self.log);
-        let device = self.device.clone();
-        let (open, faults) = (self.open, self.faults);
-        let cancel = self.cancel;
-        let cancel_on_prepare = self.cancel_on_prepare;
-        let cancel_on_host_format = self.cancel_on_host_format;
-        let capabilities = self.capabilities.clone();
-        let log_format = Rc::clone(&self.log);
-        let log_rescan = Rc::clone(&self.log);
-        let rescan_fails = self.rescan_fails;
-        let open_devices = Rc::new(Cell::new(0usize));
-        let open_devices_at_rescan = Rc::clone(&open_devices);
-        let cancelled = Rc::new(Cell::new(false));
-        let cancel_flag = Rc::clone(&cancelled);
-        let cancel_format = Rc::clone(&cancelled);
-        let seen_elevation = Rc::clone(&self.seen_elevation);
-        let log_prepare = self.log.clone();
-        let prepare = self.prepare.clone();
-        let io = Io {
-            prepare: Box::new(move |path, _, _| {
-                cancel_flag.set(cancel_flag.get() || cancel_on_prepare);
-                log_prepare
-                    .borrow_mut()
-                    .push(format!("prepare:{}", path.display()));
-                prepare
-                    .clone()
-                    .map_err(|m| BlockError::Io(io::Error::new(io::ErrorKind::PermissionDenied, m)))
-            }),
-            unmount: Box::new(move |disk: &Disk, elevation| {
-                seen_elevation.set(Some(elevation));
-                log_unmount
-                    .borrow_mut()
-                    .push(format!("unmount:{}", disk.id));
-                unmount.clone().map_err(OpenTargetError::Unmount)
-            }),
-            open_node: Box::new(move |path, access, _| {
-                log.borrow_mut()
-                    .push(format!("open:{}:{access:?}", path.display()));
-                match open {
-                    Err(kind) => Err(BlockError::Io(io::Error::new(kind, "refusé"))),
-                    Ok(()) => {
-                        let inner: Box<dyn BlockDevice> = Box::new(Faulty {
-                            inner: device.clone(),
-                            faults,
-                            written: 0,
-                        });
-                        open_devices.set(open_devices.get() + 1);
-                        Ok(Box::new(Logged {
-                            inner,
-                            log: Rc::clone(&log),
-                            cache_clean: Cell::new(false),
-                            open_devices: Rc::clone(&open_devices),
-                        }) as Box<dyn BlockDevice>)
-                    }
-                }
-            }),
-            cancelled: Box::new(move || cancel || cancelled.get()),
-            capabilities: Box::new(move || capabilities.clone()),
-            format_partition: Box::new(move |path, fs, label, _| {
-                cancel_format.set(cancel_format.get() || cancel_on_host_format);
-                log_format.borrow_mut().push(format!(
-                    "format:{}:{fs}:{}",
-                    path.display(),
-                    label.unwrap_or("")
-                ));
-                Ok(())
-            }),
-            rescan: Box::new(move |path, _| {
-                // The service cannot reread the table of a disk still opened exclusively.
-                let call = match open_devices_at_rescan.get() {
-                    0 => "rescan",
-                    _ => "rescan_disque_encore_ouvert",
-                };
-                log_rescan
-                    .borrow_mut()
-                    .push(format!("{call}:{}", path.display()));
-                if rescan_fails {
-                    return Err(BlockError::Io(io::Error::other("service absent")));
-                }
-                Ok(())
-            }),
-            pause: Box::new(|| {}),
-        };
         let env = Env {
-            io,
+            io: self.io(),
             vars: self.vars.clone(),
             catalog: self.catalog.access(),
             ..Env::default()
@@ -305,7 +209,7 @@ impl Scenario {
             &mut out,
             &mut err,
             |_| Ok(()),
-            enumerate,
+            self.enumerate(),
             |_| Ok(()),
         );
         (
@@ -313,6 +217,126 @@ impl Scenario {
             String::from_utf8_lossy(&out).into_owned(),
             String::from_utf8_lossy(&err).into_owned(),
         )
+    }
+
+    /// The n-th call returns the n-th list (the last one repeats); the hook runs at the first.
+    fn enumerate(&self) -> impl Fn() -> Result<Vec<Disk>, bonk_hal::EnumerateError> + use<> {
+        let calls = Cell::new(0usize);
+        let enumerations = self.enumerations.clone();
+        let hook = self.on_first_enumeration.clone();
+        move || {
+            let n = calls.get();
+            calls.set(n + 1);
+            if let (0, Some(hook)) = (n, &hook) {
+                hook();
+            }
+            Ok(enumerations[n.min(enumerations.len() - 1)].clone())
+        }
+    }
+
+    /// The system as the scenario describes it; `cancelled` and the count of open devices are shared.
+    fn io(&self) -> Io {
+        let open_devices = Rc::new(Cell::new(0usize));
+        let cancelled = Rc::new(Cell::new(false));
+        let (cancel, capabilities) = (self.cancel, self.capabilities.clone());
+        let cancel_flag = Rc::clone(&cancelled);
+        Io {
+            prepare: self.prepare_hook(Rc::clone(&cancelled)),
+            unmount: self.unmount_hook(),
+            open_node: self.open_hook(Rc::clone(&open_devices)),
+            cancelled: Box::new(move || cancel || cancel_flag.get()),
+            capabilities: Box::new(move || capabilities.clone()),
+            format_partition: self.format_hook(cancelled),
+            rescan: self.rescan_hook(open_devices),
+            pause: Box::new(|| {}),
+        }
+    }
+
+    fn prepare_hook(&self, cancelled: Rc<Cell<bool>>) -> bonk_ops::job::PrepareFn {
+        let (log, prepare, cancel_on_prepare) = (
+            Rc::clone(&self.log),
+            self.prepare.clone(),
+            self.cancel_on_prepare,
+        );
+        Box::new(move |path, _, _| {
+            cancelled.set(cancelled.get() || cancel_on_prepare);
+            log.borrow_mut().push(format!("prepare:{}", path.display()));
+            prepare
+                .clone()
+                .map_err(|m| BlockError::Io(io::Error::new(io::ErrorKind::PermissionDenied, m)))
+        })
+    }
+
+    fn unmount_hook(&self) -> bonk_ops::job::UnmountFn {
+        let (log, unmount, seen) = (
+            Rc::clone(&self.log),
+            self.unmount.clone(),
+            Rc::clone(&self.seen_elevation),
+        );
+        Box::new(move |disk: &Disk, elevation| {
+            seen.set(Some(elevation));
+            log.borrow_mut().push(format!("unmount:{}", disk.id));
+            unmount.clone().map_err(OpenTargetError::Unmount)
+        })
+    }
+
+    fn open_hook(&self, open_devices: Rc<Cell<usize>>) -> bonk_ops::job::OpenNodeFn {
+        let (log, device, open, faults) = (
+            Rc::clone(&self.log),
+            self.device.clone(),
+            self.open,
+            self.faults,
+        );
+        Box::new(move |path, access, _| {
+            log.borrow_mut()
+                .push(format!("open:{}:{access:?}", path.display()));
+            match open {
+                Err(kind) => Err(BlockError::Io(io::Error::new(kind, "refusé"))),
+                Ok(()) => {
+                    let inner: Box<dyn BlockDevice> = Box::new(Faulty {
+                        inner: device.clone(),
+                        faults,
+                        written: 0,
+                    });
+                    open_devices.set(open_devices.get() + 1);
+                    Ok(Box::new(Logged {
+                        inner,
+                        log: Rc::clone(&log),
+                        cache_clean: Cell::new(false),
+                        open_devices: Rc::clone(&open_devices),
+                    }) as Box<dyn BlockDevice>)
+                }
+            }
+        })
+    }
+
+    fn format_hook(&self, cancelled: Rc<Cell<bool>>) -> bonk_ops::job::FormatPartitionFn {
+        let (log, cancel_on_host_format) = (Rc::clone(&self.log), self.cancel_on_host_format);
+        Box::new(move |path, fs, label, _| {
+            cancelled.set(cancelled.get() || cancel_on_host_format);
+            log.borrow_mut().push(format!(
+                "format:{}:{fs}:{}",
+                path.display(),
+                label.unwrap_or("")
+            ));
+            Ok(())
+        })
+    }
+
+    fn rescan_hook(&self, open_devices: Rc<Cell<usize>>) -> bonk_ops::job::RescanFn {
+        let (log, rescan_fails) = (Rc::clone(&self.log), self.rescan_fails);
+        Box::new(move |path, _| {
+            // The service cannot reread the table of a disk still opened exclusively.
+            let call = match open_devices.get() {
+                0 => "rescan",
+                _ => "rescan_disque_encore_ouvert",
+            };
+            log.borrow_mut().push(format!("{call}:{}", path.display()));
+            if rescan_fails {
+                return Err(BlockError::Io(io::Error::other("service absent")));
+            }
+            Ok(())
+        })
     }
 
     fn log(&self) -> Vec<String> {

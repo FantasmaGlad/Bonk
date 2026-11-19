@@ -46,6 +46,30 @@ fn fichier_de_config(label: &str) -> std::path::PathBuf {
         .join("config.json")
 }
 
+/// What the window opens with when `bonk` starts without arguments on this configuration file.
+fn vue_de_la_fenetre(file: &std::path::Path) -> ViewDefaults {
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let vue = RefCell::new(ViewDefaults::default());
+    let env = Env {
+        config_path: Some(file.to_path_buf()),
+        ..Env::default()
+    };
+    let code = execute(
+        ["bonk"],
+        &env,
+        &mut out,
+        &mut err,
+        |_| Ok(()),
+        || Ok(vec![]),
+        |v| {
+            *vue.borrow_mut() = v.view;
+            Ok(())
+        },
+    );
+    assert_eq!(code, 0);
+    vue.into_inner()
+}
+
 #[test]
 fn config_set_puis_list_puis_effet_sur_list_et_la_fenetre() -> Result<(), Box<dyn std::error::Error>>
 {
@@ -75,26 +99,8 @@ fn config_set_puis_list_puis_effet_sur_list_et_la_fenetre() -> Result<(), Box<dy
         sample(),
     );
     assert!(!r.out.contains("nvme-systeme"), "{}", r.out);
-    let (mut out, mut err) = (Vec::new(), Vec::new());
-    let vue = RefCell::new(ViewDefaults::default());
-    let env = Env {
-        config_path: Some(file.clone()),
-        ..Env::default()
-    };
-    let code = execute(
-        ["bonk"],
-        &env,
-        &mut out,
-        &mut err,
-        |_| Ok(()),
-        || Ok(vec![]),
-        |v| {
-            *vue.borrow_mut() = v.view;
-            Ok(())
-        },
-    );
-    assert_eq!(code, 0);
-    assert!(vue.borrow().show_all && !vue.borrow().show_internal);
+    let vue = vue_de_la_fenetre(&file);
+    assert!(vue.show_all && !vue.show_internal);
     let _ = std::fs::remove_dir_all(file.parent().ok_or("parent")?);
     Ok(())
 }

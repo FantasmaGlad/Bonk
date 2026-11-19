@@ -421,6 +421,38 @@ mod tests {
             .collect()
     }
 
+    /// One part: within the limit, its header numbered and spanned, its table pointing right after it.
+    fn assert_part(part: &[Segment], index: usize, limit: u64) {
+        assert!(total(part) <= limit, "{}", total(part));
+        let Segment::Bytes(head) = &part[0] else {
+            panic!()
+        };
+        assert_eq!(head.len(), HEADER_LEN);
+        assert_eq!(
+            u16::from_le_bytes([head[AT_PART], head[AT_PART + 1]]),
+            index as u16 + 1
+        );
+        assert_eq!(head[AT_TOTAL_PARTS], 3);
+        assert_eq!(head[AT_FLAGS] & FLAG_SPANNED as u8, FLAG_SPANNED as u8);
+        assert_eq!(head[AT_INTEGRITY], 0);
+        let lookup = Resource::read(&head[AT_LOOKUP..AT_LOOKUP + RESOURCE_LEN]);
+        let Segment::Bytes(table) = &part[part.len() - 2] else {
+            panic!()
+        };
+        assert_eq!(lookup.stored, table.len() as u64);
+        let mut position = HEADER_LEN as u64;
+        for entry in table.as_chunks::<ENTRY_LEN>().0 {
+            let resource = Resource::read(entry);
+            assert_eq!(resource.offset, position);
+            assert_eq!(u16::from_le_bytes([entry[24], entry[25]]), index as u16 + 1);
+            position += resource.stored;
+        }
+        assert_eq!(lookup.offset, position);
+        let xml = Resource::read(&head[AT_XML..AT_XML + RESOURCE_LEN]);
+        assert_eq!(xml.offset, position + lookup.stored);
+        assert_eq!(xml.offset + xml.stored, total(part));
+    }
+
     #[test]
     fn chaque_morceau_a_ses_ressources_sa_table_et_son_en_tete() {
         let (header, table, size) = wim(5, 1000, false);
@@ -429,34 +461,7 @@ mod tests {
         assert_eq!(parts.len(), 3);
         let mut seen = Vec::new();
         for (index, part) in parts.iter().enumerate() {
-            assert!(total(part) <= limit, "{}", total(part));
-            let Segment::Bytes(head) = &part[0] else {
-                panic!()
-            };
-            assert_eq!(head.len(), HEADER_LEN);
-            assert_eq!(
-                u16::from_le_bytes([head[AT_PART], head[AT_PART + 1]]),
-                index as u16 + 1
-            );
-            assert_eq!(head[AT_TOTAL_PARTS], 3);
-            assert_eq!(head[AT_FLAGS] & FLAG_SPANNED as u8, FLAG_SPANNED as u8);
-            assert_eq!(head[AT_INTEGRITY], 0);
-            let lookup = Resource::read(&head[AT_LOOKUP..AT_LOOKUP + RESOURCE_LEN]);
-            let Segment::Bytes(table) = &part[part.len() - 2] else {
-                panic!()
-            };
-            assert_eq!(lookup.stored, table.len() as u64);
-            let mut position = HEADER_LEN as u64;
-            for entry in table.as_chunks::<ENTRY_LEN>().0 {
-                let resource = Resource::read(entry);
-                assert_eq!(resource.offset, position);
-                assert_eq!(u16::from_le_bytes([entry[24], entry[25]]), index as u16 + 1);
-                position += resource.stored;
-            }
-            assert_eq!(lookup.offset, position);
-            let xml = Resource::read(&head[AT_XML..AT_XML + RESOURCE_LEN]);
-            assert_eq!(xml.offset, position + lookup.stored);
-            assert_eq!(xml.offset + xml.stored, total(part));
+            assert_part(part, index, limit);
             seen.extend(sources(part));
         }
         let (xml_offset, xml_len) = (size - 50, 50);
@@ -466,6 +471,12 @@ mod tests {
             seen.iter().filter(|s| **s == (xml_offset, xml_len)).count(),
             3
         );
+    }
+
+    #[test]
+    fn la_ressource_de_demarrage_reste_dans_le_premier_morceau() {
+        let (header, table, size) = wim(5, 1000, false);
+        let parts = split(&header, &table, size, 2500).unwrap();
         let Segment::Bytes(first) = &parts[0][0] else {
             panic!()
         };

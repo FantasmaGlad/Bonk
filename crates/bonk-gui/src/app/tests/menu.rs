@@ -1,6 +1,25 @@
 use super::*;
 
+fn choix(id: &str, label: &str, source: catalog::ChoiceSource) -> catalog::Choice {
+    catalog::Choice {
+        id: id.to_owned(),
+        name: "Ubuntu".to_owned(),
+        edition: None,
+        label: label.to_owned(),
+        end_of_life: false,
+        note: None,
+        source,
+        desktop: None,
+        media: "usb".to_owned(),
+        arch: "x86_64".to_owned(),
+    }
+}
+
 pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
+    let download = |url: &str, digit: &str| catalog::ChoiceSource::Download {
+        url: url.to_owned(),
+        sha256: digit.repeat(64),
+    };
     vec![catalog::System {
         id: String::new(),
         name: "Ubuntu".to_owned(),
@@ -8,48 +27,21 @@ pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
         base: Some("ubuntu".to_owned()),
         icon: None,
         choices: vec![
-            catalog::Choice {
-                id: "ubuntu-26.04-desktop-x86_64".to_owned(),
-                name: "Ubuntu".to_owned(),
-                edition: None,
-                label: "26.04.1 desktop LTS".to_owned(),
-                end_of_life: false,
-                note: None,
-                source: catalog::ChoiceSource::Download {
-                    url: "https://u/26.iso".to_owned(),
-                    sha256: "a".repeat(64),
-                },
-                desktop: None,
-                media: "usb".to_owned(),
-                arch: "x86_64".to_owned(),
-            },
-            catalog::Choice {
-                id: "ubuntu-24.04-desktop-x86_64".to_owned(),
-                name: "Ubuntu".to_owned(),
-                edition: None,
-                label: "24.04.5 desktop LTS".to_owned(),
-                end_of_life: false,
-                note: None,
-                source: catalog::ChoiceSource::Download {
-                    url: "https://u/24.iso".to_owned(),
-                    sha256: "b".repeat(64),
-                },
-                desktop: None,
-                media: "usb".to_owned(),
-                arch: "x86_64".to_owned(),
-            },
-            catalog::Choice {
-                id: "ubuntu-11".to_owned(),
-                name: "Ubuntu".to_owned(),
-                edition: None,
-                label: "11".to_owned(),
-                end_of_life: false,
-                note: None,
-                source: catalog::ChoiceSource::OfficialPage("https://p/".to_owned()),
-                desktop: None,
-                media: "usb".to_owned(),
-                arch: "x86_64".to_owned(),
-            },
+            choix(
+                "ubuntu-26.04-desktop-x86_64",
+                "26.04.1 desktop LTS",
+                download("https://u/26.iso", "a"),
+            ),
+            choix(
+                "ubuntu-24.04-desktop-x86_64",
+                "24.04.5 desktop LTS",
+                download("https://u/24.iso", "b"),
+            ),
+            choix(
+                "ubuntu-11",
+                "11",
+                catalog::ChoiceSource::OfficialPage("https://p/".to_owned()),
+            ),
         ],
     }]
 }

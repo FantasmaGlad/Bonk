@@ -95,86 +95,67 @@ fn une_valeur_invalide_dans_le_fichier_ou_l_environnement_est_ignoree() {
     assert!(eff.iter().all(|e| e.origin == Origin::Default));
 }
 
+type Vars = [(String, String)];
+
+fn set(key: &str, value: &str, path: &Path) -> Result<String, String> {
+    texte(
+        &ConfigAction::Set {
+            key: key.into(),
+            value: value.into(),
+        },
+        path,
+        &[],
+    )
+}
+
+fn get(key: &str, path: &Path, vars: &Vars) -> Result<String, String> {
+    texte(&ConfigAction::Get { key: key.into() }, path, vars)
+}
+
+fn list(path: &Path, vars: &Vars) -> Result<String, String> {
+    texte(&ConfigAction::List { json: false }, path, vars)
+}
+
+fn reset(key: Option<&str>, path: &Path) -> Result<String, String> {
+    texte(
+        &ConfigAction::Reset {
+            key: key.map(Into::into),
+        },
+        path,
+        &[],
+    )
+}
+
 #[test]
 fn set_get_list_reset_de_bout_en_bout() -> Result<(), String> {
     let file = TempFile::new("cycle");
     let path = &file.0;
     // Missing: all defaults, nothing created by a read.
-    let list = texte(&ConfigAction::List { json: false }, path, &[])?;
+    let defaults = list(path, &[])?;
     assert!(
-        list.contains("view.show_all") && list.contains("(default)"),
-        "{list}"
+        defaults.contains("view.show_all") && defaults.contains("(default)"),
+        "{defaults}"
     );
     assert!(!path.exists());
 
-    texte(
-        &ConfigAction::Set {
-            key: "view.show_all".into(),
-            value: "oui".into(),
-        },
-        path,
-        &[],
-    )?;
+    set("view.show_all", "oui", path)?;
     assert!(path.exists());
-    assert_eq!(
-        texte(
-            &ConfigAction::Get {
-                key: "view.show_all".into()
-            },
-            path,
-            &[]
-        )?,
-        "true\n"
-    );
-    let list = texte(&ConfigAction::List { json: false }, path, &[])?;
+    assert_eq!(get("view.show_all", path, &[])?, "true\n");
+    let saved = list(path, &[])?;
     assert!(
-        list.contains("view.show_all") && list.contains("(file)"),
-        "{list}"
+        saved.contains("view.show_all") && saved.contains("(file)"),
+        "{saved}"
     );
 
     // The environment variable wins, and the list says which.
     let vars = [("BONK_VIEW_SHOW_ALL".to_owned(), "false".to_owned())];
-    assert_eq!(
-        texte(
-            &ConfigAction::Get {
-                key: "view.show_all".into()
-            },
-            path,
-            &vars
-        )?,
-        "false\n"
-    );
-    assert!(
-        texte(&ConfigAction::List { json: false }, path, &vars)?
-            .contains("variable BONK_VIEW_SHOW_ALL")
-    );
+    assert_eq!(get("view.show_all", path, &vars)?, "false\n");
+    assert!(list(path, &vars)?.contains("variable BONK_VIEW_SHOW_ALL"));
 
-    texte(
-        &ConfigAction::Reset {
-            key: Some("view.show_all".into()),
-        },
-        path,
-        &[],
-    )?;
-    assert_eq!(
-        texte(
-            &ConfigAction::Get {
-                key: "view.show_all".into()
-            },
-            path,
-            &[]
-        )?,
-        "false\n"
-    );
-    texte(
-        &ConfigAction::Set {
-            key: "log.format".into(),
-            value: "json".into(),
-        },
-        path,
-        &[],
-    )?;
-    texte(&ConfigAction::Reset { key: None }, path, &[])?;
+    reset(Some("view.show_all"), path)?;
+    assert_eq!(get("view.show_all", path, &[])?, "false\n");
+    set("log.format", "json", path)?;
+    reset(None, path)?;
     assert!(load(path)?.values.is_empty());
     Ok(())
 }

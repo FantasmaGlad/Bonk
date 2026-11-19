@@ -384,6 +384,24 @@ fn une_iso_dont_le_nom_a_des_espaces_entre_avec_des_soulignes() {
 }
 
 /// A newer GRUB in the catalog: the check says so, --yes replaces it, the ISO stays.
+/// `bonk vault update --json` on the scenario's key, which must succeed.
+fn update_json(scenario: &Scenario, cache: &str, extra: &[&str]) -> serde_json::Value {
+    let mut args = vec![
+        "vault",
+        "update",
+        "usb-a",
+        "--json",
+        "--catalog-url",
+        BASE,
+        "--cache-dir",
+        cache,
+    ];
+    args.extend_from_slice(extra);
+    let (code, out, err) = scenario.run(&args);
+    assert_eq!(code, 0, "{err}");
+    serde_json::from_str(&out).expect("JSON")
+}
+
 #[test]
 fn mettre_a_jour_grub_garde_les_iso() {
     let (mut scenario, cache) = vault_scenario(Some(GRUB), "cache-maj");
@@ -400,29 +418,7 @@ fn mettre_a_jour_grub_garde_les_iso() {
     let arch_arg = arch.display().to_string();
     let (code, _, err) = scenario.run(&["vault", "add", "usb-a", &arch_arg, "--yes"]);
     assert_eq!(code, 0, "{err}");
-    let update = |extra: &[&str]| {
-        let mut args = vec![
-            "vault",
-            "update",
-            "usb-a",
-            "--json",
-            "--catalog-url",
-            BASE,
-            "--cache-dir",
-            &cache,
-        ];
-        args.extend_from_slice(extra);
-        args.iter()
-            .map(|a| (*a).to_owned())
-            .collect::<Vec<String>>()
-    };
-    let run = |scenario: &Scenario, extra: &[&str]| {
-        let args = update(extra);
-        let args: Vec<&str> = args.iter().map(String::as_str).collect();
-        let (code, out, err) = scenario.run(&args);
-        assert_eq!(code, 0, "{err}");
-        serde_json::from_str::<serde_json::Value>(&out).expect("JSON")
-    };
+    let run = |scenario: &Scenario, extra: &[&str]| update_json(scenario, &cache, extra);
     assert_eq!(run(&scenario, &[])["up_to_date"], true);
 
     scenario.catalog = served_catalog(Some(b"MZ grub de test, version suivante"));

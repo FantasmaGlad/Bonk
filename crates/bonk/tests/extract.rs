@@ -71,14 +71,10 @@ fn volume_of(dossier: &Dossier, image: &str) -> String {
 // `fsck.vfat` exists in CI on Linux only.
 #[cfg(target_os = "linux")]
 #[test]
-fn auto_reconnait_une_iso_windows_et_ecrit_un_volume_valide() {
-    if !common::outil_disponible("fsck.vfat") {
-        return;
-    }
-    let d = Dossier::new("auto");
+fn auto_reconnait_une_iso_windows_et_annonce_l_extraction() {
+    let d = Dossier::new("auto-plan");
     let (iso, cle) = (d.file("win.iso"), d.file("cle.img"));
     fs::write(&iso, windows_iso(0x8664)).expect("écriture de l'ISO");
-
     let plan = bonk(&[
         "write",
         "--simulate",
@@ -93,7 +89,17 @@ fn auto_reconnait_une_iso_windows_et_ecrit_un_volume_valide() {
     assert!(text.contains("extraction, 4 files"), "{text}");
     assert!(text.contains("unsigned loader"), "{text}");
     assert!(!PathBuf::from(&cle).exists());
+}
 
+#[cfg(target_os = "linux")]
+#[test]
+fn auto_ecrit_un_volume_fat32_valide() {
+    if !common::outil_disponible("fsck.vfat") {
+        return;
+    }
+    let d = Dossier::new("auto");
+    let (iso, cle) = (d.file("win.iso"), d.file("cle.img"));
+    fs::write(&iso, windows_iso(0x8664)).expect("écriture de l'ISO");
     let done = bonk(&[
         "write",
         "--simulate",
@@ -120,10 +126,8 @@ fn auto_reconnait_une_iso_windows_et_ecrit_un_volume_valide() {
         serde_json::json!(["x86_64"])
     );
     assert!(value["gpt_repair"].is_null());
-
-    let volume = volume_of(&d, &cle);
     let check = Command::new("fsck.vfat")
-        .args(["-n", &volume])
+        .args(["-n", &volume_of(&d, &cle)])
         .output()
         .expect("fsck.vfat");
     assert!(

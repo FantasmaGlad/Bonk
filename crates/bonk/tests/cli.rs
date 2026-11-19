@@ -275,49 +275,66 @@ fn une_capture_rejouee_donne_les_memes_verdicts() -> Resultat {
         "{}",
         String::from_utf8_lossy(&rejoue.stderr)
     );
-
-    let resume =
-        |octets: &[u8]| -> Result<Vec<(String, String, String, String)>, serde_json::Error> {
-            let json: serde_json::Value = serde_json::from_slice(octets)?;
-            Ok(json["disks"].as_array().map_or(vec![], |d| {
-                d.iter()
-                    .map(|x| {
-                        (
-                            x["path"].to_string(),
-                            x["bus"].to_string(),
-                            x["kind"].to_string(),
-                            x["eligibility"]["verdict"].to_string(),
-                        )
-                    })
-                    .collect()
-            }))
-        };
-    let (a, b) = (resume(&direct.stdout)?, resume(&rejoue.stdout)?);
+    let (a, b) = (verdicts(&direct.stdout)?, verdicts(&rejoue.stdout)?);
     assert!(!a.is_empty());
     assert_eq!(a, b, "la capture rejouée diffère de la lecture directe");
-
-    // No secret leaves in the capture: look for the serials read here.
-    let texte = std::fs::read_to_string(&capture)?;
     let direct_json: serde_json::Value = serde_json::from_slice(&direct.stdout)?;
-    for disk in direct_json["disks"].as_array().into_iter().flatten() {
+    sans_secret(&std::fs::read_to_string(&capture)?, &direct_json);
+    rejeu_sans_ecriture(&capture, &direct_json, &dossier)?;
+    std::fs::remove_dir_all(&dossier)?;
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+type Verdict = (String, String, String, String);
+
+#[cfg(target_os = "linux")]
+/// Path, bus, kind and eligibility of each listed disk.
+fn verdicts(octets: &[u8]) -> Result<Vec<Verdict>, serde_json::Error> {
+    let json: serde_json::Value = serde_json::from_slice(octets)?;
+    Ok(json["disks"].as_array().map_or(vec![], |d| {
+        d.iter()
+            .map(|x| {
+                (
+                    x["path"].to_string(),
+                    x["bus"].to_string(),
+                    x["kind"].to_string(),
+                    x["eligibility"]["verdict"].to_string(),
+                )
+            })
+            .collect()
+    }))
+}
+
+#[cfg(target_os = "linux")]
+/// No secret leaves in the capture: the serials read here, the user's name.
+fn sans_secret(capture: &str, direct: &serde_json::Value) {
+    for disk in direct["disks"].as_array().into_iter().flatten() {
         if let Some(serie) = disk["serial"].as_str().filter(|s| s.len() >= 6) {
-            assert!(!texte.contains(serie), "numéro de série dans la capture");
+            assert!(!capture.contains(serie), "numéro de série dans la capture");
         }
     }
     if let Ok(user) = std::env::var("USER").map(|u| format!("/{u}/"))
         && user.len() > 4
     {
-        assert!(!texte.contains(&user), "nom d'utilisateur dans la capture");
+        assert!(
+            !capture.contains(&user),
+            "nom d'utilisateur dans la capture"
+        );
     }
+}
 
-    // Replaying must never be able to write to a real disk.
-    let id = direct_json["disks"][0]["id"]
-        .as_str()
-        .unwrap_or("x")
-        .to_owned();
+#[cfg(target_os = "linux")]
+/// Replaying must never be able to write to a real disk, nor read the system's sources.
+fn rejeu_sans_ecriture(
+    capture: &std::path::Path,
+    direct: &serde_json::Value,
+    dossier: &std::path::Path,
+) -> Resultat {
+    let id = direct["disks"][0]["id"].as_str().unwrap_or("x").to_owned();
     let refus = bonk()
         .arg("--fixture")
-        .arg(&capture)
+        .arg(capture)
         .args(["write", &id, "/dev/null", "--yes"])
         .output()?;
     common::assert_code(&refus, 2);
@@ -328,7 +345,7 @@ fn une_capture_rejouee_donne_les_memes_verdicts() -> Resultat {
     );
     let sources = bonk()
         .arg("--fixture")
-        .arg(&capture)
+        .arg(capture)
         .args(["debug", "sources"])
         .output()?;
     common::assert_code(&sources, 2);
@@ -336,7 +353,6 @@ fn une_capture_rejouee_donne_les_memes_verdicts() -> Resultat {
     std::fs::write(&faux, "{}")?;
     let invalide = bonk().arg("--fixture").arg(&faux).arg("list").output()?;
     common::assert_code(&invalide, 2);
-    std::fs::remove_dir_all(&dossier)?;
     Ok(())
 }
 
