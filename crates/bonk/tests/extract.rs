@@ -311,3 +311,52 @@ fn une_cle_windows_est_en_mbr_par_defaut() {
         serde_json::json!(["uefi", "bios"])
     );
 }
+
+/// A rescue compilation built on Windows PE has no installer image, only its system in `sources/boot.wim`.
+#[test]
+fn une_iso_windows_pe_s_ecrit_par_extraction() {
+    let d = Dossier::new("winpe");
+    let (iso, cle) = (d.file("pe.iso"), d.file("cle.img"));
+    let content: Vec<u8> = (0..200_000u32).map(|i| i as u8).collect();
+    let pe = build(&[
+        ("efi/boot/bootx64.efi", &loader(0x8664)),
+        ("sources/boot.wim", &content),
+        ("bootmgr", b"bootmgr"),
+    ]);
+    fs::write(&iso, pe).expect("écriture de l'ISO");
+    let plan = bonk(&[
+        "write",
+        "--simulate",
+        &cle,
+        &iso,
+        "--size",
+        "134217728",
+        "--dry-run",
+    ]);
+    let text = String::from_utf8_lossy(&plan.stdout);
+    assert!(
+        plan.status.success(),
+        "{text}{}",
+        String::from_utf8_lossy(&plan.stderr)
+    );
+    assert!(text.contains("extraction, 3 files"), "{text}");
+    let sans_wim = build(&[
+        ("efi/boot/bootx64.efi", &loader(0x8664)),
+        ("lisez-moi.txt", b"x"),
+    ]);
+    fs::write(&iso, sans_wim).expect("écriture de l'ISO");
+    let refus = bonk(&[
+        "write",
+        "--simulate",
+        &cle,
+        &iso,
+        "--size",
+        "134217728",
+        "--dry-run",
+    ]);
+    assert!(
+        !refus.status.success(),
+        "{}",
+        String::from_utf8_lossy(&refus.stdout)
+    );
+}
