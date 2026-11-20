@@ -4,7 +4,9 @@ use bonk_hal::Lang;
 use bonk_ui::browse::{
     BrowseMessage, Options, desktop_label, media_label, options, variant_facts, writable_count,
 };
-use bonk_ui::catalog::{CatalogState, Choice, ChoiceSource, System, official_page_note};
+use bonk_ui::catalog::{
+    CatalogState, Choice, ChoiceSource, System, official_page_note, vault_note,
+};
 use bonk_ui::model::{Message, Model};
 use bonk_ui::settings::Screen;
 use serde_json::{Value, json};
@@ -138,6 +140,7 @@ fn variant(choice: &Choice, lang: Lang) -> Value {
     let (id, note) = match &choice.source {
         ChoiceSource::Download { .. } => (Some(choice.id.as_str()), None),
         ChoiceSource::OfficialPage(page) => (None, Some(official_page_note(page, lang))),
+        ChoiceSource::Vault { .. } => (None, Some(vault_note(lang).to_owned())),
         ChoiceSource::NotForUsb => (
             None,
             Some(

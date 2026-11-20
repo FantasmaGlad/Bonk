@@ -44,10 +44,10 @@ pub fn boot_files(efi: &[(&str, Vec<u8>)]) -> Result<Vec<BootFile>, FormatError>
         path: MENU_PATH.to_owned(),
         data: MENU.as_bytes().to_vec(),
     });
-    files.push(BootFile {
-        path: CASPER_EXFAT_PATH.to_owned(),
-        data: CASPER_EXFAT.as_bytes().to_vec(),
-    });
+    files.extend(INITRD_SCRIPTS.iter().map(|(path, script)| BootFile {
+        path: (*path).to_owned(),
+        data: script.as_bytes().to_vec(),
+    }));
     Ok(files)
 }
 

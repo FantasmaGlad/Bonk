@@ -101,8 +101,13 @@ pub(in crate::serve) fn write_source(
             "image takes its hash and file name from the signed catalog: sha256, sha256_file and file_name are refused",
         ));
     }
-    let found = crate::catalog::image_source(id, p.catalog_url.as_deref(), p.cache_dir.as_deref())
-        .map_err(|e| failure(e.code, e.message))?;
+    let found = crate::catalog::image_source(
+        id,
+        p.catalog_url.as_deref(),
+        p.cache_dir.as_deref(),
+        crate::catalog::Destination::Drive,
+    )
+    .map_err(|e| failure(e.code, e.message))?;
     Ok((found.url, Some(found.sha256), found.file_name))
 }
 

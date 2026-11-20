@@ -61,5 +61,6 @@ pub(super) fn family_name(family: core_vault::IsoFamily) -> &'static str {
         core_vault::IsoFamily::Ubuntu => "Ubuntu",
         core_vault::IsoFamily::Arch => "Arch Linux",
         core_vault::IsoFamily::FedoraLive => "Fedora live",
+        core_vault::IsoFamily::Anaconda => "Anaconda installer",
     }
 }

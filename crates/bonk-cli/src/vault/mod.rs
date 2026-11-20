@@ -117,8 +117,22 @@ pub(crate) struct AddArgs {
     #[command(flatten)]
     common: CommonArgs,
 
-    /// ISO image to copy: Debian live, Ubuntu, Arch Linux or Fedora live; spaces in its name become _
-    iso: PathBuf,
+    /// ISO image to copy: Debian live, Ubuntu, Arch Linux, Fedora live or an Anaconda installer (AlmaLinux,
+    /// Rocky Linux); spaces in its name become _
+    #[arg(required_unless_present = "image", conflicts_with = "image")]
+    iso: Option<PathBuf>,
+
+    /// Image of the signed catalog (`bonk catalog list`): downloaded into the cache, checked, then added
+    #[arg(long, value_name = "ID")]
+    image: Option<String>,
+
+    /// Catalog address (`BONK_CATALOG_URL`); its signature is checked wherever it comes from
+    #[arg(long, value_name = "URL", requires = "image")]
+    catalog_url: Option<String>,
+
+    /// Download directory; by default the user's cache directory
+    #[arg(long, value_name = "DIR", requires = "image")]
+    cache_dir: Option<PathBuf>,
 
     /// Confirm: without --yes, Bonk does nothing
     #[arg(long)]

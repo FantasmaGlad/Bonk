@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use bonk_catalog::manifest::{self, Catalog, ImageSource, Loaded, TRUSTED_KEYS};
+use bonk_catalog::manifest::{self, Catalog, Image, ImageSource, Loaded, TRUSTED_KEYS};
 use bonk_ops::job::JobError;
 
 use crate::errors::Code;
@@ -88,7 +88,44 @@ pub(crate) struct CatalogSource {
     pub(crate) file_name: Option<String>,
 }
 
-pub(crate) fn resolve_image(catalog: &Catalog, id: &str) -> Result<CatalogSource, JobError> {
+/// What the image is fetched for: each use accepts what can start from it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Destination {
+    Drive,
+    Vault,
+    /// Downloaded only: kept in the cache.
+    Cache,
+}
+
+fn refusal(image: &Image, destination: Destination) -> Option<String> {
+    let usb = image.usb_boot;
+    let starts = match destination {
+        Destination::Drive => usb,
+        Destination::Vault => usb || image.vault,
+        Destination::Cache => true,
+    };
+    if starts {
+        return None;
+    }
+    let why = image.note.as_deref().unwrap_or("see its publisher");
+    Some(if image.vault {
+        format!(
+            "{} {} does not boot written to a USB drive, but from a Bonk vault: bonk vault add <disk> --image {}",
+            image.name, image.version, image.id
+        )
+    } else {
+        format!(
+            "{} {} does not boot from a USB drive: {why}",
+            image.name, image.version
+        )
+    })
+}
+
+pub(crate) fn resolve_image(
+    catalog: &Catalog,
+    id: &str,
+    destination: Destination,
+) -> Result<CatalogSource, JobError> {
     let image = catalog
         .images
         .iter()
@@ -97,15 +134,10 @@ pub(crate) fn resolve_image(catalog: &Catalog, id: &str) -> Result<CatalogSource
             code: Code::InvalidArgument,
             message: format!("unknown image: '{id}' (images: bonk catalog list)"),
         })?;
-    if !image.usb_boot {
+    if let Some(message) = refusal(image, destination) {
         return Err(JobError {
             code: Code::InvalidArgument,
-            message: format!(
-                "{} {} does not boot from a USB drive: {}",
-                image.name,
-                image.version,
-                image.note.as_deref().unwrap_or("see its publisher")
-            ),
+            message,
         });
     }
     match &image.source {
@@ -128,7 +160,8 @@ pub(crate) fn image_source(
     id: &str,
     url: Option<&str>,
     cache_dir: Option<&Path>,
+    destination: Destination,
 ) -> Result<CatalogSource, JobError> {
     let (loaded, _) = load(url, cache_dir)?;
-    resolve_image(&loaded.catalog, id)
+    resolve_image(&loaded.catalog, id, destination)
 }

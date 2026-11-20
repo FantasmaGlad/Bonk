@@ -36,7 +36,7 @@ pub(crate) struct DownloadArgs {
 #[derive(Debug, Serialize, JsonSchema)]
 pub(crate) struct Downloaded {
     id: String,
-    path: String,
+    pub(crate) path: String,
     sha256: String,
     bytes: u64,
     /// Kept by an earlier download: checked again, nothing fetched.
@@ -75,8 +75,36 @@ fn download(
     deps: &Deps<'_>,
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<Downloaded, JobError> {
-    let cache_dir = args.cache_dir.as_deref();
-    let source = super::image_source(&args.id, args.catalog_url.as_deref(), cache_dir)?;
+    let request = Request {
+        id: &args.id,
+        catalog_url: args.catalog_url.as_deref(),
+        cache_dir: args.cache_dir.as_deref(),
+        destination: super::Destination::Cache,
+    };
+    fetch_checked(&request, deps, progress)
+}
+
+/// A catalog image to bring into the cache.
+pub(crate) struct Request<'a> {
+    pub(crate) id: &'a str,
+    pub(crate) catalog_url: Option<&'a str>,
+    pub(crate) cache_dir: Option<&'a Path>,
+    pub(crate) destination: super::Destination,
+}
+
+/// Kept or downloaded, then checked against the signed hash.
+pub(crate) fn fetch_checked(
+    request: &Request<'_>,
+    deps: &Deps<'_>,
+    progress: &mut dyn FnMut(&Progress) -> Control,
+) -> Result<Downloaded, JobError> {
+    let cache_dir = request.cache_dir;
+    let source = super::image_source(
+        request.id,
+        request.catalog_url,
+        cache_dir,
+        request.destination,
+    )?;
     let url = source.url.to_string_lossy();
     let sha256 = source.sha256;
     let named = crate::fetch::Named {
@@ -87,7 +115,7 @@ fn download(
         crate::fetch::kept_or_fetched(named, cache_dir, &sha256, deps, progress)?;
     let bytes = check(&dest, &sha256, progress)?;
     Ok(Downloaded {
-        id: args.id.clone(),
+        id: request.id.to_owned(),
         path: dest.display().to_string(),
         sha256,
         bytes,

@@ -337,6 +337,56 @@ fn ajouter_puis_retirer_une_iso_sur_le_coffre() {
     let _ = std::fs::remove_file(&arch);
 }
 
+/// An installer of the Red Hat family is added with its location, which its initramfs needs.
+#[test]
+fn un_installateur_anaconda_entre_au_coffre_avec_son_emplacement() {
+    let (scenario, cache) = vault_scenario(Some(GRUB), "cache-anaconda");
+    let cache = cache.arg();
+    let (code, _, err) = scenario.run(&init_args(&cache, &[]));
+    assert_eq!(code, 0, "{err}");
+    let alma = iso_file(
+        "AlmaLinux-10.3-aarch64-boot.iso",
+        &[
+            ("images/pxeboot/vmlinuz", 1),
+            ("images/pxeboot/initrd.img", 1),
+            ("images/install.img", 1),
+            ("EFI/BOOT/BOOTAA64.EFI", 1),
+        ],
+    );
+    let alma_arg = alma.display().to_string();
+    let (code, out, err) = scenario.run(&["vault", "add", "usb-a", &alma_arg, "--yes", "--json"]);
+    assert_eq!(code, 0, "{err}");
+    let value: serde_json::Value = serde_json::from_str(&out).expect("JSON");
+    assert_eq!(
+        (value["family"].as_str(), value["arch"].as_str()),
+        (Some("anaconda"), Some("aarch64"))
+    );
+    let _ = std::fs::remove_file(&alma);
+}
+
+#[test]
+fn une_image_du_catalogue_ne_se_telecharge_pas_sans_confirmation() {
+    let (scenario, _cache) = vault_scenario(Some(GRUB), "cache-sans-oui");
+    let (code, _, err) = scenario.run(&[
+        "vault",
+        "add",
+        "usb-a",
+        "--image",
+        "almalinux-10-boot-aarch64",
+    ]);
+    assert_eq!(code, EXIT_USAGE, "{err}");
+    assert!(err.contains("E2004"), "{err}");
+    let (code, _, err) = scenario.run(&[
+        "vault",
+        "add",
+        "usb-a",
+        "/x.iso",
+        "--image",
+        "almalinux-10-boot-aarch64",
+    ]);
+    assert_eq!(code, EXIT_USAGE, "{err}");
+}
+
 /// Checked on the file alone: the drive is not even opened.
 #[test]
 fn une_iso_que_le_menu_ne_demarre_pas_est_refusee_avant_le_disque() {

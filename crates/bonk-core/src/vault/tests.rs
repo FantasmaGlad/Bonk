@@ -158,6 +158,20 @@ fn processeur_reconnu_comme_par_le_menu() -> std::io::Result<()> {
         ("EFI/boot/bootaa64.efi", 1),
     ];
     assert_eq!(arch("Ubuntu", &arm)?, Some(IsoArch::Aarch64));
+    let anaconda = [
+        ("images/pxeboot/vmlinuz", 1),
+        ("images/pxeboot/initrd.img", 1),
+        ("images/install.img", 1),
+        ("EFI/BOOT/BOOTAA64.EFI", 1),
+    ];
+    assert_eq!(
+        arch("AlmaLinux-10-3-aarch64-dvd", &anaconda)?,
+        Some(IsoArch::Aarch64)
+    );
+    assert_eq!(
+        arch("AlmaLinux-10-3-x86_64-dvd", &anaconda[..3])?,
+        Some(IsoArch::X86_64)
+    );
     // Fedora's ARM64 image also carries an x86_64 loader: its kernel folder decides.
     let fedora = [
         ("boot/aarch64/loader/linux", 1),
@@ -320,9 +334,22 @@ fn les_fichiers_de_demarrage_portent_les_noms_uefi_et_le_menu() -> Result<(), Fo
             "EFI/BOOT/BOOTAA64.EFI",
             "EFI/BOOT/BOOTRISCV64.EFI",
             "bonk/grub.cfg",
-            "bonk/casper/20iso_scan"
+            "bonk/casper/20iso_scan",
+            "bonk/udev/99-bonk-vault-iso.rules"
         ]
     );
+    // The rule maps the partition the vault names, at the offset the menu passes.
+    assert!(VAULT_ISO_RULE.contains(&format!("ENV{{ID_FS_LABEL}}==\"{VAULT_LABEL}\"")));
+    assert!(VAULT_ISO_RULE.contains("IMPORT{cmdline}=\"bonk.offset\""));
+    assert!(MENU.contains("bonk.offset=$bonk_offset"));
+    // Each script is one the menu puts into an initrd, under the same path.
+    for (path, _) in INITRD_SCRIPTS {
+        let beside_menu = path.trim_start_matches("bonk/");
+        assert!(
+            MENU.contains(&format!(":$bonk_dir/{beside_menu}")),
+            "{path}"
+        );
+    }
     assert!(files[3].data.starts_with(b"set timeout="));
     assert!(matches!(
         boot_files(&[("mips", vec![])]),

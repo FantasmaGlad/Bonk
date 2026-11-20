@@ -23,6 +23,7 @@ pub(crate) fn run_write(
             id,
             args.catalog_url.as_deref(),
             args.cache_dir.as_deref(),
+            crate::catalog::Destination::Drive,
         ) {
             Ok(found) => (found.url, Some(found.sha256), found.file_name),
             Err(error) => return finish::<()>(Err(error), &args.common, out, err, |_, _| Ok(())),

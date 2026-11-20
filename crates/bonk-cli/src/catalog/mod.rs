@@ -93,6 +93,7 @@ mod tests {
             media: None,
             ram_mb: None,
             ram_source: None,
+            vault: false,
             file_name: None,
             source,
         }
@@ -237,16 +238,39 @@ mod tests {
         );
     }
 
+    /// Refused before any download, saying where the image does start.
     #[test]
-    fn une_image_qui_ne_demarre_pas_sur_cle_est_refusee_avant_le_telechargement() {
-        let mut catalog = catalog();
-        catalog.images[1].usb_boot = false;
-        catalog.images[1].note = Some("CD only".to_owned());
-        let message = resolve_image(&catalog, "u22")
-            .err()
-            .map(|e| e.message)
-            .unwrap_or_default();
-        assert!(message.contains("CD only"), "{message}");
+    fn chaque_usage_accepte_ce_qui_en_demarre() {
+        use Destination::{Cache, Drive, Vault};
+        // (starts from a drive, from a vault, use, refusal naming)
+        let cas = [
+            (true, false, Drive, None),
+            (false, false, Drive, Some("CD only")),
+            (
+                false,
+                true,
+                Drive,
+                Some("bonk vault add <disk> --image u22"),
+            ),
+            (false, true, Vault, None),
+            (false, false, Vault, Some("CD only")),
+            (true, false, Vault, None),
+            (false, false, Cache, None),
+        ];
+        for (usb, vault, destination, refus) in cas {
+            let mut catalog = catalog();
+            catalog.images[1].usb_boot = usb;
+            catalog.images[1].vault = vault;
+            catalog.images[1].note = Some("CD only".to_owned());
+            let found = resolve_image(&catalog, "u22", destination).map_err(|e| e.message);
+            match refus {
+                None => assert!(found.is_ok(), "{usb} {vault} {destination:?}: {found:?}"),
+                Some(text) => assert!(
+                    found.as_ref().is_err_and(|m| m.contains(text)),
+                    "{usb} {vault} {destination:?}: {found:?}"
+                ),
+            }
+        }
     }
 
     #[test]
@@ -273,14 +297,16 @@ mod tests {
     #[test]
     fn une_image_se_resout_ou_se_refuse_en_disant_pourquoi() -> Result<(), JobError> {
         let catalog = catalog();
-        let source = resolve_image(&catalog, "u26")?;
+        let source = resolve_image(&catalog, "u26", Destination::Drive)?;
         assert_eq!(
             (source.url.to_str(), source.sha256.len()),
             (Some("https://h/x.iso"), 64)
         );
-        let inconnue = resolve_image(&catalog, "absente").err().map(|e| e.code);
+        let inconnue = resolve_image(&catalog, "absente", Destination::Drive)
+            .err()
+            .map(|e| e.code);
         assert_eq!(inconnue, Some(Code::InvalidArgument));
-        let page = resolve_image(&catalog, "w")
+        let page = resolve_image(&catalog, "w", Destination::Drive)
             .err()
             .map(|e| e.message)
             .unwrap_or_default();

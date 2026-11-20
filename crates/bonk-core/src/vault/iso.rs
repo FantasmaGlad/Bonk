@@ -9,11 +9,13 @@ pub enum IsoFamily {
     Ubuntu,
     Arch,
     FedoraLive,
+    /// The installer of the Red Hat family: AlmaLinux, Rocky Linux, Fedora Everything.
+    Anaconda,
 }
 
 impl IsoFamily {
     /// Files the menu tests, in its order: the first family whose files are all there wins.
-    pub(super) const RULES: [(Self, &'static [&'static str]); 5] = [
+    pub(super) const RULES: [(Self, &'static [&'static str]); 6] = [
         (Self::DebianLive, &["live/vmlinuz", "live/initrd.img"]),
         (Self::Ubuntu, &["casper/vmlinuz", "casper/initrd"]),
         (
@@ -31,7 +33,21 @@ impl IsoFamily {
             Self::FedoraLive,
             &["boot/aarch64/loader/linux", "boot/aarch64/loader/initrd"],
         ),
+        (
+            Self::Anaconda,
+            &[
+                "images/pxeboot/vmlinuz",
+                "images/pxeboot/initrd.img",
+                "images/install.img",
+            ],
+        ),
     ];
+
+    /// Its initramfs cannot read the vault: the menu maps the ISO from the offset written next to it.
+    #[must_use]
+    pub fn needs_location(self) -> bool {
+        matches!(self, Self::Ubuntu | Self::Anaconda)
+    }
 }
 
 /// The processor an ISO starts on.
@@ -45,10 +61,11 @@ pub enum IsoArch {
 /// Tested in the menu's order: a Kiwi kernel folder names its processor; Debian and Ubuntu share one layout
 /// across processors, so their own UEFI loader tells. GRUB compares Rock Ridge names with their case, Bonk
 /// without: these are spelled as the images spell them.
-pub(super) const ARCH_RULES: [(&str, IsoArch); 3] = [
+pub(super) const ARCH_RULES: [(&str, IsoArch); 4] = [
     ("boot/aarch64/loader/linux", IsoArch::Aarch64),
     ("boot/x86_64/loader/linux", IsoArch::X86_64),
     ("EFI/boot/bootaa64.efi", IsoArch::Aarch64),
+    ("EFI/BOOT/BOOTAA64.EFI", IsoArch::Aarch64),
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
