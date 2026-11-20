@@ -75,6 +75,7 @@ fn report(catalog: manifest::Catalog, saved_copy: bool, dir: &str) -> CatalogRep
                 name: family.name,
                 category: family.category,
                 uses: family.uses,
+                not_affiliated_with: family.not_affiliated_with,
             })
             .collect(),
         images,
@@ -141,6 +142,7 @@ mod tests {
             base: None,
             icon: None,
             choices: Vec::new(),
+            not_affiliated_with: None,
         }]);
         let dir_text = dir.to_string_lossy().into_owned();
         let missing = missing_icons(&dir_text);

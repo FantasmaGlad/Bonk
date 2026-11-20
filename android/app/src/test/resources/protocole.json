@@ -869,6 +869,7 @@
         "back": "Retour",
         "notice": null,
         "system": {
+          "affiliation": null,
           "back": "Tous les systèmes",
           "busy": false,
           "download": "Télécharger",

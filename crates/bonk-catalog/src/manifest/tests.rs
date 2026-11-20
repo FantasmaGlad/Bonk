@@ -89,6 +89,31 @@ fn le_nom_de_fichier_du_catalogue_sert_au_telechargement_et_reste_un_seul_segmen
     Ok(())
 }
 
+#[test]
+fn une_version_tierce_nomme_l_editeur_d_origine_en_texte_court() -> Result<(), serde_json::Error> {
+    let base = |extra: &str| {
+        format!(
+            r#"{{"id":"tiny11","name":"tiny11","icon":"icons/t.png","icon_sha256":"{}"{extra}}}"#,
+            "b".repeat(64)
+        )
+    };
+    let tierce: Family = serde_json::from_str(&base(r#","not_affiliated_with":"Microsoft""#))?;
+    assert_eq!(tierce.not_affiliated_with.as_deref(), Some("Microsoft"));
+    assert_eq!(check_family(&tierce), Ok(()));
+    let officielle: Family = serde_json::from_str(&base(""))?;
+    assert_eq!(officielle.not_affiliated_with, None);
+    for refus in ["", "a\nb", &"x".repeat(65)] {
+        let family: Family =
+            serde_json::from_str(&base(&format!(r#","not_affiliated_with":{refus:?}"#)))?;
+        assert_eq!(
+            check_family(&family),
+            Err("not_affiliated_with must be a short name"),
+            "{refus:?}"
+        );
+    }
+    Ok(())
+}
+
 fn windows() -> String {
     r#"{"id":"windows-11-x86_64","family":"windows","name":"Windows","version":"11","channel":"stable","released":"2021-10-05","arch":"x86_64","homepage":"https://www.microsoft.com/","official_page":"https://www.microsoft.com/software-download/windows11"}"#.to_owned()
 }
@@ -273,6 +298,7 @@ fn un_logo_faux_est_ecarte() -> Result<(), Box<dyn std::error::Error>> {
         uses: Vec::new(),
         ram_mb: None,
         ram_source: None,
+        not_affiliated_with: None,
     };
     let fetch = move |_: &str| Ok(contenu.clone());
     assert_eq!(
@@ -424,6 +450,7 @@ fn un_logo_ne_sort_pas_du_dossier_du_catalogue() {
         uses: Vec::new(),
         ram_mb: None,
         ram_source: None,
+        not_affiliated_with: None,
     };
     assert_eq!(check_family(&family("icons/ubuntu.svg")), Ok(()));
     for refuse in [

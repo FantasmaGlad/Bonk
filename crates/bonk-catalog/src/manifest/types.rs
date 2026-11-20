@@ -31,6 +31,9 @@ pub struct Family {
     pub ram_mb: Option<u32>,
     #[serde(default)]
     pub ram_source: Option<String>,
+    /// A third-party version of another publisher's system: whose, as interfaces name it ("Microsoft").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub not_affiliated_with: Option<String>,
 }
 
 /// A closed name of the catalog with the labels interfaces show.
@@ -169,6 +172,8 @@ pub struct FamilyEntry {
     /// Logo checked by its hash, in the local cache; absent if it could not be read.
     #[serde(default)]
     pub icon_path: Option<std::path::PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub not_affiliated_with: Option<String>,
 }
 
 /// Report of `bonk catalog list --json`: what interfaces read, one type for both sides.

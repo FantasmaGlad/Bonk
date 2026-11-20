@@ -70,6 +70,7 @@ fn une_image_hybride_du_catalogue_le_dit_a_kotlin() {
         uses: Vec::new(),
         base: None,
         icon: None,
+        not_affiliated_with: None,
         choices: vec![Choice {
             id: "nixos-aarch64".to_owned(),
             name: "NixOS".to_owned(),

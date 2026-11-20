@@ -112,6 +112,7 @@ private fun SystemPage(system: SystemView, send: (ToRust) -> Unit) {
                 Text(system.name, fontSize = Tokens.TEXT_TITLE.sp, modifier = Modifier.padding(start = Tokens.SPACE_LARGE.dp))
             }
         }
+        system.affiliation?.let { note -> item { Small(note) } }
         system.downloading?.let { panel -> item { Downloading(panel, send) } }
         items(system.variants) { variant -> Variant(variant, system, send) }
     }

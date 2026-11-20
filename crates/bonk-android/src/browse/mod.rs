@@ -5,7 +5,7 @@ use bonk_ui::browse::{
     BrowseMessage, Options, desktop_label, media_label, options, variant_facts, writable_count,
 };
 use bonk_ui::catalog::{
-    CatalogState, Choice, ChoiceSource, System, official_page_note, vault_note,
+    CatalogState, Choice, ChoiceSource, System, affiliation_note, official_page_note, vault_note,
 };
 use bonk_ui::model::{Message, Model};
 use bonk_ui::settings::Screen;
@@ -126,6 +126,7 @@ fn system_page(model: &Model, system: &System) -> Value {
     json!({
         "name": system.name,
         "icon": system.icon,
+        "affiliation": system.not_affiliated_with.as_deref().map(|owner| affiliation_note(owner, lang)),
         "back": lang.pick("All systems", "Tous les systèmes"),
         "write": lang.pick("Write this image", "Écrire cette image"),
         "download": lang.pick("Download", "Télécharger"),
@@ -232,6 +233,7 @@ mod tests {
                 base: None,
                 icon: None,
                 choices: vec![choice],
+                not_affiliated_with: None,
             }]),
             ..Model::default()
         }

@@ -36,6 +36,8 @@ data class CardView(val name: String, val count: String, val icon: String? = nul
 data class SystemView(
     val name: String,
     val icon: String? = null,
+    /** "Not affiliated with Microsoft" for a third-party version, already translated. */
+    val affiliation: String? = null,
     val back: String,
     val write: String,
     val download: String,

@@ -48,6 +48,7 @@ pub(crate) fn report_value(
                 name: f.name.clone(),
                 category: f.category.clone(),
                 uses: f.uses.clone(),
+                not_affiliated_with: f.not_affiliated_with.clone(),
                 icon_path,
             })
             .collect(),

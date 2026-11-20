@@ -28,6 +28,7 @@ pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
         uses: vec!["office".to_owned(), "server".to_owned()],
         base: Some("ubuntu".to_owned()),
         icon: None,
+        not_affiliated_with: None,
         choices: vec![
             choix(
                 "ubuntu-26.04-desktop-x86_64",

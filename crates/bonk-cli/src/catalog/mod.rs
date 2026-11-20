@@ -121,6 +121,7 @@ mod tests {
             uses: Vec::new(),
             ram_mb: None,
             ram_source: None,
+            not_affiliated_with: None,
         };
         Catalog {
             schema_version: 1,

@@ -46,6 +46,15 @@ pub(super) fn check_grub(grub: &Grub) -> Result<(), &'static str> {
 }
 
 pub(super) fn check_family(family: &Family) -> Result<(), &'static str> {
+    let shown =
+        |text: &str| !text.is_empty() && text.len() <= 64 && !text.chars().any(char::is_control);
+    if family
+        .not_affiliated_with
+        .as_deref()
+        .is_some_and(|owner| !shown(owner))
+    {
+        return Err("not_affiliated_with must be a short name");
+    }
     if !crate::link::is_image_id(&family.id) {
         return Err("identifier must be lowercase ASCII");
     }
