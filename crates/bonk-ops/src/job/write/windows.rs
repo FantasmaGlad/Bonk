@@ -36,7 +36,7 @@ pub(in crate::job) fn windows_image(
     if found.is_none() && mode == WriteMode::Extract {
         return Err(fail(
             Code::ImageNotBootable,
-            "this is not a Windows installation ISO (UDF, sources/install.wim or install.esd, efi/boot/bootx64.efi, bootaa64.efi or bootia32.efi)",
+            "this is not a Windows installation or PE ISO (UDF, sources/install.wim, install.esd or boot.wim, efi/boot/bootx64.efi, bootaa64.efi or bootia32.efi)",
         ));
     }
     Ok(found)

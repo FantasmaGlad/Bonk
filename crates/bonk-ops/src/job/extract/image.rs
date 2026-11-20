@@ -105,7 +105,11 @@ pub(super) fn wim_error(error: impl std::fmt::Display) -> JobError {
     fail(Code::SourceFormatUnsupported, error)
 }
 
-/// `Ok(None)`: not a Windows installation ISO Bonk can write.
+/// The WIM that may need splitting: an installer's image, else the system of a Windows PE (rescue
+/// compilations), which an installer also carries.
+const WIMS: [&str; 3] = ["install.wim", "install.esd", "boot.wim"];
+
+/// `Ok(None)`: neither a Windows installation ISO nor a Windows PE that Bonk can write.
 pub(in crate::job) fn detect(image: &ImageFile) -> Result<Option<WindowsImage>, JobError> {
     let unreadable = |e: &dyn std::fmt::Display| fail(Code::SourceUnreadable, e);
     let Ok(udf) = Udf::open(image) else {
@@ -114,10 +118,7 @@ pub(in crate::job) fn detect(image: &ImageFile) -> Result<Option<WindowsImage>, 
     let Ok(tree) = udf.tree() else {
         return Ok(None);
     };
-    let wim = tree
-        .find(&["sources", "install.wim"])
-        .or_else(|| tree.find(&["sources", "install.esd"]));
-    let Some(wim) = wim else {
+    let Some(wim) = WIMS.iter().find_map(|name| tree.find(&["sources", name])) else {
         return Ok(None);
     };
     let mut architectures = Vec::new();
