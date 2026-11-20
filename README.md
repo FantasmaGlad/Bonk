@@ -69,7 +69,7 @@ With APT, DNF (`--allowerasing`), Zypper and pacman, installing `bonk-cli` repla
 
 ## Install
 
-### Linux and macOS script
+### <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="Linux"> <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="macOS"> Linux and macOS script
 
 The command line only, in `~/.local/bin`, its checksum checked against the release.
 
@@ -77,7 +77,7 @@ The command line only, in `~/.local/bin`, its checksum checked against the relea
 curl -fsSL https://packages.bonk-os.app/install.sh | sh
 ```
 
-### Windows
+### <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="Windows"> Windows
 
 The command line only, for this user. Scoop installs either package from its manifest.
 
@@ -85,7 +85,7 @@ The command line only, for this user. Scoop installs either package from its man
 irm https://packages.bonk-os.app/install.ps1 | iex
 ```
 
-### Termux
+### <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="Android"> Termux
 
 On Android, without root: the Termux:API app from the same source as Termux (F-Droid or GitHub). The script adds Bonk's repository to `pkg`, then `pkg upgrade` keeps it current.
 
