@@ -44,6 +44,11 @@ fn head(entries: &[(u8, u32, u16)]) -> Vec<u8> {
 fn l_image_efi_devient_la_partition_efi_du_mbr() {
     let mbr = hybrid_mbr(&head(&[(PLATFORM_EFI, 55, 6144)])).expect("hybride");
     assert_eq!(mbr[446 + 4], 0xEF);
+    assert_eq!(&mbr[446 + 1..446 + 4], &[0x03, 0x20, 0x00], "LBA 220");
+    assert_eq!(
+        &mbr[446 + 5..446 + 8],
+        &crate::partition::chs(220 + 6144 - 1)
+    );
     assert_eq!(&mbr[446 + 8..446 + 12], &220u32.to_le_bytes());
     assert_eq!(&mbr[446 + 12..446 + 16], &6144u32.to_le_bytes());
     assert_eq!(&mbr[510..], &[0x55, 0xAA]);

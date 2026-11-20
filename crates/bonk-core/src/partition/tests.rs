@@ -11,6 +11,25 @@ fn codes(layout: &Layout) -> Vec<&'static str> {
     layout.findings.iter().map(|f| f.code).collect()
 }
 
+/// LBA 1 is the 0x000200 of the UEFI protective MBR; LBA 2048 the 0/32/33 that `fdisk` shows.
+#[test]
+fn adresses_chs_de_reference() {
+    // (lba, head, sector and cylinder high bits, cylinder low bits)
+    for (lba, expected) in [
+        (0, [0x00, 0x01, 0x00]),
+        (1, [0x00, 0x02, 0x00]),
+        (63, [0x01, 0x01, 0x00]),
+        (2048, [0x20, 0x21, 0x00]),
+        (16_065, [0x00, 0x01, 0x01]),
+        (256 * 16_065, [0x00, 0x41, 0x00]),
+        (1024 * 16_065 - 1, [0xFE, 0xFF, 0xFF]),
+        (1024 * 16_065, CHS_PAST_LIMIT),
+        (u64::MAX, CHS_PAST_LIMIT),
+    ] {
+        assert_eq!(chs(lba), expected, "{lba}");
+    }
+}
+
 #[test]
 fn crc32_valeurs_de_reference() {
     assert_eq!(crc32(b""), 0);

@@ -12,6 +12,7 @@ use crate::block::{BlockDevice, BlockError};
 use crate::bytes::{u16_le, u32_le, u64_le};
 
 use gpt::{check_gpt, read_header};
+pub(crate) use mbr::{CHS_PAST_LIMIT, chs};
 use mbr::{check_mbr, parse_mbr};
 
 const GPT_SIGNATURE: &[u8; 8] = b"EFI PART";

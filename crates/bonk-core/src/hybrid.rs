@@ -1,12 +1,11 @@
 use std::fmt;
 
 use crate::eltorito::{BootImage, PLATFORM_EFI, boot_images};
+use crate::partition::chs;
 
 pub const MBR_LEN: usize = 512;
 const ENTRY: usize = 446;
 const MBR_ESP: u8 = 0xEF;
-/// CHS fields past the 8 GB limit: firmware reads the LBA fields.
-const CHS_PAST_LIMIT: [u8; 3] = [0xFE, 0xFF, 0xFF];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NotHybrid {
@@ -51,13 +50,13 @@ pub fn hybrid_mbr(head: &[u8]) -> Result<[u8; MBR_LEN], NotHybrid> {
         [one] => one,
         _ => return Err(NotHybrid::SeveralEfiImages),
     };
-    let mut mbr = [0u8; MBR_LEN];
-    let partition = &mut mbr[ENTRY..ENTRY + 16];
-    partition[1..4].copy_from_slice(&CHS_PAST_LIMIT);
-    partition[4] = MBR_ESP;
-    partition[5..8].copy_from_slice(&CHS_PAST_LIMIT);
     let first = u32::try_from(image.first_sector).map_err(|_| NotHybrid::ImageOutOfReach)?;
     let sectors = u32::try_from(image.sectors).map_err(|_| NotHybrid::ImageOutOfReach)?;
+    let mut mbr = [0u8; MBR_LEN];
+    let partition = &mut mbr[ENTRY..ENTRY + 16];
+    partition[1..4].copy_from_slice(&chs(image.first_sector));
+    partition[4] = MBR_ESP;
+    partition[5..8].copy_from_slice(&chs(image.first_sector + image.sectors - 1));
     partition[8..12].copy_from_slice(&first.to_le_bytes());
     partition[12..16].copy_from_slice(&sectors.to_le_bytes());
     mbr[510] = 0x55;
