@@ -50,6 +50,46 @@ fn l_image_efi_devient_la_partition_efi_du_mbr() {
     assert!(mbr[462..510].iter().all(|b| *b == 0), "une seule partition");
 }
 
+/// A FAT boot sector at `block` declaring `total` 512-byte sectors, as `mkfs.fat` writes it.
+fn fat_at(head: &mut [u8], block: usize, total: u32) {
+    let sector = &mut head[block * SECTOR..block * SECTOR + 512];
+    sector[0] = 0xEB;
+    sector[11..13].copy_from_slice(&512u16.to_le_bytes());
+    sector[32..36].copy_from_slice(&total.to_le_bytes());
+    sector[510] = 0x55;
+    sector[511] = 0xAA;
+}
+
+/// As the published MikroTik RouterOS 7.25.1 ISO: a 69632-sector FAT32 image at block 34, past what the
+/// 16-bit count of its entry holds, so the entry says 0.
+#[test]
+fn une_image_efi_trop_grande_pour_son_entree_prend_la_taille_de_son_fat() {
+    let mut iso = head(&[(0, 30, 4), (PLATFORM_EFI, 34, 0)]);
+    iso.resize(40 * SECTOR, 0);
+    fat_at(&mut iso, 34, 69632);
+    let mbr = hybrid_mbr(&iso).expect("hybride");
+    assert_eq!(&mbr[446 + 8..446 + 12], &136u32.to_le_bytes());
+    assert_eq!(&mbr[446 + 12..446 + 16], &69632u32.to_le_bytes());
+}
+
+#[test]
+fn une_image_efi_sans_taille_ni_fat_lisible_est_refusee() {
+    let mut not_fat = head(&[(PLATFORM_EFI, 34, 0)]);
+    not_fat.resize(40 * SECTOR, 0);
+    let mut cut = not_fat.clone();
+    fat_at(&mut cut, 34, 69632);
+    cut.truncate(34 * SECTOR + 100);
+    // (head, reason)
+    let cases = [
+        (not_fat, NotHybrid::NoEfiImage),
+        (cut, NotHybrid::NoEfiImage),
+        (head(&[(PLATFORM_EFI, 34, 0)]), NotHybrid::NoEfiImage),
+    ];
+    for (head, reason) in cases {
+        assert_eq!(hybrid_mbr(&head), Err(reason));
+    }
+}
+
 #[test]
 fn l_entree_efi_d_une_section_est_trouvee_apres_l_entree_bios() {
     let mbr = hybrid_mbr(&head(&[(0, 30, 4), (PLATFORM_EFI, 39, 18140)])).expect("hybride");

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::eltorito::{PLATFORM_EFI, boot_images};
+use crate::eltorito::{BootImage, PLATFORM_EFI, boot_images};
 
 pub const MBR_LEN: usize = 512;
 const ENTRY: usize = 446;
@@ -43,7 +43,8 @@ pub fn hybrid_mbr(head: &[u8]) -> Result<[u8; MBR_LEN], NotHybrid> {
     }
     let efi: Vec<_> = boot_images(head)
         .into_iter()
-        .filter(|image| image.platform == PLATFORM_EFI && image.sectors > 1)
+        .filter(|image| image.platform == PLATFORM_EFI)
+        .filter_map(|image| sized(head, image))
         .collect();
     let image = match efi.as_slice() {
         [] => return Err(NotHybrid::NoEfiImage),
@@ -62,6 +63,35 @@ pub fn hybrid_mbr(head: &[u8]) -> Result<[u8; MBR_LEN], NotHybrid> {
     mbr[510] = 0x55;
     mbr[511] = 0xAA;
     Ok(mbr)
+}
+
+/// The entry's 16-bit count cannot hold an image of 65536 sectors or more: authoring tools then write 0 or 1,
+/// and the size is the one its FAT boot sector declares.
+fn sized(head: &[u8], image: BootImage) -> Option<BootImage> {
+    if image.sectors > 1 {
+        return Some(image);
+    }
+    let start = usize::try_from(image.first_sector).ok()?.checked_mul(512)?;
+    let sectors = fat_sectors(head.get(start..start.checked_add(512)?)?)?;
+    (sectors > 1).then_some(BootImage { sectors, ..image })
+}
+
+// BIOS parameter block, Microsoft FAT specification, section 3.1.
+fn fat_sectors(boot: &[u8]) -> Option<u64> {
+    if boot[510..] != [0x55, 0xAA] {
+        return None;
+    }
+    let bytes_per_sector = u64::from(u16::from_le_bytes([boot[11], boot[12]]));
+    if !matches!(bytes_per_sector, 512 | 1024 | 2048 | 4096) {
+        return None;
+    }
+    let small = u64::from(u16::from_le_bytes([boot[19], boot[20]]));
+    let total = if small == 0 {
+        u64::from(u32::from_le_bytes([boot[32], boot[33], boot[34], boot[35]]))
+    } else {
+        small
+    };
+    Some(total * bytes_per_sector / 512)
 }
 
 #[cfg(any(test, feature = "testing"))]
