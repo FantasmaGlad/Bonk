@@ -72,6 +72,7 @@ pub(crate) fn effect(model: &Model, args: &[String]) -> Option<Value> {
         url,
         sha256,
         file_name,
+        ..
     } = &choice.source
     else {
         return None;

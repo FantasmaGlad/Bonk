@@ -236,6 +236,7 @@ pub extern "system" fn Java_app_bonkos_bonk_Native_write<'caller>(
     sha256: JString<'caller>,
     raw: jboolean,
     mbr: jboolean,
+    hybrid: jboolean,
 ) {
     env.with_env(|env| -> Result<_, Error> {
         let descriptors = env.convert_byte_array(&descriptors)?;
@@ -252,6 +253,7 @@ pub extern "system" fn Java_app_bonkos_bonk_Native_write<'caller>(
             sha256: (!sha256.is_empty()).then_some(sha256.clone()),
             raw,
             mbr,
+            hybrid,
         };
         writer::write(
             &request,

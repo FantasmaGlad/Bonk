@@ -20,6 +20,7 @@ fn on_debian_page() -> Model {
             url: "https://d/debian-live.iso".to_owned(),
             sha256: SHA256.to_owned(),
             file_name: None,
+            hybrid: false,
         },
         desktop: None,
         media: "usb".to_owned(),
@@ -71,6 +72,7 @@ fn une_adresse_de_partage_prend_le_nom_donne_par_le_catalogue() {
             url: "https://share.example/files/686/download".to_owned(),
             sha256: SHA256.to_owned(),
             file_name: Some("GLF-OS-STABLE.iso".to_owned()),
+            hybrid: false,
         };
     }
     assert_eq!(start(&mut model)[0]["name"], "GLF-OS-STABLE.iso");

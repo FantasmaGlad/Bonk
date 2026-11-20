@@ -60,6 +60,8 @@ pub enum ChoiceSource {
         sha256: String,
         /// Set only when the address does not end with the file's name.
         file_name: Option<String>,
+        /// Starts only written with `--mode hybrid`.
+        hybrid: bool,
     },
     /// No stable link at the publisher: the address of its page, to open oneself.
     OfficialPage(String),
@@ -146,6 +148,17 @@ impl CatalogState {
             _ => None,
         }
     }
+
+    /// The catalog image at this address starts only written with `--mode hybrid`.
+    #[must_use]
+    pub fn hybrid_of(&self, address: &str) -> bool {
+        let Self::Ready(systems) = self else {
+            return false;
+        };
+        find_url(systems, address).is_some_and(|(_, choice)| {
+            matches!(choice.source, ChoiceSource::Download { hybrid: true, .. })
+        })
+    }
 }
 
 fn label_of(image: &Image) -> String {
@@ -166,11 +179,14 @@ fn label_of(image: &Image) -> String {
 
 fn choice(image: &Image) -> Choice {
     let source = match &image.source {
-        ImageSource::Download { url, sha256, .. } if image.usb_boot => ChoiceSource::Download {
-            url: url.clone(),
-            sha256: sha256.clone(),
-            file_name: image.file_name.clone(),
-        },
+        ImageSource::Download { url, sha256, .. } if image.usb_boot || image.hybrid => {
+            ChoiceSource::Download {
+                url: url.clone(),
+                sha256: sha256.clone(),
+                file_name: image.file_name.clone(),
+                hybrid: image.hybrid,
+            }
+        }
         ImageSource::Download { url, sha256, .. } if image.vault => ChoiceSource::Vault {
             url: url.clone(),
             sha256: sha256.clone(),
@@ -505,5 +521,33 @@ mod tests {
         }
         .flags();
         assert!(flags.ends_with(&["--file-name".to_owned(), "GLF-OS-STABLE.iso".to_owned()]));
+    }
+
+    #[test]
+    fn une_image_hybride_ajoute_son_mode_a_la_commande() {
+        let mut report = report();
+        report["images"][0]["usb_boot"] = json!(false);
+        report["images"][0]["hybrid"] = json!(true);
+        let catalog = CatalogState::Ready(parse(&report));
+        assert!(catalog.hybrid_of("https://u/26.iso"));
+        assert!(!catalog.hybrid_of("https://u/20.iso"));
+        let view = |raw| crate::command::WriteView {
+            raw,
+            hybrid: catalog.hybrid_of("https://u/26.iso"),
+            ..crate::command::WriteView::image("https://u/26.iso")
+        };
+        assert!(
+            view(false)
+                .flags()
+                .windows(2)
+                .any(|w| w == ["--mode", "hybrid"])
+        );
+        assert!(
+            view(true)
+                .flags()
+                .windows(2)
+                .any(|w| w == ["--mode", "raw"]),
+            "brut l'emporte"
+        );
     }
 }

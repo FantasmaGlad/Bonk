@@ -18,7 +18,7 @@ pub(in crate::job) fn windows_image(
     mode: WriteMode,
 ) -> Result<Option<WindowsImage>, JobError> {
     let wanted = match mode {
-        WriteMode::Raw => false,
+        WriteMode::Raw | WriteMode::Hybrid => false,
         WriteMode::Extract => true,
         WriteMode::Auto => image.udf && !image.is_writable_as_is(),
     };

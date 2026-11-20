@@ -65,7 +65,7 @@ fn toutes_les_commandes_equivalentes_sont_acceptees_par_la_cli() -> Result<(), S
 #[test]
 fn les_options_d_ecriture_de_la_fenetre_sont_acceptees_par_la_cli() -> Result<(), String> {
     let hex = "a".repeat(64);
-    let cas: [(WriteView<'_>, &[&str]); 6] = [
+    let cas: [(WriteView<'_>, &[&str]); 7] = [
         (WriteView::image("x.iso"), &[]),
         (
             WriteView {
@@ -100,9 +100,17 @@ fn les_options_d_ecriture_de_la_fenetre_sont_acceptees_par_la_cli() -> Result<()
             WriteView {
                 hash: &hex,
                 file_name: Some("GLF-OS-STABLE.iso"),
+                hybrid: false,
                 ..WriteView::image("https://share.example/files/686/download")
             },
             &["--sha256", &hex, "--file-name", "GLF-OS-STABLE.iso"],
+        ),
+        (
+            WriteView {
+                hybrid: true,
+                ..WriteView::image("nixos.iso")
+            },
+            &["--mode", "hybrid"],
         ),
     ];
     for (vue, attendus) in cas {

@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use bonk_core::analysis::ImageReport;
 use bonk_core::codec::Format;
 use bonk_core::format::table::TableKind;
+use bonk_core::hybrid::{MBR_LEN, hybrid_mbr};
 use bonk_core::write::{Control, Progress};
 use bonk_hal::{Elevation, FilterOptions};
 
@@ -78,7 +79,7 @@ pub fn write(
     let file = ImageFile::open(&job.source)?;
     let (source, source_info) = file.decoded()?;
     let chosen = choose(&job.target, job.options, deps)?;
-    let image = analyze_source(&file, &job.source, source_info.size_bytes)?;
+    let (image, head) = analyze_source(&file, &job.source, source_info.size_bytes)?;
     if let Some(windows) = windows_image(&file, &source_info, &image, job.mode)? {
         return write_windows(
             &windows,
@@ -91,6 +92,7 @@ pub fn write(
             progress,
         );
     }
+    let hybrid_mbr = hybrid_plan(&head, job.mode)?;
     judge_image(&image, job.mode)?;
     refuse_if_too_large(
         needed_bytes(&source_info, &image, job.mode),
@@ -129,6 +131,7 @@ pub fn write(
         source_info,
         image,
         sha256_checked,
+        hybrid_mbr,
     };
     write_raw(job, chosen, source, checked, deps, progress)
 }
@@ -137,4 +140,15 @@ pub(in crate::job) struct Checked {
     pub(in crate::job) source_info: SourceInfo,
     pub(in crate::job) image: ImageReport,
     pub(in crate::job) sha256_checked: bool,
+    pub(in crate::job) hybrid_mbr: Option<[u8; MBR_LEN]>,
+}
+
+/// Refused before the drive is touched: the MBR is computed from the image head.
+fn hybrid_plan(head: &[u8], mode: WriteMode) -> Result<Option<[u8; MBR_LEN]>, JobError> {
+    if mode != WriteMode::Hybrid {
+        return Ok(None);
+    }
+    hybrid_mbr(head)
+        .map(Some)
+        .map_err(|reason| fail(Code::ImageNotBootable, format!("--mode hybrid: {reason}")))
 }

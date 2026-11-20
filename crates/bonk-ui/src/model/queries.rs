@@ -58,6 +58,7 @@ impl Model {
                 mbr: *mbr,
                 force: self.is_internal(disk_id),
                 file_name: self.catalog.file_name_of(image.trim()),
+                hybrid: self.catalog.hybrid_of(image.trim()),
             }),
             _ => None,
         };

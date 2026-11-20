@@ -25,6 +25,8 @@ pub struct WriteView<'a> {
     pub force: bool,
     /// The catalog's name for a file its address does not name.
     pub file_name: Option<&'a str>,
+    /// A catalog image that starts only written with `--mode hybrid`.
+    pub hybrid: bool,
 }
 
 impl Default for WriteView<'_> {
@@ -36,6 +38,7 @@ impl Default for WriteView<'_> {
             mbr: TableKind::WINDOWS_DEFAULT == TableKind::Mbr,
             force: false,
             file_name: None,
+            hybrid: false,
         }
     }
 }
@@ -68,6 +71,9 @@ impl<'a> WriteView<'a> {
         if self.raw {
             flags.push("--mode".to_owned());
             flags.push("raw".to_owned());
+        } else if self.hybrid {
+            flags.push("--mode".to_owned());
+            flags.push("hybrid".to_owned());
         }
         if !self.mbr {
             flags.push("--table".to_owned());
@@ -245,6 +251,7 @@ mod tests_write {
             mbr: true,
             force: false,
             file_name: None,
+            hybrid: false,
         };
         let commands = equivalent_commands(ViewOptions::default(), Some("usb-a"), Some(view));
         assert_eq!(
@@ -258,6 +265,7 @@ mod tests_write {
             mbr: false,
             force: false,
             file_name: None,
+            hybrid: false,
         };
         assert_eq!(
             view.flags(),

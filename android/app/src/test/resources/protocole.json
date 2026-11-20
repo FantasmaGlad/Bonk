@@ -29,6 +29,7 @@
       "disk_id": "usb-S1-001-002",
       "do": "write",
       "hash": "",
+      "hybrid": false,
       "image": "/x.iso",
       "mbr": true,
       "proxy": null,

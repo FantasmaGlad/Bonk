@@ -161,9 +161,10 @@ impl TransferParams {
             None | Some("auto") => Ok(WriteMode::Auto),
             Some("raw") => Ok(WriteMode::Raw),
             Some("extract") => Ok(WriteMode::Extract),
+            Some("hybrid") => Ok(WriteMode::Hybrid),
             Some(autre) => Err(failure(
                 Code::ProtocolError,
-                format!("unknown mode: '{autre}' (auto, raw or extract)"),
+                format!("unknown mode: '{autre}' (auto, raw, extract or hybrid)"),
             )),
         }
     }

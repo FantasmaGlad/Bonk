@@ -44,6 +44,7 @@ object Native {
         sha256: String,
         raw: Boolean,
         mbr: Boolean,
+        hybrid: Boolean,
     )
 
     /** Blocks. `iso` and `name` for `add`, `grub` (the folder of the downloaded images) for `init` and `update`. */

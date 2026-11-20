@@ -50,6 +50,8 @@ pub(crate) enum ModeArg {
     Raw,
     /// Copy the files of a Windows installation ISO to a FAT32 partition; auto chooses it by itself
     Extract,
+    /// Write a DVD-only ISO as published, then an MBR naming its EFI boot image as an EFI system partition
+    Hybrid,
 }
 
 impl From<ModeArg> for WriteMode {
@@ -58,6 +60,7 @@ impl From<ModeArg> for WriteMode {
             ModeArg::Auto => Self::Auto,
             ModeArg::Raw => Self::Raw,
             ModeArg::Extract => Self::Extract,
+            ModeArg::Hybrid => Self::Hybrid,
         }
     }
 }
@@ -186,7 +189,7 @@ pub(crate) struct WriteArgs {
     pub(super) file_name: Option<String>,
 
     /// auto: analyze the image, extract a Windows ISO and refuse what would not boot; raw: write the
-    /// bytes as they are; extract: require a Windows ISO
+    /// bytes as they are; extract: require a Windows ISO; hybrid: make a DVD-only ISO start from the drive
     #[arg(long, value_enum, default_value_t = ModeArg::Auto)]
     pub(super) mode: ModeArg,
 

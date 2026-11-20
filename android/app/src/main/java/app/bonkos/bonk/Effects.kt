@@ -33,6 +33,8 @@ data class Write(
     val hash: String,
     val raw: Boolean,
     val mbr: Boolean,
+    /** A catalog image that starts only written as a hybrid: Rust adds the MBR after the ISO. */
+    val hybrid: Boolean = false,
     /** `socks5h://` address of Orbot: the image is downloaded through it, names resolved by Tor. */
     val proxy: String? = null,
 ) : Effect

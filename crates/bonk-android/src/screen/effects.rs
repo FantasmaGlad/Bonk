@@ -115,6 +115,7 @@ pub(super) fn draft_of(model: &Model) -> Option<Value> {
         "hash": hash.trim(),
         "raw": raw,
         "mbr": mbr,
+        "hybrid": model.catalog.hybrid_of(image.trim()),
         "proxy": model.proxy(),
     }))
 }

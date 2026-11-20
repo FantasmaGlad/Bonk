@@ -107,6 +107,9 @@ pub struct Image {
     /// drive.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub vault: bool,
+    /// Starts from a drive written with `--mode hybrid` (an MBR naming its EFI boot image), checked by a boot.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hybrid: bool,
     /// Name to save the file under, when the address does not end with it (a share link).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub file_name: Option<String>,

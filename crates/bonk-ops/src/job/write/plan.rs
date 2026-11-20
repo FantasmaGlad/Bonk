@@ -37,6 +37,9 @@ pub(in crate::job) fn planned_steps(job: &WriteJob, chosen: &Chosen) -> Vec<&'st
     if job.verify {
         steps.push("verify");
     }
+    if job.mode == WriteMode::Hybrid {
+        steps.push("write_hybrid_mbr");
+    }
     if job.repair_gpt {
         steps.push("repair_gpt_if_needed");
     }

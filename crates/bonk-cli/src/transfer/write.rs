@@ -18,23 +18,25 @@ pub(crate) fn run_write(
     err: &mut dyn Write,
 ) -> u8 {
     bonk_hal::interrupt::install();
-    let (source, expected_sha256, file_name) = match &args.image {
+    let (source, expected_sha256, file_name, hybrid) = match &args.image {
         Some(id) => match crate::catalog::image_source(
             id,
             args.catalog_url.as_deref(),
             args.cache_dir.as_deref(),
             crate::catalog::Destination::Drive,
         ) {
-            Ok(found) => (found.url, Some(found.sha256), found.file_name),
+            Ok(found) => (found.url, Some(found.sha256), found.file_name, found.hybrid),
             Err(error) => return finish::<()>(Err(error), &args.common, out, err, |_, _| Ok(())),
         },
         None => (
             args.source.clone().unwrap_or_default(),
             args.sha256.clone(),
             args.file_name.clone(),
+            false,
         ),
     };
     let mut job = write_job(args, source.clone(), expected_sha256);
+    job.mode = crate::catalog::mode_for(job.mode, hybrid);
     log::debug!(target: "bonk::cli", target_kind = if args.common.simulate { "image" } else { "disk" }, dry_run = args.dry_run; "command write");
     let mut notices = Notices::new(args.notify);
     let result = {
@@ -187,6 +189,12 @@ fn done_lines(done: &job::WriteDone, no_repair_gpt: bool, out: &mut dyn Write) -
             cache_warning(v, out)?;
         }
         None => writeln!(out, "  Verification: not requested")?,
+    }
+    if done.hybrid_mbr {
+        writeln!(
+            out,
+            "  Hybrid MBR: EFI partition on the ISO's boot image, read back"
+        )?;
     }
     match &done.gpt_repair {
         Some(r) => writeln!(out, "  GPT: repaired ({})", r.actions.join(", ")),

@@ -45,6 +45,7 @@ pub(in crate::job) fn write_raw(
         source_info,
         image,
         sha256_checked,
+        hybrid_mbr,
     } = checked;
     log::info!(
         target: "bonk::write",
@@ -83,6 +84,9 @@ pub(in crate::job) fn write_raw(
     } else {
         None
     };
+    if let Some(mbr) = &hybrid_mbr {
+        write_hybrid_mbr(&mut *device, mbr)?;
+    }
     let gpt_repair = if job.repair_gpt {
         repair_if_needed(&mut *device)?
     } else {
@@ -103,7 +107,31 @@ pub(in crate::job) fn write_raw(
         write,
         verify,
         gpt_repair,
+        hybrid_mbr: hybrid_mbr.is_some(),
     })))
+}
+
+/// Once the ISO is written and read back: its first sector was empty, it becomes the MBR. A drive with
+/// 4096-byte sectors gets the whole first block, the rest of it unchanged.
+fn write_hybrid_mbr(device: &mut dyn BlockDevice, mbr: &[u8]) -> Result<(), JobError> {
+    let failed =
+        |e: bonk_core::block::BlockError| fail(Code::WriteFailed, format!("hybrid MBR: {e}"));
+    let mut block = vec![0u8; device.block_size() as usize];
+    device.read_at(0, &mut block).map_err(failed)?;
+    block[..mbr.len()].copy_from_slice(mbr);
+    device.write_at(0, &block).map_err(failed)?;
+    device.flush().map_err(failed)?;
+    drop_cache_before_verify(device);
+    let mut back = vec![0u8; mbr.len()];
+    device.read_at(0, &mut back).map_err(failed)?;
+    if back != mbr {
+        return Err(fail(
+            Code::VerifyMismatch,
+            "the hybrid MBR did not read back as written",
+        ));
+    }
+    log::info!(target: "bonk::write", "hybrid mbr written and read back");
+    Ok(())
 }
 
 pub(in crate::job) fn verify_written(

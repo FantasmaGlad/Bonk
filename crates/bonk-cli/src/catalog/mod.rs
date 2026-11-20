@@ -94,6 +94,7 @@ mod tests {
             ram_mb: None,
             ram_source: None,
             vault: false,
+            hybrid: false,
             file_name: None,
             source,
         }
@@ -271,6 +272,20 @@ mod tests {
                 ),
             }
         }
+    }
+
+    #[test]
+    fn une_image_hybride_s_ecrit_sur_cle_dans_son_mode() -> Result<(), JobError> {
+        use bonk_ops::job::WriteMode::{Auto, Hybrid, Raw};
+        let mut catalog = catalog();
+        catalog.images[1].usb_boot = false;
+        catalog.images[1].hybrid = true;
+        let found = resolve_image(&catalog, "u22", Destination::Drive)?;
+        assert!(found.hybrid);
+        assert_eq!(mode_for(Auto, true), Hybrid);
+        assert_eq!(mode_for(Raw, true), Raw, "le mode demandé l'emporte");
+        assert_eq!(mode_for(Auto, false), Auto);
+        Ok(())
     }
 
     #[test]
