@@ -26,6 +26,11 @@ mod tests {
     }
 
     #[test]
+    fn le_second_etage_finit_par_la_signature_que_le_secteur_d_amorcage_controle() {
+        assert_eq!(&STAGE2[4092..], b"BNK2");
+    }
+
+    #[test]
     fn le_second_etage_tient_dans_la_zone_reservee_libre() {
         let secteurs = STAGE2.len() as u32 / 512;
         assert_eq!(secteurs, 8);

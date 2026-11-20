@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use super::{ALIGNMENT, Filesystem, FormatError, Ids, zero_range};
 use crate::block::BlockDevice;
-use crate::partition::{MBR_PROTECTIVE, crc32, read_range};
+use crate::partition::{CHS_PAST_LIMIT, MBR_PROTECTIVE, chs, crc32, read_range};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -131,15 +131,25 @@ fn mbr_sector(block: usize, signature: u32, entries: &[(u8, u32, u32)]) -> Vec<u
     put_u32(&mut sector, 440, signature);
     for (index, &(kind, first, sectors)) in entries.iter().take(4).enumerate() {
         let at = 446 + index * 16;
-        // CHS out of range: only LBA values count.
-        sector[at + 1..at + 4].copy_from_slice(&[0xFE, 0xFF, 0xFF]);
+        let last = u64::from(first) + u64::from(sectors).saturating_sub(1);
+        sector[at + 1..at + 4].copy_from_slice(&chs(u64::from(first)));
         sector[at + 4] = kind;
-        sector[at + 5..at + 8].copy_from_slice(&[0xFE, 0xFF, 0xFF]);
+        sector[at + 5..at + 8].copy_from_slice(&chs(last));
         put_u32(&mut sector, at + 8, first);
         put_u32(&mut sector, at + 12, sectors);
     }
     sector[510] = 0x55;
     sector[511] = 0xAA;
+    sector
+}
+
+/// UEFI 2.10, 5.2.3: no disk signature, and an end CHS of 0xFFFFFF past what CHS addresses.
+fn protective_mbr(block: usize, last: u64) -> Vec<u8> {
+    let sectors = u32::try_from(last).unwrap_or(u32::MAX);
+    let mut sector = mbr_sector(block, 0, &[(MBR_PROTECTIVE, 1, sectors)]);
+    if sector[451..454] == CHS_PAST_LIMIT {
+        sector[451..454].fill(0xFF);
+    }
     sector
 }
 
@@ -172,7 +182,7 @@ fn gpt_header(block: usize, h: &GptHeader) -> Vec<u8> {
     s
 }
 
-/// The partition entry array, padded with zeros to `len` bytes; a name keeps its first 36 UTF-16 units.
+/// A name keeps the characters that fit in 36 UTF-16 units, never half of a surrogate pair.
 fn gpt_entries(slots: &[Slot<'_>], len: usize) -> Vec<u8> {
     let mut table = vec![0u8; len];
     for (slot, entry) in slots
@@ -183,13 +193,16 @@ fn gpt_entries(slots: &[Slot<'_>], len: usize) -> Vec<u8> {
         entry[16..32].copy_from_slice(&slot.guid);
         put_u64(entry, 32, slot.part.first_lba);
         put_u64(entry, 40, slot.part.last_lba);
-        for (i, unit) in slot
-            .name
-            .unwrap_or_default()
-            .encode_utf16()
-            .take(36)
-            .enumerate()
-        {
+        let mut units = Vec::with_capacity(36);
+        for character in slot.name.unwrap_or_default().chars() {
+            let mut pair = [0u16; 2];
+            let encoded = character.encode_utf16(&mut pair);
+            if units.len() + encoded.len() > 36 {
+                break;
+            }
+            units.extend_from_slice(encoded);
+        }
+        for (i, unit) in units.into_iter().enumerate() {
             entry[56 + i * 2..58 + i * 2].copy_from_slice(&unit.to_le_bytes());
         }
     }
@@ -228,15 +241,7 @@ fn write_gpt(dev: &mut dyn BlockDevice, slots: &[Slot<'_>], ids: &Ids) -> Result
         block,
         &gpt_header(block_len, &header(1, last, GPT_ENTRIES_LBA)),
     )?;
-    let protective = u32::try_from(last).unwrap_or(u32::MAX);
-    dev.write_at(
-        0,
-        &mbr_sector(
-            block_len,
-            ids.disk_signature,
-            &[(MBR_PROTECTIVE, 1, protective)],
-        ),
-    )?;
+    dev.write_at(0, &protective_mbr(block_len, last))?;
     Ok(())
 }
 
@@ -397,6 +402,54 @@ mod tests {
         assert_eq!(mbr.entries[0].kind, 0x07);
         assert_eq!(u64::from(mbr.entries[0].start_lba), part.first_lba);
         assert_eq!(part.last_lba, 64 * MIB / 512 - 1);
+        let entry = &dev.as_bytes()[446..462];
+        assert_eq!(&entry[1..4], &[0x20, 0x21, 0x00], "LBA 2048");
+        assert_eq!(&entry[5..8], &chs(part.last_lba)[..]);
+        Ok(())
+    }
+
+    #[test]
+    fn mbr_protecteur_conforme_a_uefi() -> Result<(), Box<dyn std::error::Error>> {
+        for (bytes, end) in [(64 * MIB, chs(64 * MIB / 512 - 1)), (16 << 30, [0xFF; 3])] {
+            let mut dev = MemoryDevice::new(bytes, 512)?;
+            write_table(
+                &mut dev,
+                TableKind::Gpt,
+                Filesystem::Fat32,
+                None,
+                &ids(),
+                false,
+            )?;
+            let sector = &dev.as_bytes()[..512];
+            assert_eq!(&sector[440..444], &[0; 4], "signature");
+            assert_eq!(sector[446], 0, "{bytes}");
+            assert_eq!(&sector[447..450], &[0x00, 0x02, 0x00], "{bytes}");
+            assert_eq!(sector[450], MBR_PROTECTIVE);
+            assert_eq!(&sector[451..454], &end, "{bytes}");
+            assert_eq!(
+                u32::from_le_bytes([sector[454], sector[455], sector[456], sector[457]]),
+                1
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn un_nom_gpt_trop_long_garde_ses_paires_utf16_entieres()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let name = format!("{}{}", "A".repeat(35), '\u{10400}');
+        let mut dev = MemoryDevice::new(64 * MIB, 512)?;
+        write_table(
+            &mut dev,
+            TableKind::Gpt,
+            Filesystem::Fat32,
+            Some(&name),
+            &ids(),
+            false,
+        )?;
+        let layout = no_error(&dev);
+        let gpt = layout.gpt.as_ref().ok_or("pas de GPT")?;
+        assert_eq!(gpt.entries[0].name, "A".repeat(35));
         Ok(())
     }
 
