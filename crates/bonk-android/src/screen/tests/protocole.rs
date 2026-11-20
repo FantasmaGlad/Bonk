@@ -39,6 +39,7 @@ fn debian_catalog() -> CatalogState {
         uses: vec!["office".to_owned(), "server".to_owned()],
         base: Some("debian".to_owned()),
         icon: None,
+        not_affiliated_with: None,
         choices: vec![
             Choice {
                 id: "debian-13-netinst-x86_64".to_owned(),

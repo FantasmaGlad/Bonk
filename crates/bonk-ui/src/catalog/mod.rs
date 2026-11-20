@@ -86,6 +86,8 @@ pub struct System {
     pub base: Option<String>,
     pub icon: Option<PathBuf>,
     pub choices: Vec<Choice>,
+    /// The publisher of the original system, for a third-party version.
+    pub not_affiliated_with: Option<String>,
 }
 
 impl System {
@@ -107,6 +109,15 @@ pub struct Shelf {
     pub terms: crate::terms::Terms,
     /// The last verified copy: the network did not answer.
     pub saved_copy: bool,
+}
+
+/// A third-party version says so wherever its name is shown.
+#[must_use]
+pub fn affiliation_note(owner: &str, lang: Lang) -> String {
+    match lang {
+        Lang::En => format!("Not affiliated with {owner}"),
+        Lang::Fr => format!("Sans lien avec {owner}"),
+    }
 }
 
 /// For an image that starts only from a vault: where to take it once downloaded.
@@ -239,6 +250,7 @@ pub fn systems(report: &CatalogReport) -> Vec<System> {
                 base: family.category.clone(),
                 icon: family.icon_path.clone(),
                 choices,
+                not_affiliated_with: family.not_affiliated_with.clone(),
             })
         })
         .collect()
@@ -350,6 +362,7 @@ mod tests {
             base: Some(base.to_owned()),
             icon: None,
             choices: Vec::new(),
+            not_affiliated_with: None,
         };
         let systems = [
             system("Ubuntu", "server", "ubuntu"),
@@ -548,6 +561,26 @@ mod tests {
                 .windows(2)
                 .any(|w| w == ["--mode", "raw"]),
             "brut l'emporte"
+        );
+    }
+
+    #[test]
+    fn une_version_tierce_le_dit_dans_les_deux_langues() {
+        let mut report = report();
+        report["families"][0]["not_affiliated_with"] = json!("Canonical");
+        let systems = parse(&report);
+        let ubuntu = systems
+            .iter()
+            .find(|s| s.id == "ubuntu")
+            .map(|s| s.not_affiliated_with.as_deref());
+        assert_eq!(ubuntu, Some(Some("Canonical")));
+        assert_eq!(
+            affiliation_note("Microsoft", Lang::En),
+            "Not affiliated with Microsoft"
+        );
+        assert_eq!(
+            affiliation_note("Microsoft", Lang::Fr),
+            "Sans lien avec Microsoft"
         );
     }
 }

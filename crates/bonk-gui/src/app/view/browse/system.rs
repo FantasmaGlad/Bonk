@@ -2,7 +2,9 @@ use iced::widget::{Column, button, column, row, scrollable, text};
 use iced::{Element, Fill};
 
 use bonk_ui::browse::{BrowseMessage, DownloadState, variant_facts};
-use bonk_ui::catalog::{Choice, ChoiceSource, System, official_page_note, vault_note};
+use bonk_ui::catalog::{
+    Choice, ChoiceSource, System, affiliation_note, official_page_note, vault_note,
+};
 
 use crate::app::view::menu::sized_logo;
 use crate::theme;
@@ -36,6 +38,13 @@ impl App {
         let list =
             scrollable(Column::with_children(variants).spacing(8).padding([0, 4])).height(Fill);
         let mut page = column![back, head].spacing(12);
+        if let Some(owner) = &system.not_affiliated_with {
+            page = page.push(
+                text(affiliation_note(owner, lang))
+                    .size(13)
+                    .color(theme::muted()),
+            );
+        }
         if let Some(panel) = self.download_panel(system) {
             page = page.push(panel);
         }

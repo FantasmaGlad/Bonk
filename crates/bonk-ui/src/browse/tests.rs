@@ -33,6 +33,7 @@ fn debian() -> System {
         base: Some("debian".to_owned()),
         icon: None,
         choices: vec![download("debian-live"), dvd],
+        not_affiliated_with: None,
     }
 }
 

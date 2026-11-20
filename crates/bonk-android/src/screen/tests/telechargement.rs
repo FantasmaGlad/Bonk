@@ -35,6 +35,7 @@ fn on_debian_page() -> Model {
         base: None,
         icon: None,
         choices: vec![choice],
+        not_affiliated_with: None,
     }]);
     model.screen = Screen::Catalog;
     model.browse.opened = Some("Debian".to_owned());

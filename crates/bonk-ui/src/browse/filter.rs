@@ -100,6 +100,7 @@ mod tests {
             base: Some("debian".to_owned()),
             icon: None,
             choices,
+            not_affiliated_with: None,
         }
     }
 
