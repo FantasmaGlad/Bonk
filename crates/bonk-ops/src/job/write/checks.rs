@@ -77,12 +77,13 @@ pub(in crate::job) fn check_sha256(
     }
 }
 
-/// Through a separate reader: the main stream must stay intact for the write.
+/// Through a separate reader: the main stream must stay intact for the write. The head comes back for the
+/// hybrid MBR, read from the same bytes as the analysis.
 pub(in crate::job) fn analyze_source(
     image: &ImageFile,
     path: &Path,
     real_len: Option<u64>,
-) -> Result<ImageReport, JobError> {
+) -> Result<(ImageReport, Vec<u8>), JobError> {
     use std::io::Read;
 
     let (source, _) = image.decoded()?;
@@ -104,7 +105,7 @@ pub(in crate::job) fn analyze_source(
             format!("{}: empty image", path.display()),
         ));
     }
-    Ok(analysis::analyze(&head, real_len))
+    Ok((analysis::analyze(&head, real_len), head))
 }
 
 /// `Raw` overrides it, and logs it.
@@ -137,7 +138,15 @@ pub(in crate::job) fn judge_image(report: &ImageReport, mode: WriteMode) -> Resu
     };
     match (problem, mode) {
         (None, _) => Ok(()),
-        (Some((code, message)), WriteMode::Auto | WriteMode::Extract) => Err(fail(code, message)),
+        // The MBR written after the ISO is what makes it start from a drive.
+        (Some(_), WriteMode::Hybrid)
+            if report.kind == ImageKind::PlainIso && report.truncated != Some(true) =>
+        {
+            Ok(())
+        }
+        (Some((code, message)), WriteMode::Auto | WriteMode::Extract | WriteMode::Hybrid) => {
+            Err(fail(code, message))
+        }
         (Some((code, message)), WriteMode::Raw) => {
             log::warn!(target: "bonk::write", code = code.id(), reason = message.as_str(); "written anyway: raw mode");
             Ok(())
@@ -154,7 +163,7 @@ pub(in crate::job) fn needed_bytes(
 ) -> Option<u64> {
     source
         .size_bytes
-        .or(image.declared_bytes.filter(|_| mode == WriteMode::Auto))
+        .or(image.declared_bytes.filter(|_| mode != WriteMode::Raw))
 }
 
 /// A compressed image only gives its real size once read: the read-back compares with the stream, so a
@@ -171,7 +180,9 @@ pub(in crate::job) fn check_complete(
         "the decompressed image is {written} bytes and declares {declared}: the drive is incomplete"
     );
     match mode {
-        WriteMode::Auto | WriteMode::Extract => Err(fail(Code::ImageTruncated, message)),
+        WriteMode::Auto | WriteMode::Extract | WriteMode::Hybrid => {
+            Err(fail(Code::ImageTruncated, message))
+        }
         WriteMode::Raw => {
             log::warn!(target: "bonk::write", reason = message.as_str(); "written anyway: raw mode");
             Ok(())

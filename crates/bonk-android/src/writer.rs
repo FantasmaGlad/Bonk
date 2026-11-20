@@ -75,6 +75,7 @@ pub(crate) struct Request<'a> {
     pub(crate) sha256: Option<String>,
     pub(crate) raw: bool,
     pub(crate) mbr: bool,
+    pub(crate) hybrid: bool,
 }
 
 /// The engine re-check compares the list with itself on Android (the enumeration is the screen's): only this
@@ -114,6 +115,8 @@ fn write_job(request: &Request<'_>) -> WriteJob {
         expected_sha256: request.sha256.clone(),
         mode: if request.raw {
             WriteMode::Raw
+        } else if request.hybrid {
+            WriteMode::Hybrid
         } else {
             WriteMode::Auto
         },

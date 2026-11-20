@@ -129,6 +129,7 @@ impl Model {
                 mbr: *mbr,
                 force: internal_confirmed,
                 file_name: self.catalog.file_name_of(image.trim()),
+                hybrid: self.catalog.hybrid_of(image.trim()),
             },
             self.view_options(),
             self.proxy(),

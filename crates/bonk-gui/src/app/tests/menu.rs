@@ -20,6 +20,7 @@ pub(super) fn versions_du_catalogue() -> Vec<catalog::System> {
         url: url.to_owned(),
         sha256: digit.repeat(64),
         file_name: None,
+        hybrid: false,
     };
     vec![catalog::System {
         id: String::new(),

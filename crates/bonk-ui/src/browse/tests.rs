@@ -15,6 +15,7 @@ fn debian() -> System {
             url: format!("https://d/{id}.iso"),
             sha256: "ab".repeat(32),
             file_name: None,
+            hybrid: false,
         },
         desktop: Some("gnome".to_owned()),
         media: "usb".to_owned(),

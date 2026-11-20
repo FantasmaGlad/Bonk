@@ -117,6 +117,7 @@ internal class Operations(private val context: Context, private val send: (ToRus
                     hash,
                     request.raw,
                     request.mbr,
+                    request.hybrid,
                 )
             }
             send(Refresh)

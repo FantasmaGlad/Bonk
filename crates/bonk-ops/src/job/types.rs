@@ -35,6 +35,8 @@ pub enum WriteMode {
     Raw,
     /// Copies the files of a Windows installation ISO to a FAT32 partition.
     Extract,
+    /// Writes a DVD-only ISO as published, then an MBR naming its EFI boot image as an EFI system partition.
+    Hybrid,
 }
 
 #[derive(Debug)]
@@ -193,6 +195,8 @@ pub struct WriteDone {
     pub write: WriteReport,
     pub verify: Option<VerifyReport>,
     pub gpt_repair: Option<RepairReport>,
+    /// The MBR of `--mode hybrid` was written and read back.
+    pub hybrid_mbr: bool,
 }
 
 /// Result of a verification without writing.

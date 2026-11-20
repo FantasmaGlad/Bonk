@@ -418,3 +418,62 @@ fn une_cle_debranchee_en_ecriture_arrete_tout() {
         scenario.log()
     );
 }
+
+/// The ISO is written as published, then its empty first sector becomes an MBR naming its EFI image.
+#[test]
+fn une_iso_dvd_s_ecrit_hybride_et_seulement_sur_demande() {
+    let iso = bonk_core::hybrid::testing::dvd_iso(128);
+    let source = TempSource::from_bytes("dvd", &iso);
+    let scenario = Scenario::new();
+    let write = |mode: &str| {
+        scenario.run(&[
+            "write",
+            "usb-a",
+            &source.arg(),
+            "--yes",
+            "--mode",
+            mode,
+            "--progress",
+            "none",
+        ])
+    };
+    let (code, _, err) = write("auto");
+    assert_eq!(code, EXIT_SOURCE, "{err}");
+    assert!(err.contains("E3006"), "{err}");
+    let (code, out, err) = write("hybrid");
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(out.contains("Hybrid MBR"), "{out}");
+    let disk = scenario.written(iso.len());
+    let expected = bonk_core::hybrid::hybrid_mbr(&iso).expect("MBR");
+    assert_eq!(&disk[..512], expected.as_slice());
+    assert_eq!(
+        &disk[512..],
+        &iso[512..],
+        "le reste de l'ISO tel que publié"
+    );
+}
+
+#[test]
+fn une_iso_dont_le_premier_secteur_est_occupe_n_est_pas_rendue_hybride() {
+    let mut iso = bonk_core::hybrid::testing::dvd_iso(128);
+    iso[0] = 0xEB;
+    let source = TempSource::from_bytes("dvd-occupee", &iso);
+    let scenario = Scenario::new();
+    let (code, _, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &source.arg(),
+        "--yes",
+        "--mode",
+        "hybrid",
+        "--progress",
+        "none",
+    ]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("first sector is not empty"), "{err}");
+    assert!(
+        scenario.log().is_empty(),
+        "rien d'ouvert : {:?}",
+        scenario.log()
+    );
+}

@@ -66,6 +66,13 @@ fn le_nom_de_fichier_du_catalogue_sert_au_telechargement_et_reste_un_seul_segmen
     let image: Image = serde_json::from_str(&partage)?;
     assert_eq!(check_image(&image), Ok(()));
     assert_eq!(image.download_name(), Some("GLF-OS-STABLE.iso"));
+    assert!(!image.hybrid && !image.vault, "absents : faux");
+    let hybride: Image =
+        serde_json::from_str(&debian().replace(r#""usb_boot""#, r#""x""#).replace(
+            r#""arch":"x86_64""#,
+            r#""arch":"x86_64","usb_boot":false,"hybrid":true"#,
+        ))?;
+    assert!(hybride.hybrid && !hybride.usb_boot);
     let sans_nom: Image = serde_json::from_str(&debian())?;
     assert_eq!(
         (sans_nom.file_name.as_deref(), sans_nom.download_name()),

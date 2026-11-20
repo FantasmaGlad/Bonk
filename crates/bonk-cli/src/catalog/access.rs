@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use bonk_catalog::manifest::{self, Catalog, Image, ImageSource, Loaded, TRUSTED_KEYS};
-use bonk_ops::job::JobError;
+use bonk_ops::job::{JobError, WriteMode};
 
 use crate::errors::Code;
 
@@ -86,6 +86,17 @@ pub(crate) struct CatalogSource {
     pub(crate) sha256: String,
     /// Set only when the address does not end with the file's name.
     pub(crate) file_name: Option<String>,
+    /// Starts from a drive only written with `--mode hybrid`.
+    pub(crate) hybrid: bool,
+}
+
+/// A catalog image that only starts written as a hybrid takes that mode unless another was asked for.
+pub(crate) fn mode_for(requested: WriteMode, hybrid: bool) -> WriteMode {
+    if hybrid && requested == WriteMode::Auto {
+        WriteMode::Hybrid
+    } else {
+        requested
+    }
 }
 
 /// What the image is fetched for: each use accepts what can start from it.
@@ -98,7 +109,7 @@ pub(crate) enum Destination {
 }
 
 fn refusal(image: &Image, destination: Destination) -> Option<String> {
-    let usb = image.usb_boot;
+    let usb = image.usb_boot || image.hybrid;
     let starts = match destination {
         Destination::Drive => usb,
         Destination::Vault => usb || image.vault,
@@ -145,6 +156,7 @@ pub(crate) fn resolve_image(
             url: PathBuf::from(url),
             sha256: sha256.clone(),
             file_name: image.file_name.clone(),
+            hybrid: image.hybrid,
         }),
         ImageSource::OfficialPage { official_page } => Err(JobError {
             code: Code::InvalidArgument,
