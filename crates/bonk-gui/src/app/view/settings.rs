@@ -8,7 +8,6 @@ use crate::theme;
 use super::super::{App, Focus, Message};
 use super::ring;
 
-/// One choice of a group: the chosen one is outlined, the others look like plain cards.
 fn option<'a>(
     label: &'a str,
     chosen: bool,
@@ -92,7 +91,6 @@ impl App {
         section(title, self.relaunch_note(), row(choices).spacing(8).into())
     }
 
-    /// The safety filter's expert options: off by default, kept for the next start.
     fn disks_section(&self) -> Element<'_, Message> {
         let lang = self.lang;
         let boxes = [
@@ -138,7 +136,6 @@ impl App {
         )
     }
 
-    /// For whoever wants a tool that never reaches the network, so that nothing reveals their address.
     fn network_section(&self) -> Element<'_, Message> {
         let lang = self.lang;
         let switch = toggler(self.offline)
@@ -174,7 +171,6 @@ impl App {
         )
     }
 
-    /// Incognito from the first request: nothing goes out before a local Tor answers.
     fn incognito_section(&self) -> Element<'_, Message> {
         let lang = self.lang;
         let switch = toggler(self.incognito_at_start)

@@ -33,7 +33,6 @@ pub(crate) fn sized_logo(icon: Option<&PathBuf>, side: f32) -> Element<'_, Messa
     }
 }
 
-/// The current choice with its logo, or an invitation to choose.
 pub(crate) fn menu_button<'a>(
     state: &'a CatalogState,
     image_url: &str,
@@ -104,7 +103,6 @@ fn arch_filter<'a>(arches: Vec<String>, chosen: Option<&str>, lang: Lang) -> Ele
     .into()
 }
 
-/// A category, a base, or a single system and its versions.
 fn menu_filters<'a>(
     systems: &[System],
     filter: &MenuFilter,
@@ -204,7 +202,6 @@ pub(crate) fn menu_list<'a>(
     highlighted: usize,
     lang: Lang,
 ) -> Element<'a, Message> {
-    // Only the writable rows count for the keyboard highlight.
     let mut index = 0;
     let mut lines = column![].spacing(2);
     for system in filter.apply(systems) {

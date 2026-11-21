@@ -10,8 +10,7 @@ use super::super::navigation::LIST;
 use super::super::{App, Message};
 
 impl App {
-    /// Or what stands for it: detection error, empty list. `panels`: the write and vault panels under
-    /// their disk; without, they are drawn beside the list.
+    /// `panels`: the write and vault panels under their disk; without, beside the list.
     pub(super) fn disk_list<'a>(
         &'a self,
         entries: Vec<(&'a Disk, Eligibility)>,

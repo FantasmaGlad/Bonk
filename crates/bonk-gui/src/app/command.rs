@@ -1,4 +1,3 @@
-/// Standard output of a `bonk` command, or its last error line.
 pub(crate) fn run_json<S: AsRef<std::ffi::OsStr>>(
     program: &std::path::Path,
     args: &[S],

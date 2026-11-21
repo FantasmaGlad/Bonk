@@ -190,7 +190,6 @@ fn un_seul_disque_propose_se_selectionne_une_fois() {
     let _ = app.update(Message::Loaded(Ok(sample())));
     assert_eq!(app.selected.as_deref(), Some("usb-cle"));
     assert!(matches!(app.write, WriteState::Draft { .. }));
-    // Writing stays a deliberate act: nothing starts, and a deselection holds despite the refresh.
     let _ = app.update(Message::Select("usb-cle".to_owned()));
     let _ = app.update(Message::Loaded(Ok(sample())));
     assert_eq!(app.selected, None);

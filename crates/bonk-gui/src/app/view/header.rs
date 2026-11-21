@@ -11,7 +11,6 @@ use super::super::{App, Focus, Message};
 use super::ring;
 
 impl App {
-    /// Title, then a quiet line on detection: it runs on its own every two seconds.
     pub(super) fn header(&self, shown: usize) -> Element<'_, Message> {
         let lang = self.lang;
         let title = column![
@@ -43,7 +42,6 @@ impl App {
             .into()
     }
 
-    /// Hidden offline: the catalog is never read there.
     fn catalog_button(&self) -> Option<Element<'_, Message>> {
         (!self.offline).then(|| {
             ring(

@@ -14,10 +14,8 @@ pub(crate) use widgets::{
     round_button, warning_banner,
 };
 
-/// Commands, paths, identifiers.
 pub(crate) const MONO: iced::Font = iced::Font::with_name("Fira Mono");
 
-/// Secondary text: hints, details, captions.
 pub(crate) fn muted() -> iced::Color {
     colors().muted
 }

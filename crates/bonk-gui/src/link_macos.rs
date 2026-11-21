@@ -11,7 +11,6 @@ use objc2_foundation::{NSAppleEventDescriptor, NSAppleEventManager, NSObjectProt
 const GET_URL: u32 = u32::from_be_bytes(*b"GURL");
 const DIRECT_OBJECT: u32 = u32::from_be_bytes(*b"----");
 
-/// Image identifiers received, read by the window at its next tick.
 static RECEIVED: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 define_class!(

@@ -12,7 +12,6 @@ pub(super) fn off_thread<T: Send + 'static>(
     async move { receiver.await.ok() }
 }
 
-/// As [`off_thread`], a panic told as the error.
 pub(super) fn off_thread_result<T: Send + 'static>(
     work: impl FnOnce() -> Result<T, String> + Send + 'static,
 ) -> impl Future<Output = Result<T, String>> {

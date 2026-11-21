@@ -38,14 +38,12 @@ use bonk_ui::settings::{LangChoice, ThemeChoice};
 
 use navigation::{LIST, map_key};
 
-/// What the window opens with: `bonk config`, the command line and the system.
 #[derive(Debug, Default, Clone)]
 pub(crate) struct Start {
     pub(crate) view: ViewOptions,
     /// `None`: the system's language.
     pub(crate) lang: Option<Lang>,
     pub(crate) theme: ThemeChoice,
-    /// Resolved from `theme` before the window opens.
     pub(crate) dark: bool,
     pub(crate) image: Option<String>,
 }
@@ -54,9 +52,7 @@ pub(crate) struct Start {
 #[cfg_attr(test, derive(Default))]
 pub(crate) struct App {
     model: Model,
-    /// `bonk` itself, except in tests.
     program: Option<PathBuf>,
-    /// Started at the first notice.
     notifications: Option<Notifications>,
 }
 
@@ -108,7 +104,6 @@ impl App {
         self.run(effects)
     }
 
-    /// Tests never reach the desktop.
     fn notify(&mut self) {
         if cfg!(test) {
             return;
@@ -178,7 +173,6 @@ impl App {
         }
     }
 
-    /// Saving runs `bonk config`, and a relaunch closes this window once the new one started.
     fn settings_task(&self, effect: Effect) -> Task<Message> {
         match effect {
             Effect::SaveSetting { key, value } => {

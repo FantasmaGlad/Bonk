@@ -44,7 +44,6 @@ pub(in super::super) fn internal_dialog(disk: &Disk, lang: Lang) -> Element<'_, 
 }
 
 impl App {
-    /// What a person recognises: model, capacity, labels, verdict. The technical lines open on demand.
     pub(super) fn card<'a>(&'a self, disk: &'a Disk, verdict: Eligibility) -> Element<'a, Message> {
         let lang = self.lang;
         let selected = self.selected.as_deref() == Some(disk.id.as_str());

@@ -2,11 +2,9 @@ use iced::keyboard::{self, Key, key::Named};
 
 use super::{Message, Nav};
 
-/// Id of the scrolling list, to follow it when focus moves into the disks.
 pub(super) const LIST: &str = "disques";
 
-/// Tab and Shift+Tab, Space and Enter, arrows, Escape. Combinations with Ctrl, Alt or Logo are left to the
-/// system (shortcuts).
+/// Combinations with Ctrl, Alt or Logo are left to the system.
 pub(crate) fn map_key(key: &Key, modifiers: keyboard::Modifiers, repeat: bool) -> Option<Message> {
     if modifiers.control() || modifiers.alt() || modifiers.logo() {
         return None;

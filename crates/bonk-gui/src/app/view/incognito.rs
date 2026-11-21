@@ -10,7 +10,6 @@ const SIDE: f32 = 36.0;
 const GLYPH: f32 = 20.0;
 
 impl App {
-    /// Hidden offline: nothing is downloaded there.
     pub(super) fn incognito_control(&self) -> Option<Element<'_, Message>> {
         if self.offline {
             return None;
@@ -41,7 +40,6 @@ impl App {
                 .width(GLYPH)
                 .height(GLYPH),
         )
-        // While Tor is awaited the button can still turn incognito off.
         .on_press_maybe(
             (self.tor.is_some() || self.use_tor).then_some(Message::ToggleTor(!self.use_tor)),
         )

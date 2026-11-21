@@ -13,7 +13,6 @@ fn la_fenetre_affiche_la_cle_et_pas_le_disque_systeme() {
     assert!(!contient(&app, "Écrire"));
 }
 
-/// The main page carries the disks alone; language, theme and expert boxes live on the settings page.
 #[test]
 fn les_reglages_quittent_la_page_principale() {
     let mut app = loaded(sample());
@@ -59,7 +58,6 @@ fn un_clic_sur_la_carte_ouvre_le_detail() -> Result<(), Box<dyn std::error::Erro
     for message in messages {
         let _ = app.update(message);
     }
-    // Selected: the card stays readable, the technical lines wait behind their button.
     let serie = "Série : 4C530001   Nature : physique   Drapeau amovible du système : oui";
     assert!(contient(&app, "16,0 Go   CLE   USB"));
     assert!(!contient(&app, serie));
@@ -214,7 +212,6 @@ fn captures_fenetre(dossier: &std::path::Path) -> Capture {
     let _ = app.update(Message::ToggleInternal(true));
     let _ = app.update(Message::Settings(bonk_ui::settings::SettingsMessage::Close));
     capture(&app, 640.0, dossier, "fenetre-tout")?;
-    // Keyboard focus on the second card, detail closed.
     let _ = app.update(Message::Select("usb-cle".to_owned()));
     nav(&mut app, Nav::Escape);
     nav(&mut app, Nav::Previous);
@@ -225,7 +222,6 @@ fn captures_fenetre(dossier: &std::path::Path) -> Capture {
     capture(&erreur, 640.0, dossier, "fenetre-erreur")
 }
 
-/// Write panel: an image entered, then progress.
 fn captures_ecriture(dossier: &std::path::Path) -> Capture {
     let mut ecriture = loaded(sample());
     let _ = ecriture.update(Message::Select("usb-cle".to_owned()));
@@ -252,7 +248,6 @@ fn captures_ecriture(dossier: &std::path::Path) -> Capture {
     capture(&ecriture, 760.0, dossier, "fenetre-progression")
 }
 
-/// Vault panel: listed, then a disk without a vault, then the question before erasing.
 fn captures_coffre(dossier: &std::path::Path) -> Capture {
     let mut coffre = loaded(sample());
     let _ = coffre.update(Message::Select("usb-cle".to_owned()));
@@ -287,7 +282,6 @@ fn captures_coffre(dossier: &std::path::Path) -> Capture {
     Ok(())
 }
 
-/// The vault panel shows under the card of its disk: the ISO images, then the question before erasing.
 #[test]
 fn le_coffre_s_affiche_sous_son_disque() {
     let mut app = loaded(sample());

@@ -11,7 +11,6 @@ use super::super::super::{App, Focus, Message};
 use super::super::{boxed, ring};
 
 impl App {
-    /// Over the variants of the system it belongs to.
     pub(super) fn download_panel<'a>(&'a self, system: &System) -> Option<Element<'a, Message>> {
         let download = self.browse.download.as_ref()?;
         let choice = system.choices.iter().find(|c| c.id == download.id())?;

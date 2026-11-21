@@ -4,7 +4,6 @@ pub(crate) use bonk_ui::catalog::*;
 
 use super::command::run_json;
 
-/// In a separate process, through `proxy` when given. The last error line says why it failed.
 pub(crate) fn read(program: PathBuf, proxy: Option<&str>) -> Result<Shelf, String> {
     let mut args = vec!["catalog", "list", "--json"];
     if let Some(proxy) = proxy {

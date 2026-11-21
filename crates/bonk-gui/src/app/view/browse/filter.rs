@@ -7,7 +7,6 @@ use bonk_ui::catalog::System;
 
 use super::super::super::{App, Message};
 
-/// An id and the label shown for it.
 type Entries = Vec<(String, String)>;
 
 impl App {
@@ -54,7 +53,6 @@ fn media_all(lang: Lang) -> &'static str {
     lang.pick("All media", "Tous les supports")
 }
 
-/// The first entry removes the filter; the others choose an id by its label.
 fn list<'a>(
     all: &'static str,
     entries: Entries,
