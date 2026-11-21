@@ -2,6 +2,7 @@ use super::{COMMON_NAME_OID, OPTIONAL_PE32_PLUS};
 
 pub const X86_64: u16 = super::MACHINE_X86_64;
 pub const ARM64: u16 = super::MACHINE_ARM64;
+pub const X86: u16 = super::MACHINE_X86;
 
 pub fn pe(machine: u16, certificates: &[u8]) -> Vec<u8> {
     let mut file = vec![0u8; 512];

@@ -28,23 +28,30 @@ pub struct Loader {
 pub fn loaders(source: &(impl ReadAt + ?Sized), head: &[u8]) -> Vec<Loader> {
     let mut found: Vec<Loader> = Vec::new();
     for start in volumes(source, head) {
-        let Some(fat) = Fat::open(source, start) else {
-            continue;
-        };
-        for (name, machine) in LOADERS {
-            if found.iter().any(|loader| loader.machine == machine) {
-                continue;
-            }
-            let Some(bytes) = fat.read(&format!("EFI/BOOT/{name}"), LOADER_LIMIT) else {
-                continue;
-            };
-            if pe::machine(&bytes) == Some(machine) {
-                let signer = pe::signer(&bytes).unwrap_or(Signer::Unsigned);
-                found.push(Loader { machine, signer });
+        for loader in volume_loaders(source, start) {
+            if !found.iter().any(|known| known.machine == loader.machine) {
+                found.push(loader);
             }
         }
     }
     found
+}
+
+#[must_use]
+pub fn volume_loaders(source: &(impl ReadAt + ?Sized), start: u64) -> Vec<Loader> {
+    let Some(fat) = Fat::open(source, start) else {
+        return Vec::new();
+    };
+    LOADERS
+        .into_iter()
+        .filter_map(|(name, machine)| {
+            let bytes = fat.read(&format!("EFI/BOOT/{name}"), LOADER_LIMIT)?;
+            (pe::machine(&bytes) == Some(machine)).then(|| Loader {
+                machine,
+                signer: pe::signer(&bytes).unwrap_or(Signer::Unsigned),
+            })
+        })
+        .collect()
 }
 
 fn volumes(source: &(impl ReadAt + ?Sized), head: &[u8]) -> Vec<u64> {
