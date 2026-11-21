@@ -205,6 +205,9 @@ fn done_lines(done: &job::WriteDone, no_repair_gpt: bool, out: &mut dyn Write) -
     match &done.gpt_repair {
         Some(r) => writeln!(out, "  GPT: repaired ({})", r.actions.join(", ")),
         None if no_repair_gpt => writeln!(out, "  GPT: check not requested"),
+        None if !bonk_core::repair::repairs(&done.image) => {
+            writeln!(out, "  GPT: kept as published, as an ISO")
+        }
         None => writeln!(out, "  GPT: nothing to repair"),
     }
 }

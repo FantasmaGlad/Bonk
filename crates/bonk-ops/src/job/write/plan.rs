@@ -38,7 +38,11 @@ pub(in crate::job) fn plan(
     }))
 }
 
-pub(in crate::job) fn planned_steps(job: &WriteJob, chosen: &Chosen) -> Vec<&'static str> {
+pub(in crate::job) fn planned_steps(
+    job: &WriteJob,
+    chosen: &Chosen,
+    image: &ImageReport,
+) -> Vec<&'static str> {
     let mut steps = Vec::new();
     if !chosen.mounts.is_empty() {
         steps.push("unmount");
@@ -50,7 +54,7 @@ pub(in crate::job) fn planned_steps(job: &WriteJob, chosen: &Chosen) -> Vec<&'st
     if job.mode == WriteMode::Hybrid {
         steps.push("write_hybrid_mbr");
     }
-    if job.repair_gpt {
+    if job.repair_gpt && bonk_core::repair::repairs(image) {
         steps.push("repair_gpt_if_needed");
     }
     if chosen.disk.is_some() {
