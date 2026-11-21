@@ -132,7 +132,6 @@ fn zstd(data: &[u8]) -> Vec<u8> {
     ruzstd::encoding::compress_to_vec(data, ruzstd::encoding::CompressionLevel::Fastest)
 }
 
-/// Output of `pzstd` or `cat a.zst b.zst`: every frame belongs to the image.
 #[test]
 fn zstd_a_plusieurs_trames_est_lu_en_entier() -> Result<(), Box<dyn std::error::Error>> {
     let (a, b) = (sample(100_000), sample(70_000));

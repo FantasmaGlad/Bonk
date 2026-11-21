@@ -48,7 +48,6 @@ pub(super) fn vault_span(plan: &VaultPlan) -> exfat::edit::Span {
     }
 }
 
-/// A GRUB script the menu sources.
 pub(super) fn location_file(volume_offset: u64) -> Vec<u8> {
     format!("set bonk_offset={volume_offset}\n").into_bytes()
 }
@@ -83,7 +82,6 @@ pub fn remove_image(
     }
 }
 
-/// Files whose name ends in `.iso`, whatever the case, anywhere on the data partition.
 pub fn images(dev: &dyn BlockDevice, plan: &VaultPlan) -> Result<Vec<FileEntry>, FormatError> {
     let files = Reader::open(dev, plan.vault.first_lba, plan.vault.sectors())?.files()?;
     Ok(files

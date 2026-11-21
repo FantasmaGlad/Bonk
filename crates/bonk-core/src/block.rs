@@ -114,7 +114,6 @@ pub fn check_access(size: u64, block_size: u32, offset: u64, len: usize) -> Resu
     }
 }
 
-/// Zero-filled in-memory device for tests.
 #[derive(Debug, Clone)]
 pub struct MemoryDevice {
     data: Vec<u8>,

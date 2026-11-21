@@ -36,7 +36,6 @@ pub trait BulkTransport {
     fn reset(&mut self) -> Result<(), BulkError>;
 }
 
-/// Sense key, code and qualifier of a refused command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Sense {
     pub key: u8,

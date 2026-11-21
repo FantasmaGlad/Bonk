@@ -155,7 +155,6 @@ fn ensure_room(dev: &dyn BlockDevice, size_hint: Option<u64>) -> Result<(), Writ
     }
 }
 
-/// Writes the first `n` bytes of `buf` zero-padded to whole blocks; returns the padded length.
 fn write_padded(
     dev: &mut dyn BlockDevice,
     offset: u64,

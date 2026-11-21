@@ -1,5 +1,4 @@
-/// Year, month and day of a count of days since 1970-01-01, in the proleptic Gregorian calendar (Howard
-/// Hinnant's `civil_from_days`): one line of text does not justify a date library.
+/// Howard Hinnant's `civil_from_days`: one date in a line of text does not justify a library.
 #[must_use]
 pub fn civil_from_days(days: u64) -> (i64, i64, i64) {
     let shifted = i64::try_from(days).unwrap_or(0) + 719_468;

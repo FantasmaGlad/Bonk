@@ -26,7 +26,7 @@ impl<T: BulkTransport> MassStorage<T> {
         Self { transport, tag: 0 }
     }
 
-    /// Returns the bytes transferred. `Check` does not carry the sense yet.
+    /// `Check` does not carry the sense yet.
     fn execute(&mut self, cdb: &[u8], data: Data<'_>) -> Result<usize, MscError> {
         self.tag = self.tag.wrapping_add(1);
         let tag = self.tag;
@@ -134,7 +134,6 @@ impl<T: BulkTransport> MassStorage<T> {
         Err(MscError::Protocol("no status"))
     }
 
-    /// On failure, reads the sense to report it.
     fn command(&mut self, cdb: &[u8], data: Data<'_>) -> Result<usize, MscError> {
         match self.execute(cdb, data) {
             Err(MscError::Check(_)) => Err(MscError::Check(self.request_sense().ok())),
@@ -215,7 +214,6 @@ impl<T: BulkTransport> MassStorage<T> {
         ))
     }
 
-    /// The 10-byte form while it fits, else the 16-byte form.
     pub(super) fn rw_cdb(opcode_10: u8, opcode_16: u8, lba: u64, blocks: u32) -> Vec<u8> {
         if let (Ok(short_lba), Ok(short_blocks)) = (u32::try_from(lba), u16::try_from(blocks)) {
             let mut cdb = vec![0u8; 10];

@@ -73,7 +73,6 @@ pub(in crate::format) fn entry_set(
     set
 }
 
-/// Entries the root must start with.
 pub(super) fn system_entries(geo: &Geometry, label: Option<&str>) -> Vec<u8> {
     let mut bytes = vec![0u8; if label.is_some() { 3 } else { 2 } * ENTRY];
     let bitmap = &mut bytes[..ENTRY];

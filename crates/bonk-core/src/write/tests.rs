@@ -113,7 +113,6 @@ fn image_de_taille_inconnue_qui_deborde_s_arrete_a_la_fin_du_support()
         error,
         Some(WriteError::TooLarge { needed: None, .. })
     ));
-    // What fit was written, nothing beyond (the drive has 2048 bytes).
     assert_eq!(dev.as_bytes(), &image[..2048]);
     Ok(())
 }
@@ -325,7 +324,6 @@ fn les_plages_ignorees_sont_exclues_des_deux_cotes_et_le_reste_est_compare()
         &mut |_| Control::Continue,
     )?;
     assert_eq!(len, 4096);
-    // The drive differs in the ignored ranges, including across two read blocks.
     let mut other = image.clone();
     other[12] ^= 0xFF;
     other[4092] ^= 0xFF;

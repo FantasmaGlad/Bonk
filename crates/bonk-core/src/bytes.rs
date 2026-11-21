@@ -14,7 +14,6 @@ fn array<const N: usize>(b: &[u8], at: usize) -> Option<[u8; N]> {
     b.get(at..at.checked_add(N)?)?.try_into().ok()
 }
 
-/// `None` when the field runs past the end: for structures whose length is not checked beforehand.
 pub(crate) fn get_u16(b: &[u8], at: usize) -> Option<u16> {
     array(b, at).map(u16::from_le_bytes)
 }

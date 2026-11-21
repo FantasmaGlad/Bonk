@@ -1,12 +1,10 @@
 // Assembled from boot/ by boot/assemble.sh with the Rust toolchain only; CI reassembles and compares these bytes.
 
-/// First 440 bytes of the disk, before the signature and the partition table.
 pub const MBR: &[u8; 440] = include_bytes!("mbr.bin");
 
 /// FAT32 boot sector; bytes 3 to 89 stay zero for the BPB.
 pub const VBR: &[u8; 512] = include_bytes!("vbr.bin");
 
-/// Second stage, read by `VBR` from the reserved area.
 pub const STAGE2: &[u8; 4096] = include_bytes!("stage2.bin");
 
 pub const STAGE2_SECTOR: u32 = 9;

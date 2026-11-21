@@ -20,7 +20,6 @@ pub(super) const ENTRY_STREAM: u8 = 0xC0;
 pub(super) const ENTRY_NAME: u8 = 0xC1;
 pub(super) const ATTR_DIRECTORY: u16 = 0x10;
 pub(super) const NO_FAT_CHAIN: u8 = 0x02;
-/// UTF-16 units in one name entry.
 pub(super) const NAME_UNITS: usize = 15;
 pub(super) const END_OF_CHAIN: u32 = 0xFFFF_FFFF;
 /// One bound for writing and reading: Bonk never writes a directory it would refuse to read back, and a
@@ -175,7 +174,6 @@ pub(super) fn upcase_map() -> Vec<u16> {
     map
 }
 
-/// `used`: clusters in use.
 pub(super) fn boot_region(
     block: u32,
     geo: &Geometry,

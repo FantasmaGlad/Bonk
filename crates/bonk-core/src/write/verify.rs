@@ -50,7 +50,6 @@ pub struct VerifyReport {
     pub bytes_per_second: f64,
 }
 
-/// Drops the cache, then compares the SHA-256 of the first `len` bytes with `expected`.
 pub fn verify(
     dev: &mut dyn BlockDevice,
     len: u64,
@@ -116,7 +115,6 @@ pub fn verify_ignoring(
     }
 }
 
-/// With the `ignore` ranges zeroed, to compare a drive with an image.
 pub fn hash_source_ignoring(
     src: &mut dyn Read,
     size_hint: Option<u64>,

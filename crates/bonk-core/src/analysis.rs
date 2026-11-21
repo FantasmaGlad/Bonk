@@ -138,7 +138,6 @@ fn declared_by_tables(layout: &Layout) -> Option<u64> {
     by_gpt.or(by_mbr)
 }
 
-/// `real_len`: decompressed size, when known.
 #[must_use]
 pub fn analyze(head: &[u8], real_len: Option<u64>) -> ImageReport {
     let block = DEFAULT_BLOCK_SIZE as usize;
@@ -311,8 +310,6 @@ mod tests {
         image[512..604].copy_from_slice(&h);
     }
 
-    /// 4 KiB-sector image with an invalid GPT header: only the hybrid MBR gives the size, counted in 4 KiB
-    /// sectors.
     #[test]
     fn le_mbr_d_une_image_a_secteurs_de_4_kio_se_compte_en_4_kio() {
         let mut image = blank();

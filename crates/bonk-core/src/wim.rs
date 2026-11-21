@@ -22,7 +22,6 @@ pub enum WimError {
     NotWim,
     Malformed(&'static str),
     Solid,
-    /// A single resource exceeds the part size.
     ResourceTooLarge(u64),
 }
 
@@ -43,7 +42,6 @@ impl fmt::Display for WimError {
 
 impl std::error::Error for WimError {}
 
-/// Computed bytes, or a range of the source WIM.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Segment {
     Bytes(Vec<u8>),
@@ -247,7 +245,6 @@ fn pack(items: Vec<Entry>, fixed: u64, part_limit: u64) -> Result<Vec<Part>, Wim
     Ok(parts)
 }
 
-/// The part's resources laid out after the header, their lookup table, and where the boot metadata landed.
 struct Placed {
     sources: Vec<Segment>,
     table: Vec<u8>,
@@ -351,7 +348,6 @@ mod tests {
 
     use super::*;
 
-    /// One metadata resource, `streams` resources of `each` bytes, then the XML.
     fn wim(streams: usize, each: u64, solid: bool) -> (Vec<u8>, Vec<u8>, u64) {
         let mut table = Vec::new();
         let mut position = HEADER_LEN as u64;
@@ -421,7 +417,6 @@ mod tests {
             .collect()
     }
 
-    /// One part: within the limit, its header numbered and spanned, its table pointing right after it.
     fn assert_part(part: &[Segment], index: usize, limit: u64) {
         assert!(total(part) <= limit, "{}", total(part));
         let Segment::Bytes(head) = &part[0] else {
