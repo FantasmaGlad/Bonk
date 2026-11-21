@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use bonk_core::BlockDevice;
 use bonk_core::write::{self as engine, Control, DEFAULT_CHUNK, Progress};
+use bonk_core::{BlockDevice, analysis, repair};
 use bonk_hal::{Elevation, FilterOptions};
 
 use super::source::ImageFile;
@@ -103,8 +103,16 @@ fn repair_ranges(image: &ImageFile) -> Vec<std::ops::Range<u64>> {
         return Vec::new();
     };
     let mut head = Vec::new();
-    if source.reader.take(8192).read_to_end(&mut head).is_err() {
+    if source
+        .reader
+        .take(analysis::HEAD_LEN as u64)
+        .read_to_end(&mut head)
+        .is_err()
+    {
         return Vec::new();
     }
-    bonk_core::repair::ranges_rewritten_by_repair(&head)
+    if !repair::repairs(&analysis::analyze(&head, None)) {
+        return Vec::new();
+    }
+    repair::ranges_rewritten_by_repair(&head)
 }

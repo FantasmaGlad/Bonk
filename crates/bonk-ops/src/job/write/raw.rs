@@ -3,7 +3,7 @@ use std::path::Path;
 use bonk_core::BlockDevice;
 use bonk_core::codec::{Format, Source};
 use bonk_core::partition::inspect;
-use bonk_core::repair::{RepairReport, needs_repair, repair_gpt};
+use bonk_core::repair::{RepairReport, needs_repair, repair_gpt, repairs};
 use bonk_core::write::{self as engine, Control, DEFAULT_CHUNK, Phase, Progress};
 
 use crate::errors::Code;
@@ -87,7 +87,7 @@ pub(in crate::job) fn write_raw(
     if let Some(mbr) = &hybrid_mbr {
         write_hybrid_mbr(&mut *device, mbr)?;
     }
-    let gpt_repair = if job.repair_gpt {
+    let gpt_repair = if job.repair_gpt && repairs(&image) {
         repair_if_needed(&mut *device)?
     } else {
         None

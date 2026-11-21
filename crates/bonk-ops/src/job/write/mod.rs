@@ -116,7 +116,7 @@ pub fn write(
     let sha256_checked = job.expected_sha256.is_some();
 
     if job.dry_run {
-        let steps = planned_steps(job, &chosen);
+        let steps = planned_steps(job, &chosen, &image);
         return Ok(plan(
             chosen,
             source_info,

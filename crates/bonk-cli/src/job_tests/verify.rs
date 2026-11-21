@@ -201,3 +201,38 @@ fn la_verification_apres_reparation_dit_ce_que_couvre_son_empreinte() {
         "l'empreinte doit dire qu'elle n'est pas celle de l'image : {out}"
     );
 }
+
+#[test]
+fn une_iso_hybride_garde_sa_gpt_telle_que_publiee() {
+    use bonk_core::partition::testing::{ESP, gpt_image};
+
+    let mut iso = gpt_image(2048, &[(128, 1023, ESP, "EFI")]);
+    let primary = &mut iso[16 * 2048..17 * 2048];
+    primary[0] = 1;
+    primary[1..6].copy_from_slice(b"CD001");
+    primary[80..84].copy_from_slice(&512u32.to_le_bytes());
+    primary[128..130].copy_from_slice(&2048u16.to_le_bytes());
+    iso.extend(vec![0u8; 300 * 1024]);
+    let source = TempSource::from_bytes("iso-gpt", &iso);
+    let scenario = Scenario::new();
+    let (code, out, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &source.arg(),
+        "--yes",
+        "--progress",
+        "none",
+    ]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(out.contains("Image: hybrid ISO"), "{out}");
+    assert!(out.contains("GPT: kept as published, as an ISO"), "{out}");
+    assert_eq!(
+        &scenario.written(iso.len())[..],
+        &iso[..],
+        "l'ISO telle que publiée"
+    );
+    let (code, out, err) = scenario.run(&["verify", "usb-a", &source.arg(), "--progress", "none"]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    let (_, plan, _) = scenario.run(&["write", "usb-a", &source.arg(), "--dry-run"]);
+    assert!(!plan.contains("repair_gpt_if_needed"), "{plan}");
+}
