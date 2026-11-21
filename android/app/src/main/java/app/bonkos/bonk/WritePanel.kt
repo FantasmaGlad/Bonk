@@ -35,6 +35,7 @@ internal fun Draft(panel: DraftPanel, send: (ToRust) -> Unit) {
             }
         }
         OneLine(panel.imageLine)
+        panel.bootLine?.let { Body(it) }
         panel.summary?.let { Body(it) }
         Text(
             panel.warning,

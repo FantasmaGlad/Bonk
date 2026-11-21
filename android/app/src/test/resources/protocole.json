@@ -340,6 +340,7 @@
       "panel": {
         "advanced": false,
         "advanced_button": "Autre image ou options...",
+        "boot_line": null,
         "button": "Écrire et effacer ce disque",
         "enabled": true,
         "hash": "",
@@ -505,6 +506,7 @@
       "panel": {
         "advanced": false,
         "advanced_button": "Autre image ou options...",
+        "boot_line": null,
         "button": "Écrire et effacer ce disque (dans 3 s)",
         "enabled": false,
         "hash": "",
@@ -625,6 +627,7 @@
       "panel": {
         "advanced": false,
         "advanced_button": "Autre image ou options...",
+        "boot_line": null,
         "button": "Écrire et effacer ce disque (dans 3 s)",
         "enabled": false,
         "hash": "",
@@ -784,6 +787,7 @@
       "panel": {
         "advanced": false,
         "advanced_button": "Autre image ou options...",
+        "boot_line": null,
         "button": "Écrire et effacer ce disque (dans 3 s)",
         "enabled": false,
         "hash": "",
@@ -920,6 +924,7 @@
       "panel": {
         "advanced": false,
         "advanced_button": "Autre image ou options...",
+        "boot_line": null,
         "button": "Écrire et effacer ce disque (dans 3 s)",
         "enabled": false,
         "hash": "",

@@ -91,6 +91,11 @@ pub fn cache_list_args() -> Vec<String> {
 }
 
 #[must_use]
+pub fn info_args(image: &str) -> Vec<String> {
+    vec!["info".to_owned(), image.to_owned(), "--json".to_owned()]
+}
+
+#[must_use]
 pub fn cache_clean_args(sha256: &str) -> Vec<String> {
     ["cache", "clean", sha256, "--json"]
         .map(str::to_owned)

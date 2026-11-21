@@ -42,6 +42,7 @@ pub enum Effect {
     PickVaultIso,
     ListKept,
     RemoveKept(String),
+    InspectImage(String),
     /// Opened in the user's browser; only fixed addresses of Bonk itself.
     OpenLink(&'static str),
 }
@@ -71,6 +72,7 @@ pub enum Message {
     BrowseImage,
     /// `None`: closed without a choice.
     ImagePicked(Option<PathBuf>),
+    Inspected(String, Option<serde_json::Value>),
     ToggleMenu,
     MenuCategory(Option<String>),
     MenuBase(Option<String>),
@@ -207,6 +209,7 @@ pub struct Model {
     /// Catalog image the window was opened for (`--image`, a link): it fills each draft until the user
     /// chooses something else. It only ever names a catalog entry, and never starts a write.
     pub requested: Option<String>,
+    pub inspection: Option<crate::inspect::Inspection>,
     pub vault: crate::vault::VaultState,
     pub library: crate::library::LibraryState,
     pub browse: crate::browse::BrowseState,

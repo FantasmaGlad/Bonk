@@ -34,6 +34,8 @@ impl Model {
                 self.fix_focus();
             }
             Message::Write(event) => self.on_write_event(event),
+            Message::Clock => return self.inspect_draft(),
+            Message::Inspected(image, report) => self.on_inspected(&image, report.as_ref()),
             _ => {}
         }
         Vec::new()

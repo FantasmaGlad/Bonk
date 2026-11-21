@@ -47,6 +47,7 @@ pub fn ui_event(message: &Message) -> Option<(&'static str, String)> {
         Message::Browse(message) => ("catalog_tab", format!("{message:?}")),
         Message::Tick
         | Message::Clock
+        | Message::Inspected(..)
         | Message::Loaded(_)
         | Message::Write(_)
         | Message::CatalogLoaded(_) => return None,

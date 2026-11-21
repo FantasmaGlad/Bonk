@@ -26,10 +26,7 @@ pub(super) fn effects_out(
             Effect::Relaunch { key, value } => {
                 out.push(json!({"do": "relaunch", "key": key, "value": value}));
             }
-            // Orbot listens on the phone's loopback, as Tor does on a computer.
-            Effect::DetectTor => {
-                let _ = model.update(Message::TorDetected(bonk_catalog::tor::detect()));
-            }
+            Effect::DetectTor | Effect::InspectImage(_) => in_rust(model, effect),
             Effect::CancelWrite(_) => CANCEL.store(true, Ordering::SeqCst),
             Effect::StartWrite(_) => {
                 CANCEL.store(false, Ordering::SeqCst);
@@ -58,6 +55,21 @@ pub(super) fn effects_out(
         }
     }
     out
+}
+
+fn in_rust(model: &mut Model, effect: Effect) {
+    let message = match effect {
+        // Orbot listens on the phone's loopback, as Tor does on a computer.
+        Effect::DetectTor => Message::TorDetected(bonk_catalog::tor::detect()),
+        Effect::InspectImage(image) => {
+            let report = bonk_ops::job::inspect(std::path::Path::new(&image))
+                .ok()
+                .and_then(|inspection| serde_json::to_value(inspection).ok());
+            Message::Inspected(image, report)
+        }
+        _ => return,
+    };
+    let _ = model.update(message);
 }
 
 /// The vault command the model asks for, for Kotlin to run: the phone has no `bonk` command. Kotlin

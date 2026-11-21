@@ -48,6 +48,7 @@ impl Model {
             | Message::CatalogLoaded(_)
             | Message::MenuChose(_)) => self.apply_menu(message),
             message @ (Message::Clock
+            | Message::Inspected(..)
             | Message::StartWrite
             | Message::ConfirmInternal
             | Message::CloseInternal

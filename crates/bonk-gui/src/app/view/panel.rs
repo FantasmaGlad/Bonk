@@ -175,24 +175,28 @@ impl App {
                 .color(theme::muted())
                 .into()
         });
-        column![
-            text(recap::image_line(lang, &self.catalog, image)).size(14),
-            text(recap::disk_line(lang, disk)).size(14),
-            container(text(recap::warning(lang)).size(13))
-                .padding([8, 12])
-                .width(iced::Fill)
-                .style(theme::warning_banner),
-            ring(
+        let boot = self
+            .boot_line()
+            .map(|line| -> Element<'a, Message> { text(line).size(13).into() });
+        column![text(recap::image_line(lang, &self.catalog, image)).size(14)]
+            .extend(boot)
+            .push(text(recap::disk_line(lang, disk)).size(14))
+            .push(
+                container(text(recap::warning(lang)).size(13))
+                    .padding([8, 12])
+                    .width(iced::Fill)
+                    .style(theme::warning_banner),
+            )
+            .push(ring(
                 button(text(phrases::write_button(lang, elapsed, empty)).size(14))
                     .on_press_maybe(ready.then_some(Message::StartWrite))
                     .padding([6, 14])
                     .style(theme::primary_button),
                 self.has_focus(Focus::Action),
-            ),
-        ]
-        .extend(refusal)
-        .spacing(8)
-        .into()
+            ))
+            .extend(refusal)
+            .spacing(8)
+            .into()
     }
 
     fn manual_options<'a>(
