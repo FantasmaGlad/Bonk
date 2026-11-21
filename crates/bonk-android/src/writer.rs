@@ -38,7 +38,6 @@ pub(crate) fn android_io(
     }
 }
 
-/// In the command line format: one reader, as on the desktop.
 pub(crate) fn finished<T: Serialize>(result: Result<T, job::JobError>) -> Event {
     let failure =
         |message: String, code: Option<String>| Event::Finished(Outcome::Failed { code, message });
@@ -51,7 +50,6 @@ pub(crate) fn finished<T: Serialize>(result: Result<T, job::JobError>) -> Event 
     }
 }
 
-/// Engine progress to the screen; the screen's cancel stops the engine.
 pub(crate) fn report(update: &Progress) -> Control {
     push(Event::Progress {
         phase: update.phase,
@@ -186,17 +184,13 @@ mod tests {
         }
     }
 
-    /// The key the app opened must be the one the screen showed: same plug point, same serial.
     #[test]
     fn la_cle_ouverte_doit_etre_celle_choisie() {
         let disks = [disk("/dev/bus/usb/001/002", Some("S1"))];
         assert!(same_drive(&disks, "usb-S1", "/dev/bus/usb/001/002", "S1").is_ok());
-        // Another key at the same place, or the chosen key replugged elsewhere.
         assert!(same_drive(&disks, "usb-S1", "/dev/bus/usb/001/002", "S2").is_err());
         assert!(same_drive(&disks, "usb-S1", "/dev/bus/usb/001/003", "S1").is_err());
-        // The chosen disk is no longer in the list.
         assert!(same_drive(&disks, "usb-S9", "/dev/bus/usb/001/002", "S1").is_err());
-        // Without a serial, the plug point alone tells them apart.
         let anonymous = [disk("/dev/bus/usb/001/004", None)];
         assert!(
             same_drive(

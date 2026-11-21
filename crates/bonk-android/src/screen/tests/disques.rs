@@ -9,7 +9,6 @@ fn la_cle_passe_le_meme_filtre_que_sur_pc_et_se_selectionne() {
     assert_eq!(state["panel"]["kind"], "draft");
 }
 
-/// A row that changes height at each detection makes the whole screen jump.
 #[test]
 fn la_detection_periodique_ne_change_pas_l_etat_affiche() {
     let mut model = Model {
@@ -25,8 +24,6 @@ fn la_detection_periodique_ne_change_pas_l_etat_affiche() {
     assert_eq!(state(&model), before);
 }
 
-/// Cloned keys often share a serial: each must keep its own card, and tapping the second must write the
-/// second, never the first in the list.
 #[test]
 fn deux_cles_de_meme_serie_restent_distinctes() {
     let mut model = Model {
@@ -60,7 +57,6 @@ fn deux_cles_de_meme_serie_restent_distinctes() {
     );
 }
 
-/// The summary before erasing says what the key holds: a table read, never 0 by default.
 #[test]
 fn les_partitions_lues_sur_la_cle_arrivent_a_l_ecran() -> Result<(), Box<dyn std::error::Error>> {
     use bonk_core::MemoryDevice;
@@ -85,13 +81,11 @@ fn les_partitions_lues_sur_la_cle_arrivent_a_l_ecran() -> Result<(), Box<dyn std
         ..Model::default()
     };
     let _ = model.update(Message::Loaded(Ok(disk_of(&value).into_iter().collect())));
-    // The partition read on the key reaches the screen: its label is on the card.
     let facts = state(&model)["disks"][0]["facts"]
         .as_str()
         .unwrap_or_default()
         .to_owned();
     assert!(facts.contains("DONNEES"), "{facts}");
-    // A blank key really has no partition.
     let blank = MemoryDevice::new(64 << 20, 512)?;
     assert!(partitions_of(&bonk_core::partition::inspect(&blank)?).is_empty());
     Ok(())

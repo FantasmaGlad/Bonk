@@ -36,7 +36,6 @@ fn answer<'caller>(
     env.new_string(value.to_string())
 }
 
-/// Size and partitions: what the screen shows before offering to erase the key.
 fn probe(fd: RawFd, descriptors: &[u8]) -> Result<serde_json::Value, String> {
     let disk = UsbDisk::open(transport(fd, descriptors)?).map_err(|error| error.to_string())?;
     let layout = partition::inspect(&disk).map_err(|error| error.to_string())?;

@@ -2,13 +2,11 @@ use bonk_ui::incognito::TOR_PROJECT;
 use bonk_ui::model::{Message, Model};
 use serde_json::{Value, json};
 
-/// The header's round button; `null` offline, where nothing is downloaded.
 pub(crate) fn state(model: &Model) -> Value {
     if model.offline {
         return Value::Null;
     }
     json!({
-        // While Tor is awaited the button can still turn incognito off.
         "available": model.tor.is_some() || model.use_tor,
         "on": model.incognito(),
         "label": model.incognito_label(),

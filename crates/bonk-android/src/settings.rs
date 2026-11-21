@@ -33,7 +33,6 @@ fn option(label: &str, action: &str, value: &str, chosen: bool) -> Value {
     json!({"label": label, "action": action, "value": value, "chosen": chosen})
 }
 
-/// Language and theme options, the current one marked.
 fn choices(model: &Model) -> (Vec<Value>, Vec<Value>) {
     let lang = model.lang;
     let languages = LangChoice::ALL
@@ -59,7 +58,6 @@ fn choices(model: &Model) -> (Vec<Value>, Vec<Value>) {
     (languages, themes)
 }
 
-/// The settings page, or null on the main page.
 pub(crate) fn state(model: &Model) -> Value {
     if model.screen != Screen::Settings {
         return Value::Null;
@@ -102,7 +100,6 @@ pub(crate) fn state(model: &Model) -> Value {
     })
 }
 
-/// What the app read in its preferences and from the system, at each start.
 pub fn start(
     lang: &str,
     theme: &str,
