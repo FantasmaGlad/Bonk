@@ -24,7 +24,6 @@ class Actions(
         WriteService.start(context, request)
     }
 
-    /** Reading a vault is brief; what writes to the key belongs to the service, as a write does. */
     fun vault(request: VaultRun) {
         Bridge.cancelled = false
         if (request.action == "list") {

@@ -21,7 +21,6 @@ data class Select(val id: String) : ToRust
 @Serializable @SerialName("details")
 data object ToggleDetails : ToRust
 
-/** Also show the disks the safety filter excludes, with the reason. */
 @Serializable @SerialName("show_all")
 data class ShowAll(val on: Boolean) : ToRust
 
@@ -42,7 +41,6 @@ data class BaseFilter(val value: String? = null) : ToRust
 @Serializable @SerialName("system")
 data class SystemFilter(val value: String? = null) : ToRust
 
-/** Part of a system or image name; empty shows them all. */
 @Serializable @SerialName("menu_search")
 data class MenuSearch(val value: String) : ToRust
 
@@ -85,7 +83,6 @@ data object Dismiss : ToRust
 @Serializable @SerialName("download")
 data class Download(val done: Long, val total: Long?, val rate: Double) : ToRust
 
-/** A catalog image saved: where the user finds it, and its size. */
 @Serializable @SerialName("downloaded")
 data class Downloaded(val path: String, val bytes: Long) : ToRust
 
@@ -103,14 +100,12 @@ data class Open(val link: String) : ToRust
 @Serializable @SerialName("refresh")
 data object Refresh : ToRust
 
-/** A vault panel button: Rust names its action. */
 @Serializable @SerialName("vault")
 data class VaultButton(val action: String) : ToRust
 
 @Serializable @SerialName("vault_picked")
 data class VaultPicked(val value: String) : ToRust
 
-/** The round incognito button: turns downloads through Tor on or off. */
 @Serializable @SerialName("incognito")
 data object ToggleIncognito : ToRust
 
@@ -138,7 +133,6 @@ data class CatalogSystem(val name: String) : ToRust
 @Serializable @SerialName("catalog_write")
 data class CatalogWrite(val id: String) : ToRust
 
-/** A key as the app sees it: USB device, serial and what the probe read. */
 @Serializable
 data class Drive(
     val device: String,

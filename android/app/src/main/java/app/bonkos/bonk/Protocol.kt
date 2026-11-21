@@ -4,13 +4,11 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-/** Failure born in the app, tied to a Bonk code: the screen shows its translated title. */
 class BonkFailure(val code: String, message: String) : Exception(message)
 
 @Serializable
 data class Outcome(val error: String? = null)
 
-/** What the notification of a running operation says, from Rust. */
 @Serializable
 data class Notice(val title: String, val body: String, val percent: Int? = null, val last: Boolean = false)
 
@@ -49,7 +47,6 @@ object Protocol {
     /** `null` when nothing runs or the setting is off. */
     fun notice(text: String): Notice? = fromRust.decodeFromString(text)
 
-    /** A write, a vault action or a download, handed to its service. */
     fun encodeTask(task: Effect): String = fromRust.encodeToString(Effect.serializer(), task)
 
     fun decodeTask(text: String): Effect = fromRust.decodeFromString(Effect.serializer(), text)

@@ -24,7 +24,6 @@ private const val NOTICE_MS = 1000L
 /** Safety net if the service never released the lock: nothing Bonk does lasts six hours. */
 private const val WAKE_LOCK_MS = 6 * 60 * 60 * 1000L
 
-/** How long the end waits for Rust to read the last event. */
 private const val END_WAIT_MS = 3000L
 
 /**
@@ -129,7 +128,6 @@ abstract class OperationService : Service() {
         val localized = inLanguage(Bridge.language)
         val generic = localized.getString(genericTitle)
         manager.createNotificationChannel(NotificationChannel(channel, generic, NotificationManager.IMPORTANCE_LOW))
-        // Tapping the notification reopens the screen, with the progress and the result.
         val open =
             PendingIntent.getActivity(
                 this,

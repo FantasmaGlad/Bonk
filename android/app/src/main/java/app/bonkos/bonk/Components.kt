@@ -24,7 +24,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-
 /** Smallest height of anything that answers a touch. */
 internal const val TOUCH_DP = 48
 
@@ -120,7 +119,6 @@ internal fun Secondary(
         enabled = enabled,
         modifier = modifier,
         shape = RoundedCornerShape(Tokens.RADIUS.dp),
-        // Its own outline marks the choice: never a second frame around it.
         border = BorderStroke(if (chosen) 2.dp else 1.dp, Color(if (chosen) palette.accent else palette.muted)),
         colors =
             ButtonDefaults.outlinedButtonColors(

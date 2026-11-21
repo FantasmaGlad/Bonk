@@ -12,18 +12,13 @@ data class Answer(val state: ScreenState = ScreenState(), val effects: List<Effe
 @Serializable
 data class ScreenState(
     @SerialName("settings_button") val settingsButton: String = "",
-    /** The settings page; absent on the main page. */
     val settings: SettingsView? = null,
-    /** Absent offline. */
     val incognito: IncognitoView? = null,
-    /** Absent offline. */
     @SerialName("catalog_button") val catalogButton: String? = null,
-    /** The catalog tab; absent on the other pages. */
     val browse: BrowseView? = null,
     /** Language chosen in Bonk (`fr`, `en`): the app reads its own texts in it. */
     val lang: String = "en",
     val status: String = "",
-    /** What became of the image a link asked for. */
     val notice: String? = null,
     val empty: String = "",
     val disks: List<DiskView> = emptyList(),
@@ -91,13 +86,10 @@ data class DiskView(
     val badge: String,
     val state: String,
     val selected: Boolean,
-    /** Device node, serial and partitions, when opened. */
     val details: List<String> = emptyList(),
-    /** Under the selected card only. */
     @SerialName("details_button") val detailsButton: String? = null,
 )
 
-/** The write panel, named by `kind`. Absent when no disk is chosen. */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
 @JsonClassDiscriminator("kind")
@@ -133,7 +125,6 @@ data class RunningPanel(val line: String, val fraction: Float? = null, val cance
 @Serializable @SerialName("finished")
 data class FinishedPanel(val message: String, val close: String) : Panel
 
-/** The image menu: a waiting line until the catalog is read. */
 @Serializable
 data class MenuView(
     val ready: Boolean,

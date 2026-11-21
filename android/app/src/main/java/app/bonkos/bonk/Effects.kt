@@ -16,7 +16,6 @@ data class LoadCatalog(val proxy: String? = null) : Effect
 @Serializable @SerialName("pick")
 data object PickImage : Effect
 
-/** Kept for the next start; takes effect now. */
 @Serializable @SerialName("save_setting")
 data class SaveSetting(val key: String, val value: String) : Effect
 
@@ -39,18 +38,15 @@ data class Write(
     val proxy: String? = null,
 ) : Effect
 
-/** A catalog image to save without writing it; address and hash come from the signed catalog. */
 @Serializable @SerialName("download_image")
 data class DownloadImage(val url: String, val sha256: String, val name: String, val proxy: String? = null) : Effect
 
-/** A fixed address of Bonk itself, opened in the browser. */
 @Serializable @SerialName("open_link")
 data class OpenLink(val url: String) : Effect
 
 @Serializable @SerialName("vault_pick")
 data object PickVaultIso : Effect
 
-/** One GRUB image, for one processor; Rust checks the bytes against the signed catalog. */
 @Serializable
 data class GrubDownload(val arch: String, val url: String, @SerialName("size_bytes") val sizeBytes: Long)
 
@@ -65,6 +61,5 @@ data class VaultRun(
     val device: String?,
     val iso: String? = null,
     val grub: List<GrubDownload> = emptyList(),
-    /** Tor while incognito, for GRUB. */
     val proxy: String? = null,
 ) : Effect

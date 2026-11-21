@@ -66,7 +66,6 @@ internal fun CatalogPage(view: BrowseView, send: (ToRust) -> Unit) {
 
 @Composable
 private fun Grid(grid: BrowseGrid, send: (ToRust) -> Unit) {
-    // Only visible cards are drawn: the catalog has about a hundred systems.
     LazyVerticalGrid(
         columns = GridCells.Adaptive(CARD_MIN_DP.dp),
         horizontalArrangement = Arrangement.spacedBy(Tokens.SPACE_MEDIUM.dp),

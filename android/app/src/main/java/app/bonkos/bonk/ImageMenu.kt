@@ -53,7 +53,6 @@ internal fun Menu(menu: MenuView, send: (ToRust) -> Unit) {
     if (menu.open) MenuSheet(menu, send)
 }
 
-/** Over the page, from the bottom: the list keeps the whole screen height and the page does not move. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MenuSheet(menu: MenuView, send: (ToRust) -> Unit) {
@@ -75,7 +74,6 @@ private fun MenuSheet(menu: MenuView, send: (ToRust) -> Unit) {
                 Picker(menu.arch.orEmpty(), menu.arches, menu.allArches, ::ArchFilter, send)
             }
             val rows = menu.rows
-            // Only visible rows are drawn: the catalog has over 300.
             LazyColumn(
                 Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(Tokens.SPACE_SMALL.dp),
