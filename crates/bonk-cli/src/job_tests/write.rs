@@ -442,6 +442,43 @@ fn une_iso_dvd_s_ecrit_hybride_et_seulement_sur_demande() {
 }
 
 #[test]
+fn le_chargeur_efi_et_secure_boot_sont_dits_avant_et_apres_l_ecriture() {
+    use bonk_core::fat::{Kind, testing::small};
+    use bonk_core::pe::{
+        THIRD_PARTY_CAS,
+        testing::{X86_64, name, pe},
+    };
+    let shim = pe(X86_64, &name(THIRD_PARTY_CAS[0]));
+    let fat = small(Kind::Fat12, &[("EFI/BOOT/BOOTX64.EFI", &shim)]);
+    let iso = bonk_core::hybrid::testing::dvd_iso_with_fat(&fat.image);
+    let source = TempSource::from_bytes("dvd-shim", &iso);
+    let scenario = Scenario::new();
+    let expected = format!(
+        "Secure Boot (x86_64): loader signed by {}",
+        THIRD_PARTY_CAS[0]
+    );
+    let path = source.arg();
+    let write = |extra: &[&str]| {
+        let mut args = vec!["write", "usb-a", path.as_str(), "--yes", "--mode", "hybrid"];
+        args.extend(extra);
+        scenario.run(&args)
+    };
+    let (code, out, err) = write(&["--dry-run"]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(out.contains(&expected), "{out}");
+    let (_, json, _) = write(&["--dry-run", "--json"]);
+    let plan: serde_json::Value = serde_json::from_str(&json).expect("JSON");
+    assert_eq!(plan["efi_loaders"][0]["machine"], "x86_64", "{json}");
+    assert_eq!(
+        plan["efi_loaders"][0]["signer"]["microsoft_uefi_ca"][0],
+        THIRD_PARTY_CAS[0]
+    );
+    let (code, out, err) = write(&["--progress", "none"]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(out.contains(&expected), "{out}");
+}
+
+#[test]
 fn une_image_efi_au_dela_du_premier_mio_est_mesuree_dans_l_iso() {
     use bonk_core::hybrid::testing::{FAR_EFI_BLOCK, FAR_EFI_SECTORS, dvd_iso_with_far_efi};
     let iso = dvd_iso_with_far_efi();

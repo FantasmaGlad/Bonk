@@ -11,6 +11,10 @@ const OPTIONAL_PE32_PLUS: u16 = 0x20B;
 const COMMON_NAME_OID: [u8; 5] = [0x06, 0x03, 0x55, 0x04, 0x03];
 pub const PCA_2011: &str = "Microsoft Windows Production PCA 2011";
 pub const UEFI_CA_2023: &str = "Windows UEFI CA 2023";
+pub const THIRD_PARTY_CAS: [&str; 2] = [
+    "Microsoft Corporation UEFI CA 2011",
+    "Microsoft UEFI CA 2023",
+];
 
 /// Processor a UEFI loader runs on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -42,6 +46,8 @@ pub enum Signer {
     WindowsProductionPca2011,
     /// New certificate: refused by a PC whose firmware does not know it yet.
     WindowsUefiCa2023,
+    /// Microsoft's third-party authority, which signs shim and other vendors' loaders.
+    MicrosoftUefiCa(Vec<String>),
     /// Another authority, named.
     Other(String),
     /// No signature: refused with Secure Boot active.
@@ -57,6 +63,10 @@ impl Signer {
             ),
             Self::WindowsUefiCa2023 => format!(
                 "loader signed by {UEFI_CA_2023}: with Secure Boot, refused by a PC whose firmware does not know this certificate"
+            ),
+            Self::MicrosoftUefiCa(names) => format!(
+                "loader signed by {}, Microsoft's third-party authority: with Secure Boot, accepted by a PC that trusts it, which some PCs turn off by default",
+                names.join(" and ")
             ),
             Self::Other(name) => {
                 format!("loader signed by {name}: with Secure Boot, depends on what the PC accepts")
@@ -124,10 +134,17 @@ pub fn signer(file: &[u8]) -> Option<Signer> {
     }
     let table = file.get(start..start.checked_add(len)?)?;
     let names = common_names(table);
+    let third_party: Vec<String> = THIRD_PARTY_CAS
+        .into_iter()
+        .filter(|ca| names.iter().any(|name| name == ca))
+        .map(str::to_owned)
+        .collect();
     if names.iter().any(|name| name == UEFI_CA_2023) {
         Some(Signer::WindowsUefiCa2023)
     } else if names.iter().any(|name| name == PCA_2011) {
         Some(Signer::WindowsProductionPca2011)
+    } else if !third_party.is_empty() {
+        Some(Signer::MicrosoftUefiCa(third_party))
     } else {
         Some(
             names
@@ -138,36 +155,15 @@ pub fn signer(file: &[u8]) -> Option<Signer> {
     }
 }
 
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
 
-    fn pe(machine: u16, certificates: &[u8]) -> Vec<u8> {
-        let mut file = vec![0u8; 512];
-        file[..2].copy_from_slice(b"MZ");
-        file[0x3C] = 0x40;
-        file[0x40..0x44].copy_from_slice(b"PE\0\0");
-        file[0x44..0x46].copy_from_slice(&machine.to_le_bytes());
-        let optional = 0x44 + 20;
-        file[optional..optional + 2].copy_from_slice(&OPTIONAL_PE32_PLUS.to_le_bytes());
-        if !certificates.is_empty() {
-            let security = optional + 112 + 32;
-            file[security..security + 4].copy_from_slice(&512u32.to_le_bytes());
-            file[security + 4..security + 8]
-                .copy_from_slice(&(certificates.len() as u32).to_le_bytes());
-            file.extend_from_slice(certificates);
-        }
-        file
-    }
-
-    fn name(text: &str) -> Vec<u8> {
-        let mut der = COMMON_NAME_OID.to_vec();
-        der.extend([0x0C, text.len() as u8]);
-        der.extend(text.bytes());
-        der
-    }
+    use super::testing::{name, pe};
 
     #[test]
     fn le_certificat_du_chargeur_est_nomme() {
@@ -187,6 +183,29 @@ mod tests {
         assert_eq!(signer(&pe(MACHINE_X86_64, &[])), Some(Signer::Unsigned));
         assert_eq!(signer(b"pas un exe"), None);
         assert!(signer(&pe(MACHINE_X86_64, &[])).is_some_and(|s| s.meaning().contains("unsigned")));
+    }
+
+    // As Debian 13's shim: Microsoft's third-party authority of 2011 and 2023, its signer and timestamping.
+    #[test]
+    fn un_shim_signe_par_l_autorite_tierce_de_microsoft_est_reconnu() {
+        let shim = [
+            name(THIRD_PARTY_CAS[0]),
+            name("Microsoft Windows UEFI Driver Publisher"),
+            name("Microsoft Time-Stamp PCA 2010"),
+            name(THIRD_PARTY_CAS[1]),
+        ]
+        .concat();
+        let both = THIRD_PARTY_CAS.map(str::to_owned).to_vec();
+        assert_eq!(
+            signer(&pe(MACHINE_X86_64, &shim)),
+            Some(Signer::MicrosoftUefiCa(both))
+        );
+        let old = signer(&pe(MACHINE_X86_64, &name(THIRD_PARTY_CAS[0])));
+        assert_eq!(
+            old,
+            Some(Signer::MicrosoftUefiCa(vec![THIRD_PARTY_CAS[0].to_owned()]))
+        );
+        assert!(old.is_some_and(|s| s.meaning().contains("third-party")));
     }
 
     #[test]

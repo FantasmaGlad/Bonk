@@ -45,6 +45,7 @@ pub(in crate::job) fn write_raw(
         image,
         sha256_checked,
         hybrid_mbr,
+        efi_loaders,
     } = checked;
     log::info!(
         target: "bonk::write",
@@ -107,6 +108,7 @@ pub(in crate::job) fn write_raw(
         verify,
         gpt_repair,
         hybrid_mbr: hybrid_mbr.is_some(),
+        efi_loaders,
     })))
 }
 

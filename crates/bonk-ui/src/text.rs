@@ -216,6 +216,14 @@ fn secure_boot_text(lang: Lang, signer: &bonk_core::pe::Signer) -> String {
         (Signer::WindowsUefiCa2023, Lang::Fr) => format!(
             "chargeur signé par {UEFI_CA_2023} : avec Secure Boot, refusé par un PC dont le micrologiciel ne connaît pas ce certificat"
         ),
+        (Signer::MicrosoftUefiCa(names), Lang::En) => format!(
+            "loader signed by {}, Microsoft's third-party authority: with Secure Boot, accepted by a PC that trusts it, which some PCs turn off by default",
+            names.join(" and ")
+        ),
+        (Signer::MicrosoftUefiCa(names), Lang::Fr) => format!(
+            "chargeur signé par {}, l'autorité tierce de Microsoft : avec Secure Boot, accepté par un PC qui lui fait confiance, ce que certains PC désactivent par défaut",
+            names.join(" et ")
+        ),
         (Signer::Other(name), Lang::En) => {
             format!("loader signed by {name}: with Secure Boot, depends on what the PC accepts")
         }
@@ -364,5 +372,23 @@ mod tests {
                 "{line}"
             );
         }
+    }
+
+    #[test]
+    fn le_signataire_d_une_image_ecrite_telle_quelle_suit_la_langue() {
+        let shim = Signer::MicrosoftUefiCa(vec!["CA 2011".to_owned(), "CA 2023".to_owned()]);
+        let line = serde_json::json!({
+            "event": "result",
+            "write": {"bytes": 1},
+            "verify": null,
+            "gpt_repair": null,
+            "efi_loaders": [{"machine": "x86_64", "signer": shim}],
+        })
+        .to_string();
+        let Some(crate::event::Event::Finished(done)) = crate::event::parse_line(&line) else {
+            panic!("{line}");
+        };
+        assert!(outcome(Lang::En, &done).contains("CA 2011 and CA 2023, Microsoft's third-party"));
+        assert!(outcome(Lang::Fr, &done).contains("CA 2011 et CA 2023, l'autorité tierce"));
     }
 }

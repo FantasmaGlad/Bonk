@@ -41,6 +41,7 @@ pub(in crate::job) fn write_windows(
             sha256_checked,
             steps,
             Some(windows.describe(job.table, block)),
+            Vec::new(),
         ));
     }
     confirm(job, &chosen)?;

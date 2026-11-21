@@ -1,4 +1,5 @@
 use bonk_core::analysis::ImageReport;
+use bonk_core::efi::Loader;
 
 use crate::job::extract::Extraction;
 use crate::job::target::Chosen;
@@ -13,6 +14,7 @@ pub(in crate::job) fn plan(
     sha256_checked: bool,
     steps: Vec<&'static str>,
     extraction: Option<Extraction>,
+    efi_loaders: Vec<Loader>,
 ) -> WriteOutcome {
     WriteOutcome::Plan(Box::new(Plan {
         schema_version: SCHEMA_VERSION,
@@ -25,6 +27,7 @@ pub(in crate::job) fn plan(
         unmount: chosen.mounts,
         steps,
         extraction,
+        efi_loaders,
     }))
 }
 
