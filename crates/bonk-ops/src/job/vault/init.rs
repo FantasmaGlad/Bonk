@@ -21,7 +21,6 @@ use super::*;
 
 pub struct VaultInitJob {
     pub target: Target,
-    /// GRUB images and menu; empty: the boot partition stays empty.
     pub boot: Vec<BootFile>,
     pub grub: Option<GrubInfo>,
     pub table: TableKind,
@@ -163,7 +162,6 @@ pub(super) fn init_target(
         reread_table(Path::new(&info.path), job.elevation, deps);
         let sizes = [plan.vault.sectors() * block, plan.efi.sectors() * block];
         if wait_for_partitions(&identity.id, &sizes, deps)?.is_none() {
-            // Both volumes are written and read back: the system will see them at the next plug.
             log::warn!(target: "bonk::write", "new partitions not visible yet: unplug and replug the disk");
         }
     }

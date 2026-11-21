@@ -107,9 +107,7 @@ fn open_error(err: BlockError) -> JobError {
     }
 }
 
-/// Once the disk is closed: the service does not reread the table of a disk opened exclusively. Without it
-/// the kernel may keep a partition's old size, and reading it here fails until replug. A failure is reported,
-/// not fatal.
+/// Only once closed: the service skips disks opened exclusively, and a stale table lasts until replug.
 pub(super) fn reread_table(disk: &Path, elevation: Elevation, deps: &Deps<'_>) {
     if let Err(error) = (deps.io.rescan)(disk, elevation) {
         log::warn!(
@@ -145,17 +143,14 @@ impl OpenRequest {
     }
 }
 
-/// A target opened to build volumes on, and the identifiers they take.
 pub(super) struct OpenedForWriting {
     pub(super) device: Box<dyn BlockDevice>,
     pub(super) info: TargetInfo,
     pub(super) unmounted: Vec<String>,
     pub(super) ids: Ids,
-    /// What is checked again once the system has reread the new table; `None` for an image file.
     pub(super) identity: Option<TargetIdentity>,
 }
 
-/// Opens, then a last chance to cancel before the first byte: `before` names the work in that message.
 pub(super) fn open_for_writing(
     chosen: Chosen,
     target: &Target,
@@ -190,7 +185,6 @@ pub(super) fn fresh_seed(target: &str) -> Vec<u8> {
     format!("{target}:{nanos}:{}:{random}", std::process::id()).into_bytes()
 }
 
-/// Nothing to unmount, nothing to write.
 pub(super) fn open_read_only(
     target: &Target,
     options: FilterOptions,
@@ -245,7 +239,6 @@ fn open_disk(
     let identity = TargetIdentity::from(disk);
     // Rights first: a refusal must leave the key neither unmounted nor touched.
     let prepared = (deps.io.prepare)(Path::new(&disk.path), access, elevation);
-    // Cancelled while waiting for authorization: the key stays mounted and untouched.
     if (deps.io.cancelled)() {
         return Err(fail(Code::Cancelled, "cancelled before opening the disk"));
     }

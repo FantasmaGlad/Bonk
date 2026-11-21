@@ -23,12 +23,11 @@ use native::*;
 
 /// Above this, `exfat` rather than `fat32`: the usual tool limit and what devices expect.
 const FAT32_DEFAULT_LIMIT: u64 = 32 << 30;
-/// Looks at the system while waiting for the partition or filesystem: half a minute with the 250 ms pause.
+/// Half a minute at 250 ms per look.
 const PARTITION_LOOKS: u32 = 120;
 
 pub struct FormatJob {
     pub target: Target,
-    /// `None`: [`default_filesystem`].
     pub filesystem: Option<Filesystem>,
     pub table: TableKind,
     pub label: Option<String>,
@@ -53,7 +52,6 @@ fn format_error(err: FormatError) -> JobError {
     fail(Code::FormatFailed, err)
 }
 
-/// Before any action.
 fn check_available(fs: Filesystem, chosen: &Chosen, deps: &Deps<'_>) -> Result<(), JobError> {
     if fs.is_native() {
         return Ok(());
@@ -86,7 +84,6 @@ fn check_available(fs: Filesystem, chosen: &Chosen, deps: &Deps<'_>) -> Result<(
     }
 }
 
-/// No error, and the wanted partition.
 fn check_table(dev: &dyn BlockDevice, part: PartitionPlan) -> Result<(), JobError> {
     let layout = inspect(dev).map_err(|e| fail(Code::FormatFailed, e))?;
     if let Some(finding) = layout

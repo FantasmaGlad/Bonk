@@ -88,7 +88,6 @@ mod tests {
         assert!(error.message.contains("unplugged"), "{}", error.message);
     }
 
-    /// The USB transport without root reports a key pulled out as `NotConnected`.
     #[test]
     fn une_cle_debranchee_par_le_transport_usb_se_dit() {
         let gone = std::io::Error::new(std::io::ErrorKind::NotConnected, "device disconnected");

@@ -2,7 +2,6 @@ use bonk_core::BlockError;
 
 use super::*;
 
-/// The BIOS code assumes 512-byte sectors: on a 4 KiB-sector disk the plan does not announce it.
 #[test]
 fn le_bios_n_est_annonce_qu_avec_des_secteurs_de_512_octets() {
     let image = WindowsImage {
@@ -34,7 +33,6 @@ fn un_mbr_au_dela_de_2_tio_est_refuse_par_le_code_du_formatage() {
     assert!(partition_plan(4 << 40, 512, TableKind::Gpt).is_ok());
 }
 
-/// Same message as an image write: the kernel answers "no space" on an unplugged disk.
 #[test]
 fn un_support_disparu_pendant_la_copie_est_dit() {
     let full = io::Error::from(io::ErrorKind::StorageFull);

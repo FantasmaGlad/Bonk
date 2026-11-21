@@ -21,7 +21,6 @@ pub(super) fn wait_for_partition(
     )
 }
 
-/// Paths of the disk's partitions once their sizes are exactly `expected`, in any order.
 pub(in crate::job) fn wait_for_partitions(
     id: &str,
     expected: &[u64],
@@ -88,7 +87,6 @@ pub(super) struct HostDisk<'a> {
     pub(super) elevation: Elevation,
 }
 
-/// The system rereads the table, shows the partition and formats it with its own tools.
 pub(super) fn hand_over_to_host(
     disk: &HostDisk<'_>,
     partition_bytes: u64,
@@ -105,9 +103,7 @@ pub(super) fn hand_over_to_host(
                 "the system does not show the new partition: nothing was formatted on it",
             )
         })?;
-        // The host tool writes to a path: its disk must be the chosen one (same id, serial, size). The full
-        // filter is not run again: the system just mounted the new partition (Windows gives it a letter at
-        // once), and that mount is ours.
+        // No full filter here: the system just mounted the new partition, and that mount is ours.
         let disks = enumerate(deps)?;
         let found = disks
             .iter()
@@ -124,7 +120,6 @@ pub(super) fn hand_over_to_host(
             .map_err(|e| fail(Code::FormatFailed, e))?;
         wait_for_filesystem(&disk.identity.id, filesystem, deps)?;
     } else if path.is_none() {
-        // FAT32 is written and read back: the system will see it at the next plug.
         log::warn!(target: "bonk::write", "new partition not visible yet: unplug and replug the disk");
     }
     Ok(())

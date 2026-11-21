@@ -14,8 +14,7 @@ use crate::job::advance::Advance;
 use crate::job::source::ImageFile;
 use crate::job::types::JobError;
 
-/// Everything is computed before the first write: a refusal costs the key nothing. Then the table and
-/// the FAT32 structures; the files follow.
+/// Everything is computed before the first write: a refusal costs the key nothing.
 pub(super) fn write_volume<'a>(
     device: &mut dyn BlockDevice,
     prepared: &WindowsImage,
@@ -43,7 +42,6 @@ pub(super) fn write_volume<'a>(
     Ok((layout, volume, extraction))
 }
 
-/// Each file's SHA-256, in order, for the read-back.
 pub(super) fn write_files(
     device: &mut dyn BlockDevice,
     layout: &Layout,

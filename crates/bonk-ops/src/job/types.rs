@@ -20,9 +20,7 @@ pub const SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TraceIo {
-    /// Offset, length, duration and checksum of each access.
     Metadata,
-    /// Plus the first 16 bytes: image files only.
     Data,
 }
 
@@ -41,11 +39,9 @@ pub(super) fn fail(code: Code, message: impl Display) -> JobError {
     }
 }
 
-/// Returns the unmounted points.
 pub type UnmountFn = Box<dyn Fn(&Disk, Elevation) -> Result<Vec<String>, OpenTargetError>>;
 pub type OpenNodeFn =
     Box<dyn Fn(&Path, Access, Elevation) -> Result<Box<dyn BlockDevice>, BlockError>>;
-/// Before any action on the disk.
 pub type PrepareFn = Box<dyn Fn(&Path, Access, Elevation) -> Result<(), BlockError>>;
 
 pub type FormatPartitionFn =
@@ -53,7 +49,6 @@ pub type FormatPartitionFn =
 
 pub type RescanFn = Box<dyn Fn(&Path, Elevation) -> Result<(), BlockError>>;
 
-/// What operations ask of the system: injectable for tests.
 pub struct Io {
     pub prepare: PrepareFn,
     pub unmount: UnmountFn,
@@ -62,7 +57,6 @@ pub struct Io {
     pub capabilities: Box<dyn Fn() -> Vec<Capability>>,
     pub format_partition: FormatPartitionFn,
     pub rescan: RescanFn,
-    /// Short wait between looks at a partition the system has not created yet, and between download attempts.
     pub pause: Box<dyn Fn()>,
 }
 
@@ -73,8 +67,7 @@ impl Default for Io {
 }
 
 impl Io {
-    /// Real system access. `cancel` is a per-operation cancel flag (the service gives one per operation); on
-    /// Unix, Ctrl+C and SIGTERM also cancel commands and the service, which call `interrupt::install`.
+    /// On Unix, Ctrl+C and SIGTERM also cancel once `interrupt::install` ran.
     pub fn with_cancel(cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>) -> Self {
         let cancelled = std::sync::Arc::new(move || {
             bonk_hal::interrupt::requested()
@@ -115,8 +108,10 @@ pub struct Deps<'a> {
 pub enum Target {
     /// By stable id, never `/dev/sdX`.
     Disk(String),
-    /// `--simulate`: created at `size` bytes if missing.
-    Image { path: PathBuf, size: Option<u64> },
+    Image {
+        path: PathBuf,
+        size: Option<u64>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]

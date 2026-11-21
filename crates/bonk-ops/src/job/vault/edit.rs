@@ -16,12 +16,10 @@ use crate::job::verify::drop_cache_before_verify;
 
 use super::*;
 
-/// Adds an ISO to a vault: refused before the drive is touched when the vault menu could not start it.
 pub struct VaultAddJob {
     pub target: Target,
     pub source: std::path::PathBuf,
-    /// Name on the vault; by default the source's own. Android reads the chosen file through a descriptor
-    /// path that carries no name.
+    /// Android reads the chosen file through a descriptor path that carries no name.
     pub name: Option<String>,
     pub options: FilterOptions,
     pub trace_io: Option<TraceIo>,
@@ -80,8 +78,7 @@ pub(super) fn edit_error(error: FormatError) -> JobError {
     }
 }
 
-/// The name the ISO takes in the vault. The menu lists `*.iso` and `*.ISO` only, and the kernel line of a live
-/// system splits on spaces: Bonk writes them as `_`, which the user would have to do by hand otherwise.
+/// The menu lists `*.iso` and `*.ISO` only, and a live kernel line splits on spaces: they become `_`.
 pub(super) fn vault_name(path: &Path, name: Option<&str>) -> Result<String, JobError> {
     let given = name
         .or_else(|| path.file_name().and_then(|name| name.to_str()))
@@ -104,7 +101,6 @@ pub(super) fn vault_name(path: &Path, name: Option<&str>) -> Result<String, JobE
     Ok(name)
 }
 
-/// The ISO's name, family and processor, checked as the vault menu will check them at boot.
 pub(super) fn vault_source(
     path: &Path,
     name: Option<&str>,
