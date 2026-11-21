@@ -34,7 +34,6 @@ fn bonk(args: &[&str]) -> Result<Output, std::io::Error> {
     Command::new(env!("CARGO_BIN_EXE_bonk")).args(args).output()
 }
 
-/// Recognizable pattern with a boot signature: the analysis sees a disk image.
 fn image(len: usize) -> Vec<u8> {
     let mut data: Vec<u8> = (0..len).map(|i| (i * 7 % 253) as u8).collect();
     if len >= 512 {
@@ -49,7 +48,6 @@ fn texte(octets: &[u8]) -> String {
     String::from_utf8_lossy(octets).into_owned()
 }
 
-/// `bonk verify` of a simulated target against its source, writing nothing.
 fn verifier(cible: &Path, source: &Path) -> Result<Output, std::io::Error> {
     bonk(&[
         "verify",
@@ -93,10 +91,8 @@ fn ecriture_simulee_d_une_image_brute_puis_verification() -> Resultat {
         "{out}"
     );
 
-    // Later comparison, writing nothing.
     let verify = verifier(&cible, &source)?;
     assert_eq!(verify.status.code(), Some(0), "{}", texte(&verify.stderr));
-    // A changed byte: code 4 and its id.
     let mut tampered = ecrit;
     tampered[1000] ^= 1;
     fs::write(&cible, tampered)?;
@@ -247,7 +243,6 @@ fn une_image_bzip2_et_un_disque_nomme_par_son_chemin_sont_refuses() -> Resultat 
         err.contains("decompress the image") && err.trim_end().ends_with("[E3002]"),
         "{err}"
     );
-    // A disk is never named by its path: no disk answers to /dev/sda.
     let sortie = bonk(&["write", "/dev/sda", &chemin(&source), "--yes"])?;
     assert_ne!(sortie.status.code(), Some(0));
     Ok(())
@@ -283,7 +278,6 @@ fn progression_json_puis_resultat() -> Resultat {
     Ok(())
 }
 
-/// A simulated write with the access log as JSON on standard error.
 fn ecrire_trace(cible: &Path, source: &Path, trace: &str) -> Result<Output, std::io::Error> {
     bonk(&[
         "-vv",
@@ -325,7 +319,6 @@ fn trace_io_journalise_les_acces_sans_les_donnees() -> Resultat {
             .iter()
             .all(|e| e["fields"]["crc32"].is_string() && e["fields"]["micros"].is_number())
     );
-    // By default no image byte in the log; with =data, only the head.
     assert!(acces.iter().all(|e| e["fields"]["head"] == ""));
     let avec = ecrire_trace(&dir.file("o2.img"), &source, "--trace-io=data")?;
     assert!(
@@ -335,7 +328,6 @@ fn trace_io_journalise_les_acces_sans_les_donnees() -> Resultat {
     Ok(())
 }
 
-/// The low-level reads trace like the rest: `--trace-io` is accepted by every command that reads a device.
 #[test]
 fn trace_io_suit_aussi_les_lectures_de_debug() -> Resultat {
     let dir = Dossier::new("trace-debug")?;
@@ -384,7 +376,6 @@ fn reparation_du_gpt_apres_ecriture_sur_un_support_plus_grand() -> Resultat {
     Ok(())
 }
 
-/// Without the repair the anomaly stays visible, and `repair-gpt` fixes it afterwards, once.
 #[test]
 fn repair_gpt_repare_apres_coup_une_ecriture_sans_reparation() -> Resultat {
     let dir = Dossier::new("gpt-brut")?;
@@ -414,7 +405,6 @@ fn repair_gpt_repare_apres_coup_une_ecriture_sans_reparation() -> Resultat {
     Ok(())
 }
 
-/// A two-partition GPT image of 2 MiB.
 fn source_gpt(dir: &Dossier) -> Result<PathBuf, std::io::Error> {
     let source = dir.file("gpt.img");
     fs::write(
@@ -427,7 +417,6 @@ fn source_gpt(dir: &Dossier) -> Result<PathBuf, std::io::Error> {
     Ok(source)
 }
 
-/// Written to a target twice the image size: the backup GPT is no longer at the end.
 fn ecrire_gpt(cible: &Path, source: &Path, option: &str) -> Result<Output, std::io::Error> {
     bonk(&[
         "write",
@@ -534,7 +523,6 @@ fn une_empreinte_mal_formee_est_une_erreur_d_usage() -> Resultat {
     Ok(())
 }
 
-/// Structureless data, as a bad download gives.
 fn donnees() -> Vec<u8> {
     vec![0x5A; 1 << 16]
 }
@@ -570,7 +558,6 @@ fn des_donnees_sans_amorcage_sont_refusees_sauf_en_mode_brut() -> Resultat {
 #[test]
 fn une_image_tronquee_est_refusee_meme_avec_un_support_plus_grand() -> Resultat {
     let dossier = Dossier::new("tronquee")?;
-    // A 16 MiB hybrid ISO of which 1 MiB is left.
     let mut data = image(1 << 20);
     let primaire = 16 * 2048;
     data[primaire] = 1;

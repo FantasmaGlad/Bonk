@@ -14,7 +14,6 @@ use crate::job::verify::{drop_cache_before_verify, warn_if_cache_kept};
 
 use super::*;
 
-/// System authorization may take a while: say so, and allow cancelling before opening the disk.
 pub(in crate::job) fn announce_authorization(
     total: Option<u64>,
     deps: &Deps<'_>,

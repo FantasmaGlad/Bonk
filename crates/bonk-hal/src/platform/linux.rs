@@ -134,7 +134,6 @@ struct System<'a> {
     udisks: &'a dyn Fn(&Path) -> Result<(), BlockError>,
 }
 
-/// Returns the unmounted points; stops at the first failure.
 fn unmount_all(disk: &Disk, elevation: Elevation) -> Result<Vec<String>, OpenTargetError> {
     unmount_all_with(
         disk,
@@ -266,8 +265,6 @@ mod tests {
         assert_eq!(unmount_with(&[], &ok).ok(), Some(vec![]));
     }
 
-    /// Without elevation an `umount` failure is final: the service is not asked. The point does not exist, so
-    /// `umount` fails without touching anything.
     #[test]
     fn sans_elevation_le_repli_par_le_service_n_a_pas_lieu() {
         let disk = Disk {
@@ -327,7 +324,6 @@ mod tests {
         }
     }
 
-    /// `umount` and UDisks2 both refuse: both causes stay readable, the service's above all.
     #[test]
     fn l_echec_du_service_garde_sa_cause() {
         let system = System {
@@ -346,8 +342,6 @@ mod tests {
         );
     }
 
-    /// An unreadable mount table does not prove the partition is unmounted: the service is asked instead of
-    /// claiming an unmount that did not happen.
     #[test]
     fn une_table_illisible_ne_vaut_pas_demontage() {
         use std::cell::Cell;

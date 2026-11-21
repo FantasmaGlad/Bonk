@@ -26,7 +26,6 @@ fn selected(catalog: &Catalog, query: &Query, image: &Image) -> bool {
     })
 }
 
-/// By default systems in catalog order, newest version first.
 pub(crate) fn sorted<'a>(catalog: &'a Catalog, query: &Query) -> Vec<&'a Image> {
     let rank = |image: &Image| {
         catalog

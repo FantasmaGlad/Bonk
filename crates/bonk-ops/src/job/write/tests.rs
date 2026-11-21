@@ -9,7 +9,6 @@ use bonk_core::{BlockError, MemoryDevice};
 
 use super::*;
 
-/// A GPT image smaller than the drive: the backup GPT is missing at the end.
 fn image_sur_un_plus_grand_support() -> Result<MemoryDevice, Box<dyn std::error::Error>> {
     let mut image = MemoryDevice::new(8 << 20, 512)?;
     write_table(
@@ -25,7 +24,6 @@ fn image_sur_un_plus_grand_support() -> Result<MemoryDevice, Box<dyn std::error:
     Ok(support)
 }
 
-/// Accepts writes past a point without keeping them, like a failing card.
 struct PerdLaFin {
     inner: MemoryDevice,
     limite: u64,
@@ -79,7 +77,6 @@ fn une_reparation_que_le_support_ne_garde_pas_est_un_echec()
     Ok(())
 }
 
-/// Serves what was there before until its cache is dropped, as a kernel page cache can after a write.
 struct CacheTenace {
     inner: MemoryDevice,
     ancien: Option<MemoryDevice>,

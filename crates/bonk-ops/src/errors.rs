@@ -3,11 +3,9 @@ use bonk_hal::EnumerateError;
 pub const EXIT_RUNTIME_ERROR: u8 = 1;
 /// Same as clap.
 pub const EXIT_USAGE: u8 = 2;
-/// Refused by the safety filter, or the identity changed.
 pub const EXIT_TARGET_REFUSED: u8 = 3;
 pub const EXIT_VERIFY_FAILED: u8 = 4;
 pub const EXIT_CANCELLED: u8 = 5;
-/// Unreadable, unknown format or too large.
 pub const EXIT_SOURCE: u8 = 6;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,7 +49,6 @@ pub enum Code {
     ProtocolError,
 }
 
-/// As `bonk explain` shows it.
 pub struct Entry {
     pub code: Code,
     pub id: &'static str,
@@ -61,7 +58,6 @@ pub struct Entry {
     pub remedy: &'static str,
 }
 
-/// In code number order.
 pub const CATALOG: &[Entry] = &[
     Entry {
         code: Code::InvalidArgument,
@@ -433,7 +429,6 @@ pub const CATALOG: &[Entry] = &[
 
 impl Code {
     pub fn entry(self) -> &'static Entry {
-        // A test checks the catalog has every code.
         CATALOG
             .iter()
             .find(|entry| entry.code == self)
@@ -456,7 +451,6 @@ impl Code {
     }
 }
 
-/// Case-insensitive: `e1003` as `E1003`.
 pub fn lookup(text: &str) -> Option<&'static Entry> {
     CATALOG
         .iter()

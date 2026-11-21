@@ -5,7 +5,6 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import androidx.annotation.RequiresApi
 
-/** A catalog image saved without writing it: it goes on once the app is left. */
 class DownloadService : OperationService() {
     override val channel = "download"
     override val notificationId = 2

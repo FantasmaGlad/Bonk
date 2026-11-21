@@ -2,7 +2,6 @@ use bonk_hal::{Disk, Lang, format_size};
 
 use crate::catalog::{CatalogState, find_url};
 
-/// What the write will do, read just before it: the image first, then the disk it erases.
 #[must_use]
 pub fn image_line(lang: Lang, catalog: &CatalogState, image: &str) -> String {
     let image = image.trim();
@@ -14,7 +13,6 @@ pub fn image_line(lang: Lang, catalog: &CatalogState, image: &str) -> String {
     {
         format!("{} {}", choice.name, choice.title(lang))
     } else {
-        // A path or an address: its last part is what a person recognises.
         image.rsplit(['/', '\\']).next().unwrap_or(image).to_owned()
     };
     format!("{} {name}", lang.pick("Image:", "Image :"))

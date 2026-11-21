@@ -71,17 +71,13 @@ where
     ))
 }
 
-/// What Bonk reads from the process environment and asks of the system: injectable for tests.
 #[derive(Default)]
 struct Env {
     bonk_log: Option<String>,
-    /// `BONK_CONFIG`, else the system configuration directory.
     config_path: Option<PathBuf>,
-    /// `BONK_*` variables: those named after a setting override it.
     vars: Vec<(String, String)>,
     io: job::Io,
     catalog: catalog::Access,
-    /// Running as administrator: the window refuses to open.
     privileged: bool,
 }
 
@@ -137,7 +133,6 @@ where
     Cli::from_arg_matches(&matches)
 }
 
-/// What remains once the arguments are read, the log installed and any capture loaded.
 struct Prepared {
     command: Option<Command>,
     no_gui: bool,

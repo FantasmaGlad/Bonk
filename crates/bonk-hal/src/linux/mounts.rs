@@ -66,7 +66,6 @@ pub(super) struct MountIndex {
     pub(super) by_name: BTreeMap<String, Vec<String>>,
 }
 
-/// `sda1` behind a mount source (`/dev/sda1`, `/dev/disk/by-uuid/...`).
 pub(super) fn device_name(roots: &LinuxRoots, source: &str) -> Option<String> {
     let relative = source.strip_prefix("/dev/")?;
     let path = roots.dev.join(relative);

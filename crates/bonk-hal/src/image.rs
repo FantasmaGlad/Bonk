@@ -133,7 +133,6 @@ impl BlockDevice for FileDevice {
     }
 }
 
-/// `geometry`: size and block size of the device, against which the access is checked first.
 pub(crate) fn read_checked(
     file: &File,
     geometry: (u64, u32),
@@ -318,8 +317,6 @@ mod tests {
         }
     }
 
-    /// `/dev/null` is neither a regular file nor opened read-write: the guard refuses a special file before
-    /// opening it.
     #[cfg(unix)]
     #[test]
     fn ouverture_refuse_un_fichier_special() {
@@ -353,7 +350,6 @@ mod tests {
             dev.write_at(4 * 512, &[1; 512]),
             Err(BlockError::OutOfRange { .. })
         ));
-        // No partial write after a refusal.
         let mut all = vec![0xFF; 4 * 512];
         dev.read_at(0, &mut all)?;
         assert!(all.iter().all(|&b| b == 0));

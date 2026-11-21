@@ -106,7 +106,6 @@ fn arch_of(model: &Model, shown: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// The writable menu row the user touched, by its position.
 fn chosen(input: &Value, model: &Model) -> Option<Message> {
     let CatalogState::Ready(systems) = &model.catalog else {
         return None;

@@ -29,7 +29,6 @@ pub enum Format {
 }
 
 impl Format {
-    /// Content shorter than any signature is raw.
     #[must_use]
     pub fn detect(head: &[u8]) -> Self {
         if head.starts_with(&XZ) {
@@ -116,7 +115,7 @@ impl<R: BufRead> ZstdFrames<R> {
         Ok(frames)
     }
 
-    /// Skips skippable frames; false at the end. Bytes that are not a frame are an error, as for gzip and xz.
+    /// Skippable frames are skipped; bytes that are not a frame are an error, as for gzip and xz.
     fn next_frame(&mut self) -> io::Result<bool> {
         loop {
             if self.source.fill_buf()?.is_empty() {
@@ -179,7 +178,6 @@ impl<R: BufRead> Read for ZstdFrames<R> {
 pub struct Source {
     pub reader: Box<dyn Read + Send>,
     pub format: Format,
-    /// Decompressed size when known in advance: raw images only.
     pub output_len: Option<u64>,
 }
 

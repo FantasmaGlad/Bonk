@@ -77,7 +77,6 @@ impl TempSource {
         let path =
             std::env::temp_dir().join(format!("bonk-job-{}-{label}.img", std::process::id()));
         let mut data: Vec<u8> = (0..len).map(|i| (i * 13 % 251) as u8).collect();
-        // Boot signature: the analysis sees a disk image.
         if len >= 512 {
             data[446..510].fill(0);
             data[510] = 0x55;
@@ -86,7 +85,6 @@ impl TempSource {
         std::fs::write(&path, data).expect("écriture de l'image de test");
         Self(path)
     }
-    /// Not created: the download creates it.
     fn dir(label: &str) -> Self {
         Self(std::env::temp_dir().join(format!("bonk-job-{}-{label}", std::process::id())))
     }
@@ -130,7 +128,6 @@ impl ServedCatalog {
                     .cloned()
                     .ok_or_else(|| format!("{address}: not served"))
             }),
-            // Same bound as the real download: a file larger than its signed size is refused.
             fetch_file: Box::new(move |address, size| match sized.get(address) {
                 Some(data) if data.len() as u64 <= size => Ok(data.clone()),
                 Some(_) => Err(format!("{address}: larger than its signed size")),
@@ -152,13 +149,11 @@ struct Scenario {
     rescan_fails: bool,
     cancel: bool,
     cancel_on_prepare: bool,
-    /// Cancel requested while the host tool formats.
     cancel_on_host_format: bool,
     seen_elevation: Rc<Cell<Option<Elevation>>>,
     on_first_enumeration: Option<Rc<dyn Fn()>>,
     vars: Vec<(String, String)>,
     capabilities: Vec<Capability>,
-    /// Files served by address, and the keys the catalog must be signed with: never the network.
     catalog: ServedCatalog,
 }
 
@@ -184,7 +179,6 @@ impl Scenario {
         }
     }
 
-    /// The USB key and its device at `size` bytes.
     fn sized(size: u64) -> Self {
         let mut key = usb("S1");
         key.size_bytes = size;
@@ -219,7 +213,6 @@ impl Scenario {
         )
     }
 
-    /// The n-th call returns the n-th list (the last one repeats); the hook runs at the first.
     fn enumerate(&self) -> impl Fn() -> Result<Vec<Disk>, bonk_hal::EnumerateError> + use<> {
         let calls = Cell::new(0usize);
         let enumerations = self.enumerations.clone();
@@ -234,7 +227,6 @@ impl Scenario {
         }
     }
 
-    /// The system as the scenario describes it; `cancelled` and the count of open devices are shared.
     fn io(&self) -> Io {
         let open_devices = Rc::new(Cell::new(0usize));
         let cancelled = Rc::new(Cell::new(false));
@@ -369,7 +361,6 @@ fn with_internal() -> Scenario {
 
 const CONFIRMATION_REQUIRED: &str = "E2005";
 
-/// Local server of one file, served as often as asked.
 fn serve_file(body: Vec<u8>) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
     use std::io::{BufRead, BufReader, Write};
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();

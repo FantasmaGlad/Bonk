@@ -2,7 +2,6 @@ use bonk_core::BlockDevice;
 use bonk_core::format::table::PartitionPlan;
 use bonk_core::format::{Filesystem, FormatError, exfat, fat32};
 
-/// `None` for host tools.
 pub(super) fn native_cluster_bytes(
     filesystem: Filesystem,
     sectors: u64,

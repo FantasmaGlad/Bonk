@@ -48,7 +48,6 @@ mod imp {
             .exists()
     }
 
-    /// Kernel name, for a whole disk only: never a partition or a file.
     fn whole_disk_name(roots: &LinuxRoots, resolved: &Path) -> Result<String, BlockError> {
         if !fs::metadata(resolved)?.file_type().is_block_device() {
             return Err(invalid("the path is not a block device"));

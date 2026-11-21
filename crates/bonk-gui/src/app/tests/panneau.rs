@@ -101,7 +101,6 @@ fn un_disque_interne_demande_confirmation_avant_de_lancer() {
     let _ = app.update(Message::StartWrite);
     assert!(app.confirming_internal);
     assert!(matches!(app.write, WriteState::Draft { .. }));
-    // The keyboard does not confirm: Enter does nothing, Escape gives up.
     let _ = app.update(Message::Nav(Nav::Activate));
     assert!(matches!(app.write, WriteState::Draft { .. }));
     let _ = app.update(Message::Nav(Nav::Escape));
@@ -161,7 +160,6 @@ fn progression_puis_resultat() {
     ));
     assert!(contient(&app, "Écriture : 1,0 Mo sur 4,0 Mo  (2,0 Mo/s)"));
     assert!(contient(&app, "Annuler"));
-    // During a write, deselecting the disk hides neither the progress nor the cancel.
     let _ = app.update(Message::Select("usb-cle".to_owned()));
     assert!(app.selected.is_none());
     assert!(matches!(app.write, WriteState::Running { .. }));
@@ -213,7 +211,6 @@ fn le_panneau_montre_le_recapitulatif_et_le_decompte() {
         &app,
         "Toutes les données de ce disque seront effacées. Cette action est irréversible."
     ));
-    // The recap names the image, then the disk it erases: no second full description of the disk.
     assert!(contient(&app, "Disque effacé : Cle de test, 16,0 Go"));
     assert!(contient(&app, "Image : aucune choisie pour l'instant"));
     assert!(!contient(&app, "1 partition(s)"));
@@ -256,12 +253,9 @@ fn la_commande_equivalente_inclut_l_ecriture_saisie() {
 #[test]
 fn le_chemin_saisi_n_est_jamais_journalise() {
     let event = ui_event(&Message::ImageInput("/home/alice/secret.img".to_owned()));
-    // The log only knows the character count, never the path.
     assert_eq!(event, Some(("type_image_path", "22 caractères".to_owned())));
 }
 
-/// The image picked in the system picker fills the field, like typing; closing the picker without a choice
-/// leaves the field alone.
 #[test]
 fn l_image_choisie_remplit_le_champ() {
     let mut app = app_avec_panneau();
@@ -336,7 +330,6 @@ fn le_clavier_parcourt_le_panneau_et_l_action_respecte_le_delai() {
 
 #[test]
 fn les_touches_prises_par_le_champ_ne_sont_pas_des_commandes() {
-    // The subscription filter only passes keys the widgets ignored: here, the mapping itself, unchanged.
     assert!(matches!(
         map_key(
             &Key::Named(Named::Space),

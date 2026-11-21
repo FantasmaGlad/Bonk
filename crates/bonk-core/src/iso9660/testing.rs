@@ -38,7 +38,6 @@ fn dot(extent: u32, name: u8) -> Vec<u8> {
     r
 }
 
-/// One sector per directory, files as given (path, size); data is never read.
 #[must_use]
 pub fn image(label: &str, files: &[(&str, u32)]) -> Vec<u8> {
     let mut directories: Vec<String> = vec![String::new()];

@@ -8,7 +8,6 @@ const FIRST_DESCRIPTOR: u64 = 16;
 const MAX_DIRECTORY_BYTES: u32 = 1 << 20;
 const FLAG_DIRECTORY: u8 = 2;
 
-/// An ISO 9660 image, read only as far as finding a file by its path: what tells a live system's family.
 pub struct Iso<R> {
     reader: R,
     label: String,
@@ -30,7 +29,6 @@ fn invalid(what: &str) -> io::Error {
 fn name_of(record: &[u8]) -> Option<String> {
     let length = usize::from(*record.get(32)?);
     let raw = record.get(33..33 + length)?;
-    // Absent when the record ends with its name.
     let mut rest = record
         .get(33 + length + (1 - length % 2)..)
         .unwrap_or_default();
@@ -141,7 +139,6 @@ impl<R: Read + Seek> Iso<R> {
     }
 }
 
-/// Test images: a root, directories and empty files, with Rock Ridge names, as `xorriso -R` lays them out.
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 #[cfg(test)]

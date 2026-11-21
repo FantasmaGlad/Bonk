@@ -77,7 +77,6 @@ fn geometry(handle: &Handle) -> io::Result<Option<(i64, u32)>> {
     Ok(Some((geometry.DiskSize, geometry.Geometry.BytesPerSector)))
 }
 
-/// `None` if it does not exist or has no medium (empty card reader).
 pub(super) fn read_disk(number: u32, instance: Option<String>) -> io::Result<Option<RawDisk>> {
     let handle = match open_for_query(&format!(r"\\.\PhysicalDrive{number}")) {
         Ok(handle) => handle,

@@ -107,7 +107,6 @@ pub struct Volume<'a> {
     pub sectors: u64,
     pub label: Option<&'a str>,
     pub volume_id: u32,
-    /// [`crate::boot::VBR`] around the BPB, [`crate::boot::STAGE2`] in the reserved area.
     pub bios_boot: bool,
 }
 
@@ -211,7 +210,6 @@ pub fn write(dev: &mut dyn BlockDevice, volume: &Volume<'_>) -> Result<Geometry,
         entry[11] = 0x08;
         dev.write_at(at(data_start), &entry)?;
     }
-    // Only the root cluster is in use.
     write_boot(dev, volume, &geo, geo.clusters - 1, ROOT_CLUSTER + 1)?;
     Ok(geo)
 }

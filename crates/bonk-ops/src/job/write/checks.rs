@@ -23,9 +23,7 @@ pub(in crate::job) fn confirm(job: &WriteJob, chosen: &Chosen) -> Result<(), Job
     confirm_internal(chosen, job.options, job.force)
 }
 
-/// Decompresses the image once without writing. A decompressed stream only shows its end last: without this
-/// pass, data after the stream or an image larger than the target would only be seen after the key is erased.
-/// A checked hash makes this pass unnecessary.
+/// Without this pass, trailing data or an oversized image shows only after the key is erased.
 pub(in crate::job) fn rehearse(
     image_file: &ImageFile,
     image: &ImageReport,
@@ -78,8 +76,7 @@ pub(in crate::job) fn check_sha256(
     }
 }
 
-/// Through a separate reader: the main stream must stay intact for the write. The head comes back for the
-/// hybrid MBR, read from the same bytes as the analysis.
+/// Separate reader: the main stream must stay intact for the write.
 pub(in crate::job) fn analyze_source(
     image: &ImageFile,
     path: &Path,
@@ -136,8 +133,7 @@ pub(in crate::job) fn needed_bytes(
         .or(image.declared_bytes.filter(|_| mode != WriteMode::Raw))
 }
 
-/// A compressed image only gives its real size once read: the read-back compares with the stream, so a
-/// complete stream with cut content goes unseen. Checked afterwards, for lack of better.
+/// The read-back compares with the stream: a complete stream with cut content would pass it.
 pub(in crate::job) fn check_complete(
     image: &ImageReport,
     written: u64,
@@ -160,8 +156,7 @@ pub(in crate::job) fn check_complete(
     }
 }
 
-/// An offered internal disk needs `force`, `yes` is not enough: erasing a disk of the machine must not come
-/// from typing habit. Nothing has moved yet: last check before the first action.
+/// An internal disk needs `force`, not `yes`: erasing a machine's disk must not come from habit.
 pub(in crate::job) fn confirm_internal(
     chosen: &Chosen,
     options: FilterOptions,
@@ -190,7 +185,6 @@ pub(in crate::job) fn confirm_internal(
     ))
 }
 
-/// Refused before any action when the image size is known and exceeds the target.
 pub(in crate::job) fn refuse_if_too_large(
     needed: Option<u64>,
     available: Option<u64>,

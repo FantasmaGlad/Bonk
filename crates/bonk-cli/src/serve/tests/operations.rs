@@ -4,7 +4,6 @@ use super::*;
 fn ecriture_avec_progression_puis_resultat() {
     let source = TempImage::new("ecriture", 9 << 20);
     let Fake { device, cfg } = fake(false, fixed());
-    // A 9 MiB image on an 8 MiB disk is too large; take one that fits.
     let small = TempImage::new("petite", 6 << 20);
     let request = format!(
         r#"{{"id":7,"method":"disk.write","params":{{"mode":"raw","target":"usb-a","source":{:?},"yes":true}}}}"#,
@@ -19,7 +18,6 @@ fn ecriture_avec_progression_puis_resultat() {
     assert_eq!(result["event"], "result", "{out:?}");
     assert_eq!(result["write"]["bytes"], 6 << 20);
     assert!(result["verify"]["bytes"] == 6 << 20);
-    // Message order: ready, start, progress (with the request id), result.
     assert_eq!(out[1]["event"], "job_started");
     assert_eq!(out[1]["request_id"], 7);
     let progress: Vec<&Value> = out.iter().filter(|m| m["event"] == "progress").collect();
@@ -27,7 +25,6 @@ fn ecriture_avec_progression_puis_resultat() {
     assert_eq!(out.last().unwrap()["id"], 7);
     let written = device.memory.lock().unwrap().as_bytes()[..6 << 20].to_vec();
     assert_eq!(written, std::fs::read(&small.0).unwrap());
-    // Too large: refused with its code, the disk untouched.
     let refused = session(&[&too_big], &fake(false, fixed()).cfg, Duration::ZERO);
     assert_eq!(response(&refused, 8)["error"]["code"], "E3003");
 }
@@ -53,7 +50,6 @@ fn les_garde_fous_de_la_cli_s_appliquent_au_service() {
     let empreinte_remplacee = r#"{"id":6,"method":"disk.write","params":{"target":"usb-a","image":"debian","sha256_file":"https://example.org/SHA256SUMS","yes":true}}"#;
     let nom_remplace = r#"{"id":7,"method":"disk.write","params":{"target":"usb-a","image":"debian","file_name":"autre.iso","yes":true}}"#;
     let f = fake(false, fixed());
-    // Operations follow one another: one at a time, each in its session.
     for (id, request, code) in [
         (1, sans_yes, "E2004"),
         (2, interdit, "E2001"),
@@ -71,7 +67,6 @@ fn les_garde_fous_de_la_cli_s_appliquent_au_service() {
     }
     let out = session(&[&plan], &f.cfg, Duration::ZERO);
     assert_eq!(response(&out, 3)["result"]["event"], "plan");
-    // None of these requests wrote anything.
     assert!(
         f.device
             .memory
@@ -98,7 +93,6 @@ fn annulation_et_une_seule_operation_a_la_fois() {
         &cfg,
         Duration::from_millis(0),
     );
-    // The second operation is refused while the first runs.
     assert_eq!(response(&out, 2)["error"]["code"], "E6001");
     assert!(
         response(&out, 2)["error"]["message"]
@@ -107,7 +101,6 @@ fn annulation_et_une_seule_operation_a_la_fois() {
             .contains("already running")
     );
     assert_eq!(response(&out, 3)["result"]["cancelling"], true);
-    // The first is cancelled cleanly: its own code, partial drive.
     let first = response(&out, 1);
     assert_eq!(first["error"]["code"], "E4003", "{first}");
     assert_eq!(first["error"]["exit_code"], 5);
@@ -120,7 +113,6 @@ fn annulation_et_une_seule_operation_a_la_fois() {
         .filter(|b| **b != 0)
         .count();
     assert!(written < 7 << 20, "l'écriture aurait dû s'arrêter en route");
-    // Without a running operation, cancel says there is nothing to cancel.
     let idle = quick_session(&[r#"{"id":1,"method":"cancel"}"#]);
     assert_eq!(response(&idle, 1)["result"]["cancelling"], false);
 }
@@ -158,8 +150,6 @@ impl BufRead for KeptOpen {
     }
 }
 
-/// Ctrl+C or SIGTERM: the running operation is cancelled between two blocks, its response goes out, and the
-/// service returns the cancel code without waiting for the client to close the input.
 #[test]
 fn un_signal_d_arret_annule_l_operation_et_rend_la_main() {
     let source = TempImage::new("signal", 7 << 20);
@@ -198,12 +188,10 @@ fn fermer_l_entree_annule_l_operation_et_rend_la_main() {
     let f = fake(true, fixed());
     let started = std::time::Instant::now();
     let out = session(&[&write], &f.cfg, Duration::ZERO);
-    // The session ends without waiting for the ~7 slow blocks, and the operation is reported cancelled.
     assert!(started.elapsed() < Duration::from_secs(3));
     assert_eq!(response(&out, 1)["error"]["code"], "E4003");
 }
 
-/// An address goes through the same check as on the command line: its hash is required.
 #[test]
 fn disk_write_exige_l_empreinte_d_une_adresse() {
     let write = r#"{"id":1,"method":"disk.write","params":{"target":"usb-a","source":"https://a.org/x.iso","yes":true}}"#;
@@ -219,7 +207,6 @@ fn disk_write_exige_l_empreinte_d_une_adresse() {
     assert!(text.contains("--sha256"), "{text}");
 }
 
-/// The vault through the service, on an image file: prepared, listed, then GRUB found current.
 #[test]
 fn le_coffre_par_le_service() {
     use crate::job_tests::vault::{BASE, GRUB, served_catalog};
@@ -258,7 +245,6 @@ fn le_coffre_par_le_service() {
     let _ = std::fs::remove_dir_all(&cache);
 }
 
-/// An operation thread that panicked never answered: the service must not exit as if all went well.
 #[test]
 fn une_operation_qui_panique_donne_une_sortie_en_erreur() {
     let job = |panics: bool| JobHandle {

@@ -31,7 +31,6 @@ impl App {
         .into()
     }
 
-    /// Nothing when the window was not opened for an image, or once a draft carries it.
     pub(super) fn requested_notice(&self) -> Option<Element<'_, Message>> {
         if let Some(bonk_ui::source::ImageSource::Kept { path, .. }) = &self.library.chosen {
             let name = path.file_name().unwrap_or_default().to_string_lossy();

@@ -20,14 +20,12 @@ const VOLUME_FLAGS: u64 = 106;
 const VOLUME_DIRTY: u8 = 0x02;
 const ATTR_HIDDEN: u8 = 0x02;
 
-/// A file added to the root of an existing exFAT volume, written by any system: contiguous, without a FAT
-/// chain, so a live system can map it at once.
+/// Contiguous, without a FAT chain, so a live system can map it at once.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Added {
     pub name: String,
     pub size_bytes: u64,
     pub sha256: String,
-    /// Where the data starts, in bytes from the start of the volume.
     pub volume_offset: u64,
 }
 
@@ -113,7 +111,6 @@ fn refuse_taken(
     Ok(())
 }
 
-/// One free contiguous run for the whole file; an empty file takes no cluster.
 fn reserve(volume: &Volume, name: &str, size: u64) -> Result<Placed, FormatError> {
     let count = size.div_ceil(volume.cluster_bytes);
     let first_cluster = if count == 0 {
@@ -212,7 +209,7 @@ struct Found {
     contiguous: bool,
 }
 
-/// Walks the root entry sets until the end marker; `wanted` is the upper-cased name.
+/// `wanted` is the upper-cased name.
 fn find_root_file(slots: &[[u8; ENTRY]], wanted: &[u16]) -> Option<Found> {
     let upcase = upcase_map();
     let mut index = 0;

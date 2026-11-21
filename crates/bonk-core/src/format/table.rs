@@ -103,7 +103,6 @@ pub(crate) fn usable_end(
     })
 }
 
-/// Where the partition goes, computed as the write does, without writing.
 pub fn plan(size: u64, block: u32, kind: TableKind) -> Result<PartitionPlan, FormatError> {
     let first_lba = ALIGNMENT.div_ceil(u64::from(block));
     match usable_end(size, block, kind)? {
@@ -275,7 +274,7 @@ pub fn write_table(
     Ok(part)
 }
 
-/// Partitions already placed by the caller, in disk order; see [`write_table`].
+/// Partitions already placed by the caller, in disk order.
 pub(crate) fn write_slots(
     dev: &mut dyn BlockDevice,
     kind: TableKind,

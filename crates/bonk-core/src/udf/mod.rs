@@ -43,7 +43,6 @@ pub struct Extent {
     pub len: u64,
 }
 
-/// In image extents, or inline in the file entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Content {
     Extents(Vec<Extent>),
@@ -235,7 +234,6 @@ impl<'a, R: ReadAt + ?Sized> Udf<'a, R> {
         Ok(tree)
     }
 
-    /// Adds a directory's children to `tree`; its subdirectories go to `pending`.
     fn collect_directory(
         &self,
         bytes: &[u8],

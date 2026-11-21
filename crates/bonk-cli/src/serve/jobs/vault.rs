@@ -11,7 +11,6 @@ use crate::serve::protocol::{Failure, failure};
 
 use super::*;
 
-/// GRUB of the signed catalog, for `vault.init` and `vault.update`; a refusal answers before anything starts.
 pub(in crate::serve) fn vault_grub(
     p: &TransferParams,
     cfg: &Config,

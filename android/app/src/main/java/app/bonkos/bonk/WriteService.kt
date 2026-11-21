@@ -5,7 +5,6 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import androidx.annotation.RequiresApi
 
-/** A write or a vault action that writes to the key. */
 class WriteService : OperationService() {
     override val channel = "write"
     override val notificationId = 1

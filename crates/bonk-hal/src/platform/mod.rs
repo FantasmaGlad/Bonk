@@ -32,7 +32,6 @@ use crate::enumerate::{EnumerateError, SourceRead};
 use crate::image::Access;
 use crate::target::OpenTargetError;
 
-/// Whether to ask the system for missing rights.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Elevation {
     #[default]
@@ -91,7 +90,6 @@ pub fn format_capability(fs: Filesystem) -> String {
 }
 
 pub trait Platform: Send + Sync {
-    /// Raw facts, judged afterwards by [`crate::safety::evaluate`].
     fn enumerate(&self) -> Result<Vec<Disk>, EnumerateError>;
 
     fn enumerate_recorded(&self) -> (Result<Vec<Disk>, EnumerateError>, Vec<SourceRead>);
@@ -137,7 +135,6 @@ pub trait Platform: Send + Sync {
     /// or none, for a while.
     fn rescan(&self, disk: &Path, elevation: Elevation) -> Result<(), BlockError>;
 
-    /// The window refuses to open as administrator.
     fn is_privileged(&self) -> bool;
 
     fn kernel_release(&self) -> Option<String>;
@@ -165,7 +162,6 @@ pub fn run_elevated_helper(client: u32, pipe: &str) -> Result<(), String> {
     }
 }
 
-/// What every writing host reports; only elevation and host-written filesystems vary.
 #[cfg(any(
     windows,
     target_os = "macos",

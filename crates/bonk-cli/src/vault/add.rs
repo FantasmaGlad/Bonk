@@ -60,8 +60,7 @@ pub(super) fn run_add(
     })
 }
 
-/// The ISO given, or the catalog image brought into the cache and checked. Nothing is downloaded without
-/// --yes.
+/// Nothing is downloaded without --yes.
 fn source(
     args: &AddArgs,
     deps: &Deps<'_>,

@@ -22,7 +22,6 @@ use windows as current;
 pub use text::step_label;
 pub use throttle::Throttle;
 
-/// Where an operation stands, as the notification says it.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Step {
     Progress {
@@ -59,15 +58,12 @@ impl Notice {
     }
 }
 
-/// Shows notices outside the window; each system has its own.
 pub trait Notifier {
     fn show(&mut self, notice: &Notice);
 
-    /// Nothing more for now: a system that shows an icon while it works removes it.
     fn idle(&mut self) {}
 }
 
-/// After the last notice, how long the system keeps what it showed.
 const IDLE_AFTER: Duration = Duration::from_secs(10);
 
 /// Notices go to a thread of their own: the system call may block, the caller never does.

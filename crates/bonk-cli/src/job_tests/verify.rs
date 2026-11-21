@@ -15,7 +15,6 @@ fn une_relecture_fausse_fait_echouer_la_verification() {
     ]);
     assert_eq!(code, EXIT_VERIFY_FAILED);
     assert!(err.trim_end().ends_with("[E4002]"), "{err}");
-    // Without verification the same write "succeeds": the read-back is what detects it.
     let (code, _, _) = scenario.run(&[
         "write",
         "usb-a",
@@ -44,12 +43,10 @@ fn la_commande_verify_compare_sans_ecrire() {
     let (code, out, err) = scenario.run(&["verify", "usb-a", &source.arg(), "--progress", "none"]);
     assert_eq!((code, err.as_str()), (0, ""));
     assert!(out.contains("Verification passed"), "{out}");
-    // Read-back only: no unmount, opened for reading.
     assert_eq!(
         scenario.log(),
         ["prepare:/dev/sdb", "open:/dev/sdb:ReadOnly", "drop_cache"]
     );
-    // One changed byte: the comparison fails with its own code.
     scenario
         .device
         .0
@@ -97,8 +94,6 @@ fn verify_json_et_progression_json() {
     assert!(done.windows(2).all(|w| w[0] <= w[1]), "{done:?}");
 }
 
-/// The GPT repair changes the protective MBR and the primary header: `verify` of the same image must still
-/// pass, not return `E4002`, when the content is intact.
 #[test]
 fn verify_d_une_image_gpt_reussit_apres_la_reparation_du_gpt() {
     use bonk_core::partition::testing::{LINUX, gpt_image};
@@ -118,7 +113,6 @@ fn verify_d_une_image_gpt_reussit_apres_la_reparation_du_gpt() {
     assert!(out.contains("GPT: repaired"), "{out}");
     let (code, out, err) = scenario.run(&["verify", "usb-a", &source.arg(), "--progress", "none"]);
     assert_eq!((code, err.as_str()), (0, ""), "{out}");
-    // A byte changed outside the repaired fields is still detected.
     scenario
         .device
         .0
@@ -172,8 +166,6 @@ fn sans_reparation_demandee_le_gpt_n_est_pas_dit_sain() {
     assert!(!out.contains("nothing to repair"), "{out}");
 }
 
-/// After a GPT repair the hash `verify` shows is not the publisher's: a few repaired bytes are zeroed on both
-/// sides. It says so rather than suggest a wrong image.
 #[test]
 fn la_verification_apres_reparation_dit_ce_que_couvre_son_empreinte() {
     use bonk_core::format::table::{TableKind, write_table};

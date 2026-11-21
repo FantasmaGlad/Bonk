@@ -24,7 +24,6 @@ pub(super) fn parse_udev(text: &str) -> UdevRecord {
     record
 }
 
-/// Empty when the device has none (the directory exists: see [`enumerate`]).
 pub(super) fn load_udev(roots: &LinuxRoots, devnum: &str) -> Result<UdevRecord, EnumerateError> {
     let path = roots.udev_data.join(format!("b{devnum}"));
     match traced_read(&path) {

@@ -30,7 +30,6 @@ fn init(dev: &mut MemoryDevice, table: TableKind) -> Result<VaultPlan, FormatErr
     Ok(plan)
 }
 
-/// casper maps the ISO at this offset: it must point at the ISO's first byte on the partition.
 #[test]
 fn une_iso_ubuntu_laisse_son_emplacement_et_le_retrait_l_efface() -> Result<(), FormatError> {
     let mut dev = MemoryDevice::new(256 << 20, 512)?;
@@ -60,7 +59,6 @@ fn une_iso_ubuntu_laisse_son_emplacement_et_le_retrait_l_efface() -> Result<(), 
     remove_image(&mut dev, &plan, "ubuntu.iso")?;
     let reader = Reader::open(&dev, span.first_lba, span.sectors)?;
     assert!(reader.files()?.is_empty());
-    // Other families need none.
     add_image(
         &mut dev,
         &plan,
@@ -75,7 +73,6 @@ fn une_iso_ubuntu_laisse_son_emplacement_et_le_retrait_l_efface() -> Result<(), 
     Ok(())
 }
 
-/// GRUB and the menu change, the ISO images stay: same bytes at the same place.
 #[test]
 fn mettre_a_jour_le_demarrage_garde_les_iso() -> Result<(), FormatError> {
     let mut dev = MemoryDevice::new(256 << 20, 512)?;
@@ -114,7 +111,6 @@ fn familles_reconnues_comme_par_le_menu() -> std::io::Result<()> {
             .map(|kind| kind.map(|kind| kind.family))
     };
     for (expected, files) in IsoFamily::RULES {
-        // Every file the rule needs is one the menu tests.
         for file in files {
             assert!(MENU.contains(&format!("(probe)/{file}")), "{file}");
         }
@@ -127,7 +123,6 @@ fn familles_reconnues_comme_par_le_menu() -> std::io::Result<()> {
         ("boot/x86_64/loader/initrd", 1),
     ];
     assert_eq!(family("openSUSE-Live", &kiwi)?, None);
-    // Debian first, as in the menu, when an image carries both layouts.
     let both = [
         ("live/vmlinuz", 1),
         ("live/initrd.img", 1),
@@ -138,7 +133,6 @@ fn familles_reconnues_comme_par_le_menu() -> std::io::Result<()> {
     Ok(())
 }
 
-/// As the menu reads `iso_cpu`: the Kiwi kernel folder first, then the image's own ARM64 UEFI loader.
 #[test]
 fn processeur_reconnu_comme_par_le_menu() -> std::io::Result<()> {
     use crate::iso9660::{Iso, testing::image};
@@ -338,11 +332,9 @@ fn les_fichiers_de_demarrage_portent_les_noms_uefi_et_le_menu() -> Result<(), Fo
             "bonk/udev/99-bonk-vault-iso.rules"
         ]
     );
-    // The rule maps the partition the vault names, at the offset the menu passes.
     assert!(VAULT_ISO_RULE.contains(&format!("ENV{{ID_FS_LABEL}}==\"{VAULT_LABEL}\"")));
     assert!(VAULT_ISO_RULE.contains("IMPORT{cmdline}=\"bonk.offset\""));
     assert!(MENU.contains("bonk.offset=$bonk_offset"));
-    // Each script is one the menu puts into an initrd, under the same path.
     for (path, _) in INITRD_SCRIPTS {
         let beside_menu = path.trim_start_matches("bonk/");
         assert!(
@@ -358,7 +350,6 @@ fn les_fichiers_de_demarrage_portent_les_noms_uefi_et_le_menu() -> Result<(), Fo
     Ok(())
 }
 
-/// The read-back compares every boot file: a changed byte of GRUB is caught.
 #[test]
 fn un_octet_de_grub_change_fait_echouer_la_relecture() -> Result<(), Box<dyn std::error::Error>> {
     let mut dev = MemoryDevice::new(256 * MIB, 512)?;

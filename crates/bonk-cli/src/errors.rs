@@ -63,7 +63,6 @@ pub(crate) fn schema() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(ExplainReport)).unwrap_or_default()
 }
 
-/// For the service; `None` for an unknown code.
 pub(crate) fn explain_value(code: Option<&str>) -> Option<serde_json::Value> {
     let entries: Vec<EntryJson> = match code {
         Some(code) => vec![EntryJson::from(lookup(code)?)],
@@ -76,7 +75,6 @@ pub(crate) fn explain_value(code: Option<&str>) -> Option<serde_json::Value> {
     .ok()
 }
 
-/// Returns `false` for an unknown code.
 pub(crate) fn explain(args: &ExplainArgs, out: &mut dyn Write) -> io::Result<bool> {
     let entries: Vec<&Entry> = match &args.code {
         Some(code) => match lookup(code) {

@@ -107,7 +107,6 @@ class MainActivity : ComponentActivity() {
                 screen = state
                 Bridge.language = state.lang
                 keepScreenOn(state.running)
-                // The result stays readable afterwards, even once the panel is closed.
                 (state.panel as? FinishedPanel)?.let { Log.i(TAG, it.message) }
             }
             answer.effects.forEach(::accomplish)

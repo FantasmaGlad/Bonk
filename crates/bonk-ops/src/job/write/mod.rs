@@ -40,8 +40,7 @@ pub struct WriteJob {
     /// Windows drive table; no effect on a raw write, whose table comes from the image.
     pub table: TableKind,
     pub elevation: Elevation,
-    /// Stands for `yes` and allows an internal disk the filter options already admit. No question: a command
-    /// must run with nobody at the screen.
+    /// Implies `yes` and allows an internal disk the filter options already admit.
     pub force: bool,
 }
 

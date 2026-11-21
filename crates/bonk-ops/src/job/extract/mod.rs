@@ -28,7 +28,7 @@ mod tests;
 use copy::*;
 pub(super) use image::{WindowsImage, detect};
 
-/// Default loader name UEFI imposes for each machine, in the order the plan lists them.
+/// Default removable-media loader names from the UEFI specification, in plan order.
 const LOADERS: [(&str, Machine); 3] = [
     ("bootx64.efi", Machine::X86_64),
     ("bootaa64.efi", Machine::Arm64),
@@ -146,7 +146,6 @@ pub(super) fn run(
     deps: &Deps<'_>,
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<ExtractDone, JobError> {
-    // Simulation file to create: large enough for the volume, sparse, never less than FAT32 needs.
     let size_hint = prepared
         .describe(job.table, DEFAULT_BLOCK_SIZE)
         .bytes

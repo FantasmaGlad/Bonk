@@ -130,7 +130,6 @@ fn reset(key: Option<&str>, path: &Path) -> Result<String, String> {
 fn set_get_list_reset_de_bout_en_bout() -> Result<(), String> {
     let file = TempFile::new("cycle");
     let path = &file.0;
-    // Missing: all defaults, nothing created by a read.
     let defaults = list(path, &[])?;
     assert!(
         defaults.contains("view.show_all") && defaults.contains("(default)"),
@@ -147,7 +146,6 @@ fn set_get_list_reset_de_bout_en_bout() -> Result<(), String> {
         "{saved}"
     );
 
-    // The environment variable wins, and the list says which.
     let vars = [("BONK_VIEW_SHOW_ALL".to_owned(), "false".to_owned())];
     assert_eq!(get("view.show_all", path, &vars)?, "false\n");
     assert!(list(path, &vars)?.contains("variable BONK_VIEW_SHOW_ALL"));
@@ -194,7 +192,6 @@ fn fichier_corrompu_signale_et_non_ecrase() -> Result<(), Box<dyn std::error::Er
     fs::write(&file.0, "{ pas du json")?;
     let erreur = texte(&ConfigAction::List { json: false }, &file.0, &[]).err();
     assert!(erreur.is_some_and(|e| e.contains("unreadable configuration file")));
-    // `set` does not silently replace a file it does not understand.
     assert!(
         texte(
             &ConfigAction::Set {

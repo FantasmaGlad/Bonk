@@ -66,7 +66,6 @@ pub(super) fn boot_layout(
     fat32::tree::layout(volume, dev_block, &new, &[])
 }
 
-/// GUID and volume id of the boot partition, derived from the drive ids.
 pub(super) fn efi_ids(ids: &Ids) -> ([u8; 16], u32) {
     let digest = Sha256::digest([&ids.partition_guid[..], b"efi"].concat());
     (

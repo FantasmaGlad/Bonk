@@ -159,7 +159,6 @@ pub(super) fn encode_names(children: &Children) -> Result<Encoded, FormatError> 
     Ok(encoded)
 }
 
-/// The volume label in the root, `.` and `..` elsewhere.
 fn directory_head(
     path: &[String],
     label: Option<&str>,

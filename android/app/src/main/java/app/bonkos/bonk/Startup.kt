@@ -8,7 +8,6 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import java.util.Locale
 
-/** The native library starts with the settings saved on the phone. */
 internal fun startNative(preferences: SharedPreferences, theme: String) {
     Native.start(
         preferences.getString("lang", "auto") ?: "auto",

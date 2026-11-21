@@ -55,7 +55,6 @@ fn l_image_efi_devient_la_partition_efi_du_mbr() {
     assert!(mbr[462..510].iter().all(|b| *b == 0), "une seule partition");
 }
 
-/// A FAT boot sector at `block` declaring `total` 512-byte sectors, as `mkfs.fat` writes it.
 fn fat_at(head: &mut [u8], block: usize, total: u32) {
     let sector = &mut head[block * SECTOR..block * SECTOR + 512];
     sector[0] = 0xEB;
@@ -84,7 +83,6 @@ fn une_image_efi_sans_taille_ni_fat_lisible_est_refusee() {
     let mut cut = not_fat.clone();
     fat_at(&mut cut, 34, 69632);
     cut.truncate(34 * SECTOR + 100);
-    // (head, reason)
     let cases = [
         (not_fat, NotHybrid::NoEfiImage),
         (cut, NotHybrid::NoEfiImage),
@@ -106,7 +104,6 @@ fn l_entree_efi_d_une_section_est_trouvee_apres_l_entree_bios() {
 fn ce_qui_ne_se_rend_pas_hybride_est_refuse_en_le_disant() {
     let mut occupied = head(&[(PLATFORM_EFI, 55, 6144)]);
     occupied[0] = 0xEB;
-    // (head, reason)
     let cases = [
         (occupied, NotHybrid::SystemAreaUsed),
         (head(&[(0, 30, 4)]), NotHybrid::NoEfiImage),

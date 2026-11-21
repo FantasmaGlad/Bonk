@@ -22,14 +22,12 @@ pub(crate) struct Colors {
 
 const TOKENS: &str = include_str!("../../../../design/tokens.json");
 
-/// Corner radius shared with the site.
 pub(crate) static RADIUS: LazyLock<f32> = LazyLock::new(|| {
     let tokens: serde_json::Value = serde_json::from_str(TOKENS).unwrap_or_default();
     // An unreadable file draws square corners: the test below fails on it first.
     tokens["radius"].as_f64().unwrap_or_default() as f32
 });
 
-/// A theme and its incognito variant, switched without a relaunch when Tor is turned on.
 #[derive(Debug, PartialEq)]
 struct Family {
     plain: Colors,
@@ -191,7 +189,6 @@ pub(crate) mod tests {
         (a.max(b) + 0.05) / (a.min(b) + 0.05)
     }
 
-    /// Text 4.5:1 on every background it sits on, in every palette; a missing or malformed colour fails here.
     #[test]
     fn chaque_palette_tient_les_contrastes() {
         for theme in ["light", "dark", "incognito_light", "incognito_dark"] {

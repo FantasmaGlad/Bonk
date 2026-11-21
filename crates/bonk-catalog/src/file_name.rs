@@ -9,7 +9,6 @@ pub fn is_plain_file_name(name: &str) -> bool {
         && !name.chars().any(char::is_control)
 }
 
-/// Last path segment, without query or fragment.
 #[must_use]
 pub fn file_name(url: &str) -> Option<&str> {
     let path = url.split(['?', '#']).next()?;
@@ -20,7 +19,6 @@ pub fn file_name(url: &str) -> Option<&str> {
         .filter(|name| is_plain_file_name(name))
 }
 
-/// The name the catalog gives, else the one of the address: a share link ends in `download`.
 #[must_use]
 pub fn download_name<'a>(url: &'a str, given: Option<&'a str>) -> Option<&'a str> {
     match given {

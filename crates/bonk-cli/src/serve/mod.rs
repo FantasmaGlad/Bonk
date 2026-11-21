@@ -35,16 +35,13 @@ pub(crate) type EnumerateFn = Arc<dyn Fn() -> Result<Vec<Disk>, EnumerateError> 
 
 pub(crate) type IoFactory = Arc<dyn Fn(Arc<AtomicBool>) -> Io + Send + Sync>;
 
-/// What the service needs from the system: replaceable for tests.
 pub(crate) struct Config {
     pub(crate) enumerate: EnumerateFn,
     pub(crate) make_io: IoFactory,
     pub(crate) config_path: Option<PathBuf>,
     pub(crate) vars: Vec<(String, String)>,
     pub(crate) view: ViewDefaults,
-    /// Ctrl+C or SIGTERM received: the service cancels the running operation and stops.
     pub(crate) interrupted: Arc<dyn Fn() -> bool + Send + Sync>,
-    /// For the GRUB of `vault.init` and `vault.update`, resolved before the operation starts.
     pub(crate) catalog: crate::catalog::Access,
 }
 
@@ -154,7 +151,6 @@ fn handle(line: &str, cfg: &Config, out: &Out, state: &mut State) {
     }
 }
 
-/// Reads requests until end of input, then cancels the running operation and stops. Returns the exit code.
 pub(crate) fn serve(
     input: impl BufRead + Send + 'static,
     output: Box<dyn Write + Send>,
@@ -208,7 +204,6 @@ fn shut_down(state: &mut State, interrupted: bool) -> u8 {
     }
 }
 
-/// How often the loop checks for a stop while waiting for a request.
 const INTERRUPT_POLL: Duration = Duration::from_millis(100);
 
 /// Longest request line: the largest real request is a few hundred bytes.

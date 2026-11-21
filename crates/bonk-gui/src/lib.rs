@@ -19,7 +19,6 @@ use iced::Size;
 
 use crate::app::{App, Start};
 
-/// With the starting display settings (`bonk config`); returns when the window closes.
 pub fn run(
     initial: ViewOptions,
     lang: Option<bonk_hal::Lang>,
@@ -73,8 +72,6 @@ fn run_with_fallback(
 /// Set on the process relaunched with software rendering: it does not relaunch itself.
 const FALLBACK_MARKER: &str = "BONK_RENDER_FALLBACK";
 
-/// Only when the user did not pick the renderer (`ICED_BACKEND`) and this is not already the fallback
-/// process.
 fn fallback_allowed(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> bool {
     var("ICED_BACKEND").is_none() && var(FALLBACK_MARKER).is_none()
 }
@@ -207,9 +204,7 @@ mod tests {
             move |nom: &str| definies.contains(&nom).then(|| OsString::from("x"))
         };
         assert!(super::fallback_allowed(env(&[])));
-        // The user chose the renderer: do not override it.
         assert!(!super::fallback_allowed(env(&["ICED_BACKEND"])));
-        // Already the fallback process: no relaunch loop.
         assert!(!super::fallback_allowed(env(&[super::FALLBACK_MARKER])));
     }
 
@@ -329,7 +324,6 @@ mod repli_tests {
 
 #[cfg(test)]
 mod icon_tests {
-    /// An icon of the wrong size would be lost silently: `window_icon` returns `None` then.
     #[test]
     fn l_icone_de_la_fenetre_est_valide() {
         assert!(super::window_icon().is_some());
@@ -338,7 +332,6 @@ mod icon_tests {
 
 #[cfg(all(test, target_os = "linux"))]
 mod application_id_tests {
-    /// Under Wayland the shell matches the window to its `.desktop` file by this name alone.
     #[test]
     fn l_identifiant_de_la_fenetre_nomme_le_fichier_desktop_installe() {
         let desktop = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

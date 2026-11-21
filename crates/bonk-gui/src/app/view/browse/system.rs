@@ -97,7 +97,6 @@ impl App {
         row![self.download_button(id), write].spacing(8).into()
     }
 
-    /// Downloading waits while another download runs: one at a time.
     fn download_button<'a>(&self, id: &str) -> Element<'a, Message> {
         let busy = self
             .browse

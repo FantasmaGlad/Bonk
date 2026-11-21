@@ -12,7 +12,6 @@ fn disque_systeme_nvme_est_exclu() -> Result<(), Box<dyn Error>> {
     assert_eq!(nvme.size_bytes, 1_000_215_216 * 512);
     assert_eq!(nvme.model, "SAMSUNG MZVL2512HDJD-00BH1");
     assert_eq!(nvme.serial.as_deref(), Some("S6Z4"));
-    // The readable link wins over the EUI id; the shortest over its `_1` variant.
     assert_eq!(nvme.id, "nvme-SAMSUNG_MZVL2512HDJD-00BH1_S6Z4");
     let [esp, root] = nvme.partitions.as_slice() else {
         return Err(format!("deux partitions attendues : {:?}", nvme.partitions).into());
@@ -115,8 +114,6 @@ fn montage_btrfs_retrouve_par_la_source() -> Result<(), Box<dyn Error>> {
     let fake = Fake::new()?;
     desktop(&fake)?;
     usb_stick(&fake)?;
-    // btrfs reports an anonymous number (0:50): only the source names the device, here through a udev-style
-    // link.
     fs::create_dir_all(fake.base.join("dev/disk/by-uuid"))?;
     fs::write(fake.base.join("dev/sdb1"), "")?;
     symlink("../../sdb1", fake.base.join("dev/disk/by-uuid/abcd"))?;

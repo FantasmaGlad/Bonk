@@ -7,7 +7,6 @@ use super::*;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Loaded {
     pub catalog: Catalog,
-    /// Saved copy, the network having failed. Still subject to the signature and the expiry.
     pub saved_copy: bool,
 }
 

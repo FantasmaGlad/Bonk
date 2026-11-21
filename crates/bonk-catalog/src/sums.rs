@@ -1,6 +1,4 @@
-/// Lower-case SHA-256 of `name` in a checksum file: `sha256sum` format (`hex  name`, `hex *name`, `./name`)
-/// and BSD format (`SHA256 (name) = hex`). Other lines are skipped: these files sometimes carry comments or a
-/// clear-signed signature.
+/// `sha256sum` and BSD (`SHA256 (name) = hex`) formats; other lines are skipped.
 #[must_use]
 pub fn find_sha256(text: &str, name: &str) -> Option<String> {
     text.lines().find_map(|line| {

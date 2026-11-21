@@ -13,7 +13,6 @@ const GPT_LDM: [&str; 2] = [
     "5808c8aa-7e8f-42e0-85d2-e1e90434cfb3",
     "af9b60a0-1431-4f62-bc68-3311714a69ad",
 ];
-/// Storage Spaces member GPT type.
 const GPT_SPACES: &str = "e75caf8f-f680-4cee-afa3-b001e56efc2d";
 /// MBR types of the EFI system partition and of a dynamic disk.
 const MBR_ESP: u8 = 0xEF;
@@ -100,7 +99,6 @@ fn is_esp(partition: &RawPartition) -> bool {
     partition.gpt_type.as_deref() == Some(GPT_ESP) || partition.mbr_type == Some(MBR_ESP)
 }
 
-/// Windows name mapped to the filter's, shared by all systems.
 fn file_system_name(name: &str) -> String {
     match name.to_ascii_lowercase().as_str() {
         "fat" | "fat32" => "vfat".to_owned(),
@@ -282,7 +280,6 @@ pub fn disk_number(path: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
-/// Disk and partition numbers of `\\.\PhysicalDriveN\PartitionM`.
 #[must_use]
 pub fn partition_numbers(path: &str) -> Option<(u32, u32)> {
     let (disk, part) = path.rsplit_once(r"\Partition")?;
@@ -302,7 +299,6 @@ pub enum FreshTable {
     Partition(u32),
 }
 
-/// What the elevated helper still refuses on a disk the safety filter excludes.
 #[must_use]
 pub fn helper_refuses(reasons: &[Exclusion], fresh: FreshTable) -> bool {
     reasons.iter().any(|reason| match (reason, fresh) {
@@ -391,7 +387,6 @@ mod tests {
         }
     }
 
-    /// SATA system disk with ESP, USB key mounted as `E:`.
     fn poste() -> WindowsFacts {
         WindowsFacts {
             system_drive: Some("C:".to_owned()),
@@ -484,7 +479,6 @@ mod tests {
         let mut absent = poste();
         absent.system_drive = Some("Z:".to_owned());
         assert!(normalize(&absent).is_err());
-        // A folder mounted under `C:` is not the system volume.
         let mut sous_dossier = poste();
         sous_dossier.volumes[0].mount_points = vec!["C:\\mnt\\x\\".to_owned()];
         assert!(normalize(&sous_dossier).is_err());
@@ -550,7 +544,6 @@ mod tests {
         );
         facts.disks[1].instance = None;
         assert_eq!(normalize(&facts)?[1].id, "physicaldrive1");
-        // Two USB bridges with the same serial.
         let mut clone = facts.disks[1].clone();
         facts.disks[1].serial = Some("X".to_owned());
         clone.serial = Some("X".to_owned());

@@ -203,7 +203,6 @@ impl BulkTransport for UsbfsTransport {
 }
 
 impl UsbfsTransport {
-    /// The serial the drive declares, read in the first language it offers; `None` without one.
     pub fn serial(&mut self) -> Option<String> {
         let index = *self
             .descriptors

@@ -19,7 +19,6 @@ mod current {
     }
 }
 
-/// Read once, before a window opens: `None` when the system gives no answer.
 #[must_use]
 pub fn system_prefers_dark() -> Option<bool> {
     current::prefers_dark()

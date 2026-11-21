@@ -4,8 +4,7 @@ use clap::CommandFactory;
 
 use crate::Cli;
 
-/// One page per command, from the same definitions as `--help`. The packages take them from the folder
-/// named by `BONK_MAN_DIR`.
+/// The packages take them from the folder named by `BONK_MAN_DIR`.
 #[test]
 fn les_pages_de_manuel_couvrent_chaque_commande() {
     let dir = match std::env::var_os("BONK_MAN_DIR") {

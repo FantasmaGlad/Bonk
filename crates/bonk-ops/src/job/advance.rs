@@ -2,7 +2,6 @@ use std::time::Instant;
 
 use bonk_core::write::{Control, Phase, Progress};
 
-/// Progress of a phase counted in bytes, shared by the copy and the read-back.
 pub(in crate::job) struct Advance<'a, 'b> {
     pub(in crate::job) phase: Phase,
     pub(in crate::job) done: u64,

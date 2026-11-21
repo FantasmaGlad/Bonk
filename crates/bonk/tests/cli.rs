@@ -31,9 +31,6 @@ fn help_reussit_et_commence_par_la_description_de_l_outil() -> Resultat {
     Ok(())
 }
 
-/// Without arguments Bonk opens the window. Without a display (SSH, server) it fails cleanly and points to
-/// the command line, without a panic. The test removes the display variables: no window opens, even on a
-/// desktop.
 #[cfg(all(unix, not(target_os = "macos")))]
 #[test]
 fn sans_argument_et_sans_affichage_renvoie_vers_la_ligne_de_commande() -> Resultat {
@@ -74,9 +71,6 @@ fn list_aide_decrit_les_options() -> Resultat {
     Ok(())
 }
 
-/// On the machine running the test, `bonk list --json` either succeeds with versioned JSON or fails cleanly
-/// (code 1, message on stderr, nothing on stdout): never another state. The content depends on the machine;
-/// the rules are tested in `bonk-hal` and `bonk-cli`.
 #[test]
 fn list_json_reussit_ou_echoue_proprement() -> Resultat {
     let sortie = bonk().args(["list", "--json", "--all"]).output()?;
@@ -97,7 +91,6 @@ fn list_json_reussit_ou_echoue_proprement() -> Resultat {
     Ok(())
 }
 
-/// The machine's system disks are listed and forbidden, never offered: at least one, however many there are.
 #[cfg(any(windows, target_os = "macos"))]
 #[test]
 fn le_disque_systeme_du_runner_est_interdit() -> Resultat {
@@ -126,7 +119,6 @@ fn le_disque_systeme_du_runner_est_interdit() -> Resultat {
     Ok(())
 }
 
-/// No enumeration on this system: clean failure and explicit message.
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 #[test]
 fn list_hors_linux_echoue_avec_un_message_clair() -> Resultat {
@@ -155,7 +147,6 @@ fn debug_sources_json_reussit_ou_echoue_proprement() -> Resultat {
     Ok(())
 }
 
-/// The verbose log goes to stderr and never pollutes command output.
 #[test]
 fn le_journal_va_sur_stderr_et_la_sortie_reste_du_json() -> Resultat {
     let sortie = bonk()
@@ -225,7 +216,6 @@ fn sous_affichage_virtuel_le_rendu_bascule_en_logiciel() -> Resultat {
         "statut : {:?}\n{journal}",
         sortie.status,
     );
-    // The default panic message must not reach the user; the verbose log tells the fallback.
     assert!(!journal.contains("thread 'main' panicked"), "{journal}");
     // The fallback only happens if wgpu panics: on the maintainer's machine under Xvfb it does, not on the CI
     // runner, where a software driver (llvmpipe) lets wgpu succeed. When the window panics the fallback is
@@ -239,9 +229,6 @@ fn sous_affichage_virtuel_le_rendu_bascule_en_logiciel() -> Resultat {
     Ok(())
 }
 
-/// Capture then replay: what `list` sees here, `--fixture` gives back from the capture, without the serials
-/// or the user name. Linux only (the only system with enumeration here); skipped if the enumeration fails
-/// (container without udev).
 #[cfg(target_os = "linux")]
 #[test]
 fn une_capture_rejouee_donne_les_memes_verdicts() -> Resultat {
@@ -289,7 +276,6 @@ fn une_capture_rejouee_donne_les_memes_verdicts() -> Resultat {
 type Verdict = (String, String, String, String);
 
 #[cfg(target_os = "linux")]
-/// Path, bus, kind and eligibility of each listed disk.
 fn verdicts(octets: &[u8]) -> Result<Vec<Verdict>, serde_json::Error> {
     let json: serde_json::Value = serde_json::from_slice(octets)?;
     Ok(json["disks"].as_array().map_or(vec![], |d| {
@@ -307,7 +293,6 @@ fn verdicts(octets: &[u8]) -> Result<Vec<Verdict>, serde_json::Error> {
 }
 
 #[cfg(target_os = "linux")]
-/// No secret leaves in the capture: the serials read here, the user's name.
 fn sans_secret(capture: &str, direct: &serde_json::Value) {
     for disk in direct["disks"].as_array().into_iter().flatten() {
         if let Some(serie) = disk["serial"].as_str().filter(|s| s.len() >= 6) {
@@ -325,7 +310,6 @@ fn sans_secret(capture: &str, direct: &serde_json::Value) {
 }
 
 #[cfg(target_os = "linux")]
-/// Replaying must never be able to write to a real disk, nor read the system's sources.
 fn rejeu_sans_ecriture(
     capture: &std::path::Path,
     direct: &serde_json::Value,
@@ -356,7 +340,6 @@ fn rejeu_sans_ecriture(
     Ok(())
 }
 
-/// Under `--fixture` the low level reads an image file, never a real disk, even named by its path.
 #[test]
 fn fixture_refuse_la_lecture_brute_d_un_disque() -> Result<(), Box<dyn std::error::Error>> {
     let dossier = std::env::temp_dir().join(format!("bonk-fixture-brut-{}", std::process::id()));
@@ -394,8 +377,6 @@ fn fixture_refuse_la_lecture_brute_d_un_disque() -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
-/// The service writes to the disks it enumerates: under `--fixture` it would take the captured disks as real
-/// and open the real `/dev/<name>` of the same name, which the filter never judged.
 #[test]
 fn fixture_refuse_le_service() -> Result<(), Box<dyn std::error::Error>> {
     let dossier = std::env::temp_dir().join(format!("bonk-fixture-serve-{}", std::process::id()));
@@ -418,7 +399,6 @@ fn fixture_refuse_le_service() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// `--no-gui`: a script never opens a window by accident, even with a display.
 #[test]
 fn no_gui_affiche_l_aide_et_n_ouvre_jamais_la_fenetre() -> Result<(), Box<dyn std::error::Error>> {
     let seul = bonk().env("DISPLAY", ":0").arg("--no-gui").output()?;
@@ -457,7 +437,6 @@ fn quiet_refuse_verbose_et_tait_les_avertissements() -> Result<(), std::io::Erro
         .output()?;
     assert_eq!(refus.status.code(), Some(2));
 
-    // An unreadable configuration is only a warning: the log says so, except with --quiet.
     let dossier = std::env::temp_dir().join(format!("bonk-quiet-{}", std::process::id()));
     std::fs::create_dir_all(&dossier)?;
     let config = dossier.join("config.json");

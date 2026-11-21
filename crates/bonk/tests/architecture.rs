@@ -7,7 +7,6 @@ fn crates_dir() -> PathBuf {
         .map_or_else(|| PathBuf::from("crates"), Path::to_path_buf)
 }
 
-/// `[dependencies]` lines of a crate, target-specific ones included, without dev-dependencies.
 fn dependencies(name: &str) -> Vec<String> {
     let text = fs::read_to_string(crates_dir().join(name).join("Cargo.toml")).unwrap_or_default();
     assert!(!text.is_empty(), "Cargo.toml de {name} illisible");
@@ -73,7 +72,6 @@ fn chaque_crate_ne_depend_que_de_ce_que_permet_sa_couche() {
     }
 }
 
-/// Production code of a file: its tests apart, as for the size cap.
 fn read(file: &Path) -> String {
     // Windows checks out sources with CRLF line endings.
     fs::read_to_string(file)
@@ -81,7 +79,6 @@ fn read(file: &Path) -> String {
         .replace("\r\n", "\n")
 }
 
-/// The module name a file defines and the directory its declaration lives in.
 fn module_of(file: &Path) -> Option<(String, PathBuf)> {
     let dir = file.parent()?;
     let stem = file.file_stem()?.to_str()?;
@@ -95,7 +92,6 @@ fn module_of(file: &Path) -> Option<(String, PathBuf)> {
     }
 }
 
-/// Compiled only for tests: declared under `#[cfg(test)]`, or inside a module that is.
 fn test_only(file: &Path) -> bool {
     let Some((name, home)) = module_of(file) else {
         return false;
@@ -117,7 +113,6 @@ fn test_only(file: &Path) -> bool {
         })
 }
 
-/// Whether `text` declares module `name` (`pub` or not), and if so whether under `#[cfg(test)]`.
 fn declaration(text: &str, name: &str) -> Option<bool> {
     let wanted = format!("mod {name};");
     let mut previous = "";
@@ -144,7 +139,6 @@ fn production(file: &Path) -> String {
         .to_owned()
 }
 
-/// What gives away OS-specific code: platform attributes and direct OS calls.
 const SYSTEM_MARKERS: &[&str] = &[
     "target_os",
     "target_family",
@@ -293,7 +287,6 @@ fn un_module_de_tests_a_part_n_est_pas_du_code_de_production() {
     assert!(!test_only(&cli.join("lib.rs")));
 }
 
-/// One place to change when the catalog moves: every other file reads `manifest::DEFAULT_BASE`.
 #[test]
 fn l_adresse_du_catalogue_n_est_ecrite_qu_une_fois() {
     fn walk(dir: &Path, found: &mut Vec<PathBuf>) {
@@ -343,7 +336,6 @@ const KNOWN_HOSTS: &[(&str, &str)] = &[
     ),
 ];
 
-/// Hosts of the `http` and `https` addresses in `text`, comments left out; a bare scheme or prefix is no host.
 fn written_hosts(text: &str) -> Vec<String> {
     let mut hosts = Vec::new();
     for line in text.lines().filter(|l| !l.trim_start().starts_with("//")) {

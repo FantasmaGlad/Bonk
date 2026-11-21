@@ -1,7 +1,6 @@
 use std::net::{SocketAddr, TcpStream};
 use std::time::Duration;
 
-/// The daemon, then Tor Browser. On loopback a slow answer is not a usable Tor.
 const PORTS: [u16; 2] = [9050, 9150];
 const PATIENCE: Duration = Duration::from_millis(300);
 

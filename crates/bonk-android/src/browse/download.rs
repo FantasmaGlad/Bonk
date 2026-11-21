@@ -97,7 +97,6 @@ pub(super) fn message_of(input: &Value, model: &Model) -> Option<BrowseMessage> 
     })
 }
 
-/// Progress and failures the app reports go to the catalog download while one runs.
 pub(crate) fn running(model: &Model) -> bool {
     model
         .browse

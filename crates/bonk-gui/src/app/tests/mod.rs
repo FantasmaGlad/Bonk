@@ -141,7 +141,6 @@ fn une_enumeration_a_la_fois() {
     let mut app = App::default();
     let _ = app.update(Message::Tick);
     assert!(app.loading);
-    // The timer starts nothing until the previous one is done: the state stays in progress.
     let _ = app.update(Message::Tick);
     assert!(app.loading);
     let _ = app.update(Message::Loaded(Ok(vec![])));

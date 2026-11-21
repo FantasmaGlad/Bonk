@@ -34,7 +34,6 @@ fn une_image_qui_n_est_pas_iso_est_refusee() {
 #[test]
 fn un_repertoire_demesure_est_refuse_sans_allocation() -> io::Result<()> {
     let mut image = testing::image("X", &[("a/b", 1)]);
-    // Root directory size field of the volume descriptor.
     let at = (FIRST_DESCRIPTOR * SECTOR) as usize + 156 + 10;
     image[at..at + 4].copy_from_slice(&u32::MAX.to_le_bytes());
     let mut iso = Iso::open(Cursor::new(image))?;

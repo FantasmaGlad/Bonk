@@ -18,11 +18,9 @@ pub use verify::verify;
 
 pub const SCHEMA_VERSION: u32 = 2;
 
-/// Where Bonk reads its catalog unless told otherwise; the signature, not the address, is what makes it trusted.
 pub const DEFAULT_BASE: &str = "https://catalog.bonk-os.app/v2/";
 
-/// The current key, in the publishing secrets, and an offline backup that keeps publishing possible without a
-/// new Bonk release if the first is lost.
+/// Current key, then an offline backup that outlives its loss without a new release.
 pub const TRUSTED_KEYS: [[u8; 32]; 2] = [
     [
         0x0a, 0xa9, 0xf4, 0x66, 0x76, 0x3f, 0x33, 0x45, 0x0a, 0xe8, 0x21, 0x17, 0xf3, 0x00, 0xd4,
@@ -41,19 +39,10 @@ pub enum CatalogError {
     BadSignature,
     Unreadable(String),
     UnsupportedVersion(u32),
-    Expired {
-        expires_unix: u64,
-    },
-    Rollback {
-        sequence: u64,
-        seen: u64,
-    },
-    InvalidImage {
-        id: String,
-        reason: &'static str,
-    },
+    Expired { expires_unix: u64 },
+    Rollback { sequence: u64, seen: u64 },
+    InvalidImage { id: String, reason: &'static str },
     InvalidGrub(&'static str),
-    /// Neither the network nor a saved copy.
     Unavailable(String),
 }
 
@@ -85,7 +74,6 @@ impl std::error::Error for CatalogError {}
 
 #[derive(Debug, Clone, Copy)]
 pub struct Trust<'a> {
-    /// Ed25519 public keys: current and backup, to survive a lost key.
     pub keys: &'a [[u8; 32]],
     pub now_unix: u64,
     pub seen_sequence: u64,

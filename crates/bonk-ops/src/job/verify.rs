@@ -89,15 +89,13 @@ pub(super) fn drop_cache_before_verify(device: &mut dyn BlockDevice) {
     }
 }
 
-/// The report already says whether the cache was dropped; the log says it too.
 pub(super) fn warn_if_cache_kept(report: &engine::VerifyReport) {
     if !report.cache_dropped {
         log::warn!(target: "bonk::write", "cache not dropped: the verification may have read cached data");
     }
 }
 
-/// The image head is read separately, since the main stream is consumed by hashing. Empty if unreadable: the
-/// main read reports the error.
+/// Empty if unreadable: the main read reports the error.
 fn repair_ranges(image: &ImageFile) -> Vec<std::ops::Range<u64>> {
     use std::io::Read;
 

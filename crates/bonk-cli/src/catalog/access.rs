@@ -6,7 +6,6 @@ use bonk_ops::job::{JobError, WriteMode};
 
 use crate::errors::Code;
 
-/// The given address, else the variable, else Bonk's; always ending with `/`.
 pub(super) fn base_url(given: Option<&str>, variable: Option<String>) -> String {
     let url = given
         .map(str::to_owned)
@@ -27,10 +26,8 @@ pub(crate) fn refused(message: impl std::fmt::Display) -> JobError {
 }
 
 pub(crate) type FetchFn = Box<dyn Fn(&str) -> Result<Vec<u8>, String>>;
-/// A file named by the catalog, read up to its signed size.
 pub(crate) type FetchFileFn = Box<dyn Fn(&str, u64) -> Result<Vec<u8>, String>>;
 
-/// Keys the signature must match and how files are fetched: injectable for tests.
 pub(crate) struct Access {
     pub(crate) keys: Vec<[u8; 32]>,
     pub(crate) fetch: FetchFn,
@@ -51,8 +48,6 @@ impl Default for Access {
     }
 }
 
-/// Network, signature, then the saved copy when the network fails. Also returns the cache directory and the
-/// address the catalog's files are relative to.
 pub(crate) fn load_from(
     access: &Access,
     url: Option<&str>,
@@ -79,7 +74,6 @@ pub(crate) fn load(
     load_from(&Access::default(), url, cache_dir).map(|(loaded, dir, _)| (loaded, dir))
 }
 
-/// What a catalog image gives a download.
 #[derive(Debug)]
 pub(crate) struct CatalogSource {
     pub(crate) url: PathBuf,
@@ -90,7 +84,6 @@ pub(crate) struct CatalogSource {
     pub(crate) hybrid: bool,
 }
 
-/// A catalog image that only starts written as a hybrid takes that mode unless another was asked for.
 pub(crate) fn mode_for(requested: WriteMode, hybrid: bool) -> WriteMode {
     if hybrid && requested == WriteMode::Auto {
         WriteMode::Hybrid
@@ -99,12 +92,10 @@ pub(crate) fn mode_for(requested: WriteMode, hybrid: bool) -> WriteMode {
     }
 }
 
-/// What the image is fetched for: each use accepts what can start from it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Destination {
     Drive,
     Vault,
-    /// Downloaded only: kept in the cache.
     Cache,
 }
 

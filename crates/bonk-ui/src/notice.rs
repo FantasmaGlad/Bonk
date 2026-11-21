@@ -4,11 +4,9 @@ use crate::browse::DownloadState;
 use crate::event::Outcome;
 use crate::model::{Model, WriteState};
 
-/// The error code of a cancelled operation.
 const CANCELLED: &str = "E4003";
 
 impl Model {
-    /// What the system's notification says now; `None` when the setting is off or nothing ran.
     #[must_use]
     pub fn notice(&self) -> Option<Notice> {
         if !self.notify {

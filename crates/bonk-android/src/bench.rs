@@ -93,7 +93,6 @@ mod tests {
         fail_writes: bool,
     }
 
-    /// A 17 GiB key whose test area alone exists in memory.
     fn memory(fail_writes: bool) -> Memory {
         Memory {
             data: RefCell::new(vec![7; BENCH_BYTES]),

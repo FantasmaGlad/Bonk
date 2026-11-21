@@ -15,7 +15,6 @@ import java.io.OutputStream
 import java.net.Proxy
 import java.security.MessageDigest
 
-/** Copies until the end or a cancel, and reports progress about every 16 MiB. */
 internal fun copyReporting(
     input: InputStream,
     output: OutputStream,
@@ -89,7 +88,6 @@ class ImageDownload(private val context: Context, private val send: (ToRust) -> 
 
         fun discard()
 
-        /** Where the user finds it, as the phone names it. */
         fun publish(): String
     }
 

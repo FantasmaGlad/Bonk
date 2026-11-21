@@ -17,7 +17,6 @@ use bonk_ui::event::{Event, Outcome};
 use crate::screen::{self, MODEL, lock};
 use crate::writer::{android_io, finished, push, report, same_drive};
 
-/// GRUB as the last verified catalog names it, with the address the catalog was read from.
 static GRUB: Mutex<Option<(String, Grub)>> = Mutex::new(None);
 
 pub(crate) fn set_grub(base: &str, grub: Option<Grub>) {
@@ -31,7 +30,6 @@ pub(crate) struct Download {
     pub(crate) size_bytes: u64,
 }
 
-/// What Kotlin downloads, one file per processor Bonk can write: empty while the catalog offers none.
 pub(crate) fn grub_downloads() -> Vec<Download> {
     downloads(lock(&GRUB).as_ref())
 }
@@ -250,7 +248,6 @@ mod tests {
     const GRUB_BYTES: &[u8] = b"MZ grub de test";
     const ARM_BYTES: &[u8] = b"MZ grub arm64 de test";
 
-    /// One drive behind every opening, as the key behind each descriptor copy.
     struct Shared(Rc<RefCell<MemoryDevice>>);
 
     impl BlockDevice for Shared {
@@ -321,7 +318,6 @@ mod tests {
         }
     }
 
-    /// GRUB as Kotlin lays it out, one file per processor named by it, then a forged copy.
     fn grub_dirs(dir: &std::path::Path) -> (String, String) {
         let write = |name: &str, arm: &[u8]| {
             let folder = dir.join(name);
@@ -333,7 +329,6 @@ mod tests {
         (write("grub", ARM_BYTES), write("forged", b"MZ autre GRUB"))
     }
 
-    /// An Arch ISO behind a nameless path, as a descriptor reads.
     fn arch_iso(dir: &std::path::Path) -> (String, Vec<u8>) {
         let iso = dir.join("42");
         let image = bonk_core::iso9660::testing::image(
@@ -358,7 +353,6 @@ mod tests {
             "aarch64".to_owned(),
             asset("grub/2.14/BOOTAA64.EFI", ARM_BYTES),
         );
-        // A processor Bonk cannot name yet: nothing to download for it.
         efi.insert("mips64".to_owned(), asset("grub/2.14/X.EFI", b"x"));
         let grub = Grub {
             version: "2.14".to_owned(),
@@ -399,7 +393,6 @@ mod tests {
         ))
     }
 
-    /// The vault action on the drive, as the phone runs it with the catalog's GRUB when offered.
     fn run(drive: &Drive, offered: &Option<(String, Grub)>, request: &Request<'_>) -> Event {
         let drive = Rc::clone(drive);
         let disks = vec![key(256 << 20)];
@@ -415,7 +408,6 @@ mod tests {
         dir
     }
 
-    /// Without the catalog, or with a GRUB that is not the catalog's, nothing touches the drive.
     #[test]
     fn un_coffre_ne_se_prepare_qu_avec_le_grub_du_catalogue() {
         let (key, dir) = (drive(), scratch("refus"));
@@ -438,13 +430,11 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// Prepare, add an ISO read through a nameless descriptor path, list, update: the phone's whole vault.
     #[test]
     fn le_telephone_prepare_remplit_et_met_a_jour_un_coffre() {
         let (key, dir) = (drive(), scratch("coffre"));
         let ((grub, _), (iso, image)) = (grub_dirs(&dir), arch_iso(&dir));
         let offered = Some(offered_grub());
-        // The new partitions are read on the drive: the engine does not wait for the system to show them.
         let started = Instant::now();
         assert_eq!(
             run(&key, &offered, &request("init", "", "", &grub)),
@@ -471,7 +461,6 @@ mod tests {
             run(&key, &offered, &request("update", "", "", &grub)),
             Event::Finished(Outcome::Vault(VaultDone::Updated { changed: false }))
         );
-        // Another key at the chosen place: nothing runs.
         let mut other = request("list", "", "", "");
         other.serial = "S2";
         assert_eq!(

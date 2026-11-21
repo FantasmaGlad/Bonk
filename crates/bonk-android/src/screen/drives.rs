@@ -67,7 +67,6 @@ pub(crate) fn partitions_of(layout: &Layout) -> Vec<Value> {
         .collect()
 }
 
-/// As [`partitions_of`] reads them, in the shape the safety filter judges.
 pub(crate) fn partitions(layout: &Layout) -> Vec<Partition> {
     partitions_of(layout)
         .iter()
@@ -104,7 +103,6 @@ pub(super) fn disks_state(model: &Model) -> Vec<Value> {
                 "badge": verdict_badge(verdict, lang),
                 "state": state_label(verdict, lang),
                 "selected": selected,
-                // Device node, serial and partitions: on demand, under the selected card.
                 "details": if selected && model.details {
                     bonk_ui::disk::details(lang, disk)
                 } else {

@@ -24,7 +24,6 @@ pub struct FileEntry {
     pub size_bytes: u64,
 }
 
-/// Reads an exFAT volume written by any system, never trusting its fields.
 pub struct Reader<'a> {
     dev: &'a dyn BlockDevice,
     fat: u64,
@@ -54,7 +53,7 @@ fn units(bytes: &[u8]) -> impl Iterator<Item = u16> + '_ {
         .map(|pair| u16::from_le_bytes(*pair))
 }
 
-/// Volume layout read from the boot sector, offsets relative to the volume.
+/// Offsets relative to the volume.
 struct Fields {
     fat: u64,
     heap: u64,
@@ -63,7 +62,6 @@ struct Fields {
     root: u32,
 }
 
-/// Start and length of the partition in bytes, checked against the drive.
 fn partition_span(
     dev: &dyn BlockDevice,
     first_lba: u64,
@@ -158,7 +156,7 @@ impl<'a> Reader<'a> {
         self.root
     }
 
-    /// Clusters of a FAT chain, in order; bounded by the volume so a looping chain stops.
+    /// Bounded by the volume, so a looping chain stops.
     pub(super) fn chain(&self, first: u32) -> Result<Vec<u32>, FormatError> {
         let mut chain = Vec::new();
         let mut cluster = first;
@@ -305,7 +303,6 @@ impl<'a> Reader<'a> {
         Ok(label)
     }
 
-    /// Every file, directories walked to [`MAX_DEPTH`].
     pub fn files(&self) -> Result<Vec<FileEntry>, FormatError> {
         let mut files = Vec::new();
         let mut seen = 0usize;
@@ -409,7 +406,6 @@ mod tests {
         Ok(())
     }
 
-    /// Shifts come from the drive: their sum must not overflow, whatever their values.
     #[test]
     fn des_tailles_de_grappe_aberrantes_sont_refusees() -> Result<(), Box<dyn std::error::Error>> {
         for (sector_shift, cluster_shift) in [(9u8, 255u8), (255, 255), (12, 14)] {
@@ -428,7 +424,6 @@ mod tests {
         Ok(())
     }
 
-    /// A chain that loops back on itself must end in an error, not in an endless read.
     #[test]
     fn une_chaine_qui_boucle_est_refusee() -> Result<(), Box<dyn std::error::Error>> {
         let mut dev = MemoryDevice::new(66 * MIB, 512)?;

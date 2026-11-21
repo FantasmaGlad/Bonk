@@ -46,7 +46,6 @@ fn made_by_mkfs() -> Vec<u8> {
     bytes
 }
 
-/// A file over many clusters, one with a long accented name, an empty one.
 fn add_three(dev: &mut MemoryDevice, span: bonk_core::format::exfat::edit::Span) {
     let big: Vec<u8> = (0..5_000_000u32).map(|i| (i * 13) as u8).collect();
     for (name, data) in [
@@ -78,8 +77,6 @@ fn file(path: &str, size: u64) -> NewFile {
     }
 }
 
-/// A tree written by Bonk, read back by the official tool: long and accented names, nested directories, an
-/// empty file, a file over several clusters.
 #[test]
 fn une_arborescence_exfat_est_acceptee_par_fsck_exfat() {
     let long = "Un nom de fichier assez long pour plusieurs entrées de nom, été 2026.iso";
@@ -136,8 +133,6 @@ fn fsck(image: &[u8], label: &str) -> String {
     text
 }
 
-/// Added and removed in a volume made by Bonk then in one made by mkfs.exfat: the official tool finds both
-/// clean, files and free space included.
 #[test]
 fn un_ajout_et_un_retrait_sont_acceptes_par_fsck_exfat() {
     use bonk_core::format::exfat::edit::{Span, remove_file};

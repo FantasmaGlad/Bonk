@@ -36,8 +36,6 @@ fn un_depart_demande_a_kotlin_d_ecrire_avec_le_brouillon() {
     assert!(matches!(model.write, WriteState::Running { .. }));
 }
 
-/// A failure born in the app (cancel, key gone) carries a Bonk code: the screen shows its translated
-/// title and code, as for an engine error.
 #[test]
 fn un_echec_de_l_application_porte_son_code() -> Result<(), Box<dyn std::error::Error>> {
     let mut model = loaded();

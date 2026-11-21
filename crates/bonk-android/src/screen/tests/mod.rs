@@ -38,7 +38,6 @@ fn loaded() -> Model {
 fn un_lien_choisit_une_image_du_catalogue_sans_rien_ecrire() {
     let mut model = loaded();
     let link = json!({"type": "open", "link": "bonk://install/debian-13-netinst-x86_64"});
-    // The open draft already asked for the catalog: the link starts no second read.
     assert!(open_link(&mut model, &link).is_empty());
     assert_eq!(
         open_link(&mut Model::default(), &link),
@@ -57,8 +56,6 @@ fn un_lien_choisit_une_image_du_catalogue_sans_rien_ecrire() {
     }
 }
 
-/// A panic while holding the state must not leave the screen dead: the poisoned lock is taken back with
-/// the state as it was, instead of answering unavailable to every later message.
 #[test]
 fn un_verrou_empoisonne_est_repris() {
     let etat = std::sync::Arc::new(Mutex::new(1));
@@ -77,7 +74,6 @@ fn l_etat_dit_la_langue_choisie() {
     let mut model = loaded();
     model.lang = Lang::Fr;
     assert_eq!(state(&model)["lang"], "fr");
-    // A new language comes by a relaunch, never while the screen runs.
     let input = json!({"type": "settings", "action": "language", "value": "en"});
     let effects = model.update(message_of(&input, &model).unwrap_or(Message::Tick));
     assert_eq!(

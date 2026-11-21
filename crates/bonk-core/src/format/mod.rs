@@ -130,9 +130,7 @@ pub enum FormatError {
     Mismatch(String),
     Name(String),
     Source(std::io::Error),
-    /// A combination the drive cannot carry, such as BIOS code on GPT.
     Unsupported(String),
-    /// Content read from the drive that Bonk does not understand.
     Invalid(String),
 }
 

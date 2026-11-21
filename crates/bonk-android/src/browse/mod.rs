@@ -19,7 +19,6 @@ pub(crate) fn button(model: &Model) -> Value {
     json!(model.lang.pick("Catalog", "Catalogue"))
 }
 
-/// The catalog tab; `null` on the other screens.
 pub(crate) fn state(model: &Model) -> Value {
     if model.screen != Screen::Catalog {
         return Value::Null;
@@ -66,7 +65,6 @@ fn grid(model: &Model, systems: &[System]) -> Value {
     })
 }
 
-/// Four lists, each with its labels in order; the first entry removes the filter.
 fn filters(model: &Model, offered: &Options) -> Vec<Value> {
     let lang = model.lang;
     let filter = &model.browse.filter;

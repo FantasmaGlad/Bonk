@@ -56,7 +56,6 @@ fn file_set(img: &mut [u8], root: u32) {
     tag(&mut img[s..s + BLOCK], TAG_FILE_SET);
 }
 
-/// File entry at `entry` whose single extent of `bytes` starts at block `data`.
 fn extent_entry(img: &mut [u8], entry: usize, data: usize, bytes: &[u8], directory: bool) {
     img[block(data)..block(data) + bytes.len()].copy_from_slice(bytes);
     let s = block(entry);
@@ -72,7 +71,6 @@ fn extent_entry(img: &mut [u8], entry: usize, data: usize, bytes: &[u8], directo
 
 type Dirs = std::collections::BTreeMap<String, Vec<(String, Option<usize>)>>;
 
-/// Each directory's children: a name and, for a file, its index in `files`.
 fn tree(files: &[(&str, &[u8])]) -> Dirs {
     let mut dirs = Dirs::new();
     dirs.insert(String::new(), Vec::new());
@@ -90,11 +88,9 @@ fn tree(files: &[(&str, &[u8])]) -> Dirs {
     dirs
 }
 
-/// Files given by path, one extent each.
 #[must_use]
 pub fn build(files: &[(&str, &[u8])]) -> Vec<u8> {
     let dirs = tree(files);
-    // Block 0: file set; then each directory's entry and data; then the files.
     let mut next = 1;
     let mut dir_blocks = std::collections::BTreeMap::new();
     for (path, list) in &dirs {
@@ -107,7 +103,6 @@ pub fn build(files: &[(&str, &[u8])]) -> Vec<u8> {
         next += 1 + data.len().div_ceil(BLOCK).max(1);
     }
     let mut img = vec![0u8; (P + next + 1) * BLOCK];
-    // Volume recognition: what image analysis checks for ISO and UDF.
     for (sector, id, kind) in [(16, b"CD001", 1u8), (17, b"BEA01", 0), (18, b"NSR02", 0)] {
         let s = sector * BLOCK;
         img[s] = kind;
@@ -169,7 +164,6 @@ pub fn image() -> Vec<u8> {
         &fid(FID_PARENT | FID_DIRECTORY, "", 1),
         true,
     );
-    // 3000-byte file in two separate extents, through an extended entry.
     let s = block(8);
     img[s + 56..s + 64].copy_from_slice(&3000u64.to_le_bytes());
     img[s + 212..s + 216].copy_from_slice(&16u32.to_le_bytes());

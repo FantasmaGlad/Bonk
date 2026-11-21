@@ -9,7 +9,6 @@ use bonk_core::read_at::ReadAt;
 use super::types::{JobError, SourceInfo, fail};
 use crate::errors::Code;
 
-/// One descriptor, as many independent reads as steps.
 pub struct ImageFile {
     file: Arc<File>,
     path: String,
@@ -36,7 +35,6 @@ impl ImageFile {
         })
     }
 
-    /// Without moving any reader.
     pub fn size(&self) -> u64 {
         self.len
     }

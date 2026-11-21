@@ -59,7 +59,6 @@ pub(crate) fn spawn(program: &Path, args: &[String]) -> UnboundedReceiver<Event>
     receiver
 }
 
-/// Sends each progress event as it comes; keeps the result for after the process has exited.
 fn relay(stdout: impl Read, sender: &UnboundedSender<Event>) -> Option<Outcome> {
     let mut result = None;
     for line in BufReader::new(stdout).lines().map_while(Result::ok) {
@@ -138,7 +137,6 @@ mod tests {
                 && args.contains(&"--allow-virtual".to_owned())
         );
         assert!(args.contains(&"--force".to_owned()));
-        // `--all` makes no sense for a write.
         assert!(!args.contains(&"--all".to_owned()));
     }
 
@@ -266,7 +264,6 @@ mod tests {
                 message: "cible refusée".into()
             }))
         );
-        // A result shown with a non-zero exit code is still a failure.
         let events = iced::futures::executor::block_on(collect(
             r#"echo '{"event":"result","write":{"bytes":1}}'; echo 'bonk: error: après coup [E4001]' >&2; exit 1"#,
         ));
@@ -287,7 +284,6 @@ mod tests {
         assert!(
             matches!(events.as_slice(), [Event::Finished(Outcome::Failed { message, .. })] if message.contains("cannot start"))
         );
-        // Cancel sends SIGTERM to the process.
         let mut stream = spawn(
             Path::new("/bin/sh"),
             &["-c".to_owned(), "sleep 30".to_owned()],

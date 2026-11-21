@@ -16,7 +16,6 @@ pub use http::{fetch_bytes, fetch_limited, fetch_text, is_url, set_proxy};
 use partial::*;
 use stream::*;
 
-/// Attempts without a single new byte before giving up.
 const ATTEMPTS_WITHOUT_PROGRESS: u32 = 5;
 const CHUNK: usize = 256 * 1024;
 /// Chunks queued between the two threads: bounds memory when the disk is slower than the network.
@@ -28,13 +27,8 @@ const TEXT_LIMIT: u64 = 1 << 20;
 
 #[derive(Debug)]
 pub enum DownloadError {
-    /// Neither `https://` nor `http://` to this machine.
     Scheme(String),
-    Refused {
-        url: String,
-        status: u16,
-    },
-    /// After every attempt.
+    Refused { url: String, status: u16 },
     Network(String),
     Inconsistent(String),
     Io(io::Error),
@@ -64,18 +58,15 @@ impl From<io::Error> for DownloadError {
     }
 }
 
-/// Bytes in the file, and the total when the server gives it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Advance {
     pub done: u64,
     pub total: Option<u64>,
 }
 
-/// Progress, cancel and retry pacing, supplied by the caller so tests can run without waiting.
 pub struct Hooks<'a> {
     pub progress: &'a mut dyn FnMut(Advance),
     pub cancelled: &'a dyn Fn() -> bool,
-    /// Wait before retrying, by attempt number.
     pub pause: &'a dyn Fn(u32),
     pub silence_limit: Duration,
 }
@@ -154,7 +145,6 @@ fn attempt(
 }
 
 enum Accepted {
-    /// The body follows; its total length when known.
     Body(Option<u64>),
     Done(Attempt),
 }

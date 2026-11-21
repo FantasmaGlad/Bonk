@@ -44,7 +44,6 @@ struct Document {
     reads: Option<Vec<SourceRead>>,
 }
 
-/// Reads of a `diagnose --capture` report, or of a capture alone.
 pub(crate) fn load(path: &Path) -> Result<Vec<SourceRead>, String> {
     let text =
         fs::read_to_string(path).map_err(|e| format!("{}: could not read: {e}", path.display()))?;

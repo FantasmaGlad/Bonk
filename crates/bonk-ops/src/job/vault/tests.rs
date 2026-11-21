@@ -10,7 +10,6 @@ use bonk_core::MemoryDevice;
 
 use super::*;
 
-/// Cancel is seen between steps: no volume after a cancelled table.
 #[test]
 fn l_annulation_arrete_avant_les_volumes() {
     let mut device = MemoryDevice::new(256 << 20, 512).unwrap();

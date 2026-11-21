@@ -26,7 +26,6 @@ pub(super) fn run_update(
         grub,
         options: args.common.write_options(),
         trace_io: args.common.trace_io.map(TraceIo::from),
-        // Without confirmation, the check alone.
         dry_run: args.dry_run || !args.yes,
         yes: args.yes,
         elevation: args.common.elevate.into(),

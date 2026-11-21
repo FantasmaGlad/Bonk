@@ -7,9 +7,7 @@ import kotlinx.serialization.Serializable
 data class BrowseView(
     val title: String,
     val back: String,
-    /** While the catalog is read, or why it could not be. */
     val waiting: String? = null,
-    /** Why the catalog shown is the saved copy. */
     val notice: String? = null,
     val grid: BrowseGrid? = null,
     val system: SystemView? = null,
@@ -36,12 +34,10 @@ data class CardView(val name: String, val count: String, val icon: String? = nul
 data class SystemView(
     val name: String,
     val icon: String? = null,
-    /** "Not affiliated with Microsoft" for a third-party version, already translated. */
     val affiliation: String? = null,
     val back: String,
     val write: String,
     val download: String,
-    /** A download runs: the others wait. */
     val busy: Boolean = false,
     val downloading: DownloadPanel? = null,
     val variants: List<VariantView>,

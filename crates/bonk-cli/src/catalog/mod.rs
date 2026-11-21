@@ -240,7 +240,6 @@ mod tests {
         );
     }
 
-    /// Refused before any download, saying where the image does start.
     #[test]
     fn chaque_usage_accepte_ce_qui_en_demarre() {
         use Destination::{Cache, Drive, Vault};
@@ -298,7 +297,6 @@ mod tests {
             .collect();
         assert_eq!(ids, ["u22", "u26", "w"]);
         assert_eq!(sorted(&catalog, &of_family("windows")).len(), 1);
-        // An older version released later stays after the newest.
         let mut tardive = catalog.clone();
         tardive.images[1].version = "24.04.5".to_owned();
         tardive.images[1].released = "2027-01-01".to_owned();

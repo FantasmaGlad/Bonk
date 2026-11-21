@@ -9,21 +9,16 @@ pub use menu::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Choice {
-    /// Catalog identifier: what `--image` and a `bonk://install/` link name.
     pub id: String,
     /// May differ from the system: Kubuntu is filed under Ubuntu.
     pub name: String,
     pub edition: Option<String>,
     pub label: String,
     pub end_of_life: bool,
-    /// What to know before choosing it (evaluation, CD only).
     pub note: Option<String>,
     pub source: ChoiceSource,
-    /// Catalog desktop id: `gnome`, `none`, `choice`.
     pub desktop: Option<String>,
-    /// Catalog medium id: `usb`, `sd`, `optical`.
     pub media: String,
-    /// Processor the image boots on: `x86_64`, `aarch64`, `riscv64`.
     pub arch: String,
 }
 
@@ -65,9 +60,7 @@ pub enum ChoiceSource {
     },
     /// No stable link at the publisher: the address of its page, to open oneself.
     OfficialPage(String),
-    /// Does not boot from a key: shown, not writable.
     NotForUsb,
-    /// Does not boot written to a key, but from a Bonk vault: downloaded, then added to one.
     Vault {
         url: String,
         sha256: String,
@@ -77,12 +70,9 @@ pub enum ChoiceSource {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct System {
-    /// Catalog family identifier: `ubuntu`.
     pub id: String,
     pub name: String,
-    /// Usage categories of the catalog: `office`, `server`.
     pub uses: Vec<String>,
-    /// Technical base: `debian`.
     pub base: Option<String>,
     pub icon: Option<PathBuf>,
     pub choices: Vec<Choice>,
@@ -102,16 +92,13 @@ impl System {
     }
 }
 
-/// The catalog as the window shows it: its systems and the labels of its menus.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Shelf {
     pub systems: Vec<System>,
     pub terms: crate::terms::Terms,
-    /// The last verified copy: the network did not answer.
     pub saved_copy: bool,
 }
 
-/// A third-party version says so wherever its name is shown.
 #[must_use]
 pub fn affiliation_note(owner: &str, lang: Lang) -> String {
     match lang {
@@ -120,7 +107,6 @@ pub fn affiliation_note(owner: &str, lang: Lang) -> String {
     }
 }
 
-/// For an image that starts only from a vault: where to take it once downloaded.
 #[must_use]
 pub fn vault_note(lang: Lang) -> &'static str {
     lang.pick(
@@ -129,7 +115,6 @@ pub fn vault_note(lang: Lang) -> &'static str {
     )
 }
 
-/// For an image published only on its editor's page: Bonk cannot download it itself.
 #[must_use]
 pub fn official_page_note(page: &str, lang: Lang) -> String {
     match lang {
@@ -148,7 +133,6 @@ pub enum CatalogState {
 }
 
 impl CatalogState {
-    /// The name the catalog gives the file at this address, when the address does not end with it.
     #[must_use]
     pub fn file_name_of(&self, address: &str) -> Option<&str> {
         let Self::Ready(systems) = self else {
@@ -160,7 +144,6 @@ impl CatalogState {
         }
     }
 
-    /// The catalog image at this address starts only written with `--mode hybrid`.
     #[must_use]
     pub fn hybrid_of(&self, address: &str) -> bool {
         let Self::Ready(systems) = self else {
@@ -277,7 +260,6 @@ pub fn find_url<'a>(systems: &'a [System], url: &str) -> Option<(&'a System, &'a
     })
 }
 
-/// The catalog image published under this hash: what a kept download was checked against.
 pub fn find_sha256<'a>(systems: &'a [System], sha256: &str) -> Option<&'a Choice> {
     systems.iter().flat_map(|system| &system.choices).find(
         |choice| matches!(&choice.source, ChoiceSource::Download { sha256: s, .. } if s == sha256),
@@ -306,7 +288,6 @@ mod tests {
             .unwrap_or_default()
     }
 
-    /// Adds to each image what the test does not look at.
     fn complete(mut report: Value) -> Value {
         report["schema_version"] = json!(1);
         report["sequence"] = json!(1);
@@ -487,7 +468,6 @@ mod tests {
         assert!(filter("rien").apply(&systems).is_empty());
     }
 
-    /// The rows shown and the keyboard index count the same images: one filter decides both.
     #[test]
     fn le_processeur_retient_ses_images_et_l_index_clavier_suit() {
         let systems = parse(&report());

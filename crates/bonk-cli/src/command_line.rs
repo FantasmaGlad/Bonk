@@ -2,15 +2,12 @@ use clap::Parser;
 
 use crate::*;
 
-/// Checks a command line is accepted by the CLI without running it, and returns its words: every equivalent
-/// command the window shows must be valid.
 pub fn check_command_line(command: &str) -> Result<Vec<String>, String> {
     let words = split_words(command)?;
     Cli::try_parse_from(&words).map_err(|erreur| erreur.to_string())?;
     Ok(words)
 }
 
-/// Checks the arguments an interface passes to `bonk` are accepted by the CLI, without running it.
 pub fn check_args(args: &[String]) -> Result<(), String> {
     Cli::try_parse_from(std::iter::once("bonk").chain(args.iter().map(String::as_str)))
         .map(drop)

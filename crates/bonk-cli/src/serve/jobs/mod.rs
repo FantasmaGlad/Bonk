@@ -82,7 +82,6 @@ pub(super) enum Task {
     VaultUpdate(Box<VaultUpdateJob>),
 }
 
-/// A parameter error answers without starting anything.
 pub(super) fn prepare(kind: Kind, params: &Value, cfg: &Config) -> Result<Task, Failure> {
     let p: TransferParams = parse(params)?;
     match kind {
@@ -105,7 +104,6 @@ pub(super) fn start_job(
             "a write operation is already running (see 'cancel')",
         ));
     };
-    // Parameters are validated at once: a request error answers without starting.
     let task = prepare(kind, params, cfg)?;
     let cancel = Arc::new(AtomicBool::new(false));
     let (enumerate_fn, make_io) = (Arc::clone(&cfg.enumerate), Arc::clone(&cfg.make_io));

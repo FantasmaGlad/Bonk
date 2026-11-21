@@ -4,13 +4,11 @@ use crate::library::LibraryMessage;
 use crate::model::{Effect, Effects, Focus, Message, Model, Nav, WriteState};
 use crate::settings::{Screen, SettingsMessage};
 
-/// False out of bounds.
 pub fn is_disk(order: &[Focus], i: usize) -> bool {
     matches!(order.get(i), Some(Focus::Disk(_)))
 }
 
 impl Model {
-    /// Tab order: the header buttons, then the disks shown.
     pub fn focus_order(&self) -> Vec<Focus> {
         match self.screen {
             Screen::Settings => return self.settings_focus_order(),
@@ -56,7 +54,6 @@ impl Model {
         order
     }
 
-    /// Focus does not stay on a disk gone from the list (unplugged or hidden).
     pub fn fix_focus(&mut self) {
         if self
             .focus
@@ -95,8 +92,6 @@ impl Model {
         follow(&order, index)
     }
 
-    /// What answers the keyboard before the page: the confirmation, a page other than the main one, the
-    /// open menu.
     fn navigate_overlay(&mut self, nav: Nav) -> Option<Effects> {
         // In front of the confirmation, the keyboard can only give up: Enter must not erase.
         if self.confirming_internal {
@@ -153,7 +148,6 @@ impl Model {
         )]
     }
 
-    /// Space or Enter: same effect as a click on the focused widget.
     pub fn activate(&mut self) -> Effects {
         let message = match self.focus.clone() {
             Some(Focus::Settings) => Message::Settings(SettingsMessage::Open),
@@ -229,13 +223,11 @@ impl Model {
     }
 }
 
-/// Where Tab, Shift+Tab and the arrows lead from `current` in `order`.
 fn target(order: &[Focus], current: Option<usize>, nav: Nav) -> Option<usize> {
     let last = order.len() - 1;
     match nav {
         Nav::Next => Some(current.map_or(0, |i| if i == last { 0 } else { i + 1 })),
         Nav::Previous => Some(current.map_or(last, |i| if i == 0 { last } else { i - 1 })),
-        // Arrows move between disks; from a control, Down enters the list.
         Nav::Down => match current {
             Some(i)
                 if !matches!(
@@ -243,14 +235,12 @@ fn target(order: &[Focus], current: Option<usize>, nav: Nav) -> Option<usize> {
                     Focus::Tor | Focus::Catalog | Focus::Library | Focus::Settings | Focus::Copy
                 ) =>
             {
-                // Next disk, skipping the current disk's write panel.
                 (i + 1..order.len())
                     .find(|j| is_disk(order, *j))
                     .or(Some(i))
             }
             _ => order.iter().position(|item| matches!(item, Focus::Disk(_))),
         },
-        // Up goes back one disk; from the panels and the copy button, the nearest disk.
         Nav::Up => match current {
             Some(i) if in_disk_area(&order[i]) => (0..i).rev().find(|j| is_disk(order, *j)),
             _ => None,

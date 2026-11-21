@@ -4,15 +4,11 @@ use bonk_core::format::table::TableKind;
 
 use crate::model::{Model, WriteState};
 
-/// Where the image to write comes from. Each fills the write panel the same way, so a new source needs no
-/// change to the views.
+/// Each fills the write panel the same way, so a new source needs no change to the views.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImageSource {
-    /// A signed catalog entry: its address and official hash.
     Catalog { url: String, sha256: String },
-    /// A file chosen or dropped by the user; Bonk analyses it and the user may give its hash.
     File(PathBuf),
-    /// An image already downloaded, kept under the official hash it was checked against.
     Kept { path: PathBuf, sha256: String },
 }
 

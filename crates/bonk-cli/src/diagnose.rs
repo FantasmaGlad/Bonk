@@ -106,7 +106,6 @@ pub(crate) fn schema() -> Value {
     serde_json::to_value(schemars::schema_for!(Report)).unwrap_or_default()
 }
 
-/// Injectable for tests.
 pub(crate) struct Environment {
     pub(crate) now: SystemTime,
     pub(crate) kernel: Option<String>,
@@ -321,7 +320,6 @@ fn redact(value: &mut Value, serials: &[&str], user: Option<&str>) {
     }
 }
 
-/// The report as a JSON value, for the service's diagnose method; an enumeration failure is part of it.
 pub(crate) fn report_value(
     include_serials: bool,
     env: &Environment,
@@ -442,7 +440,6 @@ mod tests {
             report["enumeration"]["disks"][0]["partitions"][0]["mount_points"][0],
             "/run/media/<user>/CLE"
         );
-        // The rest stays readable: model, sizes, labels.
         assert_eq!(report["enumeration"]["disks"][0]["model"], "SanDisk Cruzer");
         assert_eq!(
             report["enumeration"]["disks"][0]["partitions"][0]["label"],
@@ -513,7 +510,6 @@ mod tests {
     fn le_rapport_ne_contient_aucune_valeur_de_variable_d_environnement()
     -> Result<(), serde_json::Error> {
         let report = build(&args(false), &env(), &Ok(vec![]))?;
-        // Only presence flags: never the value of DISPLAY or the like.
         assert!(
             report["graphics"]
                 .as_object()
@@ -534,7 +530,6 @@ mod tests {
         }
     }
 
-    /// The report goes to support: masking cannot depend on the enumeration succeeding.
     #[test]
     fn une_enumeration_en_echec_ne_laisse_pas_passer_de_numero_de_serie()
     -> Result<(), serde_json::Error> {
@@ -566,7 +561,6 @@ mod tests {
         ];
         let report = build_with_capture(&args(false), &env(), &Ok(vec![disk()]), Some(&reads))?;
         let text = report.to_string();
-        // Nothing identifying survived.
         for (champ, valeur) in [
             ("numéro de série", "4C530001"),
             ("WWN", "0x5000cca"),
@@ -579,7 +573,6 @@ mod tests {
         let udev_out = report["capture"]["reads"][0]["content"]
             .as_str()
             .ok_or_else(|| serde_json::Error::io(std::io::Error::other("contenu")))?;
-        // What replaying the enumeration needs stays.
         for kept in [
             "E:ID_FS_TYPE=vfat",
             "E:ID_BUS=usb",
@@ -611,7 +604,6 @@ mod tests {
         assert!(String::from_utf8(out)?.starts_with("Report written to "));
         let written: Value = serde_json::from_str(&std::fs::read_to_string(&path)?)?;
         assert_eq!(written["schema_version"], 1);
-        // A second call does not replace the file.
         let second = run(&with_file, &env(), &Ok(vec![]), None, &mut Vec::new());
         assert!(second.is_err_and(|e| e.kind() == io::ErrorKind::AlreadyExists));
         std::fs::remove_file(&path)?;

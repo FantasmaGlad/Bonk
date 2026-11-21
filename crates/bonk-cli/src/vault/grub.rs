@@ -9,8 +9,6 @@ use bonk_ops::job::{GrubInfo, JobError};
 use super::GrubSource;
 use crate::catalog;
 
-/// GRUB named by the signed catalog, one image per processor Bonk can write: from its address through the
-/// cache, or from `--grub-dir`, always checked against the signed hash.
 pub(crate) fn grub(
     args: &GrubSource,
     access: &catalog::Access,

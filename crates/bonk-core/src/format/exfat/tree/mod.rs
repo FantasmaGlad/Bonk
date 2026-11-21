@@ -31,15 +31,13 @@ const MAX_NAME_UNITS: usize = 255;
 const FIXED_TIMESTAMP: u32 = 0x0021_0000;
 const MEDIA: u32 = 0xFFFF_FFF8;
 
-/// Where every byte goes, computed before the first write. Each file and non-root directory is contiguous,
-/// without a FAT chain.
+/// Computed before the first write; files and non-root directories are contiguous, without a FAT chain.
 #[derive(Debug)]
 pub struct Layout {
     geometry: Geometry,
     first_lba: u64,
     block: u32,
     root: Placed,
-    /// Root first.
     directories: Vec<(Placed, Vec<u8>)>,
     files: Vec<Placed>,
     sizes: Vec<u64>,

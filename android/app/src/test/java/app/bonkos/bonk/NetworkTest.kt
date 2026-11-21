@@ -8,7 +8,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class NetworkTest {
-    /** The headers the server received for one request opened by `connect`. */
     private fun headersOf(connect: (String) -> HttpURLConnection): Map<String, String> {
         ServerSocket(0).use { server ->
             var headers = emptyMap<String, String>()

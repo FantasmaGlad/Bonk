@@ -7,7 +7,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 
-/** Drives waiting for the user's permission, unreadable drives, and what to do when none shows. */
 @Composable
 internal fun WaitingDrives(state: ScreenState, usb: UsbManager, revision: Int, errors: Map<String, String>) {
     val waiting = remember(revision, errors) { usb.drives().filterNot(usb::hasPermission) }

@@ -84,7 +84,6 @@ mod relecture {
         if !outil_disponible("sgdisk") || !outil_disponible("fsck.vfat") {
             return;
         }
-        // Below, at and above the cluster size thresholds.
         for (size, label) in [("67108864", "64m"), ("536870912", "512m")] {
             let image = Image::new(label);
             let value = format_json(&image, size, &["--label", "bonk"]);
@@ -96,7 +95,6 @@ mod relecture {
         }
     }
 
-    /// exFAT is written by Bonk: an image file is enough, on every host, and the official tool reads it back.
     #[test]
     fn exfat_ecrit_par_bonk_accepte_par_fsck_exfat() {
         if !outil_disponible("fsck.exfat") {

@@ -1,6 +1,5 @@
 use super::*;
 
-/// Each name maps to one method, and `methods` returns them all.
 #[test]
 fn chaque_methode_a_un_nom_unique() {
     let noms: std::collections::BTreeSet<_> = Method::ALL.iter().map(|m| m.name()).collect();

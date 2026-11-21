@@ -273,8 +273,6 @@ fn random(len: usize) -> Vec<u8> {
     (0..len).map(|i| (i * 31 % 251) as u8).collect()
 }
 
-/// A key may return less than asked and end with a short packet: the data phase stops there, and the
-/// status that follows is not read as data.
 #[test]
 fn une_reponse_courte_n_avale_pas_le_statut() -> Result<(), MscError> {
     for len in [34, 32] {
@@ -284,14 +282,11 @@ fn une_reponse_courte_n_avale_pas_le_statut() -> Result<(), MscError> {
         let inquiry = msc.inquiry()?;
         assert_eq!(inquiry.vendor, "General", "{len} octets");
         assert_eq!(inquiry.product, "UDisk", "{len} octets");
-        // The next exchange stays aligned: same status, same tag.
         assert_eq!(msc.capacity()?, (64, BLOCK as u32), "{len} octets");
     }
     Ok(())
 }
 
-/// Status passed but non-zero residue: the key did not keep everything. The write fails instead of
-/// looking complete.
 #[test]
 fn une_ecriture_gardee_en_partie_est_un_echec() -> Result<(), BlockError> {
     let mut fake = Fake::new(64);

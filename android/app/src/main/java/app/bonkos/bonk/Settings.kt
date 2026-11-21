@@ -17,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** Language, theme and the expert option: one choice per line, wide enough for a thumb. */
 @Composable
 internal fun SettingsPage(settings: SettingsView, send: (ToRust) -> Unit) {
     Column(

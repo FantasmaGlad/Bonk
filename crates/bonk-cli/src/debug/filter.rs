@@ -20,7 +20,6 @@ pub(super) struct FilterReport<'a> {
     rules: &'a [bonk_hal::RuleTrace],
 }
 
-/// For the service; `None` for an unknown disk.
 pub(crate) fn filter_value(
     target: &str,
     options: FilterOptions,

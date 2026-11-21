@@ -10,7 +10,6 @@ use clap::{Args, ValueEnum};
 use log::kv::{Key, Value, VisitSource};
 use log::{LevelFilter, Log, Metadata, Record};
 
-/// Components whose level is set separately.
 const COMPONENTS: [&str; 7] = ["cli", "gui", "hal", "io", "write", "net", "render"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -304,7 +303,6 @@ impl Settings {
     }
 }
 
-/// For the life of the process.
 pub(crate) fn install(settings: Settings) -> Result<(), String> {
     let file = match &settings.file {
         Some(path) => Some(Mutex::new(
@@ -361,7 +359,6 @@ mod tests {
         assert_eq!(component_of("bonk_core::block"), "io");
         assert_eq!(component_of("bonk_cli::list"), "cli");
         assert_eq!(component_of("bonk::write"), "write");
-        // An unknown `bonk::...` target stays a Bonk event, not rendering.
         assert_eq!(component_of("bonk::inconnu"), "cli");
         assert_eq!(component_of("wgpu_hal::vulkan"), "render");
         assert_eq!(component_of("iced_winit"), "render");
@@ -392,7 +389,6 @@ mod tests {
         assert_eq!(filter.level_of("hal"), LevelFilter::Trace);
         assert_eq!(filter.level_of("cli"), LevelFilter::Warn);
         assert_eq!(filter.max_level(), LevelFilter::Trace);
-        // A single level applies to every component, rendering included; a specific setting wins.
         let tout = Filter::new(0, Some("debug,render=warn"))?;
         assert_eq!(tout.level_of("io"), LevelFilter::Debug);
         assert_eq!(tout.level_of("render"), LevelFilter::Warn);
@@ -417,7 +413,6 @@ mod tests {
         Ok(())
     }
 
-    /// Its fields borrow local data, hence one call only.
     fn avec_enregistrement<R>(
         args: std::fmt::Arguments<'_>,
         level: Level,

@@ -155,8 +155,6 @@ mod tests {
         )
     }
 
-    /// Without a serial, the same model on another port is another target; with a serial, the port does not
-    /// count.
     #[test]
     fn sans_serie_l_emplacement_departage_deux_cles_identiques() {
         let mut first = usb();
@@ -215,7 +213,6 @@ mod tests {
     #[test]
     fn un_disque_devenu_interdit_est_refuse_meme_si_l_identite_est_la_meme() {
         let expected = TargetIdentity::from(&usb());
-        // The key is now mounted as a system disk.
         let mut now = usb();
         now.partitions = vec![part("/dev/sdb1", &["/mnt/cle"], false)];
         let disks = vec![now];
@@ -223,7 +220,6 @@ mod tests {
             reverify(&expected, &disks, FilterOptions::default()),
             Err(OpenTargetError::Refused(Eligibility::Excluded { .. }))
         ));
-        // An internal disk is writable only when the option allows it.
         let internal = disk("sata-x", "S9", 1 << 33, Bus::Sata, vec![]);
         let expected = TargetIdentity::from(&internal);
         let disks = vec![internal];

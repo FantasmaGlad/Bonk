@@ -9,7 +9,6 @@ import java.net.Proxy
 
 internal const val BUFFER = 1 shl 20
 
-/** What writes to a key, run by the service so that closing the screen does not stop it. */
 internal class Operations(private val context: Context, private val send: (ToRust) -> Unit) {
     private val usb = context.getSystemService(UsbManager::class.java)
 

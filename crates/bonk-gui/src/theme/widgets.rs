@@ -15,7 +15,6 @@ fn pressed(status: button::Status) -> bool {
     matches!(status, button::Status::Hovered | button::Status::Pressed)
 }
 
-/// The one action that matters on a view: accent background.
 pub(crate) fn primary_button(_theme: &Theme, status: button::Status) -> button::Style {
     let c = colors();
     let background = match status {
@@ -37,7 +36,6 @@ pub(crate) fn card_button(selected: bool) -> impl Fn(&Theme, button::Status) -> 
     card(selected, false)
 }
 
-/// As [`card_button`], with keyboard focus drawn by the outline itself: a card has no ring around it.
 pub(crate) fn card(
     selected: bool,
     focused: bool,
@@ -66,7 +64,6 @@ pub(crate) fn card(
     }
 }
 
-/// A raised area without outline: the surface colour alone sets it apart from the page.
 pub(crate) fn panel(_theme: &Theme) -> container::Style {
     let c = colors();
     container::Style {
@@ -86,7 +83,6 @@ pub(crate) fn checkbox_style(_theme: &Theme, status: checkbox::Status) -> checkb
     checkbox::Style {
         background: if checked { c.accent } else { c.surface }.into(),
         icon_color: c.on_accent,
-        // Square enough to read as a box, not as a round choice.
         border: Border {
             color: if checked { c.accent } else { c.muted },
             width: 2.0,
@@ -128,7 +124,6 @@ pub(crate) fn input_style(_theme: &Theme, status: text_input::Status) -> text_in
     }
 }
 
-/// A quiet action in running text: accent text, no outline.
 pub(crate) fn link_button(_theme: &Theme, status: button::Status) -> button::Style {
     let c = colors();
     button::Style {
@@ -143,7 +138,6 @@ pub(crate) fn link_button(_theme: &Theme, status: button::Status) -> button::Sty
     }
 }
 
-/// Incognito: filled with the accent while on, an outlined disc while off.
 pub(crate) fn round_button(on: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |_theme, status| {
         let c = colors();
@@ -165,7 +159,6 @@ pub(crate) fn round_button(on: bool) -> impl Fn(&Theme, button::Status) -> butto
     }
 }
 
-/// Before erasing: the alert colours of the site, readable in both themes.
 pub(crate) fn warning_banner(_theme: &Theme) -> container::Style {
     let c = colors();
     container::Style {

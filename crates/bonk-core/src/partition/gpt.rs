@@ -5,7 +5,6 @@ use super::{
     Severity, crc32, guid, read_range, u32_le, u64_le,
 };
 
-/// Header at `lba` and the entries it points to; `None` without the signature.
 pub(super) type HeaderAndEntries = (GptHeader, Vec<GptEntry>);
 
 pub(super) fn read_header(
@@ -138,7 +137,6 @@ pub(super) fn check_gpt(
 
 type Note<'a> = dyn FnMut(Severity, &'static str, String) + 'a;
 
-/// Presence, checksums, location, consistency between both headers.
 pub(super) fn check_gpt_headers(
     gpt: &Gpt,
     last_lba: u64,
@@ -242,7 +240,6 @@ fn check_pair(p: &GptHeader, b: &GptHeader, note: &mut Note<'_>) {
     }
 }
 
-/// Bounds, usable area, alignment, overlaps.
 pub(super) fn check_gpt_entries(
     gpt: &Gpt,
     block: u64,

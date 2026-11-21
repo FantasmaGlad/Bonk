@@ -54,9 +54,7 @@ pub fn needs_repair(layout: &Layout) -> bool {
 pub enum RepairError {
     Device(BlockError),
     NotGpt,
-    /// Neither header is valid: nothing can serve as a model.
     NoValidHeader,
-    /// Drive too small for the table, or a partition beyond the usable area.
     TooSmall,
 }
 
@@ -136,7 +134,6 @@ fn disk_guid_bytes(
     Ok(guid)
 }
 
-/// Geometry of the rebuilt GPT, decided before anything is written.
 struct Rebuild {
     model: GptHeader,
     from_primary: bool,
@@ -195,7 +192,7 @@ fn plan(dev: &dyn BlockDevice, gpt: &Gpt, block: u64) -> Result<Rebuild, RepairE
     })
 }
 
-/// Rebuilds missing or damaged headers and table; nothing is written until a valid header is found.
+/// Nothing is written until a valid header is found.
 pub fn repair_gpt(dev: &mut dyn BlockDevice) -> Result<RepairReport, RepairError> {
     let layout = inspect(dev)?;
     let gpt = layout.gpt.as_ref().ok_or(RepairError::NotGpt)?;
@@ -254,7 +251,6 @@ fn write_copies(
     Ok(actions)
 }
 
-/// The protective MBR must cover the grown drive.
 fn resize_protective_mbr(
     dev: &mut dyn BlockDevice,
     last: u64,
@@ -420,17 +416,13 @@ mod tests {
     #[test]
     fn un_disque_trop_petit_pour_les_partitions_est_refuse()
     -> Result<(), Box<dyn std::error::Error>> {
-        // 4096-sector image cut to 3000: partition 2 (up to 4000) overflows.
         let bytes = image();
         let small = MemoryDevice::from_bytes(bytes[..3000 * 512].to_vec(), 512)?;
         let mut small = small;
-        // The backup is lost with the cut: only the primary can serve as a model.
         assert!(matches!(repair_gpt(&mut small), Err(RepairError::TooSmall)));
         Ok(())
     }
 
-    /// Every byte the repair changes in the first two sectors is listed by `ranges_rewritten_by_repair`, and
-    /// nothing else in the image is touched.
     #[test]
     fn les_plages_annoncees_couvrent_exactement_ce_que_la_reparation_change()
     -> Result<(), Box<dyn std::error::Error>> {
@@ -443,7 +435,6 @@ mod tests {
     fn check_ranges_cover_repair(image: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
         let ranges = ranges_rewritten_by_repair(image);
         assert!(!ranges.is_empty());
-        // Drive four times larger: the backup is no longer at the end.
         let mut dev = grown(image, 4096 * 4)?;
         let report = repair_gpt(&mut dev)?;
         assert!(!report.actions.is_empty());
@@ -462,8 +453,6 @@ mod tests {
         Ok(())
     }
 
-    /// The rewritten primary header points to the table where the image put it (sector 12 on Debian's ISO),
-    /// not to sector 2.
     #[test]
     fn la_reparation_laisse_la_table_principale_la_ou_l_image_la_met()
     -> Result<(), Box<dyn std::error::Error>> {

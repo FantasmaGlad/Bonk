@@ -58,7 +58,6 @@ fn un_nom_ne_peut_pas_sortir_de_l_arbre() {
     assert_eq!(decode_name(b"\x10\x00a\x00b").unwrap(), "ab");
 }
 
-/// Each structure byte damaged in turn: never a panic or an endless loop.
 #[test]
 fn une_image_abimee_ne_fait_jamais_paniquer() {
     let good = testing::image();

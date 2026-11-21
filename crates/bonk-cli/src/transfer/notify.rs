@@ -5,7 +5,6 @@ use bonk_ops::job::{JobError, WriteOutcome};
 
 use crate::errors::Code;
 
-/// `--notify`: the same steps as the progress line, in the system's notifications.
 pub(super) struct Notices(Option<Notifications>);
 
 impl Notices {

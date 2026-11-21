@@ -133,7 +133,6 @@ pub(crate) fn total_bytes(cache: &Path) -> io::Result<u64> {
     Ok(read_entries(cache)?.iter().map(|entry| entry.bytes).sum())
 }
 
-/// `only`: the one hash directory to remove; the others stay.
 fn remove_files(cache: &Path, only: Option<&str>) -> io::Result<()> {
     for (sha256, directory) in hash_directories(cache)? {
         if only.is_none_or(|kept| kept == sha256) {

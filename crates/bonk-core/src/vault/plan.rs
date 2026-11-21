@@ -33,7 +33,6 @@ pub(super) fn efi_sectors(block: u32) -> Result<u64, FormatError> {
     }
 }
 
-/// Where both partitions go, without writing: also used by `--dry-run`.
 pub fn plan(size: u64, block: u32, table: TableKind) -> Result<VaultPlan, FormatError> {
     let too_small =
         || FormatError::TooSmall(format!("drive of {size} bytes too small for a vault"));
@@ -103,7 +102,6 @@ pub fn write_table(
     table::write_slots(dev, plan.table, &slots, ids, false)
 }
 
-/// Empty exFAT volume and FAT32 boot volume carrying `boot`, after [`write_table`].
 pub fn write_volumes(
     dev: &mut dyn BlockDevice,
     plan: &VaultPlan,
@@ -114,7 +112,6 @@ pub fn write_volumes(
     write_boot(dev, plan, ids, boot)
 }
 
-/// Table, both volumes and every boot file read back as written.
 pub fn verify(
     dev: &dyn BlockDevice,
     plan: &VaultPlan,
@@ -150,7 +147,6 @@ pub fn detect(dev: &dyn BlockDevice) -> Result<Option<VaultPlan>, FormatError> {
     }
 }
 
-/// Exactly two partitions, the second an EFI system partition, under GPT or a plain MBR.
 pub(super) fn vault_partitions(layout: &Layout) -> Option<VaultPlan> {
     let (table, vault, efi) = match (&layout.gpt, &layout.mbr) {
         (Some(gpt), Some(mbr)) if mbr.protective => {

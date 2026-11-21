@@ -16,7 +16,6 @@ use crate::errors::Code;
 use crate::job::source::ImageFile;
 use crate::job::types::{JobError, fail};
 
-/// As is from the ISO, or a WIM part.
 pub(super) struct Item {
     pub(super) path: Vec<String>,
     pub(super) size: u64,
@@ -78,14 +77,12 @@ impl Read for ItemReader<'_> {
     }
 }
 
-/// Where every byte of the prepared ISO goes.
 pub(in crate::job) struct WindowsImage {
     pub(super) items: Vec<Item>,
     pub(super) directories: Vec<Vec<String>>,
     pub(super) signer: Signer,
     pub(super) architectures: Vec<Machine>,
     pub(super) wim_parts: usize,
-    /// `bootmgr` at the root, for x86: the loader the BIOS code starts.
     pub(super) bios_loader: bool,
 }
 
@@ -99,11 +96,9 @@ pub(super) fn wim_error(error: impl std::fmt::Display) -> JobError {
     fail(Code::SourceFormatUnsupported, error)
 }
 
-/// The WIM that may need splitting: an installer's image, else the system of a Windows PE (rescue
-/// compilations), which an installer also carries.
+/// Installer image first: an installer also carries the Windows PE system.
 const WIMS: [&str; 3] = ["install.wim", "install.esd", "boot.wim"];
 
-/// `Ok(None)`: neither a Windows installation ISO nor a Windows PE that Bonk can write.
 pub(in crate::job) fn detect(image: &ImageFile) -> Result<Option<WindowsImage>, JobError> {
     let unreadable = |e: &dyn std::fmt::Display| fail(Code::SourceUnreadable, e);
     let Ok(udf) = Udf::open(image) else {
@@ -150,7 +145,6 @@ pub(in crate::job) fn detect(image: &ImageFile) -> Result<Option<WindowsImage>, 
     }))
 }
 
-/// A WIM of 4 GiB or more becomes parts next to it.
 pub(super) fn plan_items(
     image: &ImageFile,
     tree: &Tree,
@@ -249,7 +243,6 @@ impl WindowsImage {
         }
     }
 
-    /// Without touching the target.
     pub(in crate::job) fn check_fits(
         &self,
         size: Option<u64>,

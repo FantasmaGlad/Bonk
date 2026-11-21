@@ -1,7 +1,5 @@
 use super::*;
 
-/// The phone runs the vault through Kotlin, which opens the key; what comes back fills the vault panel,
-/// never the write panel.
 #[test]
 fn le_coffre_passe_par_kotlin_et_ses_retours_vont_au_coffre()
 -> Result<(), Box<dyn std::error::Error>> {

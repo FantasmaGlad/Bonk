@@ -1,6 +1,5 @@
 use super::*;
 
-/// Every shape of the screen state: idle, draft with the menu open, writing, result, vault.
 fn state_samples() -> Vec<Value> {
     let mut idle = Model::default();
     let _ = open_link(
@@ -15,7 +14,6 @@ fn state_samples() -> Vec<Value> {
     samples
 }
 
-/// Catalog tab: grid, then a system page.
 fn catalog_samples(model: &mut Model) -> Vec<Value> {
     use bonk_ui::browse::BrowseMessage;
 
@@ -29,7 +27,6 @@ fn catalog_samples(model: &mut Model) -> Vec<Value> {
     samples
 }
 
-/// One system with a download and an official page only.
 fn debian_catalog() -> CatalogState {
     use bonk_ui::catalog::{Choice, System};
 
@@ -74,7 +71,6 @@ fn debian_catalog() -> CatalogState {
     }])
 }
 
-/// Draft with the menu open and incognito on, writing, result.
 fn write_samples(model: &mut Model) -> Vec<Value> {
     model.catalog = debian_catalog();
     let _ = model.update(Message::ToggleMenu);
@@ -83,7 +79,6 @@ fn write_samples(model: &mut Model) -> Vec<Value> {
         "socks5h://127.0.0.1:9050".to_owned(),
     )));
     let _ = model.update(Message::ToggleTor(true));
-    // The button label counts the seconds to think: the sample wants them elapsed.
     if let WriteState::Draft { opened, .. } = &mut model.write {
         *opened = Instant::now()
             .checked_sub(Duration::from_secs(4))
@@ -107,7 +102,6 @@ fn write_samples(model: &mut Model) -> Vec<Value> {
     samples
 }
 
-/// Vault listed, then busy.
 fn vault_samples(model: &mut Model) -> Vec<Value> {
     use bonk_ui::event::VaultDone;
 

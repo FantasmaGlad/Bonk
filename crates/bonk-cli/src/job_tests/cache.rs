@@ -1,6 +1,5 @@
 use super::*;
 
-/// Only what the cache stored itself is listed and removed: a foreign file stays.
 #[test]
 fn le_cache_se_liste_et_se_vide_sans_toucher_au_reste() {
     let body = vec![0xCD; 1 << 20];

@@ -24,13 +24,11 @@ mod vault;
 #[cfg(test)]
 pub(super) use bonk_ui::text::secondes_restantes;
 
-/// From this width the disks and the write panel sit side by side.
 pub(super) const WIDE: f32 = 900.0;
 const DISKS_WIDTH: f32 = 360.0;
 
 pub(super) use disk::internal_dialog;
 
-/// Visible only when the widget has focus.
 pub(super) fn ring<'a>(
     content: impl Into<Element<'a, Message>>,
     focused: bool,
@@ -79,7 +77,6 @@ impl App {
         content.push(body).push(self.command_bar()).into()
     }
 
-    /// One column: each panel under its disk.
     fn narrow_body(&self) -> Element<'_, Message> {
         let list = self.disk_list(self.entries(), true);
         match self.active_panel() {

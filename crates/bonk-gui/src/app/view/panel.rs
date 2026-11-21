@@ -51,7 +51,6 @@ impl App {
         }
     }
 
-    /// The button only enables after the delay to think.
     fn draft_panel<'a>(
         &'a self,
         disk: &'a Disk,
@@ -102,7 +101,6 @@ impl App {
         panel.push(self.recap(disk, image, opened)).into()
     }
 
-    /// Why nothing needs setting, or why the catalog is missing.
     fn catalog_note(&self, image: &str) -> Option<Element<'_, Message>> {
         let lang = self.lang;
         match &self.catalog {
@@ -148,8 +146,6 @@ impl App {
         )
     }
 
-    /// Several ISO images on one drive instead of one image: the vault reads the drive before offering
-    /// anything.
     fn vault_button(&self, disk: &Disk) -> Option<Element<'_, Message>> {
         let open = self.vault.disk_id().is_some_and(|id| id == disk.id);
         (!open).then(|| {
@@ -161,8 +157,6 @@ impl App {
         })
     }
 
-    /// Read just before the action: the image, the disk it erases, the warning, then the button, enabled
-    /// once the delay to think has passed.
     fn recap<'a>(
         &'a self,
         disk: &'a Disk,

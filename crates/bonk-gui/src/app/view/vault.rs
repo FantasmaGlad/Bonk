@@ -26,7 +26,6 @@ fn action_button<'a>(
 }
 
 impl App {
-    /// Below the card of the disk it reads: several ISO images on one drive, each started from a menu.
     pub(super) fn vault_panel<'a>(&'a self, disk: &'a Disk) -> Option<Element<'a, Message>> {
         if self.vault.disk_id() != Some(disk.id.as_str()) {
             return None;

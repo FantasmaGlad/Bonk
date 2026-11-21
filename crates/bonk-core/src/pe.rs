@@ -85,7 +85,6 @@ pub fn machine(file: &[u8]) -> Option<Machine> {
     }
 }
 
-/// Certificates, subjects and issuers.
 fn common_names(der: &[u8]) -> Vec<String> {
     let mut names = Vec::new();
     let mut at = 0;
@@ -108,7 +107,6 @@ fn common_names(der: &[u8]) -> Vec<String> {
     names
 }
 
-/// `None`: not a readable PE.
 #[must_use]
 pub fn signer(file: &[u8]) -> Option<Signer> {
     let coff = coff_offset(file)?;

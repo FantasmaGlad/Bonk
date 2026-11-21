@@ -104,7 +104,6 @@ fn secours_absent_quand_le_disque_est_plus_grand() -> Result<(), Box<dyn std::er
     big.resize(8192 * 512, 0);
     let layout = inspect_bytes(big)?;
     let found = codes(&layout);
-    // The backup is still where the smaller disk ended: present, misplaced.
     assert_eq!(found, ["gpt_backup_not_at_end"]);
     Ok(())
 }
@@ -218,7 +217,6 @@ fn disque_vierge_et_image_minuscule() -> Result<(), Box<dyn std::error::Error>> 
 
 #[test]
 fn secteur_logique_de_4096_octets_detecte() -> Result<(), Box<dyn std::error::Error>> {
-    // A GPT header at sector 1 of a 4096-byte-sector disk is at byte 4096.
     let sectors = 64usize;
     let bs = 4096usize;
     let mut img = vec![0u8; sectors * bs];
@@ -232,7 +230,6 @@ fn secteur_logique_de_4096_octets_detecte() -> Result<(), Box<dyn std::error::Er
     put_u32(h, 84, 128);
     let layout = inspect_bytes(img)?;
     assert_eq!(layout.logical_block_size, 4096);
-    // Found at byte 4096: read as 512-byte sectors it would sit at LBA 8, not 1.
     let primary = layout.gpt.and_then(|g| g.primary).ok_or("en-tête absent")?;
     assert_eq!((primary.read_at_lba, primary.my_lba), (1, 1));
     Ok(())
@@ -252,7 +249,6 @@ fn table_aberrante_ne_fait_ni_lire_hors_bornes_ni_paniquer()
     Ok(())
 }
 
-/// The partition start comes from the image: multiplying it by the block size can overflow.
 #[test]
 fn un_debut_de_partition_demesure_ne_fait_pas_paniquer() -> Result<(), Box<dyn std::error::Error>> {
     let huge = 1u64 << 62;

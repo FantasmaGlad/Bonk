@@ -122,7 +122,6 @@ pub struct RuleTrace {
     pub fired: bool,
 }
 
-/// Without a trace, no text is built.
 struct Tracer<'t>(Option<&'t mut Vec<RuleTrace>>);
 
 impl Tracer<'_> {
@@ -215,7 +214,6 @@ fn exclusions(disk: &Disk, options: FilterOptions, tracer: &mut Tracer<'_>) -> V
     reasons
 }
 
-/// Verdict of a disk no rule excluded.
 fn bus_verdict(disk: &Disk, options: FilterOptions, no_medium: bool) -> Eligibility {
     if no_medium {
         Eligibility::Hidden {
@@ -240,7 +238,6 @@ fn bus_verdict(disk: &Disk, options: FilterOptions, no_medium: bool) -> Eligibil
     }
 }
 
-/// Rules shared by the whole disk and its partitions.
 fn push_device_exclusions(
     reasons: &mut Vec<Exclusion>,
     tracer: &mut Tracer<'_>,
@@ -626,7 +623,6 @@ mod tests {
                 ("mounted_outside_user_paths", "/dev/sdx1")
             ]
         );
-        // Rules checked but not fired are listed too, with their facts.
         let esp = trace.iter().find(|t| t.rule == "active_esp");
         assert!(esp.is_some_and(|t| !t.fired && t.facts == "is_active_esp=false"));
         let mount = trace
@@ -635,7 +631,6 @@ mod tests {
         assert!(mount.is_some_and(
             |t| t.facts.contains("mount=\"/\"") && t.facts.contains("user_mount=false")
         ));
-        // An excluded disk never reaches the bus rule, and the trace says so.
         let bus = trace.iter().find(|t| t.rule == "bus");
         assert!(bus.is_some_and(|t| !t.fired && t.facts.contains("not reached")));
     }
@@ -648,7 +643,6 @@ mod tests {
         assert!(fired(&trace).is_empty());
         let bus = trace.last();
         assert!(bus.is_some_and(|t| t.rule == "bus" && t.fired && t.facts.contains("OFFERED")));
-        // An unmounted partition is noted rather than skipped.
         assert!(
             trace
                 .iter()

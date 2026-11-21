@@ -7,7 +7,6 @@ use crate::errors::failure_text;
 use crate::event::Outcome;
 use crate::model::{Requested, WRITE_DELAY};
 
-/// Seconds shown in the countdown, from the time since opening.
 #[must_use]
 pub fn secondes_restantes(elapsed: Duration) -> u64 {
     let reste = WRITE_DELAY.saturating_sub(elapsed);
@@ -34,7 +33,6 @@ pub fn write_button(lang: Lang, elapsed: Duration, image_empty: bool) -> String 
     }
 }
 
-/// What became of the image the window was opened for; nothing once a draft carries it.
 #[must_use]
 pub fn requested_line(
     lang: Lang,
@@ -190,7 +188,6 @@ pub fn vault_outcome(lang: Lang, done: &crate::event::VaultDone) -> String {
     }
 }
 
-/// [`outcome`], plus the command that explains the error code: for hosts that have the `bonk` command.
 pub fn outcome_with_explain(lang: Lang, outcome: &Outcome) -> String {
     let text = self::outcome(lang, outcome);
     match outcome {
@@ -282,8 +279,6 @@ mod tests {
         }
     }
 
-    /// The Secure Boot sentence follows the window language with its typography: no space before the colon in
-    /// English.
     #[test]
     fn la_phrase_secure_boot_suit_la_langue() {
         let fr = outcome(Lang::Fr, &windows(Signer::WindowsProductionPca2011));
@@ -325,9 +320,6 @@ mod tests {
         assert!(!outcome(Lang::En, &windows(Signer::Unsigned)).contains("BIOS"));
     }
 
-    /// A write process stopped without an error line: the title follows the window language, never French in
-    /// an English window.
-    /// Android has no `bonk` command: its message keeps the code, never a command to type.
     #[test]
     fn le_renvoi_a_bonk_explain_est_reserve_au_bureau() {
         let failure = crate::event::parse_failure("", "signal 9");

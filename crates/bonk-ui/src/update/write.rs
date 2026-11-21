@@ -80,7 +80,6 @@ impl Model {
                 .any(|scheme| image.starts_with(scheme))
     }
 
-    /// Why a web address is not downloaded now.
     #[must_use]
     pub fn address_refusal(&self) -> &'static str {
         if self.offline {

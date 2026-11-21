@@ -11,10 +11,8 @@ use crate::job::verify::drop_cache_before_verify;
 
 use super::*;
 
-/// Replaces the boot partition when it differs from what the catalog gives today; the ISO images stay.
 pub struct VaultUpdateJob {
     pub target: Target,
-    /// GRUB images, menu and the files it uses, as `vault init` would write them now.
     pub boot: Vec<BootFile>,
     pub grub: Option<GrubInfo>,
     pub options: FilterOptions,

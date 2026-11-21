@@ -8,10 +8,8 @@ pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// Fetches a file up to the given number of bytes.
 pub type FetchSized<'a> = dyn Fn(&str, u64) -> Result<Vec<u8>, String> + 'a;
 
-/// The bytes carry the signed hash of `asset`.
 #[must_use]
 pub fn asset_matches(asset: &Asset, bytes: &[u8]) -> bool {
     hash_matches(&asset.sha256, bytes)
@@ -51,8 +49,6 @@ pub fn asset_path(
     Ok(path)
 }
 
-/// In the cache, checked by its signed hash, the cached copy included. Descriptive: `None` when missing,
-/// each failure logged.
 #[must_use]
 pub fn icon_path(
     base: &str,

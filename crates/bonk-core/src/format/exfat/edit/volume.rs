@@ -7,7 +7,6 @@ use crate::format::exfat::{ENTRY, FIRST_CLUSTER, checksum16};
 use crate::format::tree::Placed;
 use crate::partition::read_range;
 
-/// Where the volume is on the drive and what the edit touches, read before the first write.
 pub(super) struct Volume {
     pub(super) start: u64,
     pub(super) cluster_bytes: u64,
@@ -25,7 +24,6 @@ pub(super) fn invalid(what: impl Into<String>) -> FormatError {
     FormatError::Invalid(what.into())
 }
 
-/// Disk offsets of a cluster chain, every `step` bytes.
 fn offsets<'a>(
     reader: &'a Reader<'_>,
     chain: &'a [u32],
@@ -95,7 +93,6 @@ impl Volume {
         self.bitmap[index / 8] & (1 << (index % 8)) != 0
     }
 
-    /// First run of `count` free clusters: the file must be contiguous.
     pub(super) fn free_run(&self, count: u64) -> Option<u32> {
         let mut run = 0u64;
         for cluster in FIRST_CLUSTER..FIRST_CLUSTER + self.clusters {
@@ -111,7 +108,6 @@ impl Volume {
         None
     }
 
-    /// First `count` consecutive root slots not in use.
     pub(super) fn free_slots(&self, count: usize) -> Option<usize> {
         let types: Vec<u8> = self
             .root_bytes
@@ -134,7 +130,6 @@ impl Volume {
         None
     }
 
-    /// Bitmap bytes changed by marking `clusters` from `first`, with their offsets.
     pub(super) fn bitmap_writes(&mut self, first: u32, count: u32, used: bool) -> Vec<(u64, u8)> {
         let mut touched = std::collections::BTreeSet::new();
         for cluster in first..first + count {

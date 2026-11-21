@@ -211,7 +211,6 @@ fn is_ignored(name: &str) -> bool {
     name.starts_with("dm-") || numbered("md") || numbered("ram") || numbered("sr") || numbered("fd")
 }
 
-/// From the canonical device path under `/sys`.
 fn classify(components: &[&str], name: &str, dir: &Path) -> (DiskKind, Bus) {
     if components.starts_with(&["devices", "virtual"]) {
         let kind = if name.starts_with("loop") {

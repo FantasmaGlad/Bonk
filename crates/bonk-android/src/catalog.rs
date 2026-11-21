@@ -8,7 +8,6 @@ use serde_json::{Value, json};
 
 use crate::{screen, vault};
 
-/// The families of the last verified catalog: their logos are fetched by Kotlin after it.
 static FAMILIES: Mutex<Vec<Family>> = Mutex::new(Vec::new());
 
 /// The catalog and its signature, for Kotlin, which downloads them through the system's HTTPS.
@@ -55,7 +54,6 @@ pub(crate) fn load(dir: &str, json: Vec<u8>, signature: Vec<u8>) -> Result<(), S
     Ok(())
 }
 
-/// The report the window would read from `bonk catalog list --json`: newest versions first.
 fn report(catalog: manifest::Catalog, saved_copy: bool, dir: &str) -> CatalogReport {
     let mut images = catalog.images;
     images.sort_by(|a, b| {
@@ -122,7 +120,6 @@ mod tests {
 
     use super::*;
 
-    /// SHA-256 of `png`.
     const LOGO_SHA256: &str = "8f8cbb7dcf46e0bc7d53265749a6c17d116093a6ba95e442764060c76fd4a86c";
 
     /// The only test that touches the shared model and family list.

@@ -44,7 +44,6 @@ fn add_directory(children: &mut Children, path: &[String]) {
     }
 }
 
-/// A file over `max_file_bytes` is refused, naming `filesystem`.
 pub(super) fn collect_children(
     files: &[NewFile],
     extra_directories: &[Vec<String>],
@@ -79,15 +78,12 @@ pub(super) fn collect_children(
     Ok(children)
 }
 
-/// A contiguous run of clusters.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Placed {
     pub(super) first_cluster: u32,
     pub(super) clusters: u32,
 }
 
-/// Files one after the other from `next`, in their order; an empty file takes no cluster. `narrow` names the
-/// filesystem when a number overflows.
 pub(super) fn place_files(
     files: &[NewFile],
     cluster_bytes: u64,
@@ -106,7 +102,6 @@ pub(super) fn place_files(
     Ok(placed)
 }
 
-/// Refused before the first write: `used` clusters do not fit in the `available` ones.
 pub(super) fn check_room(used: u64, available: u64, cluster_bytes: u64) -> Result<(), FormatError> {
     if used > available {
         return Err(FormatError::TooSmall(format!(
@@ -118,8 +113,7 @@ pub(super) fn check_room(used: u64, available: u64, cluster_bytes: u64) -> Resul
     Ok(())
 }
 
-/// Copies `size` bytes contiguously and returns their SHA-256. `advance` gets the bytes of each block and
-/// returns false to stop.
+/// `advance` gets the bytes of each block and returns false to stop.
 pub(super) fn write_contiguous(
     dev: &mut dyn BlockDevice,
     offset: u64,

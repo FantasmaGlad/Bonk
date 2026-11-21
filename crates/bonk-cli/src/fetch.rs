@@ -15,11 +15,9 @@ pub(crate) struct Request<'a> {
     pub(crate) source: &'a Path,
     pub(crate) sha256_file: Option<&'a str>,
     pub(crate) cache_dir: Option<&'a Path>,
-    /// Name to keep a downloaded address under, when the address does not end with it.
     pub(crate) file_name: Option<&'a str>,
 }
 
-/// The same request, owned, for a write the service runs later.
 #[derive(Debug, Default)]
 pub(crate) struct Fetch {
     pub(crate) sha256_file: Option<String>,
@@ -38,7 +36,6 @@ impl Fetch {
     }
 }
 
-/// An address and the name the catalog gives its file, if any.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Named<'a> {
     pub(crate) url: &'a str,
@@ -89,7 +86,6 @@ fn sha256_from_file(location: &str, name: &str) -> Result<String, JobError> {
     })
 }
 
-/// Same path for the command line and the service.
 pub(crate) fn write(
     request: &Request<'_>,
     job: &mut WriteJob,
@@ -104,8 +100,7 @@ pub(crate) fn write(
     result
 }
 
-/// Reads the hash of a checksum file and downloads an address. Everything that would refuse the write is
-/// checked before downloading.
+/// Everything that would refuse the write is checked before downloading.
 fn resolve(
     request: &Request<'_>,
     job: &mut WriteJob,
@@ -183,7 +178,6 @@ fn cached_download(
     Ok(dest)
 }
 
-/// Where the image is kept, and whether it already is. Downloaded when missing.
 pub(crate) fn kept_or_fetched(
     named: Named<'_>,
     cache_dir: Option<&Path>,

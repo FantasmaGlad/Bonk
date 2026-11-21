@@ -18,8 +18,7 @@ pub struct RepairJob {
     pub dry_run: bool,
     pub yes: bool,
     pub elevation: Elevation,
-    /// Stands for `yes` and allows an internal disk the filter options already admit. No question: a command
-    /// must run with nobody at the screen.
+    /// Implies `yes` and allows an internal disk the filter options already admit.
     pub force: bool,
 }
 
