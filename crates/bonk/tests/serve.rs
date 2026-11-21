@@ -44,7 +44,6 @@ impl Client {
         Ok(())
     }
 
-    /// Every message up to its response, events included.
     fn call(
         &mut self,
         id: u64,
@@ -91,7 +90,6 @@ fn le_service_repond_et_s_arrete_a_la_fermeture_de_l_entree() -> Resultat {
     Ok(())
 }
 
-/// `disk.verify` of a simulated target against its source.
 fn verification(cible: &std::path::Path, source: &std::path::Path) -> serde_json::Value {
     json!({"target": cible.display().to_string(), "simulate": true, "source": source.display().to_string()})
 }
@@ -137,7 +135,6 @@ fn ecriture_simulee_par_le_service() -> Resultat {
         "{erreur}"
     );
 
-    // A real disk is not written without confirmation, even by the service.
     let sans_yes = client.call(
         13,
         "disk.write",
@@ -149,8 +146,6 @@ fn ecriture_simulee_par_le_service() -> Resultat {
     Ok(())
 }
 
-/// A request sent as soon as the response arrives never finds the operation slot still taken (already
-/// running): the service frees it before answering.
 #[test]
 fn des_operations_enchainees_sans_attente_ne_sont_jamais_refusees() -> Resultat {
     let dir = std::env::temp_dir().join(format!("bonk-serve-chain-{}", std::process::id()));

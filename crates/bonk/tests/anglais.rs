@@ -134,7 +134,6 @@ fn toutes_les_sorties_sont_en_anglais() -> Result<(), Box<dyn std::error::Error>
             }
         }
     }
-    // JSON schemas are part of the output: their descriptions too.
     let noms = Command::new(env!("CARGO_BIN_EXE_bonk"))
         .arg("schema")
         .output()?;

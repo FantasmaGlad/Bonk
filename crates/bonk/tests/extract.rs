@@ -59,7 +59,6 @@ fn windows_iso_with(loader_path: &str, machine: u16) -> Vec<u8> {
     ])
 }
 
-/// Everything after the first MiB, where the partition starts.
 #[cfg(target_os = "linux")]
 fn volume_of(dossier: &Dossier, image: &str) -> String {
     let bytes = fs::read(image).expect("lecture de l'image");

@@ -34,7 +34,6 @@ fn toutes_les_commandes_equivalentes_sont_acceptees_par_la_cli() -> Result<(), S
                 let mots = bonk_cli::check_command_line(commande)
                     .map_err(|e| format!("{commande:?} refusée : {e}"))?;
                 verifiees += 1;
-                // The settings shown are exactly the view's.
                 assert_eq!(
                     mots.iter().any(|m| m == "--all"),
                     options.show_all && mots[1] == "list"
@@ -51,7 +50,6 @@ fn toutes_les_commandes_equivalentes_sont_acceptees_par_la_cli() -> Result<(), S
                     assert_eq!(Some(mots[2].as_str()), selection, "{commande:?}");
                 }
                 if mots[1] == "write" {
-                    // The image arrives intact, and the confirmation is part of the copied command.
                     assert_eq!(mots[3], image, "{commande:?}");
                     assert!(mots.iter().any(|m| m == "--yes"));
                 }
@@ -181,7 +179,6 @@ fn le_coffre_le_telechargement_et_le_cache_de_la_fenetre_sont_acceptes_par_la_cl
     Ok(())
 }
 
-/// Every setting the window can save, as `Effect::SaveSetting` or `Effect::Relaunch` carries it.
 fn reglages_de_la_fenetre() -> Vec<(&'static str, &'static str)> {
     use bonk_ui::model::{Effect, Message, Model};
     use bonk_ui::settings::{LangChoice, SettingsMessage, ThemeChoice};
