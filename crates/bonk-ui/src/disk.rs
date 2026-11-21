@@ -1,6 +1,5 @@
 use bonk_hal::{Disk, Lang, bus_label, format_size, kind_label};
 
-/// What a person reads first: capacity, the names the system shows, the connection.
 #[must_use]
 pub fn facts(lang: Lang, disk: &Disk) -> String {
     let mut parts = vec![format_size(disk.size_bytes, lang)];
@@ -68,7 +67,6 @@ pub fn details(lang: Lang, disk: &Disk) -> Vec<String> {
     lines
 }
 
-/// The label of the disclosure under a selected card.
 #[must_use]
 pub fn details_button(lang: Lang, open: bool) -> &'static str {
     if open {
@@ -111,7 +109,6 @@ mod tests {
         }
     }
 
-    /// The card says what a person recognises; nodes, serials and mounts wait in the details.
     #[test]
     fn la_carte_est_lisible_et_les_details_gardent_le_technique() {
         let disk = key();

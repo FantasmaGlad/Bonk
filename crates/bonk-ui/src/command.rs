@@ -5,11 +5,8 @@ pub struct ViewOptions {
     pub show_internal: bool,
     pub allow_virtual: bool,
     pub show_all: bool,
-    /// Window only, no command flag: no catalog read, no download.
     pub offline: bool,
-    /// Window only: start in incognito, nothing on the network until Tor answers.
     pub incognito: bool,
-    /// Window and phone app: each step of a write shown in the system's notifications.
     pub notify: bool,
 }
 
@@ -23,9 +20,7 @@ pub struct WriteView<'a> {
     pub mbr: bool,
     /// An internal disk, confirmed in the window: `bonk write` requires `--force` for it.
     pub force: bool,
-    /// The catalog's name for a file its address does not name.
     pub file_name: Option<&'a str>,
-    /// A catalog image that starts only written with `--mode hybrid`.
     pub hybrid: bool,
 }
 
@@ -107,8 +102,6 @@ pub fn config_set_args(key: &str, value: &str) -> Vec<String> {
     ["config", "set", key, value].map(str::to_owned).into()
 }
 
-/// Commands giving what the window shows: the list, the selected disk's detail and, when an image is entered,
-/// the write itself.
 #[must_use]
 pub fn equivalent_commands(
     options: ViewOptions,

@@ -6,7 +6,6 @@ use crate::command::{ViewOptions, WriteView};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Event {
-    /// Process id, for cancelling.
     Started(u32),
     Progress {
         phase: Phase,
@@ -23,25 +22,20 @@ pub enum Outcome {
         bytes: u64,
         verified: bool,
         gpt_repaired: bool,
-        /// Windows drive: the loader certificate; the screen says what it means in its language.
         secure_boot: Option<bonk_core::pe::Signer>,
-        /// Windows drive that also boots in legacy BIOS.
         bios_boot: bool,
     },
     Failed {
-        /// Stable error code (`bonk explain`), when the process gave one.
         code: Option<String>,
         message: String,
     },
     Vault(VaultDone),
-    /// A catalog image kept without being written.
     Downloaded {
         path: String,
         bytes: u64,
     },
 }
 
-/// What a `bonk vault` command did, read from its JSON result.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VaultDone {
     /// ISO images at the root: name and size.

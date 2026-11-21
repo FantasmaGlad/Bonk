@@ -5,7 +5,6 @@ use crate::terms::Terms;
 
 use super::labels::{Order, ordered};
 
-/// What the catalog tab narrows to. Empty: every system.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct BrowseFilter {
     pub search: String,
@@ -15,7 +14,6 @@ pub struct BrowseFilter {
     pub media: Option<String>,
 }
 
-/// The values each filter offers, among the systems of the catalog.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Options {
     pub uses: Vec<String>,

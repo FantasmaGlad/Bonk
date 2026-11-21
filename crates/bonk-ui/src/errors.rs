@@ -49,7 +49,6 @@ pub fn french_title(code: &str) -> Option<&'static str> {
         .map(|(_, title)| *title)
 }
 
-/// The engine or system message as it came, after the sentence of the window: its own sentence.
 #[must_use]
 pub fn technical(message: &str) -> String {
     let mut letters = message.chars();

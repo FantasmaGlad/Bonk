@@ -6,7 +6,6 @@ use bonk_hal::Lang;
 use crate::event::{Event, Outcome, VaultDone};
 use crate::model::{Effect, Effects, Model, WriteState};
 
-/// No vault on the disk: `bonk vault list` answers this code.
 const NOT_A_VAULT: &str = "E7003";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,9 +36,7 @@ pub struct VaultWords {
     pub empty: &'static str,
     pub add: &'static str,
     pub update: &'static str,
-    /// On the write panel: opens the vault panel.
     pub open: &'static str,
-    /// Shown in place of the actions that read GRUB from the catalog.
     pub offline: &'static str,
 }
 
@@ -100,11 +97,9 @@ pub enum VaultState {
         /// Bytes per second.
         rate: f64,
     },
-    /// The disk holds no vault: preparing one erases it.
     NotVault {
         disk_id: String,
     },
-    /// Second step before erasing: the question names the disk.
     Confirming {
         disk_id: String,
     },
@@ -139,7 +134,6 @@ impl VaultState {
 
 #[derive(Debug, Clone)]
 pub enum VaultMessage {
-    /// Opens the panel for the selected disk and reads it.
     Open,
     Close,
     Prepare,
@@ -319,7 +313,6 @@ impl Model {
         Vec::new()
     }
 
-    /// The command the vault panel would run next, for the equivalent shown on screen.
     #[must_use]
     pub fn vault_equivalent(&self) -> Option<String> {
         let (action, disk_id, extra) = match &self.vault {

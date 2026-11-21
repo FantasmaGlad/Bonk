@@ -102,7 +102,6 @@ impl Model {
         effects
     }
 
-    /// A display box changed: the list too, hence the panel and the focus. Kept for the next start.
     pub(super) fn after_view_option(
         &mut self,
         focus: Focus,

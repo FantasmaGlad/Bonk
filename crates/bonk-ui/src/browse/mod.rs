@@ -12,11 +12,9 @@ use crate::catalog::{CatalogState, ChoiceSource, System};
 use crate::model::{Effects, Focus, Model};
 use crate::settings::Screen;
 
-/// The catalog tab: its filters and the system whose variants are shown.
 #[derive(Debug, Default)]
 pub struct BrowseState {
     pub filter: BrowseFilter,
-    /// By name: one page per system.
     pub opened: Option<String>,
     pub download: Option<DownloadState>,
 }
@@ -32,9 +30,7 @@ pub enum BrowseMessage {
     Media(Option<String>),
     OpenSystem(String),
     CloseSystem,
-    /// Back to the drives with this catalog image asked for.
     Write(String),
-    /// Kept in the library without being written.
     Download(String),
     CancelDownload,
     DownloadEvent(crate::event::Event),
@@ -42,7 +38,6 @@ pub enum BrowseMessage {
 }
 
 impl Model {
-    /// Shown while the catalog tab is open; `None` on the grid.
     #[must_use]
     pub fn opened_system(&self) -> Option<&System> {
         let CatalogState::Ready(systems) = &self.catalog else {

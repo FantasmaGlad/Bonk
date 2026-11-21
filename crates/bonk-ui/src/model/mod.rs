@@ -12,21 +12,17 @@ mod queries;
 
 pub use events::*;
 
-/// A plugged disk appears without a user action.
 pub const REFRESH_EVERY: Duration = Duration::from_secs(2);
 
-/// What the interface must do after a message; the result comes back as another message.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Effect {
     Enumerate,
-    /// `bonk catalog list`, through Tor when the interface is incognito.
     LoadCatalog {
         proxy: Option<String>,
     },
     DetectTor,
     Copy(String),
     PickImage,
-    /// Kept for the next start (`bonk config set`); takes effect now.
     SaveSetting {
         key: &'static str,
         value: &'static str,
@@ -41,14 +37,10 @@ pub enum Effect {
     CancelWrite(u32),
     ScrollList(f32),
     ScrollMenu(f32),
-    /// `bonk vault` arguments, run as `bonk write` is.
     RunVault(Vec<String>),
-    /// `bonk catalog download` arguments, run as `bonk write` is.
     RunDownload(Vec<String>),
     PickVaultIso,
-    /// `bonk cache list --json`, answered by [`crate::library::LibraryMessage::Listed`].
     ListKept,
-    /// `bonk cache clean <SHA256>`, answered by [`crate::library::LibraryMessage::Removed`].
     RemoveKept(String),
     /// Opened in the user's browser; only fixed addresses of Bonk itself.
     OpenLink(&'static str),
@@ -64,7 +56,6 @@ pub enum Message {
     ToggleInternal(bool),
     ToggleVirtual(bool),
     ToggleAll(bool),
-    /// Selects or deselects a disk, by id.
     Select(String),
     ToggleDetails,
     Nav(Nav),
@@ -87,18 +78,13 @@ pub enum Message {
     MenuSearch(String),
     MenuArch(Option<String>),
     CatalogLoaded(Result<crate::catalog::Shelf, String>),
-    /// Address, hash and automatic settings.
     MenuChose(crate::catalog::Choice),
     ToggleAdvanced,
-    /// Refreshes the countdown before the write is allowed.
     Clock,
-    /// After the delay to think.
     StartWrite,
     CancelWrite,
     DismissWrite,
-    /// Internal disk confirmation: erase anyway.
     ConfirmInternal,
-    /// Internal disk confirmation: give up.
     CloseInternal,
     Write(Event),
     Vault(crate::vault::VaultMessage),
@@ -124,20 +110,14 @@ pub enum Focus {
     CloseSettings,
     Library,
     CloseLibrary,
-    /// The catalog tab button, its back button, its search field.
     Catalog,
     CloseCatalog,
     CatalogSearch,
-    /// A system card of the catalog tab, by name.
     System(String),
     CloseSystem,
-    /// A writable variant on a system page, by catalog id.
     Variant(String),
-    /// Its download button.
     Download(String),
-    /// Cancels the running download, or closes its result.
     DownloadAction,
-    /// Write or remove the kept image with this hash.
     KeptWrite(String),
     KeptRemove(String),
     Language(crate::settings::LangChoice),
@@ -149,7 +129,6 @@ pub enum Focus {
     IncognitoAtStart,
     Notify,
     Disk(String),
-    /// The technical details disclosure of the selected disk.
     Details,
     Image,
     Browse,
@@ -159,19 +138,16 @@ pub enum Focus {
     Tor,
     Raw,
     Mbr,
-    /// Write panel button: write, cancel or close depending on the state.
     Action,
     Copy,
 }
 
-/// Delay to think before Write enables.
 pub const WRITE_DELAY: Duration = Duration::from_secs(3);
 
 #[derive(Debug, Default)]
 pub enum WriteState {
     #[default]
     Idle,
-    /// `opened` starts the delay to think.
     Draft {
         disk_id: String,
         image: String,
@@ -211,18 +187,13 @@ pub struct Model {
     pub write: WriteState,
     pub confirming_internal: bool,
     pub catalog: crate::catalog::CatalogState,
-    /// The network or Tor did not answer: the catalog shown is the last verified copy.
     pub catalog_saved: bool,
-    /// Never reach the network: the catalog is neither read nor shown, and a web address is refused.
     pub offline: bool,
-    /// Labels of the usage categories and bases, from the catalog once read.
     pub terms: crate::terms::Terms,
     pub menu_filter: crate::catalog::MenuFilter,
     /// A local Tor, offered by the incognito button; never used without it.
     pub tor: Option<String>,
-    /// Kept setting: start in incognito, and wait for Tor rather than reach the network without it.
     pub incognito_at_start: bool,
-    /// Kept setting: each step of a write in the system's notifications.
     pub notify: bool,
     pub lang: Lang,
     pub use_tor: bool,
@@ -242,16 +213,13 @@ pub struct Model {
     pub screen: crate::settings::Screen,
     pub lang_choice: crate::settings::LangChoice,
     pub theme_choice: crate::settings::ThemeChoice,
-    /// The window's theme family, resolved once before it opens.
     pub dark: bool,
 }
 
-/// Where the image the window was opened for stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Requested<'a> {
     Waiting,
     Ready(&'a crate::catalog::Choice),
-    /// In the catalog, but not a file Bonk can fetch and write to a drive.
     NotWritable(&'a crate::catalog::Choice),
     Unknown,
     CatalogFailed,
@@ -290,8 +258,6 @@ impl Model {
         (model, effects)
     }
 
-    /// Logs the event: what the user did, what the window made of it, and the equivalent command of the
-    /// resulting view.
     pub fn update(&mut self, message: Message) -> Effects {
         let event = ui_event(&message);
         let effects = self.apply(message);

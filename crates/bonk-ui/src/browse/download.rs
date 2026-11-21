@@ -4,7 +4,6 @@ use crate::catalog::ChoiceSource;
 use crate::event::{Event, Outcome};
 use crate::model::{Effect, Effects, Model};
 
-/// One catalog image downloaded without being written; one at a time.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DownloadState {
     Running {

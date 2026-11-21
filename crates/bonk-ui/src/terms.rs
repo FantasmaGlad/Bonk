@@ -48,7 +48,6 @@ fn built_in(list: &[(&str, &str, &str)]) -> Vec<Term> {
         .collect()
 }
 
-/// The usage categories and technical bases with their labels, as the catalog publishes them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Terms {
     uses: Vec<Term>,
@@ -85,12 +84,10 @@ impl Terms {
     }
 }
 
-/// One closed list, in menu order.
 #[derive(Debug, Clone, Copy)]
 pub struct List<'a>(&'a [Term]);
 
 impl List<'_> {
-    /// The known names among those given, in menu order; a name the list lacks is left out.
     #[must_use]
     pub fn ordered<'b>(self, given: impl Iterator<Item = &'b String> + Clone) -> Vec<String> {
         self.0
@@ -108,7 +105,6 @@ impl List<'_> {
             .map_or_else(|| id.to_owned(), |term| text(term, lang).to_owned())
     }
 
-    /// Back from what a menu shows to the catalog name.
     #[must_use]
     pub fn id_of(self, shown: &str, lang: Lang) -> Option<String> {
         self.0

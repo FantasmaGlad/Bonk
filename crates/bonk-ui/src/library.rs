@@ -29,11 +29,8 @@ pub enum Listing {
 #[derive(Debug, Default)]
 pub struct LibraryState {
     pub listing: Listing,
-    /// The hash being removed: one removal at a time.
     pub removing: Option<String>,
-    /// Why the last removal failed.
     pub error: Option<String>,
-    /// Chosen to write before a drive was: fills the next write panel.
     pub chosen: Option<ImageSource>,
 }
 
@@ -44,11 +41,9 @@ pub enum LibraryMessage {
     Listed(Result<Vec<Kept>, String>),
     Remove(String),
     Removed(Result<(), String>),
-    /// Write the kept image with this hash.
     Write(String),
 }
 
-/// Reads `bonk cache list --json`; newest first.
 pub fn parse(json: &[u8]) -> Result<Vec<Kept>, String> {
     let report: serde_json::Value =
         serde_json::from_slice(json).map_err(|error| error.to_string())?;
@@ -91,7 +86,6 @@ impl Model {
         }
     }
 
-    /// The catalog name of a kept image, when the catalog is read and still lists it.
     #[must_use]
     pub fn kept_label(&self, sha256: &str) -> Option<&str> {
         match &self.catalog {
@@ -158,7 +152,6 @@ impl Model {
         effects
     }
 
-    /// Back to the drives: the open write panel takes the image now, else the next one that opens.
     fn write_kept(&mut self, sha256: &str) -> Effects {
         let Some(kept) = self
             .kept()
@@ -196,7 +189,6 @@ impl Model {
     }
 }
 
-/// `2026-11-12` from seconds since 1970, in UTC.
 #[must_use]
 pub fn day(seconds: u64) -> String {
     let (year, month, day) = bonk_core::date::civil_from_days(seconds / 86_400);

@@ -5,7 +5,6 @@ use crate::model::{Effect, Effects, Focus, Message, Model};
 pub const TOR_PROJECT: &str = "https://www.torproject.org/";
 
 impl Model {
-    /// Downloads go through Tor and the interface wears its incognito colours.
     #[must_use]
     pub fn incognito(&self) -> bool {
         self.use_tor && self.tor.is_some() && !self.offline
@@ -17,13 +16,11 @@ impl Model {
         self.use_tor && self.tor.is_none() && !self.offline
     }
 
-    /// No catalog, download or web address: offline, or incognito still waiting for Tor.
     #[must_use]
     pub fn network_closed(&self) -> bool {
         self.offline || self.tor_awaited()
     }
 
-    /// The Tor address every request goes through while incognito: catalog, logos, images.
     #[must_use]
     pub fn proxy(&self) -> Option<&str> {
         self.tor.as_deref().filter(|_| self.incognito())
@@ -52,7 +49,6 @@ impl Model {
         vec![self.load_catalog()]
     }
 
-    /// Read again on the new route, unless it was never asked for; the list shown stays until the answer.
     fn reload_catalog(&mut self) -> Effects {
         match self.catalog {
             _ if self.offline => Vec::new(),
@@ -62,7 +58,6 @@ impl Model {
         }
     }
 
-    /// Why the catalog shown is the saved copy; nothing when it was just read.
     #[must_use]
     pub fn catalog_notice(&self) -> Option<&'static str> {
         if !self.catalog_saved || !matches!(self.catalog, CatalogState::Ready(_)) {
@@ -115,7 +110,6 @@ impl Model {
             Message::TorDetected(address) => {
                 let awaited = self.tor_awaited();
                 self.tor = address;
-                // Asked for at start, incognito keeps waiting: Orbot or Tor may start after Bonk.
                 if !self.incognito_at_start {
                     self.use_tor &= self.tor.is_some();
                 }
@@ -219,7 +213,6 @@ mod tests {
         let _ = model.update(Message::CatalogLoaded(Ok(shelf)));
     }
 
-    /// Nothing leaves the machine directly once incognito: each read carries the Tor address.
     #[test]
     fn en_incognito_chaque_lecture_passe_par_tor() {
         let mut model = with_tor();
@@ -290,7 +283,6 @@ mod tests {
         model
     }
 
-    /// Asked for at start, incognito holds every request until Tor answers, then reads through it.
     #[test]
     fn au_demarrage_rien_ne_part_avant_tor() {
         let mut model = started_incognito();
@@ -342,7 +334,6 @@ mod tests {
         assert!(model.view_options().incognito);
     }
 
-    /// A setting nothing could honour would hold every start: it needs a Tor answering now.
     #[test]
     fn demarrer_en_incognito_exige_un_tor_qui_repond() {
         let set = |model: &mut Model, on| {

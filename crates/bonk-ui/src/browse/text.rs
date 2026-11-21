@@ -4,7 +4,6 @@ use crate::catalog::{Choice, ChoiceSource, System};
 
 use super::{desktop_label, media_label};
 
-/// Under a system card: how many of its images Bonk can download and write.
 #[must_use]
 pub fn writable_count(system: &System, lang: Lang) -> String {
     let count = system
@@ -19,7 +18,6 @@ pub fn writable_count(system: &System, lang: Lang) -> String {
     }
 }
 
-/// Desktop, medium and the catalog note, on one line.
 #[must_use]
 pub fn variant_facts(choice: &Choice, lang: Lang) -> String {
     [

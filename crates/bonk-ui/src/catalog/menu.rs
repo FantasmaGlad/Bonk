@@ -3,24 +3,19 @@ use bonk_hal::Lang;
 
 use super::{Choice, ChoiceSource, System};
 
-/// A usage category, a base, or a single system and its versions, narrowed by name and processor. Empty:
-/// everything.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct MenuFilter {
     pub category: Option<String>,
     pub base: Option<String>,
     pub system: Option<String>,
-    /// Words of a system or image name, any case or accent: `kubuntu` finds Kubuntu under Ubuntu.
     pub search: String,
     pub arch: Option<String>,
 }
 
-/// What the menu lists offer, in their order and without doubles.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct MenuLists {
     pub categories: Vec<String>,
     pub bases: Vec<String>,
-    /// The systems of the chosen category and base, sorted by name.
     pub systems: Vec<String>,
     /// Processors of the catalog, the most common first.
     pub arches: Vec<String>,
@@ -37,7 +32,6 @@ impl MenuFilter {
         }
     }
 
-    /// Systems with at least one image left once every filter applies.
     pub fn apply<'a>(&self, systems: &'a [System]) -> Vec<&'a System> {
         let query = self.query();
         systems
@@ -52,7 +46,6 @@ impl MenuFilter {
         self.arch.is_some() || !self.search.trim().is_empty()
     }
 
-    /// The images of `system` the menu lists: of the chosen processor, and named like the search.
     pub fn choices<'a>(&self, system: &'a System) -> Vec<&'a Choice> {
         let query = self.query();
         system
@@ -109,7 +102,6 @@ fn arch_rank(arch: &str) -> u8 {
     }
 }
 
-/// A processor as people know it; unknown ones keep their identifier.
 #[must_use]
 pub fn arch_label(arch: &str, lang: Lang) -> String {
     match arch {

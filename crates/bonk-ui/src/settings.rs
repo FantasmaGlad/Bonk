@@ -11,7 +11,6 @@ pub enum Screen {
     Catalog,
 }
 
-/// `System` follows the machine at each start.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LangChoice {
     #[default]
@@ -32,7 +31,6 @@ pub enum ThemeChoice {
 impl LangChoice {
     pub const ALL: [Self; 3] = [Self::System, Self::En, Self::Fr];
 
-    /// As `bonk config` stores it under `lang`.
     #[must_use]
     pub fn config_value(self) -> &'static str {
         match self {
@@ -65,7 +63,6 @@ impl LangChoice {
 impl ThemeChoice {
     pub const ALL: [Self; 3] = [Self::System, Self::Light, Self::Dark];
 
-    /// As `bonk config` stores it under `theme`.
     #[must_use]
     pub fn config_value(self) -> &'static str {
         match self {
@@ -111,7 +108,6 @@ pub enum SettingsMessage {
     Language(LangChoice),
     Theme(ThemeChoice),
     Offline(bool),
-    /// Kept for the next starts; the header button switches the current one.
     IncognitoAtStart(bool),
     Notify(bool),
 }
@@ -123,7 +119,6 @@ impl Model {
         !matches!(self.write, WriteState::Running { .. }) && !self.vault.is_busy()
     }
 
-    /// Why a language or theme choice is refused now, or what it does.
     #[must_use]
     pub fn relaunch_note(&self) -> &'static str {
         if self.can_relaunch() {

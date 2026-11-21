@@ -39,7 +39,6 @@ impl Model {
     }
 
     pub fn equivalents(&self) -> Vec<String> {
-        // The vault panel open on the selected disk: its command is the one to copy.
         if let Some(vault) = self.vault_equivalent() {
             return vec![vault];
         }
