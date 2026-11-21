@@ -202,6 +202,10 @@ pub fn outcome_with_explain(lang: Lang, outcome: &Outcome) -> String {
 }
 
 fn secure_boot_text(lang: Lang, signer: &bonk_core::pe::Signer) -> String {
+    format!(" {}", secure_boot_sentence(lang, signer))
+}
+
+pub(crate) fn secure_boot_sentence(lang: Lang, signer: &bonk_core::pe::Signer) -> String {
     use bonk_core::pe::{PCA_2011, Signer, UEFI_CA_2023};
     let sentence = match (signer, lang) {
         (Signer::WindowsProductionPca2011, Lang::En) => format!(
@@ -238,8 +242,8 @@ fn secure_boot_text(lang: Lang, signer: &bonk_core::pe::Signer) -> String {
         }
     };
     match lang {
-        Lang::En => format!(" Secure Boot: {sentence}."),
-        Lang::Fr => format!(" Secure Boot : {sentence}."),
+        Lang::En => format!("Secure Boot: {sentence}."),
+        Lang::Fr => format!("Secure Boot : {sentence}."),
     }
 }
 

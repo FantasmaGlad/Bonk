@@ -122,9 +122,7 @@ pub fn parse_line(line: &str) -> Option<Event> {
             bytes: value["write"]["bytes"].as_u64()?,
             verified: !value["verify"].is_null(),
             gpt_repaired: !value["gpt_repair"].is_null(),
-            secure_boot: serde_json::from_value(value["extraction"]["signer"].clone())
-                .or_else(|_| serde_json::from_value(value["efi_loaders"][0]["signer"].clone()))
-                .ok(),
+            secure_boot: crate::inspect::signer_of(&value),
             bios_boot: value["extraction"]["firmware"]
                 .as_array()
                 .is_some_and(|firmware| firmware.iter().any(|f| f == "bios")),

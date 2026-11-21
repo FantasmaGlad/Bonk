@@ -54,6 +54,7 @@ fn draft_state(model: &Model) -> Value {
         "title": lang.pick("WRITE AN IMAGE TO THIS DISK", "ÉCRIRE UNE IMAGE SUR CE DISQUE"),
         "summary": disk.map(|disk| bonk_ui::recap::disk_line(lang, disk)),
         "image_line": bonk_ui::recap::image_line(lang, &model.catalog, image),
+        "boot_line": model.boot_line(),
         "warning": bonk_ui::recap::warning(lang),
         "menu": menu_state(model),
         "advanced": model.advanced,

@@ -170,7 +170,21 @@ impl App {
                 Message::Vault(VaultMessage::Picked(path))
             }),
             Effect::ListKept | Effect::RemoveKept(_) => self.library_task(effect),
+            Effect::InspectImage(image) => self.inspect_task(image),
         }
+    }
+
+    fn inspect_task(&self, image: String) -> Task<Message> {
+        let program = self.program();
+        let args = bonk_ui::command::info_args(&image);
+        Task::perform(
+            off_thread(move || {
+                command::run_json(&program, &args)
+                    .ok()
+                    .and_then(|output| serde_json::from_slice(&output).ok())
+            }),
+            move |report| Message::Inspected(image.clone(), report.flatten()),
+        )
     }
 
     fn settings_task(&self, effect: Effect) -> Task<Message> {
