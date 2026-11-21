@@ -42,7 +42,7 @@ fn head(entries: &[(u8, u32, u16)]) -> Vec<u8> {
 /// As the published NixOS 25.11 aarch64 ISO: EFI image at block 55, 6144 sectors (`xorriso -report_el_torito`).
 #[test]
 fn l_image_efi_devient_la_partition_efi_du_mbr() {
-    let mbr = hybrid_mbr(&head(&[(PLATFORM_EFI, 55, 6144)])).expect("hybride");
+    let mbr = hybrid_mbr(head(&[(PLATFORM_EFI, 55, 6144)]).as_slice()).expect("hybride");
     assert_eq!(mbr[446 + 4], 0xEF);
     assert_eq!(&mbr[446 + 1..446 + 4], &[0x03, 0x20, 0x00], "LBA 220");
     assert_eq!(
@@ -72,7 +72,7 @@ fn une_image_efi_trop_grande_pour_son_entree_prend_la_taille_de_son_fat() {
     let mut iso = head(&[(0, 30, 4), (PLATFORM_EFI, 34, 0)]);
     iso.resize(40 * SECTOR, 0);
     fat_at(&mut iso, 34, 69632);
-    let mbr = hybrid_mbr(&iso).expect("hybride");
+    let mbr = hybrid_mbr(iso.as_slice()).expect("hybride");
     assert_eq!(&mbr[446 + 8..446 + 12], &136u32.to_le_bytes());
     assert_eq!(&mbr[446 + 12..446 + 16], &69632u32.to_le_bytes());
 }
@@ -91,13 +91,14 @@ fn une_image_efi_sans_taille_ni_fat_lisible_est_refusee() {
         (head(&[(PLATFORM_EFI, 34, 0)]), NotHybrid::NoEfiImage),
     ];
     for (head, reason) in cases {
-        assert_eq!(hybrid_mbr(&head), Err(reason));
+        assert_eq!(hybrid_mbr(head.as_slice()), Err(reason));
     }
 }
 
 #[test]
 fn l_entree_efi_d_une_section_est_trouvee_apres_l_entree_bios() {
-    let mbr = hybrid_mbr(&head(&[(0, 30, 4), (PLATFORM_EFI, 39, 18140)])).expect("hybride");
+    let mbr =
+        hybrid_mbr(head(&[(0, 30, 4), (PLATFORM_EFI, 39, 18140)]).as_slice()).expect("hybride");
     assert_eq!(&mbr[446 + 8..446 + 12], &156u32.to_le_bytes());
 }
 
@@ -120,14 +121,14 @@ fn ce_qui_ne_se_rend_pas_hybride_est_refuse_en_le_disant() {
         ),
     ];
     for (head, reason) in cases {
-        assert_eq!(hybrid_mbr(&head), Err(reason));
+        assert_eq!(hybrid_mbr(head.as_slice()), Err(reason));
     }
 }
 
 #[test]
 fn l_iso_dvd_de_banc_se_rend_hybride() {
     let iso = testing::dvd_iso(128);
-    let mbr = hybrid_mbr(&iso).expect("hybride");
+    let mbr = hybrid_mbr(iso.as_slice()).expect("hybride");
     assert_eq!(
         &mbr[446 + 8..446 + 12],
         &(testing::EFI_BLOCK * 4).to_le_bytes()

@@ -1,5 +1,7 @@
+use crate::read_at::ReadAt;
+
 const ISO_SECTOR: usize = 2048;
-const BOOT_RECORD: usize = 17 * ISO_SECTOR;
+const BOOT_RECORD: u64 = 17 * ISO_SECTOR as u64;
 const ENTRY: usize = 32;
 const BOOTABLE: u8 = 0x88;
 const SECTION_MORE: u8 = 0x90;
@@ -15,14 +17,24 @@ pub struct BootImage {
     pub sectors: u64,
 }
 
+fn sector(source: &(impl ReadAt + ?Sized), offset: u64) -> Option<[u8; ISO_SECTOR]> {
+    let mut bytes = [0u8; ISO_SECTOR];
+    source.read_exact_at(offset, &mut bytes).ok()?;
+    Some(bytes)
+}
+
 // Boot record volume descriptor, El Torito Bootable CD-ROM Format Specification 1.0, section 2.0.
-fn catalog_lba(head: &[u8]) -> Option<usize> {
-    let record = head.get(BOOT_RECORD..BOOT_RECORD + ISO_SECTOR)?;
+fn catalog_lba(record: &[u8; ISO_SECTOR]) -> Option<u64> {
     let is_el_torito = record[0] == 0
         && &record[1..6] == b"CD001"
         && record[7..].starts_with(b"EL TORITO SPECIFICATION");
     is_el_torito.then(|| {
-        u32::from_le_bytes([record[0x47], record[0x48], record[0x49], record[0x4A]]) as usize
+        u64::from(u32::from_le_bytes([
+            record[0x47],
+            record[0x48],
+            record[0x49],
+            record[0x4A],
+        ]))
     })
 }
 
@@ -38,11 +50,13 @@ fn entry(bytes: &[u8], platform: u8) -> Option<BootImage> {
     })
 }
 
-/// The bootable entries the catalog lists, `[]` without a catalog in `head`.
+/// The bootable entries the catalog lists, `[]` without a readable catalog.
 #[must_use]
-pub fn boot_images(head: &[u8]) -> Vec<BootImage> {
-    let Some(catalog) =
-        catalog_lba(head).and_then(|lba| head.get(lba * ISO_SECTOR..(lba + 1) * ISO_SECTOR))
+pub fn boot_images(source: &(impl ReadAt + ?Sized)) -> Vec<BootImage> {
+    let Some(catalog) = sector(source, BOOT_RECORD)
+        .and_then(|record| catalog_lba(&record))
+        .and_then(|lba| lba.checked_mul(ISO_SECTOR as u64))
+        .and_then(|offset| sector(source, offset))
     else {
         return Vec::new();
     };

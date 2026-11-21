@@ -4,6 +4,7 @@ use bonk_core::analysis::ImageReport;
 use bonk_core::codec::Format;
 use bonk_core::format::table::TableKind;
 use bonk_core::hybrid::{MBR_LEN, hybrid_mbr};
+use bonk_core::read_at::ReadAt;
 use bonk_core::write::{Control, Progress};
 use bonk_hal::{Elevation, FilterOptions};
 
@@ -92,7 +93,11 @@ pub fn write(
             progress,
         );
     }
-    let hybrid_mbr = hybrid_plan(&head, job.mode)?;
+    let hybrid_mbr = if source_info.format == Format::Raw {
+        hybrid_plan(&file, job.mode)?
+    } else {
+        hybrid_plan(head.as_slice(), job.mode)?
+    };
     judge_image(&image, job.mode)?;
     refuse_if_too_large(
         needed_bytes(&source_info, &image, job.mode),
@@ -143,12 +148,16 @@ pub(in crate::job) struct Checked {
     pub(in crate::job) hybrid_mbr: Option<[u8; MBR_LEN]>,
 }
 
-/// Refused before the drive is touched: the MBR is computed from the image head.
-fn hybrid_plan(head: &[u8], mode: WriteMode) -> Result<Option<[u8; MBR_LEN]>, JobError> {
+/// Refused before the drive is touched. A raw image is read where its structures lie; a compressed one only
+/// through its decompressed head.
+fn hybrid_plan(
+    source: &(impl ReadAt + ?Sized),
+    mode: WriteMode,
+) -> Result<Option<[u8; MBR_LEN]>, JobError> {
     if mode != WriteMode::Hybrid {
         return Ok(None);
     }
-    hybrid_mbr(head)
+    hybrid_mbr(source)
         .map(Some)
         .map_err(|reason| fail(Code::ImageNotBootable, format!("--mode hybrid: {reason}")))
 }
