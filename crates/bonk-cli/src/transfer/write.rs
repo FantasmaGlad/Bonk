@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use bonk_core::efi::Loader;
 use bonk_core::format::table::TableKind;
+use bonk_core::route::Way;
 use bonk_core::write::VerifyReport;
 use bonk_hal::format_size;
 
@@ -125,6 +126,9 @@ fn plan_lines(plan: &job::Plan, out: &mut dyn Write) -> io::Result<()> {
         ))
     )?;
     writeln!(out, "  Image: {}", image_line(&plan.image))?;
+    if let Some(way) = way_line(plan.route) {
+        writeln!(out, "  Route: {way}")?;
+    }
     if plan.sha256_checked {
         writeln!(out, "  File hash: matches")?;
     }
@@ -237,6 +241,16 @@ pub(super) fn extraction_lines(
         )?;
     }
     writeln!(out, "  Secure Boot: {}", extraction.secure_boot)
+}
+
+fn way_line(way: Way) -> Option<&'static str> {
+    match way {
+        Way::Raw => Some("written as is"),
+        Way::Hybrid => {
+            Some("written as published, then an MBR naming its EFI image: starts in UEFI only")
+        }
+        Way::Extract => None,
+    }
 }
 
 fn loader_lines(loaders: &[Loader], out: &mut dyn Write) -> io::Result<()> {

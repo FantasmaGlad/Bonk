@@ -1,5 +1,6 @@
 use bonk_core::analysis::ImageReport;
 use bonk_core::efi::Loader;
+use bonk_core::route::Way;
 
 use crate::job::extract::Extraction;
 use crate::job::target::Chosen;
@@ -13,6 +14,7 @@ pub(in crate::job) fn plan(
     image: ImageReport,
     sha256_checked: bool,
     steps: Vec<&'static str>,
+    route: Way,
     extraction: Option<Extraction>,
     efi_loaders: Vec<Loader>,
 ) -> WriteOutcome {
@@ -26,6 +28,7 @@ pub(in crate::job) fn plan(
         sha256_checked,
         unmount: chosen.mounts,
         steps,
+        route,
         extraction,
         efi_loaders,
     }))

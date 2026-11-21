@@ -135,6 +135,8 @@ fn dry_run_decrit_sans_rien_faire() {
     assert_eq!(value["event"], "plan");
     assert_eq!(value["target"]["id"], "usb-a");
     assert_eq!(value["unmount"][0], "/run/media/u/A");
+    assert_eq!(value["route"], "raw");
+    assert!(out.contains("Route: written as is"), "{out}");
     assert!(scenario.log().is_empty());
 }
 
@@ -472,6 +474,11 @@ fn le_chargeur_efi_et_secure_boot_sont_dits_avant_et_apres_l_ecriture() {
     assert_eq!(
         plan["efi_loaders"][0]["signer"]["microsoft_uefi_ca"][0],
         THIRD_PARTY_CAS[0]
+    );
+    assert_eq!(plan["route"], "hybrid");
+    assert!(
+        out.contains("Route: written as published, then an MBR naming its EFI image"),
+        "{out}"
     );
     let (code, out, err) = write(&["--progress", "none"]);
     assert_eq!((code, err.as_str()), (0, ""), "{out}");

@@ -1,5 +1,8 @@
 use std::fmt;
 
+use schemars::JsonSchema;
+use serde::Serialize;
+
 use crate::analysis::{ImageKind, ImageReport};
 use crate::hybrid::NotHybrid;
 
@@ -17,6 +20,25 @@ pub enum Route<W, M> {
     Raw,
     Hybrid(M),
     Extract(W),
+}
+
+/// How the image reaches the drive: as is, as is with an MBR naming its EFI image, which starts in UEFI only, or copied to a Windows drive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Way {
+    Raw,
+    Hybrid,
+    Extract,
+}
+
+impl<W, M> Route<W, M> {
+    pub fn way(&self) -> Way {
+        match self {
+            Self::Raw => Way::Raw,
+            Self::Hybrid(_) => Way::Hybrid,
+            Self::Extract(_) => Way::Extract,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

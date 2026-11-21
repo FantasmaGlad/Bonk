@@ -161,6 +161,7 @@ pub struct Plan {
     /// Mount points that will be unmounted.
     pub unmount: Vec<String>,
     pub steps: Vec<&'static str>,
+    pub route: bonk_core::route::Way,
     /// Windows drive: what it will receive. Null for a raw write.
     pub extraction: Option<super::extract::Extraction>,
     /// Removable-media UEFI loaders of the image and who signed them; empty for a Windows drive, whose loader is in `extraction`, or when none is readable.

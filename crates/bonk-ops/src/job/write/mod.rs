@@ -83,6 +83,7 @@ pub fn write(
     let chosen = choose(&job.target, job.options, deps)?;
     let (image, head) = analyze_source(&file, &job.source, source_info.size_bytes)?;
     let planned = route_of(&file, &source_info, &image, &head, job.mode)?;
+    let way = planned.way();
     let hybrid_mbr = match planned {
         Route::Extract(windows) => {
             return write_windows(
@@ -122,6 +123,7 @@ pub fn write(
             image,
             sha256_checked,
             steps,
+            way,
             None,
             efi_loaders,
         ));

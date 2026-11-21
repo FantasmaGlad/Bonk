@@ -40,6 +40,7 @@ pub(in crate::job) fn write_windows(
             image,
             sha256_checked,
             steps,
+            bonk_core::route::Way::Extract,
             Some(windows.describe(job.table, block)),
             Vec::new(),
         ));
