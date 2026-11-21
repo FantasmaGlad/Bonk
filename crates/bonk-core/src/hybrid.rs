@@ -10,11 +10,9 @@ const MBR_ESP: u8 = 0xEF;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NotHybrid {
-    /// Something is already in the first sector: a boot sector or a partition table.
     SystemAreaUsed,
     NoEfiImage,
     SeveralEfiImages,
-    /// Past the 2 TiB an MBR can address.
     ImageOutOfReach,
 }
 
@@ -29,11 +27,6 @@ impl fmt::Display for NotHybrid {
     }
 }
 
-/// The first sector to write once a DVD-only ISO is on the drive: an MBR in its empty system area names its
-/// EFI boot image as an EFI system partition, as `isohybrid --uefi` does; every other byte stays as published.
-///
-/// # Errors
-/// [`NotHybrid`]: what keeps this ISO from starting this way.
 pub fn hybrid_mbr(source: &(impl ReadAt + ?Sized)) -> Result<[u8; MBR_LEN], NotHybrid> {
     let mut system_area = [0u8; MBR_LEN];
     if source.read_exact_at(0, &mut system_area).is_err() || system_area.iter().any(|b| *b != 0) {
@@ -63,8 +56,7 @@ pub fn hybrid_mbr(source: &(impl ReadAt + ?Sized)) -> Result<[u8; MBR_LEN], NotH
     Ok(mbr)
 }
 
-/// The entry's 16-bit count cannot hold an image of 65536 sectors or more: authoring tools then write 0 or 1,
-/// and the size is the one its FAT boot sector declares, wherever the image lies in the ISO.
+// An El Torito entry counts sectors on 16 bits: past 65535, its FAT boot sector gives the size.
 fn sized(source: &(impl ReadAt + ?Sized), image: BootImage) -> Option<BootImage> {
     if image.sectors > 1 {
         return Some(image);

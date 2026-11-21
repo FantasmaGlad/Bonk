@@ -453,7 +453,6 @@ fn une_iso_dvd_s_ecrit_hybride_et_seulement_sur_demande() {
     );
 }
 
-/// The analysis reads the first MiB only: the EFI image's size must come from wherever its FAT lies.
 #[test]
 fn une_image_efi_au_dela_du_premier_mio_est_mesuree_dans_l_iso() {
     use bonk_core::hybrid::testing::{FAR_EFI_BLOCK, FAR_EFI_SECTORS, dvd_iso_with_far_efi};

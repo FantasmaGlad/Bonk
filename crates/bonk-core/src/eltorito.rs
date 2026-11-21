@@ -6,10 +6,9 @@ const ENTRY: usize = 32;
 const BOOTABLE: u8 = 0x88;
 const SECTION_MORE: u8 = 0x90;
 const SECTION_LAST: u8 = 0x91;
-/// Platform identifier of an EFI boot image.
 pub const PLATFORM_EFI: u8 = 0xEF;
 
-/// A bootable entry: where its image lies, in 512-byte sectors from the start of the ISO.
+/// Sectors of 512 bytes, from the start of the ISO.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BootImage {
     pub platform: u8,
@@ -50,7 +49,6 @@ fn entry(bytes: &[u8], platform: u8) -> Option<BootImage> {
     })
 }
 
-/// The bootable entries the catalog lists, `[]` without a readable catalog.
 #[must_use]
 pub fn boot_images(source: &(impl ReadAt + ?Sized)) -> Vec<BootImage> {
     let Some(catalog) = sector(source, BOOT_RECORD)
