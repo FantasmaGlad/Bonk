@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::block::{DEFAULT_BLOCK_SIZE, MemoryDevice};
-use crate::partition::{Layout, MBR_PROTECTIVE, inspect};
+use crate::partition::{ESP_GUID_TEXT, Layout, MBR_ESP, MBR_PROTECTIVE, inspect};
 
 /// Image head that [`analyze`] needs: some hybrid images put their partition tables far in.
 pub const HEAD_LEN: usize = 1 << 20;
@@ -11,8 +11,6 @@ const ISO_SECTOR: usize = 2048;
 const ISO_DESCRIPTORS: usize = 16 * ISO_SECTOR;
 /// Enough descriptors to reach the UDF ones, which follow ISO 9660.
 const ISO_DESCRIPTORS_SCANNED: usize = 16;
-const ESP_GUID: &str = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B";
-const MBR_ESP: u8 = 0xEF;
 
 /// What the image is, written as is to a drive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
@@ -95,7 +93,7 @@ fn has_esp(layout: &Layout) -> bool {
     let in_gpt = layout.gpt.as_ref().is_some_and(|g| {
         g.entries
             .iter()
-            .any(|e| e.type_guid.eq_ignore_ascii_case(ESP_GUID))
+            .any(|e| e.type_guid.eq_ignore_ascii_case(ESP_GUID_TEXT))
     });
     in_gpt
         || layout
@@ -138,13 +136,17 @@ fn declared_by_tables(layout: &Layout) -> Option<u64> {
     by_gpt.or(by_mbr)
 }
 
-#[must_use]
-pub fn analyze(head: &[u8], real_len: Option<u64>) -> ImageReport {
+pub(crate) fn head_layout(head: &[u8]) -> Option<Layout> {
     let block = DEFAULT_BLOCK_SIZE as usize;
     let usable = head.len() - head.len() % block;
-    let layout = MemoryDevice::from_bytes(head[..usable].to_vec(), DEFAULT_BLOCK_SIZE)
+    MemoryDevice::from_bytes(head[..usable].to_vec(), DEFAULT_BLOCK_SIZE)
         .ok()
-        .and_then(|dev| inspect(&dev).ok());
+        .and_then(|dev| inspect(&dev).ok())
+}
+
+#[must_use]
+pub fn analyze(head: &[u8], real_len: Option<u64>) -> ImageReport {
+    let layout = head_layout(head);
     let iso = read_iso(head);
     let (bios, uefi, table) = layout.as_ref().map_or((false, false, false), |l| {
         (has_bios_code(head, l), has_esp(l), has_partition_table(l))
