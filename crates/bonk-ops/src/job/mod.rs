@@ -1,6 +1,7 @@
 mod advance;
 mod extract;
 mod format;
+mod inspect;
 mod repair;
 mod source;
 mod target;
@@ -12,6 +13,7 @@ mod write;
 
 pub use extract::{ExtractDone, ExtractReport, ExtractVerify, Extraction, Firmware};
 pub use format::{FormatJob, default_filesystem, format};
+pub use inspect::{ImageInspection, inspect};
 pub use repair::{RepairJob, repair};
 pub use source::{FileReader, ImageFile};
 pub use types::*;

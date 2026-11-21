@@ -243,7 +243,7 @@ pub(super) fn extraction_lines(
     writeln!(out, "  Secure Boot: {}", extraction.secure_boot)
 }
 
-fn way_line(way: Way) -> Option<&'static str> {
+pub(super) fn way_line(way: Way) -> Option<&'static str> {
     match way {
         Way::Raw => Some("written as is"),
         Way::Hybrid => {
@@ -253,7 +253,7 @@ fn way_line(way: Way) -> Option<&'static str> {
     }
 }
 
-fn loader_lines(loaders: &[Loader], out: &mut dyn Write) -> io::Result<()> {
+pub(super) fn loader_lines(loaders: &[Loader], out: &mut dyn Write) -> io::Result<()> {
     for loader in loaders {
         writeln!(
             out,

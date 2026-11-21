@@ -1,4 +1,5 @@
 mod args;
+mod inspect;
 mod notify;
 mod output;
 mod repair;
@@ -6,6 +7,7 @@ mod verify;
 mod write;
 
 pub(crate) use args::*;
+pub(crate) use inspect::{run_image_info, schema_image};
 pub(crate) use output::{
     end_progress_line, error_event, finish, print_json, progress_mode, schema_error, schema_plan,
     schema_progress, schema_repair, schema_verify, schema_write, schema_write_extract, sink,

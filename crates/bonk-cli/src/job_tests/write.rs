@@ -486,6 +486,38 @@ fn le_chargeur_efi_et_secure_boot_sont_dits_avant_et_apres_l_ecriture() {
 }
 
 #[test]
+fn bonk_info_dit_la_voie_d_une_image_et_son_chargeur_sans_disque() {
+    use bonk_core::fat::{Kind, testing::small};
+    use bonk_core::pe::testing::{X86_64, pe};
+    let fat = small(Kind::Fat12, &[("EFI/BOOT/BOOTX64.EFI", &pe(X86_64, &[]))]);
+    let dvd = TempSource::from_bytes(
+        "dvd-info",
+        &bonk_core::hybrid::testing::dvd_iso_with_fat(&fat.image),
+    );
+    let disk = TempSource::new("disque-info", 4096);
+    let scenario = Scenario::new();
+    let (code, out, err) = scenario.run(&["info", &dvd.arg()]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    for expected in [
+        "Image: ISO without disk boot",
+        "Route: refused, ISO without disk boot",
+        "--mode hybrid writes it: starts in UEFI only",
+        "Secure Boot (x86_64): unsigned loader",
+    ] {
+        assert!(out.contains(expected), "{expected}: {out}");
+    }
+    let (_, json, _) = scenario.run(&["info", &dvd.arg(), "--json"]);
+    let report: serde_json::Value = serde_json::from_str(&json).expect("JSON");
+    assert_eq!(report["route"], serde_json::Value::Null);
+    assert_eq!(report["hybrid_possible"], true);
+    assert_eq!(report["efi_loaders"][0]["signer"], "unsigned");
+    let (code, out, _) = scenario.run(&["info", &disk.arg()]);
+    assert_eq!(code, 0);
+    assert!(out.contains("Route: written as is"), "{out}");
+    assert!(scenario.log().is_empty(), "aucun disque touché");
+}
+
+#[test]
 fn une_image_efi_au_dela_du_premier_mio_est_mesuree_dans_l_iso() {
     use bonk_core::hybrid::testing::{FAR_EFI_BLOCK, FAR_EFI_SECTORS, dvd_iso_with_far_efi};
     let iso = dvd_iso_with_far_efi();

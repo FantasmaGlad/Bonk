@@ -8,7 +8,7 @@ use clap::CommandFactory;
 use crate::config::{self, ConfigAction, ViewDefaults, WindowRequest};
 use crate::errors::{self, Code, ExplainArgs, report};
 use crate::schema::{self, SchemaArgs};
-use crate::{Cli, Env, debug, diagnose, info, list, serve};
+use crate::{Cli, Env, debug, diagnose, info, list, serve, transfer};
 
 pub(crate) fn run_gui<E: Write, G>(
     privileged: bool,
@@ -221,6 +221,10 @@ where
     F: Fn() -> Result<Vec<Disk>, EnumerateError>,
 {
     log::debug!(target: "bonk::cli", target_disk = args.target(); "command info");
+    let image = std::path::Path::new(args.target());
+    if image.is_file() {
+        return transfer::run_image_info(image, args.json(), out, err);
+    }
     let disks = match disks_or_exit(err, enumerate) {
         Ok(disks) => disks,
         Err(code) => return code,
