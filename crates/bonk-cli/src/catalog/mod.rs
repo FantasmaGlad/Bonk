@@ -96,6 +96,7 @@ mod tests {
             vault: false,
             hybrid: false,
             file_name: None,
+            boot: None,
             source,
         }
     }

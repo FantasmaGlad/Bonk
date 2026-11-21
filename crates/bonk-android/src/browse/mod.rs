@@ -221,6 +221,7 @@ mod tests {
             desktop: Some("kde".to_owned()),
             media: "usb".to_owned(),
             arch: "x86_64".to_owned(),
+            boot: None,
         };
         Model {
             lang: Lang::Fr,

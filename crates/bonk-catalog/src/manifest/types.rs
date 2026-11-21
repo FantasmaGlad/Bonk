@@ -116,8 +116,42 @@ pub struct Image {
     /// Name to save the file under, when the address does not end with it (a share link).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub file_name: Option<String>,
+    /// Boot proved by the catalog's weekly bench; ignored when its shape is not understood.
+    #[serde(
+        default,
+        deserialize_with = "lenient",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub boot: Option<Boot>,
     #[serde(flatten)]
     pub source: ImageSource,
+}
+
+/// Last boot proved by the catalog's bench.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Boot {
+    /// `bios`, `uefi`, `secureboot`: what booted at the last bench.
+    #[serde(default)]
+    pub firmware: Vec<String>,
+    #[serde(default)]
+    pub proved: Option<Proved>,
+    /// Signer of the removable-media loader, in the shape `bonk info` gives it.
+    #[serde(default)]
+    pub secure_boot: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Proved {
+    /// `YYYY-MM-DD`.
+    pub date: String,
+    /// Address of the bench run.
+    pub bench: String,
+}
+
+// A field added later must not make an older Bonk refuse the whole catalog.
+fn lenient<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<Boot>, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(serde_json::from_value(value).ok())
 }
 
 impl Image {

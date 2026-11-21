@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use bonk_catalog::manifest::{CatalogReport, Channel, Image, ImageSource};
+use bonk_catalog::manifest::{Boot, CatalogReport, Channel, Image, ImageSource};
 use bonk_catalog::search::{self, FamilyFacts, ImageFacts};
 use bonk_hal::Lang;
 
@@ -20,9 +20,42 @@ pub struct Choice {
     pub desktop: Option<String>,
     pub media: String,
     pub arch: String,
+    pub boot: Option<Boot>,
 }
 
 impl Choice {
+    #[must_use]
+    pub fn proof(&self, lang: Lang) -> Option<String> {
+        let boot = self.boot.as_ref()?;
+        let proved = boot.proved.as_ref()?;
+        let firmware: Vec<&str> = boot
+            .firmware
+            .iter()
+            .map(|firmware| match firmware.as_str() {
+                "bios" => "BIOS",
+                "uefi" => "UEFI",
+                "secureboot" => "Secure Boot",
+                other => other,
+            })
+            .collect();
+        Some(format!(
+            "{} {}{}",
+            lang.pick("boot proved on", "démarrage prouvé le"),
+            proved.date,
+            if firmware.is_empty() {
+                String::new()
+            } else {
+                format!("{}{}", lang.pick(": ", " : "), firmware.join(", "))
+            }
+        ))
+    }
+
+    #[must_use]
+    pub fn signer(&self) -> Option<bonk_core::pe::Signer> {
+        let value = self.boot.as_ref()?.secure_boot.clone()?;
+        serde_json::from_value(value).ok()
+    }
+
     #[must_use]
     pub fn facts(&self) -> ImageFacts<'_> {
         ImageFacts {
@@ -204,6 +237,7 @@ fn choice(image: &Image) -> Choice {
         desktop: image.desktop.clone(),
         media: search::media_of(image.media.as_deref(), image.usb_boot).to_owned(),
         arch: image.arch.clone(),
+        boot: image.boot.clone(),
     }
 }
 
