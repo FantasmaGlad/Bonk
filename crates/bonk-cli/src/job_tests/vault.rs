@@ -13,7 +13,6 @@ fn sha256(bytes: &[u8]) -> String {
     bonk_core::write::hex(digest(&SHA256, bytes).as_ref())
 }
 
-/// A catalog signed by a test key, offering `grub` for x86_64 when given, and the files it names.
 pub(crate) fn served_catalog(grub: Option<&[u8]>) -> ServedCatalog {
     served_catalog_for(
         &grub
@@ -22,7 +21,6 @@ pub(crate) fn served_catalog(grub: Option<&[u8]>) -> ServedCatalog {
     )
 }
 
-/// As [`served_catalog`], with one GRUB image per processor; none: no `grub` entry.
 fn served_catalog_for(images: &[(&str, &[u8])]) -> ServedCatalog {
     let pair = Ed25519KeyPair::from_seed_unchecked(&[7; 32]).expect("clé de test");
     let public: [u8; 32] = pair.public_key().as_ref().try_into().expect("32 octets");
@@ -131,7 +129,6 @@ fn preparer_un_coffre_ecrit_grub_du_catalogue_puis_relit() {
     );
 }
 
-/// The second preparation needs no network: GRUB comes from the cache, checked again.
 #[test]
 fn grub_en_cache_sert_sans_reseau() {
     let (mut scenario, cache) = vault_scenario(Some(GRUB), "cache-hors-ligne");
@@ -170,7 +167,6 @@ fn grub_local_controle_contre_le_catalogue() {
     assert_eq!(code, 0, "{err}");
 }
 
-/// One vault for every processor the catalog offers and Bonk can name; another processor is left for later.
 #[test]
 fn grub_de_chaque_processeur_ecrit_et_controle() {
     const ARM: &[u8] = b"MZ grub arm64 de test";
@@ -188,7 +184,6 @@ fn grub_de_chaque_processeur_ecrit_et_controle() {
     );
     assert_eq!(value["verified"], true);
 
-    // Offline, each image is needed and checked.
     let folder = TempSource::dir("grub-processeurs");
     std::fs::create_dir_all(&folder.0).expect("dossier");
     std::fs::write(folder.0.join("BOOTX64.EFI"), GRUB).expect("fichier");
@@ -248,7 +243,6 @@ fn lister_un_disque_qui_n_est_pas_un_coffre_donne_e7003() {
     assert!(err.contains("E7003"), "{err}");
 }
 
-/// A command missing from this guard would let `--fixture` reach a real disk.
 #[test]
 fn le_coffre_refuse_fixture_sur_un_vrai_disque() {
     use clap::Parser;
@@ -263,7 +257,6 @@ fn le_coffre_refuse_fixture_sur_un_vrai_disque() {
     assert!(conflict(&["bonk", "vault", "list", "a.img", "--simulate"]).is_none());
 }
 
-/// The window lists real disks and starts `bonk write` without the capture.
 #[test]
 fn la_fenetre_refuse_fixture() {
     use clap::Parser;
@@ -277,7 +270,6 @@ fn la_fenetre_refuse_fixture() {
     assert!(conflict(&["bonk", "list"]).is_none());
 }
 
-/// An ISO the menu can start, as a file named `name` in the temporary directory.
 fn iso_file(name: &str, files: &[(&str, u32)]) -> std::path::PathBuf {
     let path = std::env::temp_dir().join(format!("bonk-job-{}-{name}", std::process::id()));
     let image = bonk_core::iso9660::testing::image("ARCH_202611", files);
@@ -337,7 +329,6 @@ fn ajouter_puis_retirer_une_iso_sur_le_coffre() {
     let _ = std::fs::remove_file(&arch);
 }
 
-/// An installer of the Red Hat family is added with its location, which its initramfs needs.
 #[test]
 fn un_installateur_anaconda_entre_au_coffre_avec_son_emplacement() {
     let (scenario, cache) = vault_scenario(Some(GRUB), "cache-anaconda");
@@ -387,7 +378,6 @@ fn une_image_du_catalogue_ne_se_telecharge_pas_sans_confirmation() {
     assert_eq!(code, EXIT_USAGE, "{err}");
 }
 
-/// Checked on the file alone: the drive is not even opened.
 #[test]
 fn une_iso_que_le_menu_ne_demarre_pas_est_refusee_avant_le_disque() {
     let (scenario, _cache) = vault_scenario(Some(GRUB), "cache-refus");
@@ -410,7 +400,6 @@ fn une_iso_que_le_menu_ne_demarre_pas_est_refusee_avant_le_disque() {
     }
 }
 
-/// A live system's kernel line splits on spaces: Bonk writes them as `_` in the vault.
 #[test]
 fn une_iso_dont_le_nom_a_des_espaces_entre_avec_des_soulignes() {
     let (scenario, cache) = vault_scenario(Some(GRUB), "cache-espace");
@@ -433,8 +422,6 @@ fn une_iso_dont_le_nom_a_des_espaces_entre_avec_des_soulignes() {
     let _ = std::fs::remove_file(&debian);
 }
 
-/// A newer GRUB in the catalog: the check says so, --yes replaces it, the ISO stays.
-/// `bonk vault update --json` on the scenario's key, which must succeed.
 fn update_json(scenario: &Scenario, cache: &str, extra: &[&str]) -> serde_json::Value {
     let mut args = vec![
         "vault",

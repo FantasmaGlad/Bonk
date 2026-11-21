@@ -34,7 +34,6 @@ pub(crate) struct Effective {
     pub(crate) help: &'static str,
 }
 
-/// `BONK_CONFIG`, else the system configuration directory.
 pub(crate) fn default_path(var: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
     if let Some(explicit) = var("BONK_CONFIG").filter(|p| !p.is_empty()) {
         return Some(PathBuf::from(explicit));
@@ -42,7 +41,6 @@ pub(crate) fn default_path(var: &dyn Fn(&str) -> Option<String>) -> Option<PathB
     bonk_hal::paths::config_file(var)
 }
 
-/// A missing file gives an empty configuration.
 pub(crate) fn load(path: &Path) -> Result<Stored, String> {
     match fs::read_to_string(path) {
         Ok(text) => serde_json::from_str(&text)

@@ -79,13 +79,9 @@ impl BlockDevice for Logged {
 
 #[derive(Clone, Copy, Default)]
 pub(super) struct Faults {
-    /// Wrong read-backs: faulty drive.
     pub(super) reads: bool,
-    /// Cache flush refused (`SYNCHRONIZE CACHE`, `fsync`): the data may never reach the drive.
     pub(super) flush: bool,
-    /// Unplugged once this many bytes are written: every later write fails.
     pub(super) unplugged_after: Option<u64>,
-    /// Writes accepted but lost past this position, like a failing or fake card.
     pub(super) lost_after: Option<u64>,
 }
 

@@ -9,7 +9,6 @@ impl JobSlot {
         self.0.load(Ordering::SeqCst)
     }
 
-    /// In one atomic operation.
     pub(crate) fn try_acquire(&self) -> Option<SlotGuard> {
         self.0
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
@@ -62,7 +61,6 @@ mod tests {
     fn la_reponse_part_apres_la_liberation() -> Resultat {
         let slot = JobSlot::default();
         let guard = slot.try_acquire().ok_or("emplacement libre attendu")?;
-        // The client reacts to the response by asking for the slot again: it must get it.
         let obtenu = guard.release_then(|| slot.try_acquire().is_some());
         assert!(obtenu);
         Ok(())

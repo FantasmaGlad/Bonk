@@ -34,7 +34,6 @@ where
     match gui(request) {
         Ok(()) => 0,
         Err(erreur) => {
-            // No display (SSH, server) or no usable rendering: the CLI stays.
             log::debug!(target: "bonk::cli", reason = erreur.as_str(); "window failed to open");
             report(
                 err,

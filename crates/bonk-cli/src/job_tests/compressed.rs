@@ -1,6 +1,5 @@
 use super::*;
 
-/// Hand-made gzip with stored blocks: the content is known without an external tool.
 fn gzip_stored(data: &[u8]) -> Vec<u8> {
     let mut out = vec![0x1F, 0x8B, 8, 0, 0, 0, 0, 0, 0, 0xFF];
     let mut chunks = data.chunks(0xFFFF).peekable();
@@ -31,13 +30,11 @@ fn cut_iso(sectors: u32) -> Vec<u8> {
 
 #[test]
 fn image_compressee_coupee_a_l_interieur_n_aboutit_pas_a_un_succes() {
-    // Declares 4 MiB for 1 MiB real: fits on the target, complete gzip stream.
     let source = TempSource::from_bytes("coupee-gz", &gzip_stored(&cut_iso(2048)));
     let scenario = Scenario::new();
     let (code, _, err) = scenario.run(&["write", "usb-a", &source.arg(), "--yes"]);
     assert_eq!(code, EXIT_SOURCE, "{err}");
     assert!(err.contains("E3007"), "{err}");
-    // Raw mode writes what it is given, and logs it.
     let scenario = Scenario::new();
     let (code, _, err) = scenario.run(&["write", "usb-a", &source.arg(), "--yes", "--mode", "raw"]);
     assert_eq!(code, 0, "{err}");
@@ -72,8 +69,6 @@ fn image_vide_refusee_meme_en_mode_brut() {
 /// Longer than the head the analysis reads: only a full pass sees its end.
 const LONG_IMAGE: usize = 6 << 20;
 
-/// Without a hash a compressed image is decompressed once without writing: data after the stream is refused
-/// before erasing the key.
 #[test]
 fn des_donnees_apres_le_flux_sont_refusees_avant_toute_ecriture() {
     let mut image = gzip_stored(&vec![0xAB; LONG_IMAGE]);
@@ -96,7 +91,6 @@ fn des_donnees_apres_le_flux_sont_refusees_avant_toute_ecriture() {
     assert!(scenario.written(4096).iter().all(|b| *b == 0));
 }
 
-/// A healthy compressed image passes: the dry pass does not consume the write stream.
 #[test]
 fn une_image_compressee_saine_s_ecrit_apres_le_passage_a_blanc() {
     let source = TempSource::from_bytes("flux-sain", &gzip_stored(&vec![0xAB; LONG_IMAGE]));

@@ -43,7 +43,6 @@ fn surveillance_des_disques() {
     let calls = Arc::new(AtomicUsize::new(0));
     let counter = Arc::clone(&calls);
     let enumerate: EnumerateFn = Arc::new(move || {
-        // The third enumeration sees a second key.
         if counter.fetch_add(1, Ordering::SeqCst) >= 2 {
             Ok(vec![usb("usb-a"), usb("usb-b")])
         } else {
@@ -82,7 +81,6 @@ fn surveillance_des_disques() {
         Duration::from_millis(300),
     );
     assert_eq!(response(&out, 2)["result"]["was_watching"], true);
-    // Stopped at once, the watch emitted at most the initial event, then nothing.
     assert!(out.iter().filter(|m| m["event"] == "disks_changed").count() <= 1);
 }
 
@@ -98,6 +96,5 @@ fn echec_d_enumeration_rapporte_avec_son_code() {
         Duration::ZERO,
     );
     assert_eq!(response(&out, 1)["error"]["code"], "E1002");
-    // `diagnose` reports the failure in its report instead of failing.
     assert_eq!(response(&out, 2)["result"]["enumeration"]["ok"], false);
 }

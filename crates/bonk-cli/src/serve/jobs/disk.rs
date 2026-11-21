@@ -88,7 +88,6 @@ pub(in crate::serve) fn prepare_disk(
     })
 }
 
-/// What a write starts from: a catalog image brings its hash, file name and mode.
 pub(in crate::serve) struct WriteSource {
     pub(in crate::serve) source: PathBuf,
     pub(in crate::serve) sha256: Option<String>,

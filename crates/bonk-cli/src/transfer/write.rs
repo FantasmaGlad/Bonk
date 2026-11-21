@@ -94,7 +94,6 @@ fn write_job(args: &WriteArgs, source: PathBuf, expected_sha256: Option<String>)
     }
 }
 
-/// A download may have grown the cache: text readers are told its size.
 fn cache_note(args: &WriteArgs, source: &Path, out: &mut dyn Write) {
     let text = !args.common.json && args.common.progress != ProgressMode::Json;
     let downloaded = source.to_str().is_some_and(bonk_catalog::is_url);

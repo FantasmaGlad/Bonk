@@ -70,8 +70,6 @@ fn une_ecriture_simulee_ne_fait_relire_aucune_table() {
     );
 }
 
-/// Simulating onto the image itself would overwrite it while reading: a compressed image would be destroyed.
-/// Refused before any open, plan included, whatever path names the file.
 #[test]
 fn une_simulation_vers_sa_propre_source_est_refusee() {
     let source = TempSource::new("meme-fichier", 4096);
@@ -144,7 +142,6 @@ fn dry_run_decrit_sans_rien_faire() {
 fn un_disque_interdit_est_refuse_avant_toute_action() {
     let source = TempSource::new("forbidden", 4096);
     let scenario = Scenario::new();
-    // Even with --yes and every option open.
     let (code, out, err) = scenario.run(&[
         "write",
         "nvme-sys",
@@ -176,7 +173,6 @@ fn seul_l_identifiant_stable_designe_une_cible() {
 fn un_disque_remplace_entre_les_deux_enumerations_n_est_pas_ecrit() {
     let source = TempSource::new("remplace", 4096);
     let mut scenario = Scenario::new();
-    // First enumeration: the chosen key. Second, right before opening: another serial.
     scenario.enumerations = vec![vec![usb("S1")], vec![usb("S2")]];
     let (code, out, err) = scenario.run(&[
         "write",
@@ -191,7 +187,6 @@ fn un_disque_remplace_entre_les_deux_enumerations_n_est_pas_ecrit() {
         out.is_empty() && err.trim_end().ends_with("[E2002]"),
         "{err}"
     );
-    // Unmounted, never opened.
     assert_eq!(scenario.log(), ["prepare:/dev/sdb", "unmount:usb-a"]);
     assert!(scenario.written(4096).iter().all(|b| *b == 0));
 }
@@ -331,8 +326,6 @@ fn le_refus_d_elever_va_jusqu_au_demontage() {
     assert_eq!(scenario.seen_elevation.get(), Some(Elevation::Never));
 }
 
-/// The file is replaced after opening: the hash covers the bytes that will be written, not what the path
-/// names at check time.
 #[test]
 fn l_empreinte_porte_sur_le_fichier_ecrit_meme_remplace_entre_temps() {
     let ecrit = TempSource::from_bytes("piege-empreinte", &[0xAB; 1 << 20]);
@@ -365,8 +358,6 @@ fn l_empreinte_porte_sur_le_fichier_ecrit_meme_remplace_entre_temps() {
     assert!(scenario.written(1 << 20).iter().all(|b| *b == 0));
 }
 
-/// A refused flush leaves the data in a cache that may never reach the drive: the write fails, even if the
-/// read-back, served by that cache, looks right.
 #[test]
 fn un_vidage_refuse_fait_echouer_l_ecriture() {
     let source = TempSource::new("vidage", 1 << 20);
@@ -388,8 +379,6 @@ fn un_vidage_refuse_fait_echouer_l_ecriture() {
     );
 }
 
-/// Key pulled out mid-write: immediate failure, never a read-back or table repair on a missing drive, and a
-/// message that says what happened.
 #[test]
 fn une_cle_debranchee_en_ecriture_arrete_tout() {
     let source = TempSource::new("debranchee", 8 << 20);
@@ -419,7 +408,6 @@ fn une_cle_debranchee_en_ecriture_arrete_tout() {
     );
 }
 
-/// The ISO is written as published, then its empty first sector becomes an MBR naming its EFI image.
 #[test]
 fn une_iso_dvd_s_ecrit_hybride_et_seulement_sur_demande() {
     let iso = bonk_core::hybrid::testing::dvd_iso(128);

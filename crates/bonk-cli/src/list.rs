@@ -88,7 +88,6 @@ pub(crate) fn run(
     disks: &[Disk],
     out: &mut dyn Write,
 ) -> io::Result<()> {
-    // Saved settings (`bonk config`) apply when the option is not given.
     let options = defaults.widen(FilterOptions {
         show_internal: args.show_internal,
         allow_virtual: args.allow_virtual,
@@ -132,7 +131,6 @@ fn write_table(entries: &[Entry<'_>], all: bool, out: &mut dyn Write) -> io::Res
         })
         .collect();
 
-    // The last column (state) is free: no useless padding at the end of the line.
     let mut widths = header.map(|h| h.chars().count());
     for row in &rows {
         for (width, cell) in widths.iter_mut().zip(row) {

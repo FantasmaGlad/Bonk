@@ -16,7 +16,6 @@ mod protocol;
 
 const DISK_SIZE: usize = 8 << 20;
 
-/// Shared between threads; `slow` slows writes so an operation is still running when a cancel is sent.
 #[derive(Clone)]
 struct Shared {
     memory: Arc<Mutex<MemoryDevice>>,
@@ -141,7 +140,6 @@ impl Write for Buffer {
     }
 }
 
-/// Waits before closing: gives asynchronous events time.
 struct SlowEof {
     inner: Cursor<Vec<u8>>,
     wait: Duration,
@@ -171,8 +169,6 @@ impl BufRead for SlowEof {
     }
 }
 
-/// Closes only once an expected message is out: a long operation has time to finish, without a fixed delay to
-/// guess.
 struct UntilSeen {
     inner: Cursor<Vec<u8>>,
     output: Buffer,
@@ -205,7 +201,6 @@ impl BufRead for UntilSeen {
     }
 }
 
-/// Waits for `needle` in the output before closing the input.
 fn session_until(requests: &[&str], cfg: &Config, needle: &str) -> Vec<Value> {
     let buffer = Buffer(Arc::new(Mutex::new(Vec::new())));
     let input = UntilSeen {

@@ -51,7 +51,6 @@ pub(crate) fn hexdump(args: &HexdumpArgs, out: &mut dyn Write) -> io::Result<Out
     Ok(Outcome::Done)
 }
 
-/// 16-byte lines: offset, two groups of 8 hex bytes, ASCII text.
 pub(crate) fn hexdump_lines(start: u64, bytes: &[u8]) -> Vec<String> {
     bytes
         .chunks(16)

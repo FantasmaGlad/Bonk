@@ -88,7 +88,6 @@ fn schema_liste_et_decrit() -> Result<(), serde_json::Error> {
     Ok(())
 }
 
-/// The real `list --json` output follows its own schema: same top-level fields.
 #[test]
 fn la_sortie_json_correspond_a_son_schema() -> Result<(), serde_json::Error> {
     let (_, out, _) = lancer(&["list", "--json", "--all"], sample());

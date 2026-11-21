@@ -46,7 +46,6 @@ fn fichier_de_config(label: &str) -> std::path::PathBuf {
         .join("config.json")
 }
 
-/// What the window opens with when `bonk` starts without arguments on this configuration file.
 fn vue_de_la_fenetre(file: &std::path::Path) -> ViewDefaults {
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let vue = RefCell::new(ViewDefaults::default());
@@ -88,10 +87,8 @@ fn config_set_puis_list_puis_effet_sur_list_et_la_fenetre() -> Result<(), Box<dy
         "{}",
         r.out
     );
-    // Without an option, `list` follows the setting and also shows excluded disks.
     let r = lancer_config(&["list"], &file, &[], sample());
     assert!(r.out.contains("nvme-systeme"), "{}", r.out);
-    // The environment variable wins over the file.
     let r = lancer_config(
         &["list"],
         &file,
@@ -135,7 +132,6 @@ fn un_fichier_de_config_illisible_n_empeche_pas_list() -> Result<(), Box<dyn std
     Ok(())
 }
 
-/// A file that cannot be written is not an invalid configuration: the setting was valid.
 #[test]
 fn config_non_enregistrable_est_une_erreur_d_ecriture() -> Result<(), Box<dyn std::error::Error>> {
     let file = fichier_de_config("ecriture");

@@ -13,7 +13,6 @@ fn nombres_decimaux_et_hexadecimaux() {
     assert!(parse_number("-1").is_err());
 }
 
-/// MBR with one Linux partition, in a temporary file removed at the end.
 struct TempImage(PathBuf);
 
 impl TempImage {
@@ -134,16 +133,13 @@ fn hexdump_borne_et_signale_la_fin_de_l_image() -> Result<(), Box<dyn std::error
     };
     let (done, text) = hex(0x1c0, 32)?;
     assert!(done && text.starts_with("000001c0  00 00 83"), "{text}");
-    // An offset not aligned on the sector is served as is.
     let (_, text) = hex(0x1fe, 2)?;
     assert!(text.contains("55 aa"), "{text}");
-    // Past the end: the read is cut to the image, and says so.
     let (done, text) = hex(4096 * 512 - 16, 64)?;
     assert!(
         done && text.contains("(end of image: 16 bytes read of 64 requested)"),
         "{text}"
     );
-    // Offset outside the image, and forbidden lengths.
     assert!(!hex(4096 * 512, 16)?.0);
     assert!(!hex(0, 0)?.0);
     assert!(!hex(0, HEXDUMP_MAX + 1)?.0);
@@ -166,7 +162,6 @@ fn un_disque_reel_est_refuse_avec_une_explication() -> Result<(), io::Error> {
         Outcome::Done => panic!("un disque réel ne doit pas être lu"),
     }
     assert!(out.is_empty());
-    // A directory or a special file is not opened either (FileDevice refuses them).
     let args = LayoutArgs {
         image: std::env::temp_dir(),
         json: false,
@@ -187,7 +182,6 @@ fn lignes_de_hexdump() {
         lines[0],
         "000001b0  45 46 49 20 50 41 52 54  00 01 02 41 42 43 44 45  |EFI PART...ABCDE|"
     );
-    // Incomplete line: padded with blanks to keep the text aligned.
     assert_eq!(
         lines[1],
         "000001c0  46 47                                             |FG|"

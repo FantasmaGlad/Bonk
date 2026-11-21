@@ -83,7 +83,6 @@ pub(super) struct TransferParams {
     pub(super) image: Option<String>,
     /// Its signature is checked wherever it comes from.
     pub(super) catalog_url: Option<String>,
-    /// The target is an image file, created with `size` if missing.
     pub(super) simulate: bool,
     pub(super) size: Option<u64>,
     pub(super) yes: bool,
@@ -96,7 +95,6 @@ pub(super) struct TransferParams {
     pub(super) sha256: Option<String>,
     pub(super) sha256_file: Option<String>,
     pub(super) cache_dir: Option<PathBuf>,
-    /// Name to keep a downloaded address under, when the address does not end with it.
     pub(super) file_name: Option<String>,
     /// `auto` (default), `raw` or `extract`.
     pub(super) mode: Option<String>,

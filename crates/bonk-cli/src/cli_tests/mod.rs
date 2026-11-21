@@ -57,7 +57,6 @@ fn sample() -> Vec<Disk> {
     ]
 }
 
-/// What `execute` did: code, outputs, log settings received.
 struct Resultat {
     code: u8,
     out: String,

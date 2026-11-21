@@ -156,7 +156,6 @@ fn un_lien_qui_n_est_pas_une_image_du_catalogue_n_ouvre_rien() {
         assert_eq!(recue, None, "{args:?}");
         assert!(err.contains("[E"), "{err}");
     }
-    // A value that looks like an option is refused by the parser itself.
     let (code, recue, _) = fenetre_demandee(&["gui", "--link", "--yes"]);
     assert_eq!((code, recue), (EXIT_USAGE, None));
     let (code, recue, _) = fenetre_demandee(&["gui", "--image", "a", "--link", "bonk://install/a"]);

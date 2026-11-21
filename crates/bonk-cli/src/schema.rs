@@ -42,7 +42,6 @@ pub(crate) fn registry() -> Vec<Entry> {
     ]
 }
 
-/// For the service; `None` for an unknown name.
 pub(crate) fn value(name: &str) -> Option<Value> {
     registry()
         .iter()
@@ -69,7 +68,6 @@ impl SchemaArgs {
     }
 }
 
-/// Or the list. Returns `false` for an unknown name.
 pub(crate) fn run(args: &SchemaArgs, out: &mut dyn Write) -> io::Result<bool> {
     let registry = registry();
     match &args.name {

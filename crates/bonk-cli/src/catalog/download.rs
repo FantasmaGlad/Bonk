@@ -84,7 +84,6 @@ fn download(
     fetch_checked(&request, deps, progress)
 }
 
-/// A catalog image to bring into the cache.
 pub(crate) struct Request<'a> {
     pub(crate) id: &'a str,
     pub(crate) catalog_url: Option<&'a str>,
@@ -92,7 +91,6 @@ pub(crate) struct Request<'a> {
     pub(crate) destination: super::Destination,
 }
 
-/// Kept or downloaded, then checked against the signed hash.
 pub(crate) fn fetch_checked(
     request: &Request<'_>,
     deps: &Deps<'_>,

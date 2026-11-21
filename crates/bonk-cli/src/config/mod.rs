@@ -75,21 +75,18 @@ pub(crate) const KEYS: &[Key] = &[
     },
 ];
 
-/// Display settings shared by the window and read commands.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ViewDefaults {
     pub show_internal: bool,
     pub show_all: bool,
     pub allow_virtual: bool,
-    /// The window reaches no network: no catalog, no download.
     pub offline: bool,
     /// The window starts in incognito and waits for Tor before any network use.
     pub incognito: bool,
-    /// Each step of a write in the system's notifications.
     pub notify: bool,
     /// `None`: the system's.
     pub lang: Option<bonk_hal::Lang>,
-    /// As stored: `auto`, `light` or `dark`; the window reads it.
+    /// `auto`, `light` or `dark`.
     pub theme: &'static str,
 }
 
@@ -107,11 +104,9 @@ impl ViewDefaults {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WindowRequest {
     pub view: ViewDefaults,
-    /// Catalog image to choose at once (`gui --image`, `gui --link`).
     pub image: Option<String>,
 }
 
-/// `view.show_all` gives `BONK_VIEW_SHOW_ALL`.
 pub(crate) fn variable_name(key: &str) -> String {
     format!("BONK_{}", key.replace('.', "_").to_uppercase())
 }
@@ -120,7 +115,6 @@ pub(crate) fn find_key(name: &str) -> Option<&'static Key> {
     KEYS.iter().find(|key| key.name == name)
 }
 
-/// `oui`, `1`, `true` give `true`.
 pub(crate) fn normalize(key: &Key, value: &str) -> Result<String, String> {
     let value = value.trim();
     match &key.kind {
