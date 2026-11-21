@@ -25,6 +25,7 @@ fn on_debian_page() -> Model {
         desktop: None,
         media: "usb".to_owned(),
         arch: "x86_64".to_owned(),
+        boot: None,
     };
     let mut model = loaded();
     model.lang = Lang::Fr;

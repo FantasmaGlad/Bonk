@@ -12,6 +12,7 @@ fn choix(id: &str, label: &str, source: catalog::ChoiceSource) -> catalog::Choic
         desktop: None,
         media: "usb".to_owned(),
         arch: "x86_64".to_owned(),
+        boot: None,
     }
 }
 
@@ -78,9 +79,9 @@ fn le_menu_s_ouvre_nomme_les_versions_et_un_choix_regle_tout() {
     if let WriteState::Draft { raw, mbr, .. } = &mut app.write {
         (*raw, *mbr) = (true, false);
     }
-    let _ = app.update(Message::MenuChose(
+    let _ = app.update(Message::MenuChose(Box::new(
         versions_du_catalogue()[0].choices[0].clone(),
-    ));
+    )));
     assert!(matches!(
         &app.write,
         WriteState::Draft { image, hash, raw: false, mbr: true, .. }

@@ -192,7 +192,7 @@ impl Model {
             Some(Focus::Menu) => match (&self.catalog, self.menu_open) {
                 (CatalogState::Ready(systems), true) => {
                     match self.menu_filter.writable(systems).get(self.menu_index) {
-                        Some(choice) => Message::MenuChose((*choice).clone()),
+                        Some(choice) => Message::MenuChose(Box::new((*choice).clone())),
                         None => return Vec::new(),
                     }
                 }

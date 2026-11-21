@@ -80,7 +80,7 @@ pub enum Message {
     MenuSearch(String),
     MenuArch(Option<String>),
     CatalogLoaded(Result<crate::catalog::Shelf, String>),
-    MenuChose(crate::catalog::Choice),
+    MenuChose(Box<crate::catalog::Choice>),
     ToggleAdvanced,
     Clock,
     StartWrite,

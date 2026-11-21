@@ -91,7 +91,7 @@ fn le_choix_de_l_utilisateur_l_emporte_sur_l_image_demandee() {
     let _ = app.model.request_image(UBUNTU.to_owned());
     catalogue_lu(&mut app);
     let autre = versions_du_catalogue()[0].choices[1].clone();
-    let _ = app.update(Message::MenuChose(autre));
+    let _ = app.update(Message::MenuChose(Box::new(autre)));
     assert_eq!(app.requested, None);
     let _ = app.update(Message::Select("usb-cle".to_owned()));
     let _ = app.update(Message::Select("usb-cle".to_owned()));
