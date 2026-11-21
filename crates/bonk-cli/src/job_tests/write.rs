@@ -444,13 +444,39 @@ fn une_iso_dvd_s_ecrit_hybride_et_seulement_sur_demande() {
     assert_eq!((code, err.as_str()), (0, ""), "{out}");
     assert!(out.contains("Hybrid MBR"), "{out}");
     let disk = scenario.written(iso.len());
-    let expected = bonk_core::hybrid::hybrid_mbr(&iso).expect("MBR");
+    let expected = bonk_core::hybrid::hybrid_mbr(iso.as_slice()).expect("MBR");
     assert_eq!(&disk[..512], expected.as_slice());
     assert_eq!(
         &disk[512..],
         &iso[512..],
         "le reste de l'ISO tel que publié"
     );
+}
+
+/// The analysis reads the first MiB only: the EFI image's size must come from wherever its FAT lies.
+#[test]
+fn une_image_efi_au_dela_du_premier_mio_est_mesuree_dans_l_iso() {
+    use bonk_core::hybrid::testing::{FAR_EFI_BLOCK, FAR_EFI_SECTORS, dvd_iso_with_far_efi};
+    let iso = dvd_iso_with_far_efi();
+    assert!(FAR_EFI_BLOCK as usize * 2048 > bonk_core::analysis::HEAD_LEN);
+    let source = TempSource::from_bytes("dvd-efi-loin", &iso);
+    let scenario = Scenario::new();
+    let (code, out, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &source.arg(),
+        "--yes",
+        "--mode",
+        "hybrid",
+        "--progress",
+        "none",
+    ]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    let disk = scenario.written(iso.len());
+    let entry = &disk[446..462];
+    assert_eq!(entry[4], 0xEF);
+    assert_eq!(&entry[8..12], &(FAR_EFI_BLOCK * 4).to_le_bytes());
+    assert_eq!(&entry[12..16], &FAR_EFI_SECTORS.to_le_bytes());
 }
 
 #[test]

@@ -5,7 +5,7 @@ use bonk_core::format::fat32::Volume;
 use bonk_core::format::fat32::tree::{self, MAX_FILE_BYTES};
 use bonk_core::format::table::TableKind;
 use bonk_core::pe::{self, Machine, Signer};
-use bonk_core::udf::{self, Content, ReadAt, Tree, Udf};
+use bonk_core::udf::{self, Content, Tree, Udf};
 use bonk_core::wim::{self, Segment};
 
 use super::{
@@ -15,12 +15,6 @@ use super::{
 use crate::errors::Code;
 use crate::job::source::ImageFile;
 use crate::job::types::{JobError, fail};
-
-impl ReadAt for ImageFile {
-    fn read_exact_at(&self, offset: u64, buf: &mut [u8]) -> io::Result<()> {
-        self.read_exact_positioned(offset, buf)
-    }
-}
 
 /// As is from the ISO, or a WIM part.
 pub(super) struct Item {

@@ -34,3 +34,29 @@ pub fn dvd_iso(efi_sectors: u16) -> Vec<u8> {
     iso[efi..efi + 512].fill(0xE5);
     iso
 }
+
+/// Where [`dvd_iso_with_far_efi`] puts its EFI boot image: past the first MiB of the ISO.
+pub const FAR_EFI_BLOCK: u32 = 640;
+/// 512-byte sectors its FAT declares, more than an El Torito entry counts.
+pub const FAR_EFI_SECTORS: u32 = 69_632;
+
+/// As MikroTik RouterOS 7.25.1, an EFI entry counting 0 sectors whose FAT boot sector declares the size, but
+/// lying at [`FAR_EFI_BLOCK`], past the head the analysis reads.
+#[must_use]
+pub fn dvd_iso_with_far_efi() -> Vec<u8> {
+    let mut iso = dvd_iso(0);
+    let blocks = FAR_EFI_BLOCK + 8;
+    iso.resize(blocks as usize * SECTOR, 0);
+    let pvd = &mut iso[16 * SECTOR..17 * SECTOR];
+    pvd[80..84].copy_from_slice(&blocks.to_le_bytes());
+    pvd[84..88].copy_from_slice(&blocks.to_be_bytes());
+    iso[40 * SECTOR + 40..40 * SECTOR + 44].copy_from_slice(&FAR_EFI_BLOCK.to_le_bytes());
+    let fat = FAR_EFI_BLOCK as usize * SECTOR;
+    let boot = &mut iso[fat..fat + 512];
+    boot[0] = 0xEB;
+    boot[11..13].copy_from_slice(&512u16.to_le_bytes());
+    boot[32..36].copy_from_slice(&FAR_EFI_SECTORS.to_le_bytes());
+    boot[510] = 0x55;
+    boot[511] = 0xAA;
+    iso
+}

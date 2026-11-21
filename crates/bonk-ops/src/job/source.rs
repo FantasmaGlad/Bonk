@@ -4,6 +4,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use bonk_core::codec::{self, CodecError, Source};
+use bonk_core::read_at::ReadAt;
 
 use super::types::{JobError, SourceInfo, fail};
 use crate::errors::Code;
@@ -36,10 +37,6 @@ impl ImageFile {
     }
 
     /// Without moving any reader.
-    pub(super) fn read_exact_positioned(&self, offset: u64, buf: &mut [u8]) -> io::Result<()> {
-        bonk_hal::image::read_exact_at(&self.file, buf, offset)
-    }
-
     pub fn size(&self) -> u64 {
         self.len
     }
@@ -69,6 +66,12 @@ impl ImageFile {
 pub struct FileReader {
     file: Arc<File>,
     position: u64,
+}
+
+impl ReadAt for ImageFile {
+    fn read_exact_at(&self, offset: u64, buf: &mut [u8]) -> io::Result<()> {
+        bonk_hal::image::read_exact_at(&self.file, buf, offset)
+    }
 }
 
 impl Read for FileReader {

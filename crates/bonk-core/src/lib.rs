@@ -11,6 +11,7 @@ pub mod iso9660;
 pub mod msc;
 pub mod partition;
 pub mod pe;
+pub mod read_at;
 pub mod repair;
 pub mod trace;
 pub mod udf;

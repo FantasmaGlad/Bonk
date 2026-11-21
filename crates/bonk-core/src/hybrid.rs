@@ -2,6 +2,7 @@ use std::fmt;
 
 use crate::eltorito::{BootImage, PLATFORM_EFI, boot_images};
 use crate::partition::chs;
+use crate::read_at::ReadAt;
 
 pub const MBR_LEN: usize = 512;
 const ENTRY: usize = 446;
@@ -33,17 +34,15 @@ impl fmt::Display for NotHybrid {
 ///
 /// # Errors
 /// [`NotHybrid`]: what keeps this ISO from starting this way.
-pub fn hybrid_mbr(head: &[u8]) -> Result<[u8; MBR_LEN], NotHybrid> {
-    if head
-        .get(..MBR_LEN)
-        .is_none_or(|first| first.iter().any(|b| *b != 0))
-    {
+pub fn hybrid_mbr(source: &(impl ReadAt + ?Sized)) -> Result<[u8; MBR_LEN], NotHybrid> {
+    let mut system_area = [0u8; MBR_LEN];
+    if source.read_exact_at(0, &mut system_area).is_err() || system_area.iter().any(|b| *b != 0) {
         return Err(NotHybrid::SystemAreaUsed);
     }
-    let efi: Vec<_> = boot_images(head)
+    let efi: Vec<_> = boot_images(source)
         .into_iter()
         .filter(|image| image.platform == PLATFORM_EFI)
-        .filter_map(|image| sized(head, image))
+        .filter_map(|image| sized(source, image))
         .collect();
     let image = match efi.as_slice() {
         [] => return Err(NotHybrid::NoEfiImage),
@@ -65,18 +64,21 @@ pub fn hybrid_mbr(head: &[u8]) -> Result<[u8; MBR_LEN], NotHybrid> {
 }
 
 /// The entry's 16-bit count cannot hold an image of 65536 sectors or more: authoring tools then write 0 or 1,
-/// and the size is the one its FAT boot sector declares.
-fn sized(head: &[u8], image: BootImage) -> Option<BootImage> {
+/// and the size is the one its FAT boot sector declares, wherever the image lies in the ISO.
+fn sized(source: &(impl ReadAt + ?Sized), image: BootImage) -> Option<BootImage> {
     if image.sectors > 1 {
         return Some(image);
     }
-    let start = usize::try_from(image.first_sector).ok()?.checked_mul(512)?;
-    let sectors = fat_sectors(head.get(start..start.checked_add(512)?)?)?;
+    let mut boot = [0u8; 512];
+    source
+        .read_exact_at(image.first_sector.checked_mul(512)?, &mut boot)
+        .ok()?;
+    let sectors = fat_sectors(&boot)?;
     (sectors > 1).then_some(BootImage { sectors, ..image })
 }
 
 // BIOS parameter block, Microsoft FAT specification, section 3.1.
-fn fat_sectors(boot: &[u8]) -> Option<u64> {
+fn fat_sectors(boot: &[u8; 512]) -> Option<u64> {
     if boot[510..] != [0x55, 0xAA] {
         return None;
     }
