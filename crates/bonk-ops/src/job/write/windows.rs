@@ -40,7 +40,11 @@ pub(in crate::job) fn write_windows(
             image,
             sha256_checked,
             steps,
-            Some(windows.describe(job.table, block)),
+            Boot {
+                route: bonk_core::route::Way::Extract,
+                extraction: Some(windows.describe(job.table, block)),
+                efi_loaders: Vec::new(),
+            },
         ));
     }
     confirm(job, &chosen)?;

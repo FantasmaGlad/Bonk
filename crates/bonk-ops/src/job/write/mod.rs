@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use bonk_core::analysis::ImageReport;
 use bonk_core::codec::Format;
+use bonk_core::efi;
 use bonk_core::format::table::TableKind;
 use bonk_core::hybrid::{MBR_LEN, hybrid_mbr};
 use bonk_core::route::{self, Route};
@@ -82,6 +83,7 @@ pub fn write(
     let chosen = choose(&job.target, job.options, deps)?;
     let (image, head) = analyze_source(&file, &job.source, source_info.size_bytes)?;
     let planned = route_of(&file, &source_info, &image, &head, job.mode)?;
+    let way = planned.way();
     let hybrid_mbr = match planned {
         Route::Extract(windows) => {
             return write_windows(
@@ -97,6 +99,11 @@ pub fn write(
         }
         Route::Hybrid(mbr) => Some(mbr),
         Route::Raw => None,
+    };
+    let efi_loaders = if source_info.format == Format::Raw {
+        efi::loaders(&file, &head)
+    } else {
+        efi::loaders(head.as_slice(), &head)
     };
     refuse_if_too_large(
         needed_bytes(&source_info, &image, job.mode),
@@ -116,7 +123,11 @@ pub fn write(
             image,
             sha256_checked,
             steps,
-            None,
+            Boot {
+                route: way,
+                extraction: None,
+                efi_loaders,
+            },
         ));
     }
     confirm(job, &chosen)?;
@@ -136,6 +147,7 @@ pub fn write(
         image,
         sha256_checked,
         hybrid_mbr,
+        efi_loaders,
     };
     write_raw(job, chosen, source, checked, deps, progress)
 }
@@ -145,6 +157,7 @@ pub(in crate::job) struct Checked {
     pub(in crate::job) image: ImageReport,
     pub(in crate::job) sha256_checked: bool,
     pub(in crate::job) hybrid_mbr: Option<[u8; MBR_LEN]>,
+    pub(in crate::job) efi_loaders: Vec<efi::Loader>,
 }
 
 fn route_of(

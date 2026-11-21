@@ -1,5 +1,6 @@
 use std::io::{self, Read};
 
+use bonk_core::efi::{LOADER_LIMIT, LOADERS};
 use bonk_core::format::NewFile;
 use bonk_core::format::fat32::Volume;
 use bonk_core::format::fat32::tree::{self, MAX_FILE_BYTES};
@@ -8,10 +9,7 @@ use bonk_core::pe::{self, Machine, Signer};
 use bonk_core::udf::{self, Content, Tree, Udf};
 use bonk_core::wim::{self, Segment};
 
-use super::{
-    Extraction, Firmware, LABEL, LOADER_LIMIT, LOADERS, PART_LIMIT, WIM_HEADER, format_failure,
-    partition_plan,
-};
+use super::{Extraction, Firmware, LABEL, PART_LIMIT, WIM_HEADER, format_failure, partition_plan};
 use crate::errors::Code;
 use crate::job::source::ImageFile;
 use crate::job::types::{JobError, fail};

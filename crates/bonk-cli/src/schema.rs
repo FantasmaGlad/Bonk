@@ -14,6 +14,7 @@ pub(crate) fn registry() -> Vec<Entry> {
     vec![
         ("list", list::schema),
         ("info", info::schema),
+        ("info-image", transfer::schema_image),
         ("diagnose", diagnose::schema),
         ("explain", errors::schema),
         ("config", config::schema),

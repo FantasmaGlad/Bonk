@@ -18,7 +18,7 @@ const JSON_SCHEMA_VERSION: u32 = 1;
 // Without it clap would reuse the doc comment above as long help.
 #[command(long_about = None)]
 pub(crate) struct InfoArgs {
-    /// Stable identifier of the disk (see `bonk list --all`) or its path (`/dev/sdb`)
+    /// Stable identifier of the disk (see `bonk list --all`), its path (`/dev/sdb`), or an image file
     target: String,
 
     /// JSON output, for scripts
@@ -37,6 +37,10 @@ pub(crate) struct InfoArgs {
 impl InfoArgs {
     pub(crate) fn target(&self) -> &str {
         &self.target
+    }
+
+    pub(crate) fn json(&self) -> bool {
+        self.json
     }
 }
 

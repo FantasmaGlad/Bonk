@@ -1,7 +1,9 @@
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+use bonk_core::efi::Loader;
 use bonk_core::format::table::TableKind;
+use bonk_core::route::Way;
 use bonk_core::write::VerifyReport;
 use bonk_hal::format_size;
 
@@ -124,6 +126,9 @@ fn plan_lines(plan: &job::Plan, out: &mut dyn Write) -> io::Result<()> {
         ))
     )?;
     writeln!(out, "  Image: {}", image_line(&plan.image))?;
+    if let Some(way) = way_line(plan.route) {
+        writeln!(out, "  Route: {way}")?;
+    }
     if plan.sha256_checked {
         writeln!(out, "  File hash: matches")?;
     }
@@ -133,6 +138,7 @@ fn plan_lines(plan: &job::Plan, out: &mut dyn Write) -> io::Result<()> {
     if let Some(extraction) = &plan.extraction {
         extraction_lines(extraction, out)?;
     }
+    loader_lines(&plan.efi_loaders, out)?;
     writeln!(out, "  Steps: {}", plan.steps.join(", "))
 }
 
@@ -175,6 +181,7 @@ fn done_lines(done: &job::WriteDone, no_repair_gpt: bool, out: &mut dyn Write) -
         done.source.path, done.source.format
     )?;
     writeln!(out, "  Image: {}", image_line(&done.image))?;
+    loader_lines(&done.efi_loaders, out)?;
     if done.sha256_checked {
         writeln!(out, "  File hash: matches")?;
     }
@@ -234,6 +241,28 @@ pub(super) fn extraction_lines(
         )?;
     }
     writeln!(out, "  Secure Boot: {}", extraction.secure_boot)
+}
+
+pub(super) fn way_line(way: Way) -> Option<&'static str> {
+    match way {
+        Way::Raw => Some("written as is"),
+        Way::Hybrid => {
+            Some("written as published, then an MBR naming its EFI image: starts in UEFI only")
+        }
+        Way::Extract => None,
+    }
+}
+
+pub(super) fn loader_lines(loaders: &[Loader], out: &mut dyn Write) -> io::Result<()> {
+    for loader in loaders {
+        writeln!(
+            out,
+            "  Secure Boot ({}): {}",
+            loader.machine.name(),
+            loader.signer.meaning()
+        )?;
+    }
+    Ok(())
 }
 
 pub(super) fn cache_warning(report: &VerifyReport, out: &mut dyn Write) -> io::Result<()> {

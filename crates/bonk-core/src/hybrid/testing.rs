@@ -32,6 +32,16 @@ pub fn dvd_iso(efi_sectors: u16) -> Vec<u8> {
     iso
 }
 
+#[must_use]
+pub fn dvd_iso_with_fat(fat: &[u8]) -> Vec<u8> {
+    let sectors = u16::try_from(fat.len() / 512).unwrap_or(u16::MAX);
+    let mut iso = dvd_iso(sectors);
+    let at = EFI_BLOCK as usize * SECTOR;
+    iso.resize(at + fat.len(), 0);
+    iso[at..].copy_from_slice(fat);
+    iso
+}
+
 pub const FAR_EFI_BLOCK: u32 = 640;
 pub const FAR_EFI_SECTORS: u32 = 69_632;
 

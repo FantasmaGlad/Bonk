@@ -26,6 +26,8 @@ const GPT_ENTRIES_LIMIT: u64 = 1 << 20;
 pub(crate) const ALIGNMENT_BYTES: u64 = 1 << 20;
 
 pub(crate) const MBR_PROTECTIVE: u8 = 0xEE;
+pub(crate) const MBR_ESP: u8 = 0xEF;
+pub const ESP_GUID_TEXT: &str = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B";
 
 /// CRC-32 (IEEE 802.3), as GPT uses it.
 #[must_use]

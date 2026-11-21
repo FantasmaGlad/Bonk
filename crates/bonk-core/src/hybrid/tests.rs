@@ -135,3 +135,64 @@ fn l_iso_dvd_de_banc_se_rend_hybride() {
         crate::analysis::ImageKind::PlainIso
     );
 }
+
+fn with_fats(fats: &[(u32, &[u8])]) -> Vec<u8> {
+    let entries: Vec<(u8, u32, u16)> = fats
+        .iter()
+        .map(|(block, fat)| (PLATFORM_EFI, *block, (fat.len() / 512) as u16))
+        .collect();
+    let mut iso = head(&entries);
+    for (block, fat) in fats {
+        let at = *block as usize * SECTOR;
+        if iso.len() < at + fat.len() {
+            iso.resize(at + fat.len(), 0);
+        }
+        iso[at..at + fat.len()].copy_from_slice(fat);
+    }
+    iso
+}
+
+fn loader_fat(machine: u16, name: &str) -> Vec<u8> {
+    let loader = crate::pe::testing::pe(machine, &[]);
+    let path = format!("EFI/BOOT/{name}");
+    crate::fat::testing::small(crate::fat::Kind::Fat12, &[(path.as_str(), &loader)]).image
+}
+
+fn esp_entries(mbr: &[u8; MBR_LEN]) -> Vec<(u32, u32)> {
+    (0..4)
+        .map(|slot| &mbr[446 + slot * 16..446 + slot * 16 + 16])
+        .filter(|entry| entry[4] == 0xEF)
+        .map(|entry| {
+            (
+                u32::from_le_bytes([entry[8], entry[9], entry[10], entry[11]]),
+                u32::from_le_bytes([entry[12], entry[13], entry[14], entry[15]]),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn chaque_image_efi_qui_porte_un_chargeur_devient_une_partition() {
+    use crate::pe::testing::{X86, X86_64};
+    let x64 = loader_fat(X86_64, "BOOTX64.EFI");
+    let ia32 = loader_fat(X86, "BOOTIA32.EFI");
+    let blank = vec![0u8; x64.len()];
+    let iso = with_fats(&[(40, &x64), (1000, &blank), (2000, &ia32)]);
+    let mbr = hybrid_mbr(iso.as_slice()).expect("hybride");
+    assert_eq!(esp_entries(&mbr), [(160, 2880), (8000, 2880)]);
+    assert_eq!(&mbr[510..], &[0x55, 0xAA]);
+}
+
+#[test]
+fn des_images_efi_qu_un_mbr_ne_peut_pas_declarer_sont_refusees() {
+    use crate::pe::testing::X86_64;
+    let fat = loader_fat(X86_64, "BOOTX64.EFI");
+    let overlapping = with_fats(&[(40, &fat), (400, &fat)]);
+    let five: Vec<(u32, &[u8])> = (0..5).map(|i| (40 + i * 800, fat.as_slice())).collect();
+    for (iso, reason) in [
+        (overlapping, NotHybrid::OverlappingEfiImages),
+        (with_fats(&five), NotHybrid::TooManyEfiImages),
+    ] {
+        assert_eq!(hybrid_mbr(iso.as_slice()), Err(reason));
+    }
+}

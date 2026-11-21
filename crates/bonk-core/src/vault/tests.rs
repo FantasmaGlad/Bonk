@@ -3,7 +3,7 @@ use crate::format::NewFile;
 use crate::format::exfat::read::Reader;
 use crate::format::table::{self, TableKind};
 use crate::format::{Filesystem, FormatError, Ids, exfat, fat32};
-use crate::partition::{Severity, inspect};
+use crate::partition::{ESP_GUID_TEXT, Severity, inspect};
 
 use super::*;
 use crate::block::MemoryDevice;

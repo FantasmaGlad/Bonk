@@ -28,15 +28,7 @@ mod tests;
 use copy::*;
 pub(super) use image::{WindowsImage, detect};
 
-/// Default removable-media loader names from the UEFI specification, in plan order.
-const LOADERS: [(&str, Machine); 3] = [
-    ("bootx64.efi", Machine::X86_64),
-    ("bootaa64.efi", Machine::Arm64),
-    ("bootia32.efi", Machine::X86),
-];
 const LABEL: &str = "BONK-WIN";
-/// The loader fits well within this; the cap guards against an image built to deceive.
-const LOADER_LIMIT: u64 = 64 << 20;
 const WIM_HEADER: usize = 208;
 const MIN_SIMULATED: u64 = 128 << 20;
 /// Margin under the FAT32 limit: a part stays a valid file, rounding included.

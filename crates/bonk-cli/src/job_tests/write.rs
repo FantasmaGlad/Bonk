@@ -135,6 +135,8 @@ fn dry_run_decrit_sans_rien_faire() {
     assert_eq!(value["event"], "plan");
     assert_eq!(value["target"]["id"], "usb-a");
     assert_eq!(value["unmount"][0], "/run/media/u/A");
+    assert_eq!(value["route"], "raw");
+    assert!(out.contains("Route: written as is"), "{out}");
     assert!(scenario.log().is_empty());
 }
 
@@ -439,6 +441,80 @@ fn une_iso_dvd_s_ecrit_hybride_et_seulement_sur_demande() {
         &iso[512..],
         "le reste de l'ISO tel que publié"
     );
+}
+
+#[test]
+fn le_chargeur_efi_et_secure_boot_sont_dits_avant_et_apres_l_ecriture() {
+    use bonk_core::fat::{Kind, testing::small};
+    use bonk_core::pe::{
+        THIRD_PARTY_CAS,
+        testing::{X86_64, name, pe},
+    };
+    let shim = pe(X86_64, &name(THIRD_PARTY_CAS[0]));
+    let fat = small(Kind::Fat12, &[("EFI/BOOT/BOOTX64.EFI", &shim)]);
+    let iso = bonk_core::hybrid::testing::dvd_iso_with_fat(&fat.image);
+    let source = TempSource::from_bytes("dvd-shim", &iso);
+    let scenario = Scenario::new();
+    let expected = format!(
+        "Secure Boot (x86_64): loader signed by {}",
+        THIRD_PARTY_CAS[0]
+    );
+    let path = source.arg();
+    let write = |extra: &[&str]| {
+        let mut args = vec!["write", "usb-a", path.as_str(), "--yes", "--mode", "hybrid"];
+        args.extend(extra);
+        scenario.run(&args)
+    };
+    let (code, out, err) = write(&["--dry-run"]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(out.contains(&expected), "{out}");
+    let (_, json, _) = write(&["--dry-run", "--json"]);
+    let plan: serde_json::Value = serde_json::from_str(&json).expect("JSON");
+    assert_eq!(plan["efi_loaders"][0]["machine"], "x86_64", "{json}");
+    assert_eq!(
+        plan["efi_loaders"][0]["signer"]["microsoft_uefi_ca"][0],
+        THIRD_PARTY_CAS[0]
+    );
+    assert_eq!(plan["route"], "hybrid");
+    assert!(
+        out.contains("Route: written as published, then an MBR naming its EFI image"),
+        "{out}"
+    );
+    let (code, out, err) = write(&["--progress", "none"]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(out.contains(&expected), "{out}");
+}
+
+#[test]
+fn bonk_info_dit_la_voie_d_une_image_et_son_chargeur_sans_disque() {
+    use bonk_core::fat::{Kind, testing::small};
+    use bonk_core::pe::testing::{X86_64, pe};
+    let fat = small(Kind::Fat12, &[("EFI/BOOT/BOOTX64.EFI", &pe(X86_64, &[]))]);
+    let dvd = TempSource::from_bytes(
+        "dvd-info",
+        &bonk_core::hybrid::testing::dvd_iso_with_fat(&fat.image),
+    );
+    let disk = TempSource::new("disque-info", 4096);
+    let scenario = Scenario::new();
+    let (code, out, err) = scenario.run(&["info", &dvd.arg()]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    for expected in [
+        "Image: ISO without disk boot",
+        "Route: refused, ISO without disk boot",
+        "--mode hybrid writes it: starts in UEFI only",
+        "Secure Boot (x86_64): unsigned loader",
+    ] {
+        assert!(out.contains(expected), "{expected}: {out}");
+    }
+    let (_, json, _) = scenario.run(&["info", &dvd.arg(), "--json"]);
+    let report: serde_json::Value = serde_json::from_str(&json).expect("JSON");
+    assert_eq!(report["route"], serde_json::Value::Null);
+    assert_eq!(report["hybrid_possible"], true);
+    assert_eq!(report["efi_loaders"][0]["signer"], "unsigned");
+    let (code, out, _) = scenario.run(&["info", &disk.arg()]);
+    assert_eq!(code, 0);
+    assert!(out.contains("Route: written as is"), "{out}");
+    assert!(scenario.log().is_empty(), "aucun disque touché");
 }
 
 #[test]

@@ -7,7 +7,7 @@ use crate::format::table::{
     self, GUID_ESP, MBR_ESP, PartitionPlan, Slot, TableKind, gpt_type, mbr_type, usable_end,
 };
 use crate::format::{ALIGNMENT, Filesystem, FormatError, Ids, exfat, fat32};
-use crate::partition::{Layout, MbrEntry, Severity, inspect};
+use crate::partition::{ESP_GUID_TEXT, Layout, MbrEntry, Severity, inspect};
 
 use super::*;
 

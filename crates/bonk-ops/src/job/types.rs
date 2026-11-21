@@ -161,8 +161,11 @@ pub struct Plan {
     /// Mount points that will be unmounted.
     pub unmount: Vec<String>,
     pub steps: Vec<&'static str>,
+    pub route: bonk_core::route::Way,
     /// Windows drive: what it will receive. Null for a raw write.
     pub extraction: Option<super::extract::Extraction>,
+    /// Removable-media UEFI loaders of the image and who signed them; empty for a Windows drive, whose loader is in `extraction`, or when none is readable.
+    pub efi_loaders: Vec<bonk_core::efi::Loader>,
 }
 
 /// Result of a write.
@@ -181,6 +184,8 @@ pub struct WriteDone {
     pub gpt_repair: Option<RepairReport>,
     /// The MBR of `--mode hybrid` was written and read back.
     pub hybrid_mbr: bool,
+    /// Removable-media UEFI loaders of the image and who signed them; empty when none is readable.
+    pub efi_loaders: Vec<bonk_core::efi::Loader>,
 }
 
 /// Result of a verification without writing.
