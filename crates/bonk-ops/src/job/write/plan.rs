@@ -8,15 +8,19 @@ use crate::job::types::{Plan, SCHEMA_VERSION, SourceInfo, WriteOutcome};
 
 use super::*;
 
+pub(in crate::job) struct Boot {
+    pub(in crate::job) route: Way,
+    pub(in crate::job) extraction: Option<Extraction>,
+    pub(in crate::job) efi_loaders: Vec<Loader>,
+}
+
 pub(in crate::job) fn plan(
     chosen: Chosen,
     source: SourceInfo,
     image: ImageReport,
     sha256_checked: bool,
     steps: Vec<&'static str>,
-    route: Way,
-    extraction: Option<Extraction>,
-    efi_loaders: Vec<Loader>,
+    boot: Boot,
 ) -> WriteOutcome {
     WriteOutcome::Plan(Box::new(Plan {
         schema_version: SCHEMA_VERSION,
@@ -28,9 +32,9 @@ pub(in crate::job) fn plan(
         sha256_checked,
         unmount: chosen.mounts,
         steps,
-        route,
-        extraction,
-        efi_loaders,
+        route: boot.route,
+        extraction: boot.extraction,
+        efi_loaders: boot.efi_loaders,
     }))
 }
 

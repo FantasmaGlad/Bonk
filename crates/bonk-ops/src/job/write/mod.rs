@@ -123,9 +123,11 @@ pub fn write(
             image,
             sha256_checked,
             steps,
-            way,
-            None,
-            efi_loaders,
+            Boot {
+                route: way,
+                extraction: None,
+                efi_loaders,
+            },
         ));
     }
     confirm(job, &chosen)?;
