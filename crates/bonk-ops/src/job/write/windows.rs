@@ -1,46 +1,12 @@
 use bonk_core::analysis::ImageReport;
-use bonk_core::codec::Format;
 use bonk_core::write::{Control, Progress};
 
-use crate::errors::Code;
 use crate::job::extract::{self, WindowsImage};
 use crate::job::source::ImageFile;
 use crate::job::target::Chosen;
-use crate::job::types::{Deps, JobError, SourceInfo, WriteMode, WriteOutcome, fail};
+use crate::job::types::{Deps, JobError, SourceInfo, WriteOutcome};
 
 use super::*;
-
-/// `extract` requires one; `auto` looks for one where a raw write would be refused; `raw` never looks.
-pub(in crate::job) fn windows_image(
-    file: &ImageFile,
-    source: &SourceInfo,
-    image: &ImageReport,
-    mode: WriteMode,
-) -> Result<Option<WindowsImage>, JobError> {
-    let wanted = match mode {
-        WriteMode::Raw | WriteMode::Hybrid => false,
-        WriteMode::Extract => true,
-        WriteMode::Auto => image.udf && !image.is_writable_as_is(),
-    };
-    if !wanted || source.format != Format::Raw {
-        return if mode == WriteMode::Extract {
-            Err(fail(
-                Code::ImageNotBootable,
-                "--mode extract requires an uncompressed Windows installation ISO",
-            ))
-        } else {
-            Ok(None)
-        };
-    }
-    let found = extract::detect(file)?;
-    if found.is_none() && mode == WriteMode::Extract {
-        return Err(fail(
-            Code::ImageNotBootable,
-            "this is not a Windows installation or PE ISO (UDF, sources/install.wim, install.esd or boot.wim, efi/boot/bootx64.efi, bootaa64.efi or bootia32.efi)",
-        ));
-    }
-    Ok(found)
-}
 
 #[allow(clippy::too_many_arguments)]
 pub(in crate::job) fn write_windows(

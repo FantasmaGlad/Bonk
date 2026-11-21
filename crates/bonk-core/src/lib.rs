@@ -13,6 +13,7 @@ pub mod partition;
 pub mod pe;
 pub mod read_at;
 pub mod repair;
+pub mod route;
 pub mod trace;
 pub mod udf;
 pub mod vault;

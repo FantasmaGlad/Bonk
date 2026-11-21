@@ -26,18 +26,7 @@ pub enum TraceIo {
     Data,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum WriteMode {
-    /// Refuses an image that would not boot written as is, or a truncated one.
-    #[default]
-    Auto,
-    /// Writes the bytes as is, whatever the analysis says.
-    Raw,
-    /// Copies the files of a Windows installation ISO to a FAT32 partition.
-    Extract,
-    /// Writes a DVD-only ISO as published, then an MBR naming its EFI boot image as an EFI system partition.
-    Hybrid,
-}
+pub use bonk_core::route::WriteMode;
 
 #[derive(Debug)]
 pub struct JobError {

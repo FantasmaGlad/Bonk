@@ -4,10 +4,11 @@ use bonk_core::analysis::ImageReport;
 use bonk_core::codec::Format;
 use bonk_core::format::table::TableKind;
 use bonk_core::hybrid::{MBR_LEN, hybrid_mbr};
-use bonk_core::read_at::ReadAt;
+use bonk_core::route::{self, Route};
 use bonk_core::write::{Control, Progress};
 use bonk_hal::{Elevation, FilterOptions};
 
+use super::extract;
 use super::source::ImageFile;
 use super::target::choose;
 use super::types::{Deps, JobError, SourceInfo, Target, TraceIo, WriteMode, WriteOutcome, fail};
@@ -81,24 +82,23 @@ pub fn write(
     let (source, source_info) = file.decoded()?;
     let chosen = choose(&job.target, job.options, deps)?;
     let (image, head) = analyze_source(&file, &job.source, source_info.size_bytes)?;
-    if let Some(windows) = windows_image(&file, &source_info, &image, job.mode)? {
-        return write_windows(
-            &windows,
-            &file,
-            source_info,
-            image,
-            chosen,
-            job,
-            deps,
-            progress,
-        );
-    }
-    let hybrid_mbr = if source_info.format == Format::Raw {
-        hybrid_plan(&file, job.mode)?
-    } else {
-        hybrid_plan(head.as_slice(), job.mode)?
+    let planned = route_of(&file, &source_info, &image, &head, job.mode)?;
+    let hybrid_mbr = match planned {
+        Route::Extract(windows) => {
+            return write_windows(
+                &windows,
+                &file,
+                source_info,
+                image,
+                chosen,
+                job,
+                deps,
+                progress,
+            );
+        }
+        Route::Hybrid(mbr) => Some(mbr),
+        Route::Raw => None,
     };
-    judge_image(&image, job.mode)?;
     refuse_if_too_large(
         needed_bytes(&source_info, &image, job.mode),
         chosen.info.size_bytes,
@@ -148,16 +148,29 @@ pub(in crate::job) struct Checked {
     pub(in crate::job) hybrid_mbr: Option<[u8; MBR_LEN]>,
 }
 
-/// Refused before the drive is touched. A raw image is read where its structures lie; a compressed one only
-/// through its decompressed head.
-fn hybrid_plan(
-    source: &(impl ReadAt + ?Sized),
+fn route_of(
+    file: &ImageFile,
+    source_info: &SourceInfo,
+    image: &ImageReport,
+    head: &[u8],
     mode: WriteMode,
-) -> Result<Option<[u8; MBR_LEN]>, JobError> {
-    if mode != WriteMode::Hybrid {
-        return Ok(None);
+) -> Result<Route<extract::WindowsImage, [u8; MBR_LEN]>, JobError> {
+    let compressed = source_info.format != Format::Raw;
+    let windows = if route::looks_for_windows(image, mode, compressed) {
+        extract::detect(file)?
+    } else {
+        None
+    };
+    let planned = route::plan(image, mode, compressed, windows, || {
+        if compressed {
+            hybrid_mbr(head)
+        } else {
+            hybrid_mbr(file)
+        }
+    })
+    .map_err(refused)?;
+    if let Some(problem) = &planned.overridden {
+        log::warn!(target: "bonk::write", code = refusal_code(problem).id(), reason = problem.to_string().as_str(); "written anyway: raw mode");
     }
-    hybrid_mbr(source)
-        .map(Some)
-        .map_err(|reason| fail(Code::ImageNotBootable, format!("--mode hybrid: {reason}")))
+    Ok(planned.route)
 }

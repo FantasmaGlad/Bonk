@@ -1,11 +1,8 @@
 use crate::iso9660::testing::image;
 
 pub const SECTOR: usize = 2048;
-/// Where [`dvd_iso`] puts its EFI boot image, in 2048-byte blocks.
 pub const EFI_BLOCK: u32 = 48;
 
-/// A DVD-only ISO: empty first sector, a boot catalog at block 40 whose single EFI entry covers
-/// `efi_sectors` 512-byte sectors from [`EFI_BLOCK`].
 #[must_use]
 pub fn dvd_iso(efi_sectors: u16) -> Vec<u8> {
     let mut iso = image("DVD_ONLY", &[("EFI/BOOT/BOOTAA64.EFI", 1)]);
@@ -35,13 +32,9 @@ pub fn dvd_iso(efi_sectors: u16) -> Vec<u8> {
     iso
 }
 
-/// Where [`dvd_iso_with_far_efi`] puts its EFI boot image: past the first MiB of the ISO.
 pub const FAR_EFI_BLOCK: u32 = 640;
-/// 512-byte sectors its FAT declares, more than an El Torito entry counts.
 pub const FAR_EFI_SECTORS: u32 = 69_632;
 
-/// As MikroTik RouterOS 7.25.1, an EFI entry counting 0 sectors whose FAT boot sector declares the size, but
-/// lying at [`FAR_EFI_BLOCK`], past the head the analysis reads.
 #[must_use]
 pub fn dvd_iso_with_far_efi() -> Vec<u8> {
     let mut iso = dvd_iso(0);

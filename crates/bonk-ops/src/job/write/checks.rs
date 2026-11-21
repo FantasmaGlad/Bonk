@@ -1,6 +1,7 @@
 use std::path::Path;
 
-use bonk_core::analysis::{self, ImageKind, ImageReport};
+use bonk_core::analysis::{self, ImageReport};
+use bonk_core::route::Refusal;
 use bonk_core::write::{self as engine, Control, DEFAULT_CHUNK, Progress, VerifyError};
 use bonk_hal::{Eligibility, FilterOptions, Warning, evaluate};
 
@@ -108,50 +109,19 @@ pub(in crate::job) fn analyze_source(
     Ok((analysis::analyze(&head, real_len), head))
 }
 
-/// `Raw` overrides it, and logs it.
-pub(in crate::job) fn judge_image(report: &ImageReport, mode: WriteMode) -> Result<(), JobError> {
-    let problem = if report.truncated == Some(true) {
-        Some((
-            Code::ImageTruncated,
-            format!(
-                "the image declares {} bytes",
-                report.declared_bytes.unwrap_or_default()
-            ),
-        ))
-    } else if report.is_writable_as_is() {
-        None
-    } else if report.kind == ImageKind::PlainIso {
-        let hint = if report.udf {
-            "; Bonk does not recognize a Windows installation in it"
-        } else {
-            ""
-        };
-        Some((
-            Code::ImageNotBootable,
-            format!("ISO without disk boot: it would not boot from a USB drive{hint}"),
-        ))
-    } else {
-        Some((
-            Code::ImageNotBootable,
-            "no boot structure or partition table recognized".to_owned(),
-        ))
-    };
-    match (problem, mode) {
-        (None, _) => Ok(()),
-        // The MBR written after the ISO is what makes it start from a drive.
-        (Some(_), WriteMode::Hybrid)
-            if report.kind == ImageKind::PlainIso && report.truncated != Some(true) =>
-        {
-            Ok(())
-        }
-        (Some((code, message)), WriteMode::Auto | WriteMode::Extract | WriteMode::Hybrid) => {
-            Err(fail(code, message))
-        }
-        (Some((code, message)), WriteMode::Raw) => {
-            log::warn!(target: "bonk::write", code = code.id(), reason = message.as_str(); "written anyway: raw mode");
-            Ok(())
-        }
+pub(in crate::job) fn refusal_code(refusal: &Refusal) -> Code {
+    match refusal {
+        Refusal::Truncated { .. } => Code::ImageTruncated,
+        Refusal::NoDiskBoot { .. }
+        | Refusal::NoStructure
+        | Refusal::ExtractNeedsPlainIso
+        | Refusal::NotWindows
+        | Refusal::NotHybrid(_) => Code::ImageNotBootable,
     }
+}
+
+pub(in crate::job) fn refused(refusal: Refusal) -> JobError {
+    fail(refusal_code(&refusal), refusal.to_string())
 }
 
 /// When known before reading the whole image: a compressed image only gives what its structure declares,
