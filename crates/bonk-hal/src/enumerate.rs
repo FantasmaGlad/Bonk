@@ -9,18 +9,9 @@ use crate::disk::Disk;
 
 #[derive(Debug)]
 pub enum EnumerateError {
-    Io {
-        what: String,
-        source: io::Error,
-    },
-    /// Readable, but not in the expected shape.
-    Malformed {
-        what: String,
-        detail: String,
-    },
-    Unsupported {
-        os: &'static str,
-    },
+    Io { what: String, source: io::Error },
+    Malformed { what: String, detail: String },
+    Unsupported { os: &'static str },
 }
 
 impl fmt::Display for EnumerateError {
@@ -63,7 +54,6 @@ pub struct SourceRead {
     pub content: Option<String>,
 }
 
-/// The JSON a replayed capture recorded for `source`, if the capture read it.
 pub(crate) fn captured<T: serde::de::DeserializeOwned>(
     reads: &[SourceRead],
     source: &str,
@@ -80,7 +70,6 @@ pub(crate) fn captured<T: serde::de::DeserializeOwned>(
     }))
 }
 
-/// Also returns every system source read with its content, for `bonk debug sources`.
 pub fn enumerate_disks_recorded() -> (Result<Vec<Disk>, EnumerateError>, Vec<SourceRead>) {
     crate::platform::current().enumerate_recorded()
 }

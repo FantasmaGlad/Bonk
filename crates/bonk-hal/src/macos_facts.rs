@@ -214,7 +214,6 @@ fn mark_active_esp(media: &[RawMedia], disks: &mut [Disk]) {
 /// disks it carries appear as `"BSD Name"`. Returns `(disk, serial)`.
 #[must_use]
 pub fn serials_from_ioreg(text: &str) -> Vec<(String, String)> {
-    /// Quoted value after `key`, with or without spaces around `=`.
     fn value_after<'a>(line: &'a str, key: &str) -> Option<&'a str> {
         let rest = line.split_once(key)?.1.trim_start().strip_prefix('=')?;
         let rest = rest.trim_start().strip_prefix('"')?;
@@ -272,7 +271,6 @@ pub fn locations_from_ioreg(text: &str) -> Vec<(String, String)> {
     found
 }
 
-/// `/dev/disk2` gives `/dev/rdisk2`. Never a partition or another device.
 #[must_use]
 pub fn raw_disk_path(path: &str) -> Option<String> {
     let digits = path.strip_prefix("/dev/disk")?;
@@ -285,7 +283,6 @@ pub(crate) fn from_capture(reads: &[SourceRead]) -> Option<Result<Vec<Disk>, Enu
         .map(|media| media.and_then(|media| normalize(&media)))
 }
 
-/// Capture content without what identifies the owner. Unreadable content is dropped.
 #[must_use]
 pub fn sanitize(content: &str) -> String {
     let Ok(mut media) = serde_json::from_str::<Vec<RawMedia>>(content) else {
@@ -330,7 +327,6 @@ mod tests {
         }
     }
 
-    /// APFS system, ESP, USB key mounted under `/Volumes`.
     fn mac() -> Vec<RawMedia> {
         let mut container = whole("disk3", "PCI-Express");
         container.physical_stores = vec!["disk0s2".to_owned()];
@@ -377,7 +373,6 @@ mod tests {
             .filter(|m| m.device != "disk3s1")
             .collect();
         assert!(normalize(&sans).is_err());
-        // A mount elsewhere than `/` does not make a system disk.
         let mut ailleurs = mac();
         ailleurs[4].mount = Some("/Volumes/x".to_owned());
         assert!(normalize(&ailleurs).is_err());

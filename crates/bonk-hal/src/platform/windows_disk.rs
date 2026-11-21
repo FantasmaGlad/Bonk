@@ -205,7 +205,6 @@ impl BlockDevice for WindowsDisk {
     }
 }
 
-/// Locks and dismounts each volume of the disk; returns the unmounted points.
 pub(super) fn unmount(path: &str) -> Result<Vec<String>, OpenTargetError> {
     let number = disk_number(path)
         .ok_or_else(|| OpenTargetError::Unmount(format!("{path}: not a whole disk")))?;

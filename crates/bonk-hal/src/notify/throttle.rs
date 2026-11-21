@@ -4,7 +4,6 @@ use super::Notice;
 
 const PACE: Duration = Duration::from_secs(1);
 
-/// At most one notice a second, except a new step or the end.
 #[derive(Debug, Default)]
 pub struct Throttle {
     previous: Option<(String, Instant)>,

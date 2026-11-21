@@ -155,7 +155,6 @@ mod tests {
             libc::raise(libc::SIGTERM);
         }
         assert!(requested());
-        // Installing again resets the flag for the next operation.
         install();
         assert!(!requested());
     }

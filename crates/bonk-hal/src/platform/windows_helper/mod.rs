@@ -8,7 +8,6 @@ mod server;
 pub(in crate::platform) use client::*;
 pub(in crate::platform) use server::*;
 
-/// Hidden subcommand of the binary, started elevated.
 const HELPER_COMMAND: &str = "elevated-helper";
 
 fn access_name(access: Access) -> &'static str {

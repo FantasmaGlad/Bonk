@@ -21,7 +21,6 @@ const FD_VARIABLE: &str = "TERMUX_USB_FD";
 /// node in `TERMUX_USB_FD`. Without root there is no other way to a drive.
 pub(crate) struct Termux {
     fd: RawFd,
-    /// `/dev/bus/usb/BBB/DDD`, the path the drive is named by.
     node: String,
 }
 

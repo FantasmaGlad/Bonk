@@ -21,7 +21,6 @@ const AUTHORIZATION_POLL: Duration = Duration::from_millis(100);
 
 type Options<'a> = HashMap<&'a str, Variant<'a>>;
 
-/// `None`: no known remedy.
 fn advice(error_name: &str) -> Option<String> {
     match error_name {
         "org.freedesktop.UDisks2.Error.NotAuthorizedDismissed" => {
@@ -170,7 +169,6 @@ fn open_now(device: &Path, mode: &str, flags: i32) -> Result<OwnedFd, BlockError
     Ok(fd.into())
 }
 
-/// Otherwise the message says what is missing.
 pub(super) fn reachable() -> Result<(), String> {
     connect()
         .and_then(|connection| {
@@ -260,7 +258,6 @@ pub(super) fn rescan(disk: &Path, interactive: bool) -> Result<(), BlockError> {
     Ok(())
 }
 
-/// Through the service, when `umount` is not allowed.
 pub(super) fn unmount(partition: &Path) -> Result<(), BlockError> {
     let connection = connect()?;
     let object = resolve(&connection, partition)?;

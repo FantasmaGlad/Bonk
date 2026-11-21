@@ -88,7 +88,6 @@ pub(super) fn extents(volume: &str) -> io::Result<Option<Vec<RawExtent>>> {
     ))
 }
 
-/// Descriptive: an unreadable volume simply has none.
 pub(super) fn volume_information(volume: &str) -> (Option<String>, Option<String>) {
     let name = wide(volume);
     let mut label = [0u16; 261];

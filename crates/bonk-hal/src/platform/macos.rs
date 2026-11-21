@@ -79,7 +79,6 @@ fn read_serials() -> Vec<(String, String)> {
         .collect()
 }
 
-/// Where each USB disk is plugged; descriptive, like the serials.
 fn read_locations() -> Vec<(String, String)> {
     Command::new("/usr/sbin/ioreg")
         .args(["-r", "-l", "-w0", "-c", "IOUSBHostDevice"])

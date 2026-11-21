@@ -8,18 +8,15 @@ fn serie_lue_dans_un_descripteur_de_chaine() {
     }
     descriptor[0] = descriptor.len() as u8;
     assert_eq!(string_of(&descriptor).as_deref(), Some("AA01"));
-    // The length byte counts, not the buffer: bytes beyond it are left out.
     let mut padded = descriptor.clone();
     padded.extend([b'Z', 0]);
     assert_eq!(string_of(&padded).as_deref(), Some("AA01"));
     assert_eq!(string_of(&[2, 3]), None);
     assert_eq!(string_of(&[4, 2, b'A', 0]), None);
     assert_eq!(string_of(&[]), None);
-    // An unpaired surrogate is not text.
     assert_eq!(string_of(&[4, 3, 0x00, 0xD8]), None);
 }
 
-/// Typical real key: device, configuration, storage interface, two endpoints.
 fn stockage() -> Vec<u8> {
     let mut bytes = vec![18, 1];
     bytes.extend([0; 16]);
@@ -101,8 +98,6 @@ fn sans_memoire_le_transfert_recommence_plus_petit_et_le_reste() -> io::Result<(
     Ok(())
 }
 
-/// Out of memory in the middle of a receive: smaller transfers until the buffer is full, and the limit
-/// stays smaller for the next one.
 #[test]
 fn une_reception_sans_memoire_se_poursuit_plus_petite() -> io::Result<()> {
     let mut limit = TRANSFER_START;

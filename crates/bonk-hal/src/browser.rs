@@ -1,6 +1,5 @@
 use std::process::{Command, Stdio};
 
-/// Opens `url` in the user's browser; `false` when no opener could be started.
 pub fn open(url: &str) -> bool {
     let Some(mut command) = opener(url) else {
         return false;

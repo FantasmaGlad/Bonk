@@ -58,7 +58,6 @@ fn les_lectures_de_sources_sont_enregistrees_avec_leur_contenu() -> Result<(), B
             .as_deref()
             .is_some_and(|c| c.contains("/boot/efi"))
     );
-    // Failures are recorded too: a missing optional file is a failed read.
     assert!(
         reads.iter().any(|r| !r.ok && r.error.is_some()),
         "{reads:?}"
@@ -107,7 +106,6 @@ fn une_capture_rejouee_redonne_les_memes_disques() -> Result<(), Box<dyn Error>>
     assert_eq!(replayed, original);
     assert_eq!(find(&replayed, "/dev/sdb")?.bus, Bus::Usb);
     assert_eq!(find(&replayed, "/dev/sdb")?.partitions[0].holders, ["dm-0"]);
-    // Without the links the bus is lost: the information goes through them.
     let without_links: Vec<_> = reads.iter().filter(|r| r.kind != "link").cloned().collect();
     assert!(
         enumerate_from_reads(&without_links).map_or(true, |d| d.is_empty()

@@ -32,7 +32,6 @@ use crate::target::OpenTargetError;
 
 use super::*;
 
-/// Client side: pipe to the helper, kept until exit.
 pub(in crate::platform) struct Session {
     pipe: File,
     reader: BufReader<File>,
@@ -140,7 +139,6 @@ pub(in crate::platform) fn accept(pipe: &File, helper: u32) -> io::Result<()> {
     Ok(())
 }
 
-/// Starts the helper if needed (one prompt per process), then sends the request.
 pub(in crate::platform) fn ask(request: &Value) -> io::Result<Value> {
     let mut slot = SESSION
         .lock()

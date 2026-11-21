@@ -43,7 +43,6 @@ fn fixture_paths() -> Result<Vec<PathBuf>, Box<dyn Error>> {
 
 type Verdicts = BTreeMap<String, Value>;
 
-/// The verdicts a scenario expects, its own or another's through `same_as`.
 fn expected_of<'a>(fixture: &'a Fixture, scenario: &'a Scenario) -> Result<&'a Verdicts, String> {
     match (&scenario.expected, &scenario.same_as) {
         (Some(map), None) => Ok(map),
@@ -57,7 +56,6 @@ fn expected_of<'a>(fixture: &'a Fixture, scenario: &'a Scenario) -> Result<&'a V
     }
 }
 
-/// Each disk's verdict under the scenario's options against the expected one.
 fn check_scenario(
     fixture: &Fixture,
     scenario: &Scenario,
@@ -67,7 +65,6 @@ fn check_scenario(
 ) -> Result<(), Box<dyn Error>> {
     for disk in &fixture.disks {
         let verdict = evaluate(disk, scenario.options);
-        // The rule-by-rule check always gives the filter's verdict.
         let (traced, trace) = evaluate_traced(disk, scenario.options);
         if traced != verdict || trace.is_empty() {
             failures.push(format!(
