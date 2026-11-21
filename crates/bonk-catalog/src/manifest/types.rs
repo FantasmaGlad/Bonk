@@ -121,7 +121,6 @@ pub struct Image {
 }
 
 impl Image {
-    /// `None` for an official page, or a name that would leave the cache directory.
     #[must_use]
     pub fn download_name(&self) -> Option<&str> {
         match &self.source {
@@ -151,7 +150,6 @@ pub enum ImageSource {
     OfficialPage { official_page: String },
 }
 
-/// `24.04.5` sorts after `26.04.1` even if released later, and `9` before `10`.
 #[must_use]
 pub fn version_numbers(version: &str) -> Vec<u64> {
     version

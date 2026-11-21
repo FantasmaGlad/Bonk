@@ -5,7 +5,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::manifest::{Family, replace};
 
-/// Named by the signed hash: a new logo never reuses an old file.
 fn file(dir: &Path, family: &Family) -> Option<PathBuf> {
     let extension = Path::new(&family.icon).extension()?.to_str()?;
     Some(
@@ -18,7 +17,6 @@ fn matches(family: &Family, bytes: &[u8]) -> bool {
     crate::manifest::hash_matches(&family.icon_sha256, bytes)
 }
 
-/// The cached logo, checked again by its signed hash at each read.
 #[must_use]
 pub fn cached(dir: &Path, family: &Family) -> Option<PathBuf> {
     let path = file(dir, family)?;
@@ -46,11 +44,9 @@ pub fn store(dir: &Path, family: &Family, bytes: &[u8]) -> Result<PathBuf, Strin
     Ok(path)
 }
 
-/// Fetches a logo by its full address.
 pub type Fetch<'a> = dyn Fn(&str) -> Result<Vec<u8>, String> + Sync + 'a;
 
-/// Every family's logo, `workers` downloads at a time. A logo shared by two families is fetched once, so two
-/// threads never write the same file.
+/// A logo shared by two families is fetched once: two threads never write the same file.
 pub fn paths(
     base: &str,
     dir: &Path,
@@ -140,7 +136,6 @@ mod tests {
             calls.fetch_add(1, Ordering::SeqCst);
             let now = running.fetch_add(1, Ordering::SeqCst) + 1;
             peak.fetch_max(now, Ordering::SeqCst);
-            // Waits for a second download to start; sequential code never gets one.
             let deadline = Instant::now() + Duration::from_secs(5);
             while peak.load(Ordering::SeqCst) < 2 && Instant::now() < deadline {
                 std::thread::sleep(Duration::from_millis(1));

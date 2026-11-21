@@ -27,8 +27,6 @@ pub(super) fn header_text(
     headers.get(name)?.to_str().ok().map(str::to_owned)
 }
 
-/// A response read on its own thread: head, chunks, then `End` or `Failed`. Stops as soon as the caller lets
-/// go.
 pub(super) fn connect(
     agent: Agent,
     url: String,

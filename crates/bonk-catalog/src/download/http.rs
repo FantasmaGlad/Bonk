@@ -8,7 +8,6 @@ use ureq::{Agent, Proxy};
 
 use super::{DownloadError, TEXT_LIMIT};
 
-/// Redirections follow the same rule.
 pub(super) fn https_required(url: &str) -> Result<bool, DownloadError> {
     if url.starts_with("https://") {
         return Ok(true);
@@ -30,7 +29,6 @@ pub fn is_url(text: &str) -> bool {
     text.starts_with("https://") || text.starts_with("http://")
 }
 
-/// One setting for the whole process: no download can forget it.
 static PROXY: RwLock<Option<Proxy>> = RwLock::new(None);
 
 /// `socks5h://` only: any other scheme resolves names outside the proxy, and the anonymity Tor promises would
@@ -58,7 +56,6 @@ pub(super) fn agent(https_only: bool) -> Result<Agent, DownloadError> {
         .tls_config(tls)
         .timeout_connect(Some(Duration::from_secs(30)))
         .timeout_recv_response(Some(Duration::from_secs(60)))
-        // 4xx and 5xx are read as responses: they are handled differently.
         .http_status_as_error(false)
         .user_agent(concat!("bonk/", env!("CARGO_PKG_VERSION")))
         .build()

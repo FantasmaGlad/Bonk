@@ -18,7 +18,6 @@ pub(super) fn is_date(text: &str) -> bool {
         })
 }
 
-/// Stays under the manifest directory: no absolute path, no parent, no other host.
 pub(super) fn is_relative(path: &str) -> bool {
     !path.starts_with('/')
         && !path.contains('\\')
@@ -171,7 +170,6 @@ pub(super) fn invalid(id: &str, reason: &'static str) -> CatalogError {
     }
 }
 
-/// Unique, valid families, and images that are unique, valid and of a known family.
 pub(super) fn check_entries(catalog: &Catalog) -> Result<(), CatalogError> {
     let mut families = HashSet::new();
     for family in &catalog.families {

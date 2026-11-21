@@ -13,20 +13,15 @@ use bonk_catalog::{Advance, DownloadError, Hooks, download, fetch_limited, fetch
 
 const ETAG: &str = "\"v1\"";
 
-/// What the server does with a connection, by its number (from 0).
 #[derive(Clone, PartialEq)]
 enum Reply {
-    /// Honours `Range` and `If-Range`.
     Serve,
-    /// Cuts after this many body bytes.
     CutAfter(usize),
     IgnoreRange,
     WrongStart,
     Mute,
     Status(u16),
-    /// Compresses the body when the request accepts gzip.
     Gzip,
-    /// These gzip bytes, whatever the request.
     Raw(Vec<u8>),
 }
 
@@ -185,7 +180,6 @@ impl Drop for Temp {
     }
 }
 
-/// Gzip with one stored deflate block: valid compressed framing without a compressor in the tests.
 fn gzip_stored(body: &[u8]) -> Vec<u8> {
     let crc = body.iter().fold(!0u32, |crc, byte| {
         (0..8).fold(crc ^ u32::from(*byte), |c, _| {
@@ -413,7 +407,6 @@ fn le_texte_d_empreintes_se_lit_et_une_page_absente_se_dit() {
     ));
 }
 
-/// The catalog, its signature and the logos travel compressed: about six times fewer bytes.
 #[test]
 fn un_fichier_du_catalogue_se_recoit_compresse_et_se_lit_tel_quel() {
     let body = b"{\"schema_version\":2}".repeat(50);
@@ -425,7 +418,6 @@ fn un_fichier_du_catalogue_se_recoit_compresse_et_se_lit_tel_quel() {
     assert!(server.requests()[0].contains("accept-encoding: gzip"));
 }
 
-/// A few compressed bytes cannot unfold past the expected size.
 #[test]
 fn une_reponse_compressee_ne_depasse_pas_la_taille_attendue_une_fois_decompressee() {
     let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
@@ -437,7 +429,6 @@ fn une_reponse_compressee_ne_depasse_pas_la_taille_attendue_une_fois_decompresse
     assert!(error.to_string().contains("once decompressed"), "{error}");
 }
 
-/// An image is never asked compressed: resuming and the published hash count the file's own bytes.
 #[test]
 fn une_image_se_demande_sans_compression() {
     let body = data(4096);
@@ -448,7 +439,6 @@ fn une_image_se_demande_sans_compression() {
     assert!(server.requests()[0].contains("accept-encoding: identity"));
 }
 
-/// A published file larger than the text bound (GRUB is 1.4 MB) is read up to its signed size.
 #[test]
 fn un_fichier_publie_se_lit_jusqu_a_sa_taille_signee() {
     let body = data(1_429_504);

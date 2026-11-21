@@ -1,9 +1,7 @@
 use crate::manifest::{Family, FamilyEntry, Image};
 
-/// What the catalog is narrowed to; an empty field keeps everything.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Query {
-    /// Words that must all appear in the family's id or name, or in the image's name or edition.
     pub text: String,
     pub uses: Option<String>,
     pub base: Option<String>,
@@ -89,7 +87,6 @@ impl Query {
             && same(self.arch.as_deref(), Some(image.arch))
     }
 
-    /// Kubuntu is filed under Ubuntu: the image's names count as much as the family's.
     fn names(&self, family: FamilyFacts<'_>, image: ImageFacts<'_>) -> bool {
         let haystack = fold(
             &[

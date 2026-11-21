@@ -40,7 +40,6 @@ fn debian() -> String {
     )
 }
 
-/// An identifier a link could not name is refused in the catalog too.
 #[test]
 fn un_identifiant_hors_de_la_regle_des_liens_est_refuse() -> Result<(), serde_json::Error> {
     for id in ["-debian", &"a".repeat(129)] {
@@ -181,7 +180,6 @@ fn signature_fausse_octet_change_ou_autre_cle_sont_refuses()
         Err(CatalogError::BadSignature)
     );
     assert_eq!(verify(&bytes, &[], &trust), Err(CatalogError::BadSignature));
-    // Without a key nothing is ever allowed.
     assert_eq!(check(&bytes, &key, &[], 0), Err(CatalogError::BadSignature));
     Ok(())
 }
@@ -227,7 +225,6 @@ impl Drop for Dossier {
     }
 }
 
-/// Serves the manifest, and its signature at the `.sig` address.
 fn serveur(manifeste: Vec<u8>, signature: Vec<u8>) -> impl Fn(&str) -> Result<Vec<u8>, String> {
     move |url: &str| {
         Ok(if url.ends_with(".sig") {
@@ -258,13 +255,11 @@ fn la_copie_sert_si_le_reseau_manque_jamais_si_le_fichier_est_refuse()
     assert!(!lire(NOW, &bon)?.saved_copy);
     assert!(lire(NOW, &hors_ligne)?.saved_copy);
 
-    // Received but tampered: refused, even with a good copy.
     let mut f = bytes.clone();
     f[20] ^= 1;
     let falsifie = serveur(f, signature.clone());
     assert_eq!(lire(NOW, &falsifie), Err(CatalogError::BadSignature));
 
-    // An older manifest, even well signed, does not pass after a newer one.
     let ancien = manifest(4, NOW + 1, &debian());
     let s3 = key.sign(&ancien).as_ref().to_vec();
     let retour = serveur(ancien, s3);
@@ -273,7 +268,6 @@ fn la_copie_sert_si_le_reseau_manque_jamais_si_le_fichier_est_refuse()
         Err(CatalogError::Rollback { .. })
     ));
 
-    // The copy expires too.
     assert!(matches!(
         lire(NOW + 1, &hors_ligne),
         Err(CatalogError::Expired { .. })
@@ -307,7 +301,6 @@ fn un_logo_faux_est_ecarte() -> Result<(), Box<dyn std::error::Error>> {
     );
     let chemin = icon_path("https://c/", &dossier.0, &family(empreinte.clone()), &fetch);
     assert!(chemin.is_some_and(|p| p.is_file()));
-    // Already saved: no network.
     let hors_ligne = |_: &str| Err("coupure".to_owned());
     let chemin = icon_path(
         "https://c/",
@@ -315,7 +308,6 @@ fn un_logo_faux_est_ecarte() -> Result<(), Box<dyn std::error::Error>> {
         &family(empreinte.clone()),
         &hors_ligne,
     );
-    // A cached copy changed on disk is not served, even offline.
     std::fs::write(chemin.ok_or("en cache")?, b"<svg>autre</svg>")?;
     assert_eq!(
         icon_path(
@@ -395,7 +387,6 @@ fn un_fichier_publie_est_controle_puis_garde_en_cache() -> Result<(), String> {
         asset_path("https://c/", &dossier.0, "grub", &asset, &hors_ligne)?,
         chemin
     );
-    // A cached copy changed on disk is not trusted.
     fs::write(&chemin, b"abime").map_err(|e| e.to_string())?;
     assert!(asset_path("https://c/", &dossier.0, "grub", &asset, &hors_ligne).is_err());
     Ok(())

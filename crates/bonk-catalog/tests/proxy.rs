@@ -3,7 +3,6 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc;
 use std::time::Duration;
 
-/// Minimal SOCKS5 server: records the requested name, answers a page.
 fn faux_socks(serveur: TcpListener, noms: mpsc::Sender<String>) {
     std::thread::spawn(move || {
         while let Ok((mut flux, _)) = serveur.accept() {
@@ -20,7 +19,7 @@ fn echange(flux: &mut TcpStream, noms: &mpsc::Sender<String>) -> std::io::Result
     flux.write_all(&[5, 0])?;
     let mut demande = [0u8; 4];
     flux.read_exact(&mut demande)?;
-    // Type 3 is a name only the proxy resolves; any other type means DNS went direct.
+    // RFC 1928 address type 3: the proxy resolves the name, DNS did not go direct.
     if demande[3] != 3 {
         let _ = noms.send(format!("adresse de type {}", demande[3]));
         return Ok(());
@@ -56,7 +55,6 @@ fn le_nom_passe_par_le_proxy_et_sans_proxy_rien_ne_part() -> Result<(), Box<dyn 
     assert_eq!(page, "ok");
     assert_eq!(recus.recv_timeout(Duration::from_secs(5))?, "localhost");
 
-    // Proxy down: an error, never a fallback to the requested server, which is listening.
     let ferme = TcpListener::bind("127.0.0.1:0")?;
     let port_ferme = ferme.local_addr()?.port();
     drop(ferme);

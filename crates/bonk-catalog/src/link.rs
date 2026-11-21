@@ -1,6 +1,5 @@
 use std::fmt;
 
-/// The only link Bonk answers: it names an image of the signed catalog, never an address or a disk.
 const PREFIX: &str = "bonk://install/";
 
 const MAX_ID: usize = 128;
@@ -24,8 +23,7 @@ impl fmt::Display for LinkError {
 
 impl std::error::Error for LinkError {}
 
-/// The catalog's identifier rule, for its families and images and for links: a link comes from a web page,
-/// so anything outside this alphabet is refused and it can carry neither a path, a query nor an option.
+/// A link comes from a web page: outside this alphabet it could carry a path, a query or an option.
 #[must_use]
 pub fn is_image_id(id: &str) -> bool {
     (1..=MAX_ID).contains(&id.len())
@@ -35,7 +33,6 @@ pub fn is_image_id(id: &str) -> bool {
         && !id.starts_with('-')
 }
 
-/// The catalog identifier named by `bonk://install/<id>`.
 pub fn image_id(link: &str) -> Result<&str, LinkError> {
     let id = link
         .get(..PREFIX.len())
