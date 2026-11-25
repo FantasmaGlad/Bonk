@@ -5,6 +5,7 @@ use std::ops::Range;
 use schemars::JsonSchema;
 use serde::Serialize;
 
+use crate::analysis::{ImageKind, ImageReport};
 use crate::block::{BlockDevice, BlockError};
 use crate::partition::{Gpt, GptHeader, Layout, MBR_PROTECTIVE, crc32, inspect, read_range};
 
@@ -43,6 +44,12 @@ pub fn ranges_rewritten_by_repair(head: &[u8]) -> Vec<Range<u64>> {
         return ranges;
     }
     Vec::new()
+}
+
+// An ISO keeps its tables as published: the media check of Fedora or RHEL hashes its first sectors too.
+#[must_use]
+pub fn repairs(image: &ImageReport) -> bool {
+    !matches!(image.kind, ImageKind::HybridIso | ImageKind::PlainIso)
 }
 
 #[must_use]
@@ -316,6 +323,28 @@ mod tests {
         let mut big = bytes.to_vec();
         big.resize(total_sectors * 512, 0);
         MemoryDevice::from_bytes(big, 512)
+    }
+
+    #[test]
+    fn une_iso_garde_ses_tables_et_une_image_disque_se_repare() {
+        use crate::analysis::{ImageKind, ImageReport};
+        let report = |kind| ImageReport {
+            kind,
+            bios: true,
+            uefi: true,
+            udf: false,
+            declared_bytes: None,
+            truncated: None,
+        };
+        for (kind, expected) in [
+            (ImageKind::HybridIso, false),
+            (ImageKind::PlainIso, false),
+            (ImageKind::BootableDisk, true),
+            (ImageKind::DataDisk, true),
+            (ImageKind::Unknown, true),
+        ] {
+            assert_eq!(repairs(&report(kind)), expected, "{kind:?}");
+        }
     }
 
     #[test]
