@@ -25,6 +25,8 @@ pub struct VaultAddJob {
     pub trace_io: Option<TraceIo>,
     pub yes: bool,
     pub elevation: Elevation,
+    /// Families checked before the drive is opened; the vault's own menu has the last word.
+    pub families: Vec<vault::VaultFamily>,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
@@ -106,6 +108,7 @@ pub(super) fn vault_name(path: &Path, name: Option<&str>) -> Result<String, JobE
 pub(super) fn vault_source(
     path: &Path,
     name: Option<&str>,
+    families: &[vault::VaultFamily],
 ) -> Result<(String, u64, vault::IsoKind), JobError> {
     let name = vault_name(path, name)?;
     let file = std::fs::File::open(path)
@@ -116,8 +119,7 @@ pub(super) fn vault_source(
         .len();
     let mut iso = bonk_core::iso9660::Iso::open(std::io::BufReader::new(file))
         .map_err(|e| fail(Code::IsoNotForVault, format!("{name}: {e}")))?;
-    let families = vault::default_families();
-    let kind = vault::iso_kind(&mut iso, &families)
+    let kind = vault::iso_kind(&mut iso, families)
         .map_err(|e| fail(Code::IsoNotForVault, format!("{name}: {e}")))?
         .ok_or_else(|| {
             let known: Vec<&str> = families.iter().map(|family| family.name.as_str()).collect();
@@ -136,7 +138,7 @@ pub fn vault_add(
     deps: &Deps<'_>,
     progress: &mut dyn FnMut(&Progress) -> Control,
 ) -> Result<VaultAddDone, JobError> {
-    let (name, size, kind) = vault_source(&job.source, job.name.as_deref())?;
+    let (name, size, kind) = vault_source(&job.source, job.name.as_deref(), &job.families)?;
     confirmed(job.yes, "vault add")?;
     let (mut device, info, plan) = open_vault(
         &job.target,
@@ -146,6 +148,18 @@ pub fn vault_add(
         job.trace_io,
         deps,
     )?;
+    if !vault::vault_families(&*device, &plan)
+        .iter()
+        .any(|family| family.id == kind.family.id)
+    {
+        return Err(fail(
+            Code::IsoNotForVault,
+            format!(
+                "{name}: this vault's menu does not start {} yet: bonk vault update first",
+                kind.family.name
+            ),
+        ));
+    }
     let mut file = std::fs::File::open(&job.source).map_err(|e| {
         fail(
             Code::SourceUnreadable,

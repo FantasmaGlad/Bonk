@@ -235,6 +235,10 @@ pub struct Catalog {
     /// Boot loader of the vault. Absent from older catalogs.
     #[serde(default)]
     pub grub: Option<Grub>,
+    /// How the vault menu starts each live system, read by `bonk_core::vault::families_from`. Absent from
+    /// older catalogs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub vault_families: Vec<serde_json::Value>,
     #[serde(default)]
     pub taxonomy: Option<Taxonomy>,
 }

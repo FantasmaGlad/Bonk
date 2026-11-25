@@ -18,7 +18,10 @@ fn ids() -> Ids {
 }
 
 fn boot() -> Vec<BootFile> {
-    let files = boot_files(&[("x86_64", b"MZ grub x86_64".repeat(1000))]);
+    let files = boot_files(
+        &[("x86_64", b"MZ grub x86_64".repeat(1000))],
+        &default_families(),
+    );
     assert!(files.is_ok(), "{files:?}");
     files.unwrap_or_default()
 }
@@ -88,7 +91,10 @@ fn mettre_a_jour_le_demarrage_garde_les_iso() -> Result<(), FormatError> {
         &mut |_| true,
     )?;
     assert!(boot_matches(&dev, &plan, &boot())?);
-    let newer = boot_files(&[("x86_64", b"MZ grub x86_64, version suivante".repeat(2000))])?;
+    let newer = boot_files(
+        &[("x86_64", b"MZ grub x86_64, version suivante".repeat(2000))],
+        &default_families(),
+    )?;
     assert!(!boot_matches(&dev, &plan, &newer)?);
 
     let ids = Ids::from_seed(b"mise a jour");
@@ -326,11 +332,14 @@ fn liste_les_iso_sans_les_autres_fichiers() -> Result<(), Box<dyn std::error::Er
 
 #[test]
 fn les_fichiers_de_demarrage_portent_les_noms_uefi_et_le_menu() -> Result<(), FormatError> {
-    let files = boot_files(&[
-        ("x86_64", vec![1]),
-        ("aarch64", vec![2]),
-        ("riscv64", vec![3]),
-    ])?;
+    let files = boot_files(
+        &[
+            ("x86_64", vec![1]),
+            ("aarch64", vec![2]),
+            ("riscv64", vec![3]),
+        ],
+        &default_families(),
+    )?;
     let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
     assert_eq!(
         paths,
@@ -339,6 +348,7 @@ fn les_fichiers_de_demarrage_portent_les_noms_uefi_et_le_menu() -> Result<(), Fo
             "EFI/BOOT/BOOTAA64.EFI",
             "EFI/BOOT/BOOTRISCV64.EFI",
             "bonk/grub.cfg",
+            "bonk/families.json",
             "bonk/casper/20iso_scan",
             "bonk/udev/99-bonk-vault-iso.rules"
         ]
@@ -356,7 +366,7 @@ fn les_fichiers_de_demarrage_portent_les_noms_uefi_et_le_menu() -> Result<(), Fo
     }
     assert!(files[3].data.starts_with(b"set timeout="));
     assert!(matches!(
-        boot_files(&[("mips", vec![])]),
+        boot_files(&[("mips", vec![])], &default_families()),
         Err(FormatError::Unsupported(_))
     ));
     Ok(())
@@ -447,4 +457,39 @@ fn une_famille_servie_en_donnees_entre_au_menu_sans_code() -> Result<(), Box<dyn
         "linux (loop)/boot/$5/loader/linux iso-scan/filename=$2 root=live:CDLABEL=$4 rd.live.image"
     ));
     Ok(())
+}
+
+#[test]
+fn le_coffre_garde_les_familles_de_son_menu() -> Result<(), Box<dyn std::error::Error>> {
+    let mut families = default_families();
+    families.retain(|family| family.id != "arch");
+    let ids_of =
+        |families: &[VaultFamily]| families.iter().map(|f| f.id.clone()).collect::<Vec<_>>();
+    for (written, expected) in [
+        (true, ids_of(&families)),
+        (false, ids_of(&default_families())),
+    ] {
+        let mut dev = MemoryDevice::new(256 * MIB, 512)?;
+        let plan = plan(dev.size(), dev.block_size(), TableKind::Gpt)?;
+        write_table(&mut dev, &plan, &ids())?;
+        let mut boot = boot_files(&[("x86_64", b"MZ grub".repeat(100))], &families)?;
+        if !written {
+            boot.retain(|file| file.path != FAMILIES_PATH);
+        }
+        write_volumes(&mut dev, &plan, &ids(), &boot)?;
+        assert_eq!(ids_of(&vault_families(&dev, &plan)), expected, "{written}");
+    }
+    Ok(())
+}
+
+#[test]
+fn une_famille_servie_illisible_ou_refusee_est_laissee_de_cote() {
+    let mut debian = serde_json::to_value(&default_families()[0]).unwrap_or_default();
+    let mut unsafe_family = debian.clone();
+    unsafe_family["options"] = serde_json::json!("boot=live; reboot");
+    debian["id"] = serde_json::json!("debian_bis");
+    let served = [serde_json::json!({"id": 3}), unsafe_family, debian];
+    let kept: Vec<String> = families_from(&served).into_iter().map(|f| f.id).collect();
+    assert_eq!(kept, ["debian_bis"]);
+    assert_eq!(families_from(&served[..2]), default_families());
 }

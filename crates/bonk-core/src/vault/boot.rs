@@ -28,7 +28,10 @@ pub fn efi_file_name(arch: &str) -> Option<&'static str> {
 ///
 /// # Errors
 /// [`FormatError::Unsupported`] for an architecture without an EFI removable-media name.
-pub fn boot_files(efi: &[(&str, Vec<u8>)]) -> Result<Vec<BootFile>, FormatError> {
+pub fn boot_files(
+    efi: &[(&str, Vec<u8>)],
+    families: &[VaultFamily],
+) -> Result<Vec<BootFile>, FormatError> {
     let mut files = efi
         .iter()
         .map(|(arch, data)| {
@@ -42,7 +45,11 @@ pub fn boot_files(efi: &[(&str, Vec<u8>)]) -> Result<Vec<BootFile>, FormatError>
         .collect::<Result<Vec<_>, FormatError>>()?;
     files.push(BootFile {
         path: MENU_PATH.to_owned(),
-        data: menu(&default_families()).into_bytes(),
+        data: menu(families).into_bytes(),
+    });
+    files.push(BootFile {
+        path: FAMILIES_PATH.to_owned(),
+        data: serde_json::to_vec_pretty(families).unwrap_or_default(),
     });
     files.extend(INITRD_SCRIPTS.iter().map(|(path, script)| BootFile {
         path: (*path).to_owned(),

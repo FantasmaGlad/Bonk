@@ -21,6 +21,7 @@ const EFI_MIN_BYTES: u64 = 64 << 20;
 const EFI_MAX_BYTES: u64 = 1 << 30;
 const VAULT_MIN_BYTES: u64 = 64 << 20;
 pub const MENU_PATH: &str = "bonk/grub.cfg";
+pub const FAMILIES_PATH: &str = "bonk/families.json";
 /// Ubuntu's iso-scan step, in place of casper's own.
 pub const CASPER_SCRIPT: &str = include_str!("initrd/casper.sh");
 /// A udev rule for the installers of the Red Hat family: their dracut hooks moved between versions, udev's

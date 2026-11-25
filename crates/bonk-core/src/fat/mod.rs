@@ -3,6 +3,10 @@ use std::collections::HashSet;
 use crate::bytes::{u16_le, u32_le};
 use crate::read_at::ReadAt;
 
+mod name;
+
+use name::{LongName, short_name};
+
 const ENTRY: usize = 32;
 const ATTR_VOLUME_ID: u8 = 0x08;
 const ATTR_DIRECTORY: u8 = 0x10;
@@ -121,13 +125,13 @@ impl<'a, R: ReadAt + ?Sized> Fat<'a, R> {
         self.kind
     }
 
-    // Short 8.3 names only, compared without case: what removable-media loader paths use.
+    // Short or long name, compared without case as firmware and Windows do.
     #[must_use]
     pub fn read(&self, path: &str, limit: u64) -> Option<Vec<u8>> {
         let mut directory = self.root_bytes()?;
         let mut parts = path.split('/').filter(|part| !part.is_empty()).peekable();
         while let Some(part) = parts.next() {
-            let entry = find(&directory, &short_name(part)?, self.kind)?;
+            let entry = find(&directory, part, self.kind)?;
             if parts.peek().is_none() {
                 return self.file(entry, limit);
             }
@@ -220,34 +224,27 @@ impl<'a, R: ReadAt + ?Sized> Fat<'a, R> {
     }
 }
 
-fn short_name(part: &str) -> Option<[u8; 11]> {
-    let (base, extension) = part.rsplit_once('.').unwrap_or((part, ""));
-    let plain = |text: &str, max: usize| {
-        !text.is_empty()
-            && text.len() <= max
-            && text.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
-    };
-    if !plain(base, 8) || !(extension.is_empty() || plain(extension, 3)) {
-        return None;
-    }
-    let mut name = [b' '; 11];
-    name[..base.len()].copy_from_slice(base.to_ascii_uppercase().as_bytes());
-    name[8..8 + extension.len()].copy_from_slice(extension.to_ascii_uppercase().as_bytes());
-    Some(name)
-}
-
-fn find(directory: &[u8], name: &[u8; 11], kind: Kind) -> Option<Entry> {
+fn find(directory: &[u8], part: &str, kind: Kind) -> Option<Entry> {
+    let short = short_name(part);
+    let mut long = LongName::default();
     for raw in directory.as_chunks::<ENTRY>().0 {
         match raw[0] {
             0x00 => return None,
-            0xE5 => continue,
+            0xE5 => {
+                long = LongName::default();
+                continue;
+            }
             _ => {}
         }
         let attributes = raw[11];
-        if attributes & ATTR_LONG_NAME == ATTR_LONG_NAME
-            || attributes & ATTR_VOLUME_ID != 0
-            || !raw[..11].eq_ignore_ascii_case(name)
-        {
+        if attributes & ATTR_LONG_NAME == ATTR_LONG_NAME {
+            long.push(raw);
+            continue;
+        }
+        let long_name = long.take(&raw[..11]);
+        let named = short.is_some_and(|short| raw[..11].eq_ignore_ascii_case(&short))
+            || long_name.is_some_and(|name| name.eq_ignore_ascii_case(part));
+        if attributes & ATTR_VOLUME_ID != 0 || !named {
             continue;
         }
         let high = if kind == Kind::Fat32 {

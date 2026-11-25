@@ -1,6 +1,11 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use super::{FAMILIES_PATH, VaultPlan};
+use crate::block::BlockDevice;
+use crate::fat::Fat;
+use crate::read_at::OnDevice;
+
 /// How the vault menu recognises a live system in an ISO and starts it; served by the catalog.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct VaultFamily {
@@ -33,6 +38,45 @@ const PLACEHOLDERS: [&str; 6] = [
 #[must_use]
 pub fn default_families() -> Vec<VaultFamily> {
     serde_json::from_str(include_str!("families.json")).unwrap_or_default()
+}
+
+// A family served in a shape this Bonk does not read, or with a refused value, is left out; none left, the
+// families this Bonk knows.
+#[must_use]
+pub fn families_from(served: &[serde_json::Value]) -> Vec<VaultFamily> {
+    let families: Vec<VaultFamily> = served
+        .iter()
+        .filter_map(|value| match serde_json::from_value::<VaultFamily>(value.clone()) {
+            Ok(family) if family_errors(&family).is_empty() => Some(family),
+            Ok(family) => {
+                log::warn!(target: "bonk::vault", errors = family_errors(&family).join("; ").as_str(); "vault family left out");
+                None
+            }
+            Err(error) => {
+                log::warn!(target: "bonk::vault", error = error.to_string().as_str(); "vault family not read");
+                None
+            }
+        })
+        .collect();
+    if families.is_empty() {
+        default_families()
+    } else {
+        families
+    }
+}
+
+// The families the vault's own menu starts; a vault prepared before they were written has the defaults.
+#[must_use]
+pub fn vault_families(dev: &dyn BlockDevice, plan: &VaultPlan) -> Vec<VaultFamily> {
+    let reader = OnDevice(dev);
+    let start = plan
+        .efi
+        .first_lba
+        .saturating_mul(u64::from(dev.block_size()));
+    let served = Fat::open(&reader, start)
+        .and_then(|fat| fat.read(FAMILIES_PATH, 1 << 20))
+        .and_then(|bytes| serde_json::from_slice::<Vec<serde_json::Value>>(&bytes).ok());
+    served.map_or_else(default_families, |served| families_from(&served))
 }
 
 // Written into the GRUB menu and the kernel line: a value that could close a quote, name a variable or chain a

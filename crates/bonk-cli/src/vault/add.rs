@@ -34,6 +34,7 @@ pub(super) fn run_add(
                 trace_io: args.common.trace_io.map(TraceIo::from),
                 yes: args.yes,
                 elevation: args.common.elevate.into(),
+                families: bonk_core::vault::default_families(),
             };
             job::vault_add(&job, deps, &mut progress)
         })

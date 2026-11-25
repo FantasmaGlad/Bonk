@@ -45,7 +45,11 @@ pub(crate) fn load(dir: &str, json: Vec<u8>, signature: Vec<u8>) -> Result<(), S
     )
     .map_err(|error| error.to_string())?;
     let mut catalog = loaded.catalog;
-    vault::set_grub(manifest::DEFAULT_BASE, catalog.grub.take());
+    vault::set_grub(
+        manifest::DEFAULT_BASE,
+        catalog.grub.take(),
+        std::mem::take(&mut catalog.vault_families),
+    );
     *screen::lock(&FAMILIES) = catalog.families.clone();
     let report = report(catalog, loaded.saved_copy, dir);
     let shelf = bonk_ui::catalog::shelf(&report);

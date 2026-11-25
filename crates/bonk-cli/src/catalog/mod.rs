@@ -142,6 +142,7 @@ mod tests {
                 image("u26", "ubuntu", "2026-08-26", download()),
             ],
             grub: None,
+            vault_families: Vec::new(),
             taxonomy: None,
         }
     }

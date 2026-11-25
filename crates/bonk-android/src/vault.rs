@@ -18,9 +18,11 @@ use crate::screen::{self, MODEL, lock};
 use crate::writer::{android_io, finished, push, report, same_drive};
 
 static GRUB: Mutex<Option<(String, Grub)>> = Mutex::new(None);
+static VAULT_FAMILIES: Mutex<Vec<serde_json::Value>> = Mutex::new(Vec::new());
 
-pub(crate) fn set_grub(base: &str, grub: Option<Grub>) {
+pub(crate) fn set_grub(base: &str, grub: Option<Grub>, vault_families: Vec<serde_json::Value>) {
     *lock(&GRUB) = grub.map(|grub| (base.to_owned(), grub));
+    *lock(&VAULT_FAMILIES) = vault_families;
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -86,7 +88,8 @@ fn boot(entry: Option<&Grub>, folder: &Path) -> Result<(Vec<BootFile>, GrubInfo)
             "the catalog offers no GRUB image this version of Bonk can write",
         ));
     }
-    let files = core_vault::boot_files(&images).map_err(refused)?;
+    let families = core_vault::families_from(&lock(&VAULT_FAMILIES));
+    let files = core_vault::boot_files(&images, &families).map_err(refused)?;
     let info = GrubInfo {
         version: entry.version.clone(),
         build: entry.build.clone(),
@@ -214,6 +217,7 @@ fn add_job(target: Target, request: &Request<'_>) -> VaultAddJob {
         trace_io: None,
         yes: true,
         elevation: Elevation::Never,
+        families: core_vault::families_from(&lock(&VAULT_FAMILIES)),
     }
 }
 
