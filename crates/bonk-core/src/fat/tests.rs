@@ -93,3 +93,26 @@ fn ce_qui_n_est_pas_un_fat_n_ouvre_pas() {
     let fat = Fat::open(cut, 0).expect("boot sector alone");
     assert_eq!(fat.read(LOADER, 64), None);
 }
+
+#[test]
+fn un_nom_long_se_lit_sur_plusieurs_entrees_et_sans_casse() {
+    let image = fat32(&[
+        ("bonk/families.json", b"[]"),
+        ("bonk/un-nom-bien-plus-long-que-treize.json", b"long"),
+    ]);
+    let fat = Fat::open(image.as_slice(), 0).expect("FAT");
+    assert_eq!(
+        fat.read("bonk/families.json", 64).as_deref(),
+        Some(&b"[]"[..])
+    );
+    assert_eq!(
+        fat.read("BONK/Families.JSON", 64).as_deref(),
+        Some(&b"[]"[..])
+    );
+    assert_eq!(
+        fat.read("bonk/un-nom-bien-plus-long-que-treize.json", 64)
+            .as_deref(),
+        Some(&b"long"[..])
+    );
+    assert_eq!(fat.read("bonk/un-nom-bien-plus-long-que-treize", 64), None);
+}

@@ -22,6 +22,10 @@ pub(crate) fn served_catalog(grub: Option<&[u8]>) -> ServedCatalog {
 }
 
 fn served_catalog_for(images: &[(&str, &[u8])]) -> ServedCatalog {
+    served_catalog_with(images, "")
+}
+
+fn served_catalog_with(images: &[(&str, &[u8])], extra: &str) -> ServedCatalog {
     let pair = Ed25519KeyPair::from_seed_unchecked(&[7; 32]).expect("clé de test");
     let public: [u8; 32] = pair.public_key().as_ref().try_into().expect("32 octets");
     let fake = "c".repeat(64);
@@ -51,7 +55,7 @@ fn served_catalog_for(images: &[(&str, &[u8])]) -> ServedCatalog {
         .as_secs()
         + 3600;
     let manifest = format!(
-        r#"{{"schema_version":2,"sequence":1,"expires_unix":{expires},"families":[],"images":[]{entry}}}"#
+        r#"{{"schema_version":2,"sequence":1,"expires_unix":{expires},"families":[],"images":[]{entry}{extra}}}"#
     )
     .into_bytes();
     let mut files = HashMap::new();
@@ -398,6 +402,43 @@ fn une_iso_que_le_menu_ne_demarre_pas_est_refusee_avant_le_disque() {
     for path in [&inconnue, &extension, &pas_iso] {
         let _ = std::fs::remove_file(path);
     }
+}
+
+#[test]
+fn le_menu_du_coffre_suit_les_familles_du_catalogue() {
+    let mut families = bonk_core::vault::default_families();
+    families.retain(|family| family.id != "arch");
+    let served = format!(
+        r#","vault_families":{}"#,
+        serde_json::to_string(&families).expect("JSON")
+    );
+    let mut scenario = Scenario::sized(VAULT_DISK);
+    scenario.catalog = served_catalog_with(&[("x86_64", GRUB)], &served);
+    let cache = TempSource::dir("cache-familles");
+    let cache = cache.arg();
+    let (code, _, err) = scenario.run(&init_args(&cache, &[]));
+    assert_eq!(code, 0, "{err}");
+    let disk = scenario.written(VAULT_DISK as usize);
+    let menu = bonk_core::vault::menu(&families);
+    assert!(
+        disk.windows(menu.len()).any(|w| w == menu.as_bytes()),
+        "menu des familles servies"
+    );
+    let arch = iso_file(
+        "arch-sans-famille.iso",
+        &[
+            ("arch/boot/x86_64/vmlinuz-linux", 1),
+            ("arch/boot/x86_64/initramfs-linux.img", 1),
+        ],
+    );
+    let arg = arch.display().to_string();
+    let (code, _, err) = scenario.run(&["vault", "add", "usb-a", &arg, "--yes"]);
+    assert_eq!(code, EXIT_USAGE, "{err}");
+    assert!(
+        err.contains("does not start Arch Linux yet") && err.contains("E7004"),
+        "{err}"
+    );
+    let _ = std::fs::remove_file(&arch);
 }
 
 #[test]

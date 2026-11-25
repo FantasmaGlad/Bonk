@@ -45,7 +45,9 @@ pub(crate) fn grub(
             "the catalog offers no GRUB image this version of Bonk can write",
         ));
     }
-    let files = core_vault::boot_files(&images).map_err(|e| catalog::refused(e.to_string()))?;
+    let families = core_vault::families_from(&loaded.catalog.vault_families);
+    let files =
+        core_vault::boot_files(&images, &families).map_err(|e| catalog::refused(e.to_string()))?;
     let info = GrubInfo {
         version: entry.version,
         build: entry.build,

@@ -15,13 +15,13 @@ pub fn add_image(
     plan: &VaultPlan,
     name: &str,
     size: u64,
-    family: IsoFamily,
+    location: bool,
     reader: &mut dyn std::io::Read,
     advance: &mut dyn FnMut(u64) -> bool,
 ) -> Result<exfat::edit::Added, FormatError> {
     let span = vault_span(plan);
     let added = exfat::edit::add_file(dev, span, name, size, false, reader, advance)?;
-    if family.needs_location() {
+    if location {
         let location = location_file(added.volume_offset);
         let size = location.len() as u64;
         exfat::edit::add_file(

@@ -10,7 +10,7 @@ use bonk_ops::job::{self, Deps, JobError, TraceIo, VaultAddJob};
 use super::AddArgs;
 use crate::catalog::{Destination, download};
 use crate::transfer::{finish, progress_mode, sink, target_line};
-use crate::vault::{arch_name, family_name};
+use crate::vault::arch_name;
 
 pub(super) fn run_add(
     args: &AddArgs,
@@ -34,6 +34,7 @@ pub(super) fn run_add(
                 trace_io: args.common.trace_io.map(TraceIo::from),
                 yes: args.yes,
                 elevation: args.common.elevate.into(),
+                families: bonk_core::vault::default_families(),
             };
             job::vault_add(&job, deps, &mut progress)
         })
@@ -49,7 +50,7 @@ pub(super) fn run_add(
             out,
             "  {}, {}, {}",
             format_size(done.size_bytes, bonk_hal::Lang::En),
-            family_name(done.family),
+            done.family_name,
             arch_name(done.arch)
         )?;
         writeln!(out, "  sha256 {}", done.sha256)?;
