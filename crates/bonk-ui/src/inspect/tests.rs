@@ -93,3 +93,57 @@ fn la_reponse_d_une_autre_image_ou_un_echec_ne_dit_rien() {
         )]
     );
 }
+
+#[test]
+fn une_image_du_catalogue_dit_sa_preuve_et_secure_boot_sans_telechargement() {
+    use bonk_catalog::manifest::{Boot, Proved};
+
+    use crate::catalog::{CatalogState, Choice, ChoiceSource, System};
+
+    let url = "https://cdimage.debian.org/debian-13.iso";
+    let choice = Choice {
+        id: "debian-13-netinst-x86_64".to_owned(),
+        name: "Debian".to_owned(),
+        edition: None,
+        label: "13".to_owned(),
+        end_of_life: false,
+        note: None,
+        source: ChoiceSource::Download {
+            url: url.to_owned(),
+            sha256: "ab".repeat(32),
+            file_name: None,
+            hybrid: false,
+        },
+        desktop: None,
+        media: "usb".to_owned(),
+        arch: "x86_64".to_owned(),
+        boot: Some(Boot {
+            firmware: vec!["bios".to_owned(), "secureboot".to_owned()],
+            proved: Some(Proved {
+                date: "2026-11-23".to_owned(),
+                bench: "https://github.com/o/r/actions/runs/1".to_owned(),
+            }),
+            secure_boot: Some(json!({"microsoft_uefi_ca": ["Microsoft UEFI CA 2023"]})),
+        }),
+    };
+    assert_eq!(
+        crate::browse::variant_facts(&choice, Lang::Fr),
+        "Clé USB · démarrage prouvé le 2026-11-23 : BIOS, Secure Boot"
+    );
+    let mut model = drafting(url, false, Lang::En);
+    model.catalog = CatalogState::Ready(vec![System {
+        id: "debian".to_owned(),
+        name: "Debian".to_owned(),
+        uses: Vec::new(),
+        base: None,
+        icon: None,
+        choices: vec![choice],
+        not_affiliated_with: None,
+    }]);
+    assert_eq!(model.update(Message::Clock), []);
+    let line = model.boot_line().expect("Secure Boot du catalogue");
+    assert!(
+        line.contains("Microsoft UEFI CA 2023, Microsoft's third-party authority"),
+        "{line}"
+    );
+}

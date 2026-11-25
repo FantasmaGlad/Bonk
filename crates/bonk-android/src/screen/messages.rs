@@ -112,7 +112,7 @@ fn chosen(input: &Value, model: &Model) -> Option<Message> {
     };
     let index = usize::try_from(input["index"].as_u64()?).ok()?;
     let choice = model.menu_filter.writable(systems).get(index).copied()?;
-    Some(Message::MenuChose(choice.clone()))
+    Some(Message::MenuChose(Box::new(choice.clone())))
 }
 
 /// Download progress, or a failure born in the app (cancel, key gone, download): its code, when it has one,

@@ -178,7 +178,7 @@ fn menu_row<'a>(
     };
     match &choice.source {
         ChoiceSource::Download { .. } => button(line)
-            .on_press(Message::MenuChose(choice.clone()))
+            .on_press(Message::MenuChose(Box::new(choice.clone())))
             .width(Length::Fill)
             .padding([4, 8])
             .style(theme::card_button(highlighted))

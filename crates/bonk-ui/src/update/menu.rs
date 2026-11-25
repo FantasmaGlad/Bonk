@@ -9,7 +9,7 @@ impl Model {
         match message {
             Message::RequestImage(id) => return self.request_image(id),
             Message::CatalogLoaded(result) => return self.on_catalog_loaded(result),
-            Message::MenuChose(choice) => return self.on_menu_chosen(choice),
+            Message::MenuChose(choice) => return self.on_menu_chosen(*choice),
             Message::ToggleMenu => {
                 self.focus = Some(Focus::Menu);
                 self.menu_open = !self.menu_open;

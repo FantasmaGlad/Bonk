@@ -1,6 +1,7 @@
 use bonk_core::pe::Signer;
 use serde_json::Value;
 
+use crate::catalog::{CatalogState, find_url};
 use crate::model::{Effect, Effects, Model, WriteState};
 use crate::text::secure_boot_sentence;
 
@@ -67,12 +68,17 @@ impl Model {
         let WriteState::Draft { image, raw, .. } = &self.write else {
             return None;
         };
-        let facts = self
+        let image = image.trim();
+        let Some(facts) = self
             .inspection
             .as_ref()
-            .filter(|known| known.image == image.trim())?
-            .facts
-            .as_ref()?;
+            .filter(|known| known.image == image)
+            .and_then(|known| known.facts.as_ref())
+        else {
+            return self
+                .catalog_signer(image)
+                .map(|signer| secure_boot_sentence(self.lang, &signer));
+        };
         match (&facts.refusal, &facts.signer) {
             (Some(reason), _) if !raw => Some(format!(
                 "{} {reason}",
@@ -82,6 +88,13 @@ impl Model {
             (_, Some(signer)) => Some(secure_boot_sentence(self.lang, signer)),
             _ => None,
         }
+    }
+
+    fn catalog_signer(&self, image: &str) -> Option<Signer> {
+        let CatalogState::Ready(systems) = &self.catalog else {
+            return None;
+        };
+        find_url(systems, image)?.1.signer()
     }
 }
 

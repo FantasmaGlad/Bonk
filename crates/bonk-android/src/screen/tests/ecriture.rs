@@ -85,6 +85,7 @@ fn une_image_hybride_du_catalogue_le_dit_a_kotlin() {
             desktop: None,
             media: "usb".to_owned(),
             arch: "aarch64".to_owned(),
+            boot: None,
         }],
     }]);
     let _ = model.update(Message::ImageInput("https://n/nixos.iso".to_owned()));

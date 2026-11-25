@@ -480,3 +480,36 @@ fn une_image_invalide_refuse_tout_le_manifeste() -> Result<(), Box<dyn std::erro
     }
     Ok(())
 }
+
+#[test]
+fn la_preuve_de_demarrage_se_lit_et_une_forme_inconnue_est_ignoree()
+-> Result<(), Box<dyn std::error::Error>> {
+    let with_boot = |boot: &str| {
+        debian().replacen(
+            r#""size_bytes":123"#,
+            &format!(r#""size_bytes":123,"boot":{boot}"#),
+            1,
+        )
+    };
+    let proved = with_boot(
+        r#"{"firmware":["bios","uefi","aarch64"],"proved":{"date":"2026-11-23","bench":"https://github.com/o/r/actions/runs/1"},"secure_boot":"unsigned","route":"raw"}"#,
+    );
+    let catalog = parse(&manifest(1, NOW + 1, &proved))?;
+    let boot = catalog.images[0].boot.as_ref().ok_or("preuve")?;
+    assert_eq!(boot.firmware, ["bios", "uefi", "aarch64"]);
+    assert_eq!(
+        boot.proved.as_ref().map(|p| p.date.as_str()),
+        Some("2026-11-23")
+    );
+    assert_eq!(boot.secure_boot, Some(serde_json::json!("unsigned")));
+    for unknown in [r#"{"proved":"hier"}"#, r#"{"firmware":"uefi"}"#, "42"] {
+        let catalog = parse(&manifest(1, NOW + 1, &with_boot(unknown)))?;
+        assert_eq!(catalog.images.len(), 1, "{unknown}");
+        assert_eq!(catalog.images[0].boot, None, "{unknown}");
+    }
+    assert_eq!(
+        parse(&manifest(1, NOW + 1, &debian()))?.images[0].boot,
+        None
+    );
+    Ok(())
+}

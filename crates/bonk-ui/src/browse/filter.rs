@@ -87,6 +87,7 @@ mod tests {
             desktop: Some(desktop.to_owned()),
             media: media.to_owned(),
             arch: "x86_64".to_owned(),
+            boot: None,
         }
     }
 
