@@ -40,7 +40,7 @@ fn une_iso_ubuntu_laisse_son_emplacement_et_le_retrait_l_efface() -> Result<(), 
         &plan,
         "ubuntu.iso",
         data.len() as u64,
-        IsoFamily::Ubuntu,
+        true,
         &mut data.as_slice(),
         &mut |_| true,
     )?;
@@ -64,7 +64,7 @@ fn une_iso_ubuntu_laisse_son_emplacement_et_le_retrait_l_efface() -> Result<(), 
         &plan,
         "arch.iso",
         3,
-        IsoFamily::Arch,
+        false,
         &mut &b"iso"[..],
         &mut |_| true,
     )?;
@@ -83,7 +83,7 @@ fn mettre_a_jour_le_demarrage_garde_les_iso() -> Result<(), FormatError> {
         &plan,
         "debian-live.iso",
         data.len() as u64,
-        IsoFamily::DebianLive,
+        false,
         &mut data.as_slice(),
         &mut |_| true,
     )?;
@@ -106,17 +106,24 @@ fn mettre_a_jour_le_demarrage_garde_les_iso() -> Result<(), FormatError> {
 fn familles_reconnues_comme_par_le_menu() -> std::io::Result<()> {
     use crate::iso9660::{Iso, testing::image};
     use std::io::Cursor;
+    let families = default_families();
+    let menu = menu(&families);
     let family = |label: &str, files: &[(&str, u32)]| {
-        iso_kind(&mut Iso::open(Cursor::new(image(label, files)))?)
-            .map(|kind| kind.map(|kind| kind.family))
+        iso_kind(&mut Iso::open(Cursor::new(image(label, files)))?, &families)
+            .map(|kind| kind.map(|kind| kind.family.id))
     };
-    for (expected, files) in IsoFamily::RULES {
-        for file in files {
-            assert!(MENU.contains(&format!("(probe)/{file}")), "{file}");
+    for expected in &families {
+        for set in &expected.detect {
+            for file in set {
+                assert!(menu.contains(&format!("(probe)/{file}")), "{file}");
+            }
+            let present: Vec<(&str, u32)> = set.iter().map(|f| (f.as_str(), 1)).collect();
+            assert_eq!(
+                family("Fedora-WS-Live-44", &present)?,
+                Some(expected.id.clone())
+            );
+            assert_eq!(family("X", &present[..1])?, None, "{}", expected.id);
         }
-        let present: Vec<(&str, u32)> = files.iter().map(|f| (*f, 1)).collect();
-        assert_eq!(family("Fedora-WS-Live-44", &present)?, Some(expected));
-        assert_eq!(family("X", &present[..1])?, None, "{expected:?}");
     }
     let kiwi = [
         ("boot/x86_64/loader/linux", 1),
@@ -129,7 +136,7 @@ fn familles_reconnues_comme_par_le_menu() -> std::io::Result<()> {
         ("casper/vmlinuz", 1),
         ("casper/initrd", 1),
     ];
-    assert_eq!(family("X", &both)?, Some(IsoFamily::DebianLive));
+    assert_eq!(family("X", &both)?, Some("debian_live".to_owned()));
     Ok(())
 }
 
@@ -138,11 +145,15 @@ fn processeur_reconnu_comme_par_le_menu() -> std::io::Result<()> {
     use crate::iso9660::{Iso, testing::image};
     use std::io::Cursor;
     let arch = |label: &str, files: &[(&str, u32)]| {
-        iso_kind(&mut Iso::open(Cursor::new(image(label, files)))?)
-            .map(|kind| kind.map(|kind| kind.arch))
+        iso_kind(
+            &mut Iso::open(Cursor::new(image(label, files)))?,
+            &default_families(),
+        )
+        .map(|kind| kind.map(|kind| kind.arch))
     };
+    let menu = menu(&default_families());
     for (file, _) in ARCH_RULES {
-        assert!(MENU.contains(&format!("(probe)/{file}")), "{file}");
+        assert!(menu.contains(&format!("(probe)/{file}")), "{file}");
     }
     let casper = [("casper/vmlinuz", 1), ("casper/initrd", 1)];
     assert_eq!(arch("Ubuntu", &casper)?, Some(IsoArch::X86_64));
@@ -334,11 +345,12 @@ fn les_fichiers_de_demarrage_portent_les_noms_uefi_et_le_menu() -> Result<(), Fo
     );
     assert!(VAULT_ISO_RULE.contains(&format!("ENV{{ID_FS_LABEL}}==\"{VAULT_LABEL}\"")));
     assert!(VAULT_ISO_RULE.contains("IMPORT{cmdline}=\"bonk.offset\""));
-    assert!(MENU.contains("bonk.offset=$bonk_offset"));
+    let menu = menu(&default_families());
+    assert!(menu.contains("bonk.offset=$bonk_offset"));
     for (path, _) in INITRD_SCRIPTS {
         let beside_menu = path.trim_start_matches("bonk/");
         assert!(
-            MENU.contains(&format!(":$bonk_dir/{beside_menu}")),
+            menu.contains(&format!(":$bonk_dir/{beside_menu}")),
             "{path}"
         );
     }
@@ -370,5 +382,69 @@ fn un_plan_pour_un_autre_disque_n_ecrit_rien() -> Result<(), Box<dyn std::error:
         Err(FormatError::Mismatch(_))
     ));
     assert!(dev.as_bytes().iter().all(|b| *b == 0));
+    Ok(())
+}
+
+#[test]
+fn les_familles_par_defaut_sont_valides_et_uniques() {
+    let families = default_families();
+    assert_eq!(families.len(), 5);
+    for family in &families {
+        assert_eq!(family_errors(family), Vec::<String>::new());
+    }
+    let mut ids: Vec<&str> = families.iter().map(|family| family.id.as_str()).collect();
+    ids.dedup();
+    assert_eq!(ids.len(), families.len());
+}
+
+#[test]
+fn une_famille_qui_pourrait_sortir_du_menu_est_refusee() {
+    let good = default_families().remove(0);
+    type Spoil = fn(&mut VaultFamily);
+    let cases: [(&str, Spoil); 9] = [
+        ("identifier", |f| f.id = "Debian".to_owned()),
+        ("name", |f| f.name = "Debian\" ; reboot".to_owned()),
+        ("detect", |f| {
+            f.detect = vec![vec!["../live/vmlinuz".to_owned()]]
+        }),
+        ("detect", |f| f.detect = vec![]),
+        ("label prefix", |f| {
+            f.label_prefix = Some("Fedora.*".to_owned())
+        }),
+        ("kernel", |f| f.kernel = "/live/vmlinuz".to_owned()),
+        ("options", |f| f.options = "boot=live $root".to_owned()),
+        ("options", |f| f.options = "findiso={iso}".to_owned()),
+        ("initrd extra", |f| f.initrd_extra = Some("a b".to_owned())),
+    ];
+    for (reason, spoil) in cases {
+        let mut family = good.clone();
+        spoil(&mut family);
+        let errors = family_errors(&family);
+        assert!(
+            errors.iter().any(|error| error.contains(reason)),
+            "{reason}: {errors:?}"
+        );
+    }
+}
+
+#[test]
+fn une_famille_servie_en_donnees_entre_au_menu_sans_code() -> Result<(), Box<dyn std::error::Error>>
+{
+    let opensuse: VaultFamily = serde_json::from_str(
+        r#"{"id":"opensuse_live","name":"openSUSE live","detect":[["boot/x86_64/loader/linux","boot/x86_64/loader/initrd"]],
+            "label_prefix":"openSUSE","kernel":"boot/{cpu}/loader/linux","initrd":"boot/{cpu}/loader/initrd",
+            "options":"iso-scan/filename={path} root=live:CDLABEL={label} rd.live.image"}"#,
+    )?;
+    assert_eq!(family_errors(&opensuse), Vec::<String>::new());
+    let mut families = default_families();
+    families.push(opensuse);
+    let menu = menu(&families);
+    assert!(menu.contains(
+        "if regexp '^openSUSE' \"$isolabel\"; then set family=opensuse_live; else unset family; fi"
+    ));
+    assert!(menu.contains("menuentry \"openSUSE live: $path\""));
+    assert!(menu.contains(
+        "linux (loop)/boot/$5/loader/linux iso-scan/filename=$2 root=live:CDLABEL=$4 rd.live.image"
+    ));
     Ok(())
 }

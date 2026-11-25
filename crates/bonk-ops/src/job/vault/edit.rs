@@ -35,7 +35,9 @@ pub struct VaultAddDone {
     /// Name at the root of the data partition.
     pub name: String,
     pub size_bytes: u64,
-    pub family: vault::IsoFamily,
+    /// Identifier of the vault family the menu starts it as: `debian_live`, `ubuntu`, `arch`.
+    pub family: String,
+    pub family_name: String,
     /// The processor it starts on; the vault menu lists the others after this machine's.
     pub arch: vault::IsoArch,
     pub sha256: String,
@@ -114,12 +116,14 @@ pub(super) fn vault_source(
         .len();
     let mut iso = bonk_core::iso9660::Iso::open(std::io::BufReader::new(file))
         .map_err(|e| fail(Code::IsoNotForVault, format!("{name}: {e}")))?;
-    let kind = vault::iso_kind(&mut iso)
+    let families = vault::default_families();
+    let kind = vault::iso_kind(&mut iso, &families)
         .map_err(|e| fail(Code::IsoNotForVault, format!("{name}: {e}")))?
         .ok_or_else(|| {
+            let known: Vec<&str> = families.iter().map(|family| family.name.as_str()).collect();
             fail(
                 Code::IsoNotForVault,
-                format!("{name}: not Debian live, Ubuntu, Arch Linux or Fedora live"),
+                format!("{name}: none of {}", known.join(", ")),
             )
         })?;
     Ok((name, size, kind))
@@ -156,7 +160,7 @@ pub fn vault_add(
         &plan,
         &name,
         size,
-        kind.family,
+        kind.family.location,
         &mut file,
         &mut |n| advance.add(n),
     )
@@ -175,7 +179,8 @@ pub fn vault_add(
         target: info,
         name,
         size_bytes: size,
-        family: kind.family,
+        family: kind.family.id,
+        family_name: kind.family.name,
         arch: kind.arch,
         sha256: added.sha256,
         verified: true,

@@ -42,7 +42,7 @@ pub fn boot_files(efi: &[(&str, Vec<u8>)]) -> Result<Vec<BootFile>, FormatError>
         .collect::<Result<Vec<_>, FormatError>>()?;
     files.push(BootFile {
         path: MENU_PATH.to_owned(),
-        data: MENU.as_bytes().to_vec(),
+        data: menu(&default_families()).into_bytes(),
     });
     files.extend(INITRD_SCRIPTS.iter().map(|(path, script)| BootFile {
         path: (*path).to_owned(),

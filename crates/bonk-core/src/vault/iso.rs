@@ -1,54 +1,7 @@
 use schemars::JsonSchema;
 use serde::Serialize;
 
-/// The live systems the menu starts from an ISO file, recognised by the same files it looks for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum IsoFamily {
-    DebianLive,
-    Ubuntu,
-    Arch,
-    FedoraLive,
-    /// The installer of the Red Hat family: AlmaLinux, Rocky Linux, Fedora Everything.
-    Anaconda,
-}
-
-impl IsoFamily {
-    /// Files the menu tests, in its order: the first family whose files are all there wins.
-    pub(super) const RULES: [(Self, &'static [&'static str]); 6] = [
-        (Self::DebianLive, &["live/vmlinuz", "live/initrd.img"]),
-        (Self::Ubuntu, &["casper/vmlinuz", "casper/initrd"]),
-        (
-            Self::Arch,
-            &[
-                "arch/boot/x86_64/vmlinuz-linux",
-                "arch/boot/x86_64/initramfs-linux.img",
-            ],
-        ),
-        (
-            Self::FedoraLive,
-            &["boot/x86_64/loader/linux", "boot/x86_64/loader/initrd"],
-        ),
-        (
-            Self::FedoraLive,
-            &["boot/aarch64/loader/linux", "boot/aarch64/loader/initrd"],
-        ),
-        (
-            Self::Anaconda,
-            &[
-                "images/pxeboot/vmlinuz",
-                "images/pxeboot/initrd.img",
-                "images/install.img",
-            ],
-        ),
-    ];
-
-    /// Its initramfs cannot read the vault: the menu maps the ISO from the offset written next to it.
-    #[must_use]
-    pub fn needs_location(self) -> bool {
-        matches!(self, Self::Ubuntu | Self::Anaconda)
-    }
-}
+use super::VaultFamily;
 
 /// The processor an ISO starts on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
@@ -68,9 +21,9 @@ pub(super) const ARCH_RULES: [(&str, IsoArch); 4] = [
     ("EFI/BOOT/BOOTAA64.EFI", IsoArch::Aarch64),
 ];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IsoKind {
-    pub family: IsoFamily,
+    pub family: VaultFamily,
     pub arch: IsoArch,
 }
 
@@ -80,26 +33,50 @@ pub struct IsoKind {
 /// Not an ISO 9660 image, or unreadable.
 pub fn iso_kind<R: std::io::Read + std::io::Seek>(
     iso: &mut crate::iso9660::Iso<R>,
+    families: &[VaultFamily],
 ) -> std::io::Result<Option<IsoKind>> {
-    for (family, files) in IsoFamily::RULES {
+    for family in families {
+        if !has_any_set(iso, &family.detect)? {
+            continue;
+        }
+        if family
+            .label_prefix
+            .as_deref()
+            .is_some_and(|prefix| !iso.label().starts_with(prefix))
+        {
+            return Ok(None);
+        }
+        return Ok(Some(IsoKind {
+            family: family.clone(),
+            arch: iso_arch(iso)?,
+        }));
+    }
+    Ok(None)
+}
+
+fn iso_arch<R: std::io::Read + std::io::Seek>(
+    iso: &mut crate::iso9660::Iso<R>,
+) -> std::io::Result<IsoArch> {
+    for (file, arch) in ARCH_RULES {
+        if iso.file_size(file)?.is_some() {
+            return Ok(arch);
+        }
+    }
+    Ok(IsoArch::X86_64)
+}
+
+fn has_any_set<R: std::io::Read + std::io::Seek>(
+    iso: &mut crate::iso9660::Iso<R>,
+    sets: &[Vec<String>],
+) -> std::io::Result<bool> {
+    for set in sets {
         let mut all = true;
-        for file in files {
+        for file in set {
             all &= iso.file_size(file)?.is_some();
         }
         if all {
-            // The menu checks the label too: other Kiwi images share this layout.
-            if family == IsoFamily::FedoraLive && !iso.label().starts_with("Fedora-") {
-                return Ok(None);
-            }
-            let mut arch = IsoArch::X86_64;
-            for (file, found) in ARCH_RULES {
-                if iso.file_size(file)?.is_some() {
-                    arch = found;
-                    break;
-                }
-            }
-            return Ok(Some(IsoKind { family, arch }));
+            return Ok(true);
         }
     }
-    Ok(None)
+    Ok(false)
 }

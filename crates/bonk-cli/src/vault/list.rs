@@ -54,13 +54,3 @@ pub(super) fn arch_name(arch: core_vault::IsoArch) -> &'static str {
         core_vault::IsoArch::Aarch64 => "for ARM64 machines",
     }
 }
-
-pub(super) fn family_name(family: core_vault::IsoFamily) -> &'static str {
-    match family {
-        core_vault::IsoFamily::DebianLive => "Debian live",
-        core_vault::IsoFamily::Ubuntu => "Ubuntu",
-        core_vault::IsoFamily::Arch => "Arch Linux",
-        core_vault::IsoFamily::FedoraLive => "Fedora live",
-        core_vault::IsoFamily::Anaconda => "Anaconda installer",
-    }
-}
