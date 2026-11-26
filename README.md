@@ -28,18 +28,18 @@
 
 ## Download
 
-Bonk with its window and the `bonk` command; on Android, the app. On macOS, the app does not put `bonk` in the Terminal: use Homebrew or the script below.
+Bonk with its window and the `bonk` command; on Android, the app.
 
 | Platform | Download | Status |
 | :--- | :--- | :--- |
-| <img src="docs/icons/debian.svg" width="20" height="20" valign="middle" alt="debian">&nbsp;**Debian,&nbsp;Ubuntu** | [x86_64 .deb](https://packages.bonk-os.app/download/bonk_amd64.deb), [ARM64 .deb](https://packages.bonk-os.app/download/bonk_arm64.deb) | Writes USB drives |
-| <img src="docs/icons/fedora.svg" width="20" height="20" valign="middle" alt="fedora">&nbsp;**Fedora,&nbsp;RHEL** | [x86_64 .rpm](https://packages.bonk-os.app/download/bonk.x86_64.rpm), [ARM64 .rpm](https://packages.bonk-os.app/download/bonk.aarch64.rpm) | Writes USB drives |
-| <img src="docs/icons/opensuse.svg" width="20" height="20" valign="middle" alt="opensuse">&nbsp;**openSUSE,&nbsp;SLES** | [x86_64 .rpm](https://packages.bonk-os.app/download/bonk.x86_64.rpm), [ARM64 .rpm](https://packages.bonk-os.app/download/bonk.aarch64.rpm) | Writes USB drives |
-| <img src="docs/icons/arch.svg" width="20" height="20" valign="middle" alt="arch">&nbsp;**Arch&nbsp;Linux** | [x86_64 .pkg.tar.zst](https://packages.bonk-os.app/download/bonk-x86_64.pkg.tar.zst) | Writes USB drives |
-| <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="linux">&nbsp;**Any&nbsp;Linux** | [x86_64](https://packages.bonk-os.app/download/bonk-linux-x86_64.tar.gz), [ARM64](https://packages.bonk-os.app/download/bonk-linux-aarch64.tar.gz), [x86](https://packages.bonk-os.app/download/bonk-linux-i686.tar.gz) | Writes USB drives; x86 untested |
-| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Windows&nbsp;10+** | [x86_64](https://packages.bonk-os.app/download/bonk-windows-x86_64-setup.exe), [ARM64](https://packages.bonk-os.app/download/bonk-windows-aarch64-setup.exe), [x86](https://packages.bonk-os.app/download/bonk-windows-i686-setup.exe) | Writes USB drives; ARM64 and x86 untested |
-| <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [Universal .dmg](https://packages.bonk-os.app/download/bonk-macos-universal.dmg) | Intel and Apple silicon (M1 and later); runs on a Mac, writing not tried yet |
-| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Android&nbsp;8+** | [ARM64 .apk](https://packages.bonk-os.app/download/bonk-android-arm64.apk), [x86_64 .apk](https://packages.bonk-os.app/download/bonk-android-x86_64.apk) | Tested on five phones |
+| <img src="docs/icons/debian.svg" width="20" height="20" valign="middle" alt="debian">&nbsp;**Debian,&nbsp;Ubuntu** | [x86_64&nbsp;.deb](https://packages.bonk-os.app/download/bonk_amd64.deb),&nbsp;[ARM64&nbsp;.deb](https://packages.bonk-os.app/download/bonk_arm64.deb) | Writes USB drives |
+| <img src="docs/icons/fedora.svg" width="20" height="20" valign="middle" alt="fedora">&nbsp;**Fedora,&nbsp;RHEL** | [x86_64&nbsp;.rpm](https://packages.bonk-os.app/download/bonk.x86_64.rpm),&nbsp;[ARM64&nbsp;.rpm](https://packages.bonk-os.app/download/bonk.aarch64.rpm) | Writes USB drives |
+| <img src="docs/icons/opensuse.svg" width="20" height="20" valign="middle" alt="opensuse">&nbsp;**openSUSE,&nbsp;SLES** | [x86_64&nbsp;.rpm](https://packages.bonk-os.app/download/bonk.x86_64.rpm),&nbsp;[ARM64&nbsp;.rpm](https://packages.bonk-os.app/download/bonk.aarch64.rpm) | Writes USB drives |
+| <img src="docs/icons/arch.svg" width="20" height="20" valign="middle" alt="arch">&nbsp;**Arch&nbsp;Linux** | [x86_64&nbsp;.pkg.tar.zst](https://packages.bonk-os.app/download/bonk-x86_64.pkg.tar.zst) | Writes USB drives |
+| <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="linux">&nbsp;**Any&nbsp;Linux** | [x86_64](https://packages.bonk-os.app/download/bonk-linux-x86_64.tar.gz),&nbsp;[ARM64](https://packages.bonk-os.app/download/bonk-linux-aarch64.tar.gz),&nbsp;[x86](https://packages.bonk-os.app/download/bonk-linux-i686.tar.gz) | Writes USB drives; x86 untested |
+| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Windows&nbsp;10+** | [x86_64](https://packages.bonk-os.app/download/bonk-windows-x86_64-setup.exe),&nbsp;[ARM64](https://packages.bonk-os.app/download/bonk-windows-aarch64-setup.exe),&nbsp;[x86](https://packages.bonk-os.app/download/bonk-windows-i686-setup.exe) | Writes USB drives; ARM64 and x86 untested |
+| <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [Universal&nbsp;.dmg](https://packages.bonk-os.app/download/bonk-macos-universal.dmg) | Intel and Apple silicon (M1 and later) |
+| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Android&nbsp;8+** | [ARM64&nbsp;.apk](https://packages.bonk-os.app/download/bonk-android-arm64.apk),&nbsp;[x86_64&nbsp;.apk](https://packages.bonk-os.app/download/bonk-android-x86_64.apk) | Writes USB drives |
 
 ## Command line only
 
@@ -47,10 +47,10 @@ No window and no graphics libraries, for servers and scripts. Installs without a
 
 | Platform | Download | Status |
 | :--- | :--- | :--- |
-| <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="linux">&nbsp;**Any&nbsp;Linux** | [x86_64](https://packages.bonk-os.app/download/bonk-cli-linux-x86_64.tar.gz), [ARM64](https://packages.bonk-os.app/download/bonk-cli-linux-aarch64.tar.gz), [x86](https://packages.bonk-os.app/download/bonk-cli-linux-i686.tar.gz) | Writes USB drives; x86 untested |
-| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Windows&nbsp;10+** | [x86_64](https://packages.bonk-os.app/download/bonk-cli-windows-x86_64.zip), [ARM64](https://packages.bonk-os.app/download/bonk-cli-windows-aarch64.zip), [x86](https://packages.bonk-os.app/download/bonk-cli-windows-i686.zip) | Writes USB drives; ARM64 and x86 untested |
-| <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [x86_64](https://packages.bonk-os.app/download/bonk-cli-macos-x86_64.tar.gz), [ARM64](https://packages.bonk-os.app/download/bonk-cli-macos-aarch64.tar.gz), [Universal](https://packages.bonk-os.app/download/bonk-cli-macos-universal.tar.gz) | CI only, no real drive yet |
-| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Termux** | [ARM64](https://packages.bonk-os.app/download/bonk-cli-android-aarch64.tar.gz), [x86_64](https://packages.bonk-os.app/download/bonk-cli-android-x86_64.tar.gz) | Tested on a phone |
+| <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="linux">&nbsp;**Any&nbsp;Linux** | [x86_64](https://packages.bonk-os.app/download/bonk-cli-linux-x86_64.tar.gz),&nbsp;[ARM64](https://packages.bonk-os.app/download/bonk-cli-linux-aarch64.tar.gz),&nbsp;[x86](https://packages.bonk-os.app/download/bonk-cli-linux-i686.tar.gz) | Writes USB drives; x86 untested |
+| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Windows&nbsp;10+** | [x86_64](https://packages.bonk-os.app/download/bonk-cli-windows-x86_64.zip),&nbsp;[ARM64](https://packages.bonk-os.app/download/bonk-cli-windows-aarch64.zip),&nbsp;[x86](https://packages.bonk-os.app/download/bonk-cli-windows-i686.zip) | Writes USB drives; ARM64 and x86 untested |
+| <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [x86_64](https://packages.bonk-os.app/download/bonk-cli-macos-x86_64.tar.gz),&nbsp;[ARM64](https://packages.bonk-os.app/download/bonk-cli-macos-aarch64.tar.gz),&nbsp;[Universal](https://packages.bonk-os.app/download/bonk-cli-macos-universal.tar.gz) | Intel and Apple silicon (M1 and later) |
+| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Termux** | [ARM64](https://packages.bonk-os.app/download/bonk-cli-android-aarch64.tar.gz),&nbsp;[x86_64](https://packages.bonk-os.app/download/bonk-cli-android-x86_64.tar.gz) | Writes USB drives |
 
 ## Package managers
 
@@ -63,7 +63,12 @@ Add Bonk's signed repository first, as shown on [bonk-os.app/install](https://bo
 | <img src="docs/icons/opensuse.svg" width="20" height="20" valign="middle" alt="opensuse">&nbsp;**Zypper** | `sudo zypper install bonk` | `sudo zypper install bonk-cli` |
 | <img src="docs/icons/arch.svg" width="20" height="20" valign="middle" alt="arch">&nbsp;**pacman** | `sudo pacman -S bonk` | `sudo pacman -S bonk-cli` |
 | <img src="docs/icons/homebrew.svg" width="20" height="20" valign="middle" alt="homebrew">&nbsp;**Homebrew** | `brew install fantasmaglad/bonk/bonk` | `brew install fantasmaglad/bonk/bonk-cli` |
-| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Scoop** | `scoop install https://packages.bonk-os.app/scoop/bonk.json` | `scoop install https://packages.bonk-os.app/scoop/bonk-cli.json` |
+
+Scoop, with `bonk-cli.json` for the command line only:
+
+```powershell
+scoop install https://packages.bonk-os.app/scoop/bonk.json
+```
 
 With APT, DNF (`--allowerasing`), Zypper and pacman, installing `bonk-cli` replaces `bonk` (Zypper and pacman ask first); with Homebrew and Scoop, remove `bonk` first. To go back, remove `bonk-cli`, then install `bonk`.
 
@@ -71,7 +76,7 @@ With APT, DNF (`--allowerasing`), Zypper and pacman, installing `bonk-cli` repla
 
 ### <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="Linux"> <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="macOS"> Linux and macOS script
 
-The command line only, in `~/.local/bin`, its checksum checked against the release.
+The command line only, in `~/.local/bin`, added to the shell's `PATH`; its checksum is checked against the release.
 
 ```bash
 curl -fsSL https://packages.bonk-os.app/install.sh | sh
@@ -112,3 +117,13 @@ Checksums: [`SHA256SUMS`](https://packages.bonk-os.app/download/SHA256SUMS). Pro
 ## Vault
 
 Several ISO images on one drive: `bonk vault init`, then `bonk vault add`. The vault starts in BIOS and UEFI with Secure Boot turned off; on a Windows PC encrypted with BitLocker, suspend BitLocker before changing Secure Boot.
+
+## Related repositories
+
+| Repository | Content |
+| :--- | :--- |
+| <img src="docs/icons/bonk.png" width="20" height="20" valign="middle" alt="BonkWeb">&nbsp;**[BonkWeb](https://github.com/FantasmaGlad/BonkWeb)** | website |
+| <img src="docs/icons/bonk.png" width="20" height="20" valign="middle" alt="bonk-catalog">&nbsp;**[bonk-catalog](https://github.com/FantasmaGlad/bonk-catalog)** | image catalog |
+| <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="bonk-packages">&nbsp;**[bonk-packages](https://github.com/FantasmaGlad/bonk-packages)** | package repositories |
+| <img src="docs/icons/homebrew.svg" width="20" height="20" valign="middle" alt="homebrew-bonk">&nbsp;**[homebrew-bonk](https://github.com/FantasmaGlad/homebrew-bonk)** | Homebrew tap |
+| <img src="docs/icons/bonk.png" width="20" height="20" valign="middle" alt="bonk-security">&nbsp;**[bonk-security](https://github.com/FantasmaGlad/bonk-security)** | security site |
