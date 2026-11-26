@@ -28,7 +28,7 @@
 
 ## Download
 
-Bonk with its window and the `bonk` command; on Android, the app.
+Bonk with its window and the `bonk` command; on Android, the app. On macOS, the app does not put `bonk` in the Terminal: use Homebrew or the script below.
 
 | Platform | Download | Status |
 | :--- | :--- | :--- |
@@ -38,8 +38,8 @@ Bonk with its window and the `bonk` command; on Android, the app.
 | <img src="docs/icons/arch.svg" width="20" height="20" valign="middle" alt="arch">&nbsp;**Arch&nbsp;Linux** | [x86_64 .pkg.tar.zst](https://packages.bonk-os.app/download/bonk-x86_64.pkg.tar.zst) | Writes USB drives |
 | <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="linux">&nbsp;**Any&nbsp;Linux** | [x86_64](https://packages.bonk-os.app/download/bonk-linux-x86_64.tar.gz), [ARM64](https://packages.bonk-os.app/download/bonk-linux-aarch64.tar.gz), [x86](https://packages.bonk-os.app/download/bonk-linux-i686.tar.gz) | Writes USB drives; x86 untested |
 | <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Windows&nbsp;10+** | [x86_64](https://packages.bonk-os.app/download/bonk-windows-x86_64-setup.exe), [ARM64](https://packages.bonk-os.app/download/bonk-windows-aarch64-setup.exe), [x86](https://packages.bonk-os.app/download/bonk-windows-i686-setup.exe) | Writes USB drives; ARM64 and x86 untested |
-| <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [Universal .dmg](https://packages.bonk-os.app/download/bonk-macos-universal.dmg) | CI only, never run on a Mac |
-| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Android&nbsp;8+** | [ARM64 .apk](https://packages.bonk-os.app/download/bonk-android-arm64.apk), [x86_64 .apk](https://packages.bonk-os.app/download/bonk-android-x86_64.apk) | Beta, one phone tested |
+| <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [Universal .dmg](https://packages.bonk-os.app/download/bonk-macos-universal.dmg) | Intel and Apple silicon (M1 and later); runs on a Mac, writing not tried yet |
+| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Android&nbsp;8+** | [ARM64 .apk](https://packages.bonk-os.app/download/bonk-android-arm64.apk), [x86_64 .apk](https://packages.bonk-os.app/download/bonk-android-x86_64.apk) | Tested on five phones |
 
 ## Command line only
 
@@ -50,7 +50,7 @@ No window and no graphics libraries, for servers and scripts. Installs without a
 | <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="linux">&nbsp;**Any&nbsp;Linux** | [x86_64](https://packages.bonk-os.app/download/bonk-cli-linux-x86_64.tar.gz), [ARM64](https://packages.bonk-os.app/download/bonk-cli-linux-aarch64.tar.gz), [x86](https://packages.bonk-os.app/download/bonk-cli-linux-i686.tar.gz) | Writes USB drives; x86 untested |
 | <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Windows&nbsp;10+** | [x86_64](https://packages.bonk-os.app/download/bonk-cli-windows-x86_64.zip), [ARM64](https://packages.bonk-os.app/download/bonk-cli-windows-aarch64.zip), [x86](https://packages.bonk-os.app/download/bonk-cli-windows-i686.zip) | Writes USB drives; ARM64 and x86 untested |
 | <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [x86_64](https://packages.bonk-os.app/download/bonk-cli-macos-x86_64.tar.gz), [ARM64](https://packages.bonk-os.app/download/bonk-cli-macos-aarch64.tar.gz), [Universal](https://packages.bonk-os.app/download/bonk-cli-macos-universal.tar.gz) | CI only, no real drive yet |
-| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Termux** | [ARM64](https://packages.bonk-os.app/download/bonk-cli-android-aarch64.tar.gz), [x86_64](https://packages.bonk-os.app/download/bonk-cli-android-x86_64.tar.gz) | CI only, not tried on a phone |
+| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Termux** | [ARM64](https://packages.bonk-os.app/download/bonk-cli-android-aarch64.tar.gz), [x86_64](https://packages.bonk-os.app/download/bonk-cli-android-x86_64.tar.gz) | Tested on a phone |
 
 ## Package managers
 
@@ -63,7 +63,7 @@ Add Bonk's signed repository first, as shown on [bonk-os.app/install](https://bo
 | <img src="docs/icons/opensuse.svg" width="20" height="20" valign="middle" alt="opensuse">&nbsp;**Zypper** | `sudo zypper install bonk` | `sudo zypper install bonk-cli` |
 | <img src="docs/icons/arch.svg" width="20" height="20" valign="middle" alt="arch">&nbsp;**pacman** | `sudo pacman -S bonk` | `sudo pacman -S bonk-cli` |
 | <img src="docs/icons/homebrew.svg" width="20" height="20" valign="middle" alt="homebrew">&nbsp;**Homebrew** | `brew install fantasmaglad/bonk/bonk` | `brew install fantasmaglad/bonk/bonk-cli` |
-| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Scoop** | `scoop install` [bonk.json](https://packages.bonk-os.app/scoop/bonk.json) | `scoop install` [bonk-cli.json](https://packages.bonk-os.app/scoop/bonk-cli.json) |
+| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Scoop** | `scoop install https://packages.bonk-os.app/scoop/bonk.json` | `scoop install https://packages.bonk-os.app/scoop/bonk-cli.json` |
 
 With APT, DNF (`--allowerasing`), Zypper and pacman, installing `bonk-cli` replaces `bonk` (Zypper and pacman ask first); with Homebrew and Scoop, remove `bonk` first. To go back, remove `bonk-cli`, then install `bonk`.
 
@@ -95,7 +95,7 @@ curl -fsSL https://packages.bonk-os.app/install.sh | sh
 
 ### Chromebook
 
-In the Linux development environment (Crostini, Debian), the Debian package, the APT repository or the script. Enable the USB drive for Linux first, in the ChromeOS settings (Linux development environment, Manage USB devices); for the Android app, enable it for Google Play Store instead.
+In the Linux development environment (Crostini, Debian), the Debian package, the APT repository or the script. Enable the USB drive for Linux first, in the ChromeOS settings (Linux development environment, Manage USB devices); a drive goes to one environment at a time, so for the Android app share it with Google Play Store (Android apps) instead of Linux.
 
 ### Derivatives
 

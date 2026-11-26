@@ -28,7 +28,7 @@
 
 ## Télécharger
 
-Bonk avec sa fenêtre et la commande `bonk` ; sur Android, l'application.
+Bonk avec sa fenêtre et la commande `bonk` ; sur Android, l'application. Sous macOS, l'application ne met pas `bonk` dans le Terminal : Homebrew ou le script ci-dessous.
 
 | Plateforme | Téléchargement | État |
 | :--- | :--- | :--- |
@@ -38,8 +38,8 @@ Bonk avec sa fenêtre et la commande `bonk` ; sur Android, l'application.
 | <img src="docs/icons/arch.svg" width="20" height="20" valign="middle" alt="arch">&nbsp;**Arch&nbsp;Linux** | [x86_64 .pkg.tar.zst](https://packages.bonk-os.app/download/bonk-x86_64.pkg.tar.zst) | Écrit les clés USB |
 | <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="linux">&nbsp;**Tout&nbsp;Linux** | [x86_64](https://packages.bonk-os.app/download/bonk-linux-x86_64.tar.gz), [ARM64](https://packages.bonk-os.app/download/bonk-linux-aarch64.tar.gz), [x86](https://packages.bonk-os.app/download/bonk-linux-i686.tar.gz) | Écrit les clés USB ; x86 non essayé |
 | <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Windows&nbsp;10+** | [x86_64](https://packages.bonk-os.app/download/bonk-windows-x86_64-setup.exe), [ARM64](https://packages.bonk-os.app/download/bonk-windows-aarch64-setup.exe), [x86](https://packages.bonk-os.app/download/bonk-windows-i686-setup.exe) | Écrit les clés USB ; ARM64 et x86 non essayés |
-| <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [Universal .dmg](https://packages.bonk-os.app/download/bonk-macos-universal.dmg) | CI seulement, jamais lancée sur un Mac |
-| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Android&nbsp;8+** | [ARM64 .apk](https://packages.bonk-os.app/download/bonk-android-arm64.apk), [x86_64 .apk](https://packages.bonk-os.app/download/bonk-android-x86_64.apk) | Bêta, un téléphone essayé |
+| <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [Universal .dmg](https://packages.bonk-os.app/download/bonk-macos-universal.dmg) | Intel et Apple silicon (M1 et suivants) ; lancée sur un Mac, écriture pas encore essayée |
+| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Android&nbsp;8+** | [ARM64 .apk](https://packages.bonk-os.app/download/bonk-android-arm64.apk), [x86_64 .apk](https://packages.bonk-os.app/download/bonk-android-x86_64.apk) | Essayée sur cinq téléphones |
 
 ## Ligne de commande seule
 
@@ -50,7 +50,7 @@ Sans fenêtre ni bibliothèque graphique, pour les serveurs et les scripts. S'in
 | <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="linux">&nbsp;**Tout&nbsp;Linux** | [x86_64](https://packages.bonk-os.app/download/bonk-cli-linux-x86_64.tar.gz), [ARM64](https://packages.bonk-os.app/download/bonk-cli-linux-aarch64.tar.gz), [x86](https://packages.bonk-os.app/download/bonk-cli-linux-i686.tar.gz) | Écrit les clés USB ; x86 non essayé |
 | <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Windows&nbsp;10+** | [x86_64](https://packages.bonk-os.app/download/bonk-cli-windows-x86_64.zip), [ARM64](https://packages.bonk-os.app/download/bonk-cli-windows-aarch64.zip), [x86](https://packages.bonk-os.app/download/bonk-cli-windows-i686.zip) | Écrit les clés USB ; ARM64 et x86 non essayés |
 | <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [x86_64](https://packages.bonk-os.app/download/bonk-cli-macos-x86_64.tar.gz), [ARM64](https://packages.bonk-os.app/download/bonk-cli-macos-aarch64.tar.gz), [Universal](https://packages.bonk-os.app/download/bonk-cli-macos-universal.tar.gz) | CI seulement, sans vraie clé |
-| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Termux** | [ARM64](https://packages.bonk-os.app/download/bonk-cli-android-aarch64.tar.gz), [x86_64](https://packages.bonk-os.app/download/bonk-cli-android-x86_64.tar.gz) | CI seulement, jamais sur un téléphone |
+| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Termux** | [ARM64](https://packages.bonk-os.app/download/bonk-cli-android-aarch64.tar.gz), [x86_64](https://packages.bonk-os.app/download/bonk-cli-android-x86_64.tar.gz) | Essayé sur un téléphone |
 
 ## Gestionnaires de paquets
 
@@ -63,7 +63,7 @@ Ajouter d'abord le dépôt signé de Bonk, comme indiqué sur [bonk-os.app/insta
 | <img src="docs/icons/opensuse.svg" width="20" height="20" valign="middle" alt="opensuse">&nbsp;**Zypper** | `sudo zypper install bonk` | `sudo zypper install bonk-cli` |
 | <img src="docs/icons/arch.svg" width="20" height="20" valign="middle" alt="arch">&nbsp;**pacman** | `sudo pacman -S bonk` | `sudo pacman -S bonk-cli` |
 | <img src="docs/icons/homebrew.svg" width="20" height="20" valign="middle" alt="homebrew">&nbsp;**Homebrew** | `brew install fantasmaglad/bonk/bonk` | `brew install fantasmaglad/bonk/bonk-cli` |
-| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Scoop** | `scoop install` [bonk.json](https://packages.bonk-os.app/scoop/bonk.json) | `scoop install` [bonk-cli.json](https://packages.bonk-os.app/scoop/bonk-cli.json) |
+| <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Scoop** | `scoop install https://packages.bonk-os.app/scoop/bonk.json` | `scoop install https://packages.bonk-os.app/scoop/bonk-cli.json` |
 
 Avec APT, DNF (`--allowerasing`), Zypper et pacman, installer `bonk-cli` remplace `bonk` (Zypper et pacman demandent d'abord) ; avec Homebrew et Scoop, retirer `bonk` d'abord. Pour revenir, retirer `bonk-cli`, puis installer `bonk`.
 
@@ -95,7 +95,7 @@ curl -fsSL https://packages.bonk-os.app/install.sh | sh
 
 ### Chromebook
 
-Dans l'environnement de développement Linux (Crostini, Debian), le paquet Debian, le dépôt APT ou le script. Activer d'abord la clé USB pour Linux dans les paramètres de ChromeOS (environnement de développement Linux, Gérer les périphériques USB) ; pour l'application Android, l'activer plutôt pour Google Play Store.
+Dans l'environnement de développement Linux (Crostini, Debian), le paquet Debian, le dépôt APT ou le script. Activer d'abord la clé USB pour Linux dans les paramètres de ChromeOS (environnement de développement Linux, Gérer les périphériques USB) ; une clé ne va qu'à un environnement à la fois : pour l'application Android, la confier à Google Play Store (applications Android) plutôt qu'à Linux.
 
 ### Dérivées
 
