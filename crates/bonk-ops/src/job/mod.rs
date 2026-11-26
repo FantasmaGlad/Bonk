@@ -13,7 +13,7 @@ mod write;
 
 pub use extract::{ExtractDone, ExtractReport, ExtractVerify, Extraction, Firmware};
 pub use format::{FormatJob, default_filesystem, format};
-pub use inspect::{ImageInspection, inspect};
+pub use inspect::{ImageInspection, inspect, inspect_image};
 pub use repair::{RepairJob, repair};
 pub use source::{FileReader, ImageFile};
 pub use types::*;

@@ -2,6 +2,8 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use super::VaultFamily;
+use crate::iso9660::Iso;
+use crate::read_at::{Cursor, ReadAt};
 
 /// The processor an ISO starts on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
@@ -27,12 +29,49 @@ pub struct IsoKind {
     pub arch: IsoArch,
 }
 
+/// The vault family that starts an image, as `bonk info` reports it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+pub struct VaultMatch {
+    /// Identifier of the family, `debian_live`.
+    pub family: String,
+    pub name: String,
+    pub arch: IsoArch,
+}
+
+/// `None` for an image that is not an ISO 9660 one, or that no family starts.
+///
+/// # Errors
+/// Unreadable image.
+pub fn vault_match<S: ReadAt + ?Sized>(
+    source: &S,
+    len: u64,
+    families: &[VaultFamily],
+) -> std::io::Result<Option<VaultMatch>> {
+    let mut iso = match Iso::open(Cursor::new(source, len)) {
+        Ok(iso) => iso,
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::InvalidData | std::io::ErrorKind::UnexpectedEof
+            ) =>
+        {
+            return Ok(None);
+        }
+        Err(error) => return Err(error),
+    };
+    Ok(iso_kind(&mut iso, families)?.map(|kind| VaultMatch {
+        family: kind.family.id,
+        name: kind.family.name,
+        arch: kind.arch,
+    }))
+}
+
 /// What the vault menu would start, `None` for an ISO it shows as not supported.
 ///
 /// # Errors
 /// Not an ISO 9660 image, or unreadable.
 pub fn iso_kind<R: std::io::Read + std::io::Seek>(
-    iso: &mut crate::iso9660::Iso<R>,
+    iso: &mut Iso<R>,
     families: &[VaultFamily],
 ) -> std::io::Result<Option<IsoKind>> {
     for family in families {
@@ -54,9 +93,7 @@ pub fn iso_kind<R: std::io::Read + std::io::Seek>(
     Ok(None)
 }
 
-fn iso_arch<R: std::io::Read + std::io::Seek>(
-    iso: &mut crate::iso9660::Iso<R>,
-) -> std::io::Result<IsoArch> {
+fn iso_arch<R: std::io::Read + std::io::Seek>(iso: &mut Iso<R>) -> std::io::Result<IsoArch> {
     for (file, arch) in ARCH_RULES {
         if iso.file_size(file)?.is_some() {
             return Ok(arch);
@@ -66,7 +103,7 @@ fn iso_arch<R: std::io::Read + std::io::Seek>(
 }
 
 fn has_any_set<R: std::io::Read + std::io::Seek>(
-    iso: &mut crate::iso9660::Iso<R>,
+    iso: &mut Iso<R>,
     sets: &[Vec<String>],
 ) -> std::io::Result<bool> {
     for set in sets {

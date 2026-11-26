@@ -63,7 +63,7 @@ fn error(code: Code, message: impl std::fmt::Display) -> JobError {
     }
 }
 
-fn download_error(failure: &DownloadError) -> JobError {
+pub(crate) fn download_error(failure: &DownloadError) -> JobError {
     let code = match failure {
         DownloadError::Cancelled => Code::Cancelled,
         _ => Code::DownloadFailed,

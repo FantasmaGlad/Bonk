@@ -10,9 +10,30 @@ use super::types::{JobError, SourceInfo, fail};
 use crate::errors::Code;
 
 pub struct ImageFile {
-    file: Arc<File>,
+    source: Backing,
     path: String,
     len: u64,
+}
+
+#[derive(Clone)]
+enum Backing {
+    File(Arc<File>),
+    /// Read by position only, as a file on a server.
+    At(Arc<dyn ReadAt + Send + Sync>),
+}
+
+impl Backing {
+    fn read_at(&self, buf: &mut [u8], offset: u64, len: u64) -> io::Result<usize> {
+        match self {
+            Self::File(file) => bonk_hal::image::read_at(file, buf, offset),
+            Self::At(source) => {
+                let left = len.saturating_sub(offset);
+                let n = usize::try_from(left).map_or(buf.len(), |left| left.min(buf.len()));
+                source.read_exact_at(offset, &mut buf[..n])?;
+                Ok(n)
+            }
+        }
+    }
 }
 
 impl ImageFile {
@@ -29,10 +50,19 @@ impl ImageFile {
             ));
         }
         Ok(Self {
-            file: Arc::new(file),
+            source: Backing::File(Arc::new(file)),
             path: path.display().to_string(),
             len: metadata.len(),
         })
+    }
+
+    /// An image read by position, `name` standing for its path in reports.
+    pub fn at(name: String, len: u64, source: Arc<dyn ReadAt + Send + Sync>) -> Self {
+        Self {
+            source: Backing::At(source),
+            path: name,
+            len,
+        }
     }
 
     pub fn size(&self) -> u64 {
@@ -41,7 +71,8 @@ impl ImageFile {
 
     pub fn raw(&self) -> FileReader {
         FileReader {
-            file: Arc::clone(&self.file),
+            source: self.source.clone(),
+            len: self.len,
             position: 0,
         }
     }
@@ -62,19 +93,23 @@ impl ImageFile {
 
 /// Sequential reads through positional access: readers of the same file share no cursor.
 pub struct FileReader {
-    file: Arc<File>,
+    source: Backing,
+    len: u64,
     position: u64,
 }
 
 impl ReadAt for ImageFile {
     fn read_exact_at(&self, offset: u64, buf: &mut [u8]) -> io::Result<()> {
-        bonk_hal::image::read_exact_at(&self.file, buf, offset)
+        match &self.source {
+            Backing::File(file) => bonk_hal::image::read_exact_at(file, buf, offset),
+            Backing::At(source) => source.read_exact_at(offset, buf),
+        }
     }
 }
 
 impl Read for FileReader {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let n = bonk_hal::image::read_at(&self.file, buf, self.position)?;
+        let n = self.source.read_at(buf, self.position, self.len)?;
         self.position += n as u64;
         Ok(n)
     }
