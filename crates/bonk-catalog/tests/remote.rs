@@ -43,6 +43,22 @@ fn des_morceaux_epars_se_lisent_sans_tout_telecharger() {
 }
 
 #[test]
+fn apres_une_redirection_chaque_morceau_se_demande_au_meme_miroir() {
+    let body = data(LEN);
+    let server = Server::start(body.clone(), |_| Reply::Redirect);
+    let remote = RemoteFile::open(&server.url()).unwrap();
+    assert_eq!(read(&remote, 600_000, 16).unwrap(), body[600_000..600_016]);
+    let requests = server.requests();
+    assert!(requests[0].starts_with("get /image.iso "), "{requests:?}");
+    assert!(
+        requests[1..]
+            .iter()
+            .all(|r| r.starts_with("get /miroir.iso ")),
+        "{requests:?}"
+    );
+}
+
+#[test]
 fn un_morceau_deja_lu_ne_se_redemande_pas() {
     let server = Server::start(data(LEN), |_| Reply::Serve);
     let remote = RemoteFile::open(&server.url()).unwrap();

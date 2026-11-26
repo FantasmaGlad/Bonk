@@ -21,6 +21,8 @@ pub enum Reply {
     Status(u16),
     Gzip,
     Raw(Vec<u8>),
+    /// `/image.iso` sends to `/miroir.iso`, as a mirror redirector does at each request.
+    Redirect,
 }
 
 pub struct Server {
@@ -109,6 +111,13 @@ fn answer(mut stream: TcpStream, request: &str, body: &[u8], reply: Reply) {
             return answer_gzip(stream, &gzip_stored(body));
         }
         Reply::Raw(gzip) => return answer_gzip(stream, &gzip),
+        Reply::Redirect if request.starts_with("get /image.iso ") => {
+            let _ = write!(
+                stream,
+                "HTTP/1.1 302 F\r\nlocation: /miroir.iso\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
+            );
+            return;
+        }
         Reply::WrongStart => {
             let _ = write!(
                 stream,

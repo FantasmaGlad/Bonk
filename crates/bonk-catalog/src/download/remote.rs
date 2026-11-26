@@ -2,8 +2,8 @@ use std::collections::{HashMap, VecDeque};
 use std::io::{self, Read};
 use std::sync::{Mutex, PoisonError};
 
-use ureq::Agent;
 use ureq::http::{StatusCode, header};
+use ureq::{Agent, ResponseExt};
 
 use super::partial::parse_content_range;
 use super::stream::{header_text, range_validator};
@@ -51,6 +51,8 @@ impl Blocks {
 }
 
 struct Part {
+    /// Where the redirects ended.
+    location: String,
     total: u64,
     validator: Option<String>,
     bytes: Vec<u8>,
@@ -66,7 +68,9 @@ impl RemoteFile {
         blocks.keep(0, first.bytes);
         Ok(Self {
             agent,
-            url: url.to_owned(),
+            // A redirector may send each request to another mirror, whose validator differs: every block
+            // is asked of the mirror that answered first.
+            url: first.location,
             len: first.total,
             validator: first.validator,
             blocks: Mutex::new(blocks),
@@ -172,6 +176,7 @@ fn request_part(
         .call()
         .map_err(|e| DownloadError::Network(format!("{url}: {e}")))?;
     partial_status(response.status(), url, known.is_some())?;
+    let location = response.get_uri().to_string();
     let headers = response.headers();
     let validator = range_validator(headers);
     let place = header_text(headers, header::CONTENT_RANGE).and_then(|v| parse_content_range(&v));
@@ -184,11 +189,18 @@ fn request_part(
     if first != start || start >= total {
         return Err(inconsistent(url, "partial answer at another place"));
     }
-    let expected = len.min(total - start);
+    let bytes = read_body(response.body_mut(), url, len.min(total - start))?;
+    Ok(Part {
+        location,
+        total,
+        validator,
+        bytes,
+    })
+}
+
+fn read_body(body: &mut ureq::Body, url: &str, expected: u64) -> Result<Vec<u8>, DownloadError> {
     let mut bytes = Vec::new();
-    response
-        .body_mut()
-        .with_config()
+    body.with_config()
         .limit(expected.saturating_add(1))
         .reader()
         .take(expected.saturating_add(1))
@@ -197,11 +209,7 @@ fn request_part(
     if bytes.len() as u64 != expected {
         return Err(inconsistent(url, "partial answer of another length"));
     }
-    Ok(Part {
-        total,
-        validator,
-        bytes,
-    })
+    Ok(bytes)
 }
 
 fn partial_status(status: StatusCode, url: &str, validated: bool) -> Result<(), DownloadError> {
