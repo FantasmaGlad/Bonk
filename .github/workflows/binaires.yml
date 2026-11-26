@@ -162,6 +162,15 @@ jobs:
           $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"').Matches[0].Groups[1].Value
           Write-Output "$($info.ProductName) $($info.ProductVersion) : $($info.FileDescription)"
           if ($info.ProductName -ne 'Bonk' -or $info.ProductVersion -ne $version) { exit 1 }
+      - name: Vérifier que l'exécutable se passe du runtime Visual C++
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $dumpbin = & $vswhere -latest -find 'VC\Tools\MSVC\**\dumpbin.exe' | Select-Object -First 1
+          $dlls = & $dumpbin /nologo /dependents "target\$env:TARGET\release\bonk.exe"
+          $dlls | Select-String '\.dll' | ForEach-Object { $_.Line.Trim() }
+          if ($dlls -match 'vcruntime|msvcp') { exit 1 }
       - name: Vérifier l'exécutable Android
         if: matrix.outil == 'ndk'
         run: readelf -l "target/$TARGET/release/bonk" | grep -F '/system/bin/linker64'
