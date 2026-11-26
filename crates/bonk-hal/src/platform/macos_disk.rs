@@ -1,5 +1,5 @@
 use std::fs::{File, OpenOptions};
-use std::io::{self, IoSliceMut};
+use std::io::{self, IoSliceMut, Read};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
@@ -21,7 +21,7 @@ const DKIOCGETBLOCKCOUNT: libc::c_ulong = 0x4008_6419;
 /// `_IO('d', 22)` from `sys/disk.h`.
 const DKIOCSYNCHRONIZECACHE: libc::c_ulong = 0x2000_6416;
 
-/// Descriptor from `authopen` before the unmount, reused at open: a single prompt.
+/// Read-only descriptor from `authopen` before the unmount, reused at open: a single prompt.
 static AUTHORIZED: Mutex<Option<(PathBuf, Access, OwnedFd)>> = Mutex::new(None);
 
 fn raw_path(path: &Path) -> Result<String, BlockError> {
@@ -33,7 +33,7 @@ fn raw_path(path: &Path) -> Result<String, BlockError> {
     })
 }
 
-fn receive_fd(socket: &UnixStream) -> io::Result<OwnedFd> {
+fn receive_fd(socket: &UnixStream) -> io::Result<Option<OwnedFd>> {
     let mut byte = [0u8; 1];
     let mut slices = [IoSliceMut::new(&mut byte)];
     // Room for one header and one descriptor, aligned as `cmsghdr` requires.
@@ -62,14 +62,23 @@ fn receive_fd(socket: &UnixStream) -> io::Result<OwnedFd> {
             )
         }
     };
-    let fd = received.ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "authorization refused or cancelled",
-        )
-    })?;
     // SAFETY: the kernel just created this descriptor for this process, its sole owner.
-    Ok(unsafe { OwnedFd::from_raw_fd(fd) })
+    Ok(received.map(|fd| unsafe { OwnedFd::from_raw_fd(fd) }))
+}
+
+// authopen opens the disk itself: its own message says why no descriptor came back.
+fn authopen_error(status: Option<i32>, said: &str) -> io::Error {
+    let kind = if said.contains("Resource busy") {
+        io::ErrorKind::ResourceBusy
+    } else {
+        io::ErrorKind::PermissionDenied
+    };
+    let why = match status {
+        _ if !said.is_empty() => format!("authopen: {said}"),
+        Some(code) => format!("authorization refused or cancelled (authopen exit status {code})"),
+        None => "authorization refused or cancelled".to_owned(),
+    };
+    io::Error::new(kind, why)
 }
 
 fn authorize(
@@ -86,10 +95,11 @@ fn authorize(
         .args(["-stdoutpipe", "-o", &flags.to_string(), raw])
         .stdin(Stdio::null())
         .stdout(Stdio::from(OwnedFd::from(theirs)))
+        .stderr(Stdio::piped())
         .spawn()?;
-    loop {
-        if child.try_wait()?.is_some() {
-            break;
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
         }
         if cancelled() {
             let _ = child.kill();
@@ -100,9 +110,28 @@ fn authorize(
             )));
         }
         std::thread::sleep(Duration::from_millis(100));
+    };
+    let mut said = String::new();
+    if let Some(mut stderr) = child.stderr.take() {
+        let _ = stderr.read_to_string(&mut said);
     }
     // The child closed its copy: without a descriptor the read ends instead of blocking.
-    Ok(receive_fd(&ours)?)
+    receive_fd(&ours)?.ok_or_else(|| BlockError::Io(authopen_error(status.code(), said.trim())))
+}
+
+fn right_to_open(
+    raw: &str,
+    access: Access,
+    elevation: Elevation,
+    cancelled: &dyn Fn() -> bool,
+) -> Result<OwnedFd, BlockError> {
+    if elevation == Elevation::Never {
+        return Err(BlockError::Io(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!("{raw}: insufficient rights, elevation disabled"),
+        )));
+    }
+    authorize(raw, access, cancelled)
 }
 
 pub(super) fn prepare(
@@ -115,13 +144,12 @@ pub(super) fn prepare(
     if crate::image::has_access(Path::new(&raw), access) {
         return Ok(());
     }
-    if elevation == Elevation::Never {
-        return Err(BlockError::Io(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            format!("{raw}: insufficient rights, elevation disabled"),
-        )));
+    // The raw disk cannot be opened for writing while one of its volumes is mounted (EBUSY): writing asks
+    // for the right at open, after the unmount.
+    if access == Access::ReadWrite && elevation != Elevation::Never {
+        return Ok(());
     }
-    let fd = authorize(&raw, access, cancelled)?;
+    let fd = right_to_open(&raw, access, elevation, cancelled)?;
     *AUTHORIZED
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner) =
@@ -155,15 +183,7 @@ pub(super) fn open(
             .read(true)
             .write(access == Access::ReadWrite)
             .open(&raw)?,
-        None => {
-            prepare(path, access, elevation, cancelled)?;
-            let (_, _, fd) = AUTHORIZED
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .take()
-                .ok_or_else(|| io::Error::from(io::ErrorKind::PermissionDenied))?;
-            File::from(fd)
-        }
+        None => File::from(right_to_open(&raw, access, elevation, cancelled)?),
     };
     let (mut block_size, mut blocks) = (0u32, 0u64);
     // SAFETY: valid descriptor; each request writes into a variable of the size it declares.
@@ -237,3 +257,6 @@ pub(super) fn unmount(disk: &Disk) -> Result<Vec<String>, OpenTargetError> {
         .flat_map(|p| p.mount_points.iter().cloned())
         .collect())
 }
+
+#[cfg(test)]
+mod tests;

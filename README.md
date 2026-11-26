@@ -28,7 +28,7 @@
 
 ## Download
 
-Bonk with its window and the `bonk` command; on Android, the app.
+Bonk with its window and the `bonk` command; on Android, the app. On macOS, the `.dmg` holds the window app, the command line comes from Homebrew or the script; allow Bonk to access removable volumes when the system asks.
 
 | Platform | Download | Status |
 | :--- | :--- | :--- |
