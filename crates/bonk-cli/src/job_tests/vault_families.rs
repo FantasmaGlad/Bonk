@@ -107,3 +107,91 @@ fn ajouter_reconnait_une_famille_que_seul_le_catalogue_enregistre_connait() {
     assert_eq!(value["family"], "mint");
     let _ = std::fs::remove_file(&mint);
 }
+
+fn with_mint() -> Vec<bonk_core::vault::VaultFamily> {
+    let mut families = bonk_core::vault::default_families();
+    families.retain(|family| family.id != "mint");
+    families.push(bonk_core::vault::VaultFamily {
+        id: "mint".to_owned(),
+        name: "Linux Mint".to_owned(),
+        detect: vec![vec![
+            "casper/vmlinuz".to_owned(),
+            "casper/initrd.lz".to_owned(),
+        ]],
+        label_prefix: None,
+        kernel: "casper/vmlinuz".to_owned(),
+        initrd: "casper/initrd.lz".to_owned(),
+        options: "boot=casper iso-scan/filename={path}".to_owned(),
+        location: false,
+        initrd_extra: None,
+    });
+    families
+}
+
+#[test]
+fn des_familles_candidates_d_un_fichier_preparent_le_coffre_et_y_font_entrer_l_iso() {
+    let mut scenario = Scenario::sized(VAULT_DISK);
+    scenario.catalog = served_catalog_with(&[("x86_64", GRUB)], None, "");
+    let cache = TempSource::dir("cache-familles-candidates");
+    let cache = cache.arg();
+    let file = TempSource::from_bytes(
+        "familles-candidates.json",
+        serde_json::to_string(&with_mint())
+            .expect("JSON")
+            .as_bytes(),
+    );
+    let file = file.arg();
+    let (code, _, err) = scenario.run(&init_args(&cache, &["--families", &file]));
+    assert_eq!(code, 0, "{err}");
+    let menu = bonk_core::vault::menu(&with_mint());
+    let disk = scenario.written(VAULT_DISK as usize);
+    assert!(
+        disk.windows(menu.len()).any(|w| w == menu.as_bytes()),
+        "menu des familles du fichier"
+    );
+    let mint = iso_file(
+        "mint-candidate.iso",
+        &[("casper/vmlinuz", 1), ("casper/initrd.lz", 1)],
+    );
+    let arg = mint.display().to_string();
+    let (code, out, err) = scenario.run(&[
+        "vault",
+        "add",
+        "usb-a",
+        &arg,
+        "--yes",
+        "--json",
+        "--families",
+        &file,
+    ]);
+    assert_eq!(code, 0, "{err}");
+    let value: serde_json::Value = serde_json::from_str(&out).expect("JSON");
+    assert_eq!(value["family"], "mint");
+    let _ = std::fs::remove_file(&mint);
+}
+
+#[test]
+fn un_fichier_de_familles_refuse_ou_illisible_n_ecrit_rien() {
+    let mut hostile = with_mint();
+    hostile[0].options = "quiet; reboot".to_owned();
+    let cases = [
+        (
+            "familles-hostiles.json",
+            serde_json::to_string(&hostile).expect("JSON"),
+        ),
+        ("familles-vides.json", "[]".to_owned()),
+        ("familles-illisibles.json", "{".to_owned()),
+    ];
+    for (name, text) in cases {
+        let mut scenario = Scenario::sized(VAULT_DISK);
+        scenario.catalog = served_catalog_with(&[("x86_64", GRUB)], None, "");
+        let cache = TempSource::dir(&format!("cache-{name}"));
+        let cache = cache.arg();
+        let file = TempSource::from_bytes(name, text.as_bytes());
+        let file = file.arg();
+        let (code, _, err) = scenario.run(&init_args(&cache, &["--families", &file]));
+        assert_eq!(code, EXIT_USAGE, "{name}: {err}");
+        assert!(err.contains("[E0001]"), "{name}: {err}");
+        assert!(scenario.log().is_empty(), "{name}: aucun disque touché");
+    }
+}

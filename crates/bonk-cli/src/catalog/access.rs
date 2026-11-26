@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use bonk_catalog::manifest::{self, Catalog, Image, ImageSource, Loaded, TRUSTED_KEYS};
-use bonk_core::vault::{VaultFamily, default_families, families_from};
+use bonk_core::vault::{VaultFamily, default_families, families_from, family_errors};
 use bonk_ops::job::{JobError, WriteMode};
 
 use crate::errors::Code;
@@ -83,6 +83,27 @@ pub(crate) fn saved_families(access: &Access, cache_dir: Option<&Path>) -> Vec<V
             log::info!(target: "bonk::catalog", error = error.to_string().as_str(); "vault families of this Bonk");
             default_families()
         }
+    }
+}
+
+/// # Errors
+/// Unreadable file, not a list of families, an empty list, or a family the menu would refuse.
+pub(crate) fn families_file(path: &Path) -> Result<Vec<VaultFamily>, JobError> {
+    let invalid = |message: String| JobError {
+        code: Code::InvalidArgument,
+        message: format!("{}: {message}", path.display()),
+    };
+    let text = std::fs::read_to_string(path).map_err(|e| invalid(e.to_string()))?;
+    let families: Vec<VaultFamily> =
+        serde_json::from_str(&text).map_err(|e| invalid(e.to_string()))?;
+    if families.is_empty() {
+        return Err(invalid("no vault family".to_owned()));
+    }
+    let errors: Vec<String> = families.iter().flat_map(family_errors).collect();
+    if errors.is_empty() {
+        Ok(families)
+    } else {
+        Err(invalid(errors.join("; ")))
     }
 }
 

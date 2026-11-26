@@ -41,7 +41,10 @@ pub(crate) fn grub(
         .as_ref()
         .is_some_and(|folder| !folder.join(BIOS_CORE).exists());
     let bios = entry.bios.as_ref().filter(|_| !copied_without_bios);
-    let families = core_vault::families_from(&loaded.catalog.vault_families);
+    let families = match &args.families {
+        Some(file) => catalog::families_file(file)?,
+        None => core_vault::families_from(&loaded.catalog.vault_families),
+    };
     vault_boot(&entry, bios, &families, &read)
 }
 

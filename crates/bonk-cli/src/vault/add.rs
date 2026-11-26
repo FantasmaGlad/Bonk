@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use bonk_core::write::{Control, Progress};
 use bonk_ops::errors::Code;
-use bonk_ops::job::{self, Deps, JobError, TraceIo, VaultAddJob};
+use bonk_ops::job::{self, Deps, JobError, TraceIo, VaultAddDone, VaultAddJob};
 
 use super::AddArgs;
 use crate::catalog::{self, Destination, download};
@@ -26,19 +26,7 @@ pub(super) fn run_add(
             &mut *out,
             &mut *err,
         );
-        source(args, deps, &mut progress).and_then(|source| {
-            let job = VaultAddJob {
-                target: args.common.target(),
-                source,
-                name: None,
-                options: args.common.write_options(),
-                trace_io: args.common.trace_io.map(TraceIo::from),
-                yes: args.yes,
-                elevation: args.common.elevate.into(),
-                families: catalog::saved_families(access, args.cache_dir.as_deref()),
-            };
-            job::vault_add(&job, deps, &mut progress)
-        })
+        add(args, access, deps, &mut progress)
     };
     finish(result, &args.common, out, err, |done, out| {
         writeln!(
@@ -60,6 +48,37 @@ pub(super) fn run_add(
         }
         Ok(())
     })
+}
+
+// The download refreshes the saved catalog: its families are read after it.
+fn add(
+    args: &AddArgs,
+    access: &catalog::Access,
+    deps: &Deps<'_>,
+    progress: &mut dyn FnMut(&Progress) -> Control,
+) -> Result<VaultAddDone, JobError> {
+    let source = source(args, deps, progress)?;
+    let job = VaultAddJob {
+        target: args.common.target(),
+        source,
+        name: None,
+        options: args.common.write_options(),
+        trace_io: args.common.trace_io.map(TraceIo::from),
+        yes: args.yes,
+        elevation: args.common.elevate.into(),
+        families: families(args, access)?,
+    };
+    job::vault_add(&job, deps, progress)
+}
+
+fn families(
+    args: &AddArgs,
+    access: &catalog::Access,
+) -> Result<Vec<bonk_core::vault::VaultFamily>, JobError> {
+    match &args.families {
+        Some(file) => catalog::families_file(file),
+        None => Ok(catalog::saved_families(access, args.cache_dir.as_deref())),
+    }
 }
 
 /// Nothing is downloaded without --yes.

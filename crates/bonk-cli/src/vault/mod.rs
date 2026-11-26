@@ -86,6 +86,11 @@ pub(crate) struct GrubSource {
     /// Download directory; by default the user's cache directory
     #[arg(long, value_name = "DIR")]
     pub(crate) cache_dir: Option<PathBuf>,
+
+    /// Vault families from this JSON file, checked by the catalog's rules, instead of the catalog's: for a
+    /// family not published yet
+    #[arg(long, value_name = "FILE")]
+    pub(crate) families: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -136,6 +141,11 @@ pub(crate) struct AddArgs {
     /// directory
     #[arg(long, value_name = "DIR")]
     cache_dir: Option<PathBuf>,
+
+    /// Vault families from this JSON file, checked by the catalog's rules, instead of the catalog's: for a
+    /// family not published yet
+    #[arg(long, value_name = "FILE")]
+    families: Option<PathBuf>,
 
     /// Confirm: without --yes, Bonk does nothing
     #[arg(long)]

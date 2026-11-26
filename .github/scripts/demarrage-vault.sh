@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Usage: demarrage-vault.sh <bonk> <iso url> <SHA256SUMS url> <work dir> <proof> [demarrage-qemu.py options]
-# MODE: uefi (default) or bios.
+# MODE: uefi (default) or bios. FAMILLES: vault families file, for a family the catalog does not serve yet.
 set -euo pipefail
 
 bonk=$1
@@ -13,8 +13,10 @@ mkdir -p "$travail"
 ici=$(cd "$(dirname "$0")" && pwd)
 nom=${source##*/}
 cle="$travail/cle.img"
+familles=()
+if [ -n "${FAMILLES:-}" ]; then familles=(--families "$FAMILLES"); fi
 
-"$bonk" vault init --simulate "$cle" --size "${VAULT_SIZE:-$((3 << 30))}" --yes --progress none --cache-dir "$travail/cache"
+"$bonk" vault init --simulate "$cle" --size "${VAULT_SIZE:-$((3 << 30))}" --yes --progress none --cache-dir "$travail/cache" "${familles[@]}"
 
 curl --fail --silent --show-error --location --connect-timeout 30 --retry 5 --retry-all-errors --continue-at - --output "$travail/$nom" "$source"
 # GNU lines (`sum  name`) or BSD lines (`SHA256 (name) = sum`, Fedora).
@@ -26,7 +28,7 @@ echo "$attendu  $travail/$nom" | sha256sum --check --quiet
 
 # COPIE=bonk: added by `bonk vault add`; otherwise as a user would put it there, by the system's exFAT driver.
 if [ "${COPIE:-}" = bonk ]; then
-  "$bonk" vault add --simulate "$cle" "$travail/$nom" --yes --progress none
+  "$bonk" vault add --simulate "$cle" "$travail/$nom" --yes --progress none "${familles[@]}"
 elif sudo -n true 2> /dev/null; then
   boucle=$(sudo losetup --find --partscan --show "$cle")
   point=$(mktemp -d)
