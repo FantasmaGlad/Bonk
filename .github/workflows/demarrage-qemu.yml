@@ -238,6 +238,24 @@ jobs:
             motif: 'linuxmint-22-cinnamon-64bit\.iso'
             taille: 6442450944
             options: --ligne 4 --memoire 4096 --delai 900
+          # Garuda's dracut mounts the volume of its label: the vault's udev rule maps the ISO from its offset.
+          - nom: Garuda
+            copie: bonk
+            familles: crates/bonk-core/src/vault/families.json
+            base: https://iso.builds.garudalinux.org/iso/garuda/cinnamon/260819
+            sommes: garuda-cinnamon-linux-garuda-260819.iso.sha256
+            motif: 'garuda-cinnamon-linux-garuda-260819\.iso'
+            taille: 6442450944
+            options: --ligne 4 --memoire 4096 --delai 900
+          # Manjaro's miso_loop_mnt finds the vault by its label and loops the ISO, as Arch does.
+          - nom: Manjaro
+            copie: bonk
+            familles: crates/bonk-core/src/vault/families.json
+            base: https://download.manjaro.org/xfce/26.1.0
+            sommes: manjaro-xfce-26.1.0-260812-linux71.iso.sha256
+            motif: 'manjaro-xfce-26\.1\.0-260812-linux71\.iso'
+            taille: 8589934592
+            options: --memoire 4096 --delai 900
           # Anaconda finds its medium by the ISO label: the vault's udev rule maps the ISO from its offset.
           - nom: AlmaLinux
             copie: bonk
