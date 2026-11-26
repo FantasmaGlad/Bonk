@@ -85,7 +85,7 @@
   ],
   "kernel": "casper/vmlinuz",
   "initrd": "casper/initrd.lz",
-  "options": "boot=casper username=mint hostname=mint bonk.offset={offset} --",
+  "options": "boot=casper username=mint hostname=mint bonk.offset={offset}",
   "location": true,
   "initrd_extra": "newc:scripts/casper-premount/20iso_scan:{bonk}/casper/20iso_scan"
  }
