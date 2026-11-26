@@ -331,9 +331,13 @@ fn avec_grub(grub: &str) -> Vec<u8> {
 }
 
 fn grub(efi_path: &str) -> String {
+    grub_with(efi_path, "grub/2.14/bios/core.img")
+}
+
+fn grub_with(efi_path: &str, core_path: &str) -> String {
     let (a, b) = ("a".repeat(64), "b".repeat(64));
     format!(
-        r#"{{"version":"2.14","released":"2026-01-14","build":"6e330c761ee82877","efi":{{"x86_64":{{"path":"{efi_path}","sha256":"{a}","size_bytes":1}}}},"source":{{"path":"grub/2.14/grub-2.14.tar.xz","sha256":"{b}","size_bytes":2}},"source_signature":{{"path":"grub/2.14/grub-2.14.tar.xz.sig","sha256":"{b}","size_bytes":3}}}}"#
+        r#"{{"version":"2.14","released":"2026-01-14","build":"6e330c761ee82877","efi":{{"x86_64":{{"path":"{efi_path}","sha256":"{a}","size_bytes":1}}}},"bios":{{"boot":{{"path":"grub/2.14/bios/boot.img","sha256":"{a}","size_bytes":512}},"core":{{"path":"{core_path}","sha256":"{a}","size_bytes":4}}}},"source":{{"path":"grub/2.14/grub-2.14.tar.xz","sha256":"{b}","size_bytes":2}},"source_signature":{{"path":"grub/2.14/grub-2.14.tar.xz.sig","sha256":"{b}","size_bytes":3}}}}"#
     )
 }
 
@@ -351,15 +355,21 @@ fn l_entree_grub_se_lit_et_reste_dans_le_dossier_du_catalogue()
     )?;
     let entry = catalog.grub.ok_or("pas d'entrée grub")?;
     assert_eq!(entry.efi["x86_64"].path, "grub/2.14/BOOTX64.EFI");
+    assert_eq!(
+        entry.bios.map(|bios| bios.core.path).as_deref(),
+        Some("grub/2.14/bios/core.img")
+    );
     for chemin in [
         "../BOOTX64.EFI",
         "/BOOTX64.EFI",
         "https://autre/BOOTX64.EFI",
     ] {
-        assert!(matches!(
-            check(&avec_grub(&grub(chemin)), &key, &[public], 0),
-            Err(CatalogError::InvalidGrub(_))
-        ));
+        for entree in [grub(chemin), grub_with("grub/2.14/BOOTX64.EFI", chemin)] {
+            assert!(matches!(
+                check(&avec_grub(&entree), &key, &[public], 0),
+                Err(CatalogError::InvalidGrub(_))
+            ));
+        }
     }
     Ok(())
 }

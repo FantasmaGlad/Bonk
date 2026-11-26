@@ -48,7 +48,7 @@ data class OpenLink(val url: String) : Effect
 data object PickVaultIso : Effect
 
 @Serializable
-data class GrubDownload(val arch: String, val url: String, @SerialName("size_bytes") val sizeBytes: Long)
+data class GrubDownload(val name: String, val url: String, @SerialName("size_bytes") val sizeBytes: Long)
 
 /**
  * A vault action on the chosen disk. `iso` for `add`; `grub` for `init` and `update`, empty while the catalog

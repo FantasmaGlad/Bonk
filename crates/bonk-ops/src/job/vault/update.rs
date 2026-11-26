@@ -1,5 +1,5 @@
 use bonk_core::format::Ids;
-use bonk_core::vault::{self, BootFile};
+use bonk_core::vault::{self, VaultBoot};
 use bonk_hal::{Access, Elevation, FilterOptions};
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -13,7 +13,7 @@ use super::*;
 
 pub struct VaultUpdateJob {
     pub target: Target,
-    pub boot: Vec<BootFile>,
+    pub boot: VaultBoot,
     pub grub: Option<GrubInfo>,
     pub options: FilterOptions,
     pub trace_io: Option<TraceIo>,
@@ -30,11 +30,13 @@ pub struct VaultUpdateDone {
     pub dry_run: bool,
     pub target: TargetInfo,
     pub grub: Option<GrubInfo>,
-    /// The boot partition already held these exact files.
+    /// GRUB for BIOS machines in the MBR and the sectors before the first partition.
+    pub bios: bool,
+    /// The boot partition already held these exact files, and the MBR this GRUB for BIOS.
     pub up_to_date: bool,
     /// Written now.
     pub updated: bool,
-    /// Boot partition read back after writing.
+    /// Boot partition and MBR read back after writing.
     pub verified: bool,
 }
 
@@ -55,12 +57,14 @@ pub fn vault_update(job: &VaultUpdateJob, deps: &Deps<'_>) -> Result<VaultUpdate
         deps,
     )?;
     let up_to_date = vault::boot_matches(&*device, &plan, &job.boot).map_err(read_error)?;
+    let block_size = device.block_size();
     let done = |event, updated, verified, target| VaultUpdateDone {
         schema_version: SCHEMA_VERSION,
         event,
         dry_run: job.dry_run,
         target,
         grub: job.grub.clone(),
+        bios: job.boot.bios_on(block_size).is_some(),
         up_to_date,
         updated,
         verified,

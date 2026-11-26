@@ -87,7 +87,7 @@ fn vault_effect(model: &Model, args: &[String]) -> Option<Value> {
     let grub: Vec<Value> = if matches!(action, "init" | "update") {
         crate::vault::grub_downloads()
             .into_iter()
-            .map(|image| json!({"arch": image.arch, "url": image.url, "size_bytes": image.size_bytes}))
+            .map(|image| json!({"name": image.name, "url": image.url, "size_bytes": image.size_bytes}))
             .collect()
     } else {
         Vec::new()

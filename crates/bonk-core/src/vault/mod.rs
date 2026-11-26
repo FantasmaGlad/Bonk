@@ -1,3 +1,4 @@
+mod bios;
 mod boot;
 mod family;
 mod images;
@@ -7,6 +8,7 @@ mod plan;
 #[cfg(test)]
 mod tests;
 
+pub use bios::*;
 pub use boot::*;
 pub use family::*;
 pub use images::*;

@@ -110,8 +110,8 @@ pub(super) struct TransferParams {
     pub(super) iso: Option<PathBuf>,
     /// `vault.remove`: name of the ISO on the vault.
     pub(super) name: Option<String>,
-    /// `vault.init`, `vault.update`: folder holding the GRUB images (BOOTX64.EFI, BOOTAA64.EFI), checked
-    /// against the catalog.
+    /// `vault.init`, `vault.update`: folder holding the GRUB images (BOOTX64.EFI, BOOTAA64.EFI, bios/boot.img,
+    /// bios/core.img), checked against the catalog.
     pub(super) grub_dir: Option<PathBuf>,
 }
 

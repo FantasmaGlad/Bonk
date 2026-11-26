@@ -2,7 +2,7 @@
 
 use bonk_core::format::Ids;
 use bonk_core::format::table::TableKind;
-use bonk_core::vault;
+use bonk_core::vault::{self, VaultBoot};
 
 use crate::errors::Code;
 
@@ -17,7 +17,7 @@ fn l_annulation_arrete_avant_les_volumes() {
         &mut device,
         TableKind::Mbr,
         &Ids::from_seed(b"essai"),
-        &[],
+        &VaultBoot::default(),
         &|| true,
     );
     assert_eq!(result.err().map(|e| e.code), Some(Code::Cancelled));
@@ -31,7 +31,7 @@ fn un_disque_trop_petit_ne_recoit_rien() {
         &mut device,
         TableKind::Mbr,
         &Ids::from_seed(b"essai"),
-        &[],
+        &VaultBoot::default(),
         &|| false,
     );
     assert_eq!(result.err().map(|e| e.code), Some(Code::FormatFailed));

@@ -261,6 +261,26 @@ pub struct Grub {
     pub build: String,
     /// One standalone EFI image per architecture: `x86_64`, later `aarch64` and `riscv64`.
     pub efi: BTreeMap<String, Asset>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bios: Option<GrubBios>,
     pub source: Asset,
     pub source_signature: Asset,
+}
+
+/// GRUB for BIOS machines: `boot.img` for the MBR, `core.img` for the sectors before the first partition.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct GrubBios {
+    pub boot: Asset,
+    pub core: Asset,
+}
+
+impl GrubBios {
+    /// SHA-256 of each file, by its role: `boot`, `core`.
+    #[must_use]
+    pub fn hashes(&self) -> BTreeMap<String, String> {
+        BTreeMap::from([
+            ("boot".to_owned(), self.boot.sha256.clone()),
+            ("core".to_owned(), self.core.sha256.clone()),
+        ])
+    }
 }

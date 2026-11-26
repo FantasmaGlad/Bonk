@@ -183,7 +183,7 @@ jobs:
 
   # GRUB comes from the published catalog: the vault is checked as a user gets it.
   vault:
-    name: Vault, ${{ matrix.nom }} (uefi)
+    name: Vault, ${{ matrix.nom }} (${{ matrix.mode || 'uefi' }})
     needs: [bonk, qemu]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -201,6 +201,19 @@ jobs:
             sommes: sha256sums.txt
             motif: 'archlinux-x86_64\.iso'
             options: --memoire 2048 --delai 300
+          # GRUB for BIOS shows the menu about a second after SeaBIOS and starts its first entry ten seconds later.
+          - nom: Debian live
+            mode: bios
+            base: https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid
+            motif: 'debian-live-[0-9.]*-amd64-standard\.iso'
+            options: --memoire 2048 --delai 300 --attente 5
+          - nom: Arch
+            mode: bios
+            copie: bonk
+            base: https://geo.mirror.pkgbuild.com/iso/latest
+            sommes: sha256sums.txt
+            motif: 'archlinux-x86_64\.iso'
+            options: --memoire 2048 --delai 300 --attente 5
           # casper does not look into exFAT: the vault swaps in its own iso-scan step (newc: in the menu).
           # Its entry sources the ISO's offset first: the kernel line comes one later.
           - nom: Ubuntu
@@ -272,6 +285,7 @@ jobs:
           PREUVE: ${{ matrix.preuve || 'login:' }}
           VAULT_SIZE: ${{ matrix.taille }}
           COPIE: ${{ matrix.copie }}
+          MODE: ${{ matrix.mode || 'uefi' }}
         # The runner's second disk, when mounted, holds the ISO and the vault: the system disk may be too small.
         run: |
           read -r -a options <<< "$OPTIONS"

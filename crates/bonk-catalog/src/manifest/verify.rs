@@ -29,9 +29,11 @@ pub(super) fn check_grub(grub: &Grub) -> Result<(), &'static str> {
     if grub.efi.is_empty() {
         return Err("no EFI image");
     }
+    let bios = grub.bios.iter().flat_map(|bios| [&bios.boot, &bios.core]);
     let assets = grub
         .efi
         .values()
+        .chain(bios)
         .chain([&grub.source, &grub.source_signature]);
     for asset in assets {
         if !is_relative(&asset.path) {

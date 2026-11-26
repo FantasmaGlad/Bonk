@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Usage: demarrage-vault.sh <bonk> <iso url> <SHA256SUMS url> <work dir> <proof> [demarrage-qemu.py options]
+# MODE: uefi (default) or bios.
 set -euo pipefail
 
 bonk=$1
@@ -47,4 +48,4 @@ else
 fi
 "$bonk" vault list --simulate "$cle"
 
-python3 "$ici/demarrage-qemu.py" "$cle" uefi grub "$preuve" "$travail" "$@"
+python3 "$ici/demarrage-qemu.py" "$cle" "${MODE:-uefi}" grub "$preuve" "$travail" "$@"

@@ -14,7 +14,7 @@ use super::*;
 pub(in crate::serve) fn vault_grub(
     p: &TransferParams,
     cfg: &Config,
-) -> Result<(Vec<bonk_core::vault::BootFile>, job::GrubInfo), Failure> {
+) -> Result<(bonk_core::vault::VaultBoot, job::GrubInfo), Failure> {
     let source = crate::vault::GrubSource {
         grub_dir: p.grub_dir.clone(),
         catalog_url: p.catalog_url.clone(),
@@ -80,7 +80,7 @@ pub(in crate::serve) fn vault_init_task(
 ) -> Result<Task, Failure> {
     // A plan or a refusal for want of confirmation writes nothing: no GRUB needed.
     let (boot, grub) = if p.dry_run || !(p.yes || p.force) {
-        (Vec::new(), None)
+        (bonk_core::vault::VaultBoot::default(), None)
     } else {
         let (boot, grub) = vault_grub(p, cfg)?;
         (boot, Some(grub))

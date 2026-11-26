@@ -1,11 +1,10 @@
-use std::collections::BTreeMap;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Mutex;
 
-use bonk_catalog::manifest::{self, Grub};
+use bonk_catalog::manifest::{self, Grub, GrubBios};
 use bonk_core::format::table::TableKind;
-use bonk_core::vault::{self as core_vault, BootFile};
+use bonk_core::vault::{self as core_vault, BiosGrub, VaultBoot};
 use bonk_core::{BlockDevice, BlockError, partition};
 use bonk_hal::{Disk, Elevation, FilterOptions};
 use bonk_ops::errors::Code;
@@ -27,10 +26,13 @@ pub(crate) fn set_grub(base: &str, grub: Option<Grub>, vault_families: Vec<serde
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Download {
-    pub(crate) arch: String,
+    pub(crate) name: String,
     pub(crate) url: String,
     pub(crate) size_bytes: u64,
 }
+
+const BIOS_BOOT: &str = "bios-boot";
+const BIOS_CORE: &str = "bios-core";
 
 pub(crate) fn grub_downloads() -> Vec<Download> {
     downloads(lock(&GRUB).as_ref())
@@ -40,17 +42,30 @@ fn downloads(offered: Option<&(String, Grub)>) -> Vec<Download> {
     let Some((base, entry)) = offered else {
         return Vec::new();
     };
-    writable(entry)
-        .map(|(arch, asset)| Download {
-            arch: arch.clone(),
+    files(entry)
+        .into_iter()
+        .map(|(name, asset)| Download {
+            name: name.to_owned(),
             url: format!("{base}{}", asset.path),
             size_bytes: asset.size_bytes,
         })
         .collect()
 }
 
+/// Each GRUB image this Bonk writes, by its file name in the download folder.
+fn files(entry: &Grub) -> Vec<(&str, &manifest::Asset)> {
+    let bios = entry
+        .bios
+        .iter()
+        .flat_map(|bios| [(BIOS_BOOT, &bios.boot), (BIOS_CORE, &bios.core)]);
+    efi_files(entry)
+        .map(|(arch, asset)| (arch.as_str(), asset))
+        .chain(bios)
+        .collect()
+}
+
 /// A processor this Bonk has no removable-media name for is left to a later version.
-fn writable(entry: &Grub) -> impl Iterator<Item = (&String, &manifest::Asset)> {
+fn efi_files(entry: &Grub) -> impl Iterator<Item = (&String, &manifest::Asset)> {
     entry
         .efi
         .iter()
@@ -64,24 +79,24 @@ fn refused(message: impl std::fmt::Display) -> JobError {
     }
 }
 
-/// The files Kotlin downloaded into `folder`, one named by each processor, accepted only with the hashes
-/// the signed catalog gives.
-fn boot(entry: Option<&Grub>, folder: &Path) -> Result<(Vec<BootFile>, GrubInfo), JobError> {
+/// The files Kotlin downloaded into `folder`, accepted only with the hashes the signed catalog gives.
+fn boot(entry: Option<&Grub>, folder: &Path) -> Result<(VaultBoot, GrubInfo), JobError> {
     let entry =
         entry.ok_or_else(|| refused("the catalog does not offer GRUB yet: try again later"))?;
-    let mut images = Vec::new();
-    let mut efi = BTreeMap::new();
-    for (arch, asset) in writable(entry) {
-        let data = std::fs::read(folder.join(arch))
-            .map_err(|e| refused(format!("GRUB {} {arch}: {e}", entry.version)))?;
+    let read = |name: &str, asset: &manifest::Asset| -> Result<Vec<u8>, JobError> {
+        let data = std::fs::read(folder.join(name))
+            .map_err(|e| refused(format!("GRUB {} {name}: {e}", entry.version)))?;
         if !manifest::asset_matches(asset, &data) {
             return Err(refused(format!(
-                "GRUB {} {arch} does not match its signed hash",
+                "GRUB {} {name} does not match its signed hash",
                 entry.version
             )));
         }
-        efi.insert(arch.clone(), asset.sha256.clone());
-        images.push((arch.as_str(), data));
+        Ok(data)
+    };
+    let mut images = Vec::new();
+    for (arch, asset) in efi_files(entry) {
+        images.push((arch.as_str(), read(arch, asset)?));
     }
     if images.is_empty() {
         return Err(refused(
@@ -90,12 +105,29 @@ fn boot(entry: Option<&Grub>, folder: &Path) -> Result<(Vec<BootFile>, GrubInfo)
     }
     let families = core_vault::families_from(&lock(&VAULT_FAMILIES));
     let files = core_vault::boot_files(&images, &families).map_err(refused)?;
-    let info = GrubInfo {
+    let bios = match &entry.bios {
+        Some(offered) => Some(BiosGrub {
+            boot: read(BIOS_BOOT, &offered.boot)?,
+            core: read(BIOS_CORE, &offered.core)?,
+        }),
+        None => None,
+    };
+    Ok((VaultBoot { files, bios }, grub_info(entry)))
+}
+
+fn grub_info(entry: &Grub) -> GrubInfo {
+    GrubInfo {
         version: entry.version.clone(),
         build: entry.build.clone(),
-        efi,
-    };
-    Ok((files, info))
+        efi: efi_files(entry)
+            .map(|(arch, asset)| (arch.clone(), asset.sha256.clone()))
+            .collect(),
+        bios: entry
+            .bios
+            .as_ref()
+            .map(GrubBios::hashes)
+            .unwrap_or_default(),
+    }
 }
 
 /// Android says nothing of a new table: the chosen disk's partitions are read on the drive itself, as the
@@ -221,7 +253,7 @@ fn add_job(target: Target, request: &Request<'_>) -> VaultAddJob {
     }
 }
 
-fn update_job(target: Target, boot: Vec<BootFile>, grub: GrubInfo) -> VaultUpdateJob {
+fn update_job(target: Target, boot: VaultBoot, grub: GrubInfo) -> VaultUpdateJob {
     VaultUpdateJob {
         target,
         boot,
@@ -328,6 +360,9 @@ mod tests {
             std::fs::create_dir_all(&folder).expect("dossier");
             std::fs::write(folder.join("x86_64"), GRUB_BYTES).expect("GRUB");
             std::fs::write(folder.join("aarch64"), arm).expect("GRUB");
+            let (boot, core) = bios_bytes();
+            std::fs::write(folder.join(BIOS_BOOT), boot).expect("GRUB");
+            std::fs::write(folder.join(BIOS_CORE), core).expect("GRUB");
             folder.display().to_string()
         };
         (write("grub", ARM_BYTES), write("forged", b"MZ autre GRUB"))
@@ -346,6 +381,14 @@ mod tests {
         (iso.display().to_string(), image)
     }
 
+    fn bios_bytes() -> (Vec<u8>, Vec<u8>) {
+        let mut boot = vec![0xEB; 512];
+        boot[510..].copy_from_slice(&[0x55, 0xAA]);
+        let mut core = vec![0xC0; 1024];
+        core[400..512].fill(0);
+        (boot, core)
+    }
+
     fn offered_grub() -> (String, Grub) {
         let fake = asset("grub/x.tar.xz", b"x");
         let mut efi = BTreeMap::new();
@@ -358,11 +401,16 @@ mod tests {
             asset("grub/2.14/BOOTAA64.EFI", ARM_BYTES),
         );
         efi.insert("mips64".to_owned(), asset("grub/2.14/X.EFI", b"x"));
+        let (boot, core) = bios_bytes();
         let grub = Grub {
             version: "2.14".to_owned(),
             released: "2026-01-14".to_owned(),
             build: "6e330c761ee82877".to_owned(),
             efi,
+            bios: Some(GrubBios {
+                boot: asset("grub/2.14/bios/boot.img", &boot),
+                core: asset("grub/2.14/bios/core.img", &core),
+            }),
             source: fake.clone(),
             source_signature: fake,
         };
@@ -376,14 +424,24 @@ mod tests {
             downloads(Some(&offered_grub())),
             [
                 Download {
-                    arch: "aarch64".to_owned(),
+                    name: "aarch64".to_owned(),
                     url: "https://catalog.test/v1/grub/2.14/BOOTAA64.EFI".to_owned(),
                     size_bytes: ARM_BYTES.len() as u64,
                 },
                 Download {
-                    arch: "x86_64".to_owned(),
+                    name: "x86_64".to_owned(),
                     url: "https://catalog.test/v1/grub/2.14/BOOTX64.EFI".to_owned(),
                     size_bytes: GRUB_BYTES.len() as u64,
+                },
+                Download {
+                    name: "bios-boot".to_owned(),
+                    url: "https://catalog.test/v1/grub/2.14/bios/boot.img".to_owned(),
+                    size_bytes: 512,
+                },
+                Download {
+                    name: "bios-core".to_owned(),
+                    url: "https://catalog.test/v1/grub/2.14/bios/core.img".to_owned(),
+                    size_bytes: 1024,
                 },
             ]
         );
@@ -444,6 +502,7 @@ mod tests {
             run(&key, &offered, &request("init", "", "", &grub)),
             Event::Finished(Outcome::Vault(VaultDone::Prepared))
         );
+        assert_eq!(key.borrow().as_bytes()[..3], [0xEB; 3], "GRUB pour le BIOS");
         assert!(
             started.elapsed() < Duration::from_secs(10),
             "{:?}",

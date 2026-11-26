@@ -8,6 +8,8 @@ use super::*;
 const VAULT_DISK: u64 = 256 << 20;
 pub(crate) const BASE: &str = "https://catalogue.test/";
 pub(crate) const GRUB: &[u8] = b"MZ grub de test";
+const BIOS_BOOT_PATH: &str = "grub/2.14/bios/boot.img";
+const BIOS_CORE_PATH: &str = "grub/2.14/bios/core.img";
 
 fn sha256(bytes: &[u8]) -> String {
     bonk_core::write::hex(digest(&SHA256, bytes).as_ref())
@@ -22,30 +24,42 @@ pub(crate) fn served_catalog(grub: Option<&[u8]>) -> ServedCatalog {
 }
 
 fn served_catalog_for(images: &[(&str, &[u8])]) -> ServedCatalog {
-    served_catalog_with(images, "")
+    served_catalog_with(images, None, "")
 }
 
-fn served_catalog_with(images: &[(&str, &[u8])], extra: &str) -> ServedCatalog {
+fn asset(path: &str, bytes: &[u8]) -> String {
+    format!(
+        r#"{{"path":"{path}","sha256":"{}","size_bytes":{}}}"#,
+        sha256(bytes),
+        bytes.len()
+    )
+}
+
+fn served_catalog_with(
+    images: &[(&str, &[u8])],
+    bios: Option<(&[u8], &[u8])>,
+    extra: &str,
+) -> ServedCatalog {
     let pair = Ed25519KeyPair::from_seed_unchecked(&[7; 32]).expect("clé de test");
     let public: [u8; 32] = pair.public_key().as_ref().try_into().expect("32 octets");
     let fake = "c".repeat(64);
     let path = |arch: &str| format!("grub/2.14/{arch}.EFI");
     let efi: Vec<String> = images
         .iter()
-        .map(|(arch, bytes)| {
-            format!(
-                r#""{arch}":{{"path":"{}","sha256":"{}","size_bytes":{}}}"#,
-                path(arch),
-                sha256(bytes),
-                bytes.len()
-            )
-        })
+        .map(|(arch, bytes)| format!(r#""{arch}":{}"#, asset(&path(arch), bytes)))
         .collect();
+    let bios_entry = bios.map_or_else(String::new, |(boot, core)| {
+        format!(
+            r#","bios":{{"boot":{},"core":{}}}"#,
+            asset(BIOS_BOOT_PATH, boot),
+            asset(BIOS_CORE_PATH, core)
+        )
+    });
     let entry = if images.is_empty() {
         String::new()
     } else {
         format!(
-            r#","grub":{{"version":"2.14","released":"2026-01-14","build":"6e330c761ee82877","efi":{{{}}},"source":{{"path":"grub/2.14/grub-2.14.tar.xz","sha256":"{fake}","size_bytes":1}},"source_signature":{{"path":"grub/2.14/grub-2.14.tar.xz.sig","sha256":"{fake}","size_bytes":1}}}}"#,
+            r#","grub":{{"version":"2.14","released":"2026-01-14","build":"6e330c761ee82877","efi":{{{}}}{bios_entry},"source":{{"path":"grub/2.14/grub-2.14.tar.xz","sha256":"{fake}","size_bytes":1}},"source_signature":{{"path":"grub/2.14/grub-2.14.tar.xz.sig","sha256":"{fake}","size_bytes":1}}}}"#,
             efi.join(",")
         )
     };
@@ -66,6 +80,10 @@ fn served_catalog_with(images: &[(&str, &[u8])], extra: &str) -> ServedCatalog {
     files.insert(format!("{BASE}catalog.json"), manifest);
     for (arch, bytes) in images {
         files.insert(format!("{BASE}{}", path(arch)), bytes.to_vec());
+    }
+    if let Some((boot, core)) = bios {
+        files.insert(format!("{BASE}{BIOS_BOOT_PATH}"), boot.to_vec());
+        files.insert(format!("{BASE}{BIOS_CORE_PATH}"), core.to_vec());
     }
     ServedCatalog {
         keys: vec![public],
@@ -413,7 +431,7 @@ fn le_menu_du_coffre_suit_les_familles_du_catalogue() {
         serde_json::to_string(&families).expect("JSON")
     );
     let mut scenario = Scenario::sized(VAULT_DISK);
-    scenario.catalog = served_catalog_with(&[("x86_64", GRUB)], &served);
+    scenario.catalog = served_catalog_with(&[("x86_64", GRUB)], None, &served);
     let cache = TempSource::dir("cache-familles");
     let cache = cache.arg();
     let (code, _, err) = scenario.run(&init_args(&cache, &[]));
@@ -518,4 +536,52 @@ fn mettre_a_jour_grub_garde_les_iso() {
     let name = arch.file_name().and_then(|n| n.to_str()).expect("nom");
     assert_eq!(value["images"][0]["path"], name);
     let _ = std::fs::remove_file(&arch);
+}
+
+fn bios_images() -> (Vec<u8>, Vec<u8>) {
+    let mut boot = vec![0xEB; 512];
+    boot[510..].copy_from_slice(&[0x55, 0xAA]);
+    let mut core = vec![0xC0; 1024];
+    core[400..512].fill(0);
+    (boot, core)
+}
+
+#[test]
+fn le_coffre_demarre_aussi_en_bios_quand_le_catalogue_offre_grub_pour_le_bios() {
+    let (boot, core) = bios_images();
+    let (mut scenario, cache) = vault_scenario(Some(GRUB), "cache-bios");
+    scenario.catalog = served_catalog_with(&[("x86_64", GRUB)], Some((&boot, &core)), "");
+    let cache = cache.arg();
+    let (code, out, err) = scenario.run(&init_args(&cache, &[]));
+    assert_eq!(code, 0, "{err}");
+    let value: serde_json::Value = serde_json::from_str(&out).expect("JSON");
+    assert_eq!(value["bios"], true);
+    assert_eq!(
+        value["grub"]["bios"],
+        serde_json::json!({"boot": sha256(&boot), "core": sha256(&core)})
+    );
+    let mbr = scenario.written(512);
+    assert_eq!((mbr[..3].to_vec(), mbr[0x1BE]), (vec![0xEB; 3], 0x80));
+    assert_eq!(update_json(&scenario, &cache, &[])["up_to_date"], true);
+
+    let mut older = core.clone();
+    older[700] ^= 1;
+    scenario.catalog = served_catalog_with(&[("x86_64", GRUB)], Some((&boot, &older)), "");
+    let done = update_json(&scenario, &cache, &["--yes"]);
+    assert_eq!(
+        (done["updated"].clone(), done["bios"].clone()),
+        (true.into(), true.into())
+    );
+
+    let folder = TempSource::dir("grub-local-sans-bios");
+    std::fs::create_dir_all(&folder.0).expect("dossier");
+    std::fs::write(folder.0.join("BOOTX64.EFI"), GRUB).expect("fichier");
+    let dir = folder.arg();
+    let (code, out, err) = scenario.run(&init_args(&cache, &["--grub-dir", &dir]));
+    assert_eq!(code, 0, "{err}");
+    let value: serde_json::Value = serde_json::from_str(&out).expect("JSON");
+    assert_eq!(
+        (value["bios"].clone(), value["grub"]["bios"].clone()),
+        (false.into(), serde_json::json!({}))
+    );
 }

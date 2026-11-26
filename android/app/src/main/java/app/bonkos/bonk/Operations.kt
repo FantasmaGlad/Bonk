@@ -31,7 +31,7 @@ internal class Operations(private val context: Context, private val send: (ToRus
 
     /** Rust checks the bytes against the signed catalog; the bound only stops a runaway download. */
     private fun downloadGrub(grub: GrubDownload, folder: File, proxy: String?) {
-        val target = File(folder, grub.arch)
+        val target = File(folder, grub.name)
         open(grub.url, proxy?.let(::socks) ?: Proxy.NO_PROXY).inputStream.use { input ->
             target.outputStream().use { output ->
                 val buffer = ByteArray(BUFFER)
@@ -56,7 +56,7 @@ internal class Operations(private val context: Context, private val send: (ToRus
                     ?: throw BonkFailure("E1003", "the drive is no longer connected")
             grub =
                 request.grub.takeIf { it.isNotEmpty() }?.let { images ->
-                    // One file per processor, named by it: Rust reads the folder.
+                    // Named by Rust, which reads the folder back.
                     File(context.cacheDir, "grub").apply {
                         deleteRecursively()
                         mkdirs()
