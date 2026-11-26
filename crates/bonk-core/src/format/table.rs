@@ -338,11 +338,52 @@ pub fn verify_bios_boot(dev: &dyn BlockDevice) -> Result<(), FormatError> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
-    use crate::block::MemoryDevice;
+    use crate::block::{BlockError, MemoryDevice, check_access};
     use crate::partition::{Severity, inspect};
 
     const MIB: u64 = 1 << 20;
+
+    // Keeps only the sectors written: a disk past the CHS limit without its gigabytes in memory.
+    struct Sparse {
+        size: u64,
+        sectors: BTreeMap<u64, Vec<u8>>,
+    }
+
+    impl BlockDevice for Sparse {
+        fn size(&self) -> u64 {
+            self.size
+        }
+
+        fn block_size(&self) -> u32 {
+            512
+        }
+
+        fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), BlockError> {
+            check_access(self.size, 512, offset, buf.len())?;
+            for (index, sector) in (offset / 512..).zip(buf.chunks_mut(512)) {
+                match self.sectors.get(&index) {
+                    Some(data) => sector.copy_from_slice(data),
+                    None => sector.fill(0),
+                }
+            }
+            Ok(())
+        }
+
+        fn write_at(&mut self, offset: u64, data: &[u8]) -> Result<(), BlockError> {
+            check_access(self.size, 512, offset, data.len())?;
+            for (index, sector) in (offset / 512..).zip(data.chunks(512)) {
+                self.sectors.insert(index, sector.to_vec());
+            }
+            Ok(())
+        }
+
+        fn flush(&mut self) -> Result<(), BlockError> {
+            Ok(())
+        }
+    }
 
     fn ids() -> Ids {
         Ids::from_seed(b"test")
@@ -410,7 +451,10 @@ mod tests {
     #[test]
     fn mbr_protecteur_conforme_a_uefi() -> Result<(), Box<dyn std::error::Error>> {
         for (bytes, end) in [(64 * MIB, chs(64 * MIB / 512 - 1)), (16 << 30, [0xFF; 3])] {
-            let mut dev = MemoryDevice::new(bytes, 512)?;
+            let mut dev = Sparse {
+                size: bytes,
+                sectors: BTreeMap::new(),
+            };
             write_table(
                 &mut dev,
                 TableKind::Gpt,
@@ -419,7 +463,8 @@ mod tests {
                 &ids(),
                 false,
             )?;
-            let sector = &dev.as_bytes()[..512];
+            let mut sector = [0u8; 512];
+            dev.read_at(0, &mut sector)?;
             assert_eq!(&sector[440..444], &[0; 4], "signature");
             assert_eq!(sector[446], 0, "{bytes}");
             assert_eq!(&sector[447..450], &[0x00, 0x02, 0x00], "{bytes}");
