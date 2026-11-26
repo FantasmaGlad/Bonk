@@ -165,7 +165,7 @@ class ProtocolTest {
     fun uneTachePasseAuServiceSansPerte() {
         val write = Write("usb-S1-001-002", "/dev/bus/usb/001/002", "https://x/y.iso", "ab", raw = true, mbr = false)
         assertEquals(write, Protocol.decodeTask(Protocol.encodeTask(write)))
-        val vault = VaultRun("init", "usb-S1-001-002", "/dev/bus/usb/001/002", grub = listOf(GrubDownload("x86_64", "https://x/BOOTX64.EFI", 5), GrubDownload("aarch64", "https://x/BOOTAA64.EFI", 6)))
+        val vault = VaultRun("init", "usb-S1-001-002", "/dev/bus/usb/001/002", grub = listOf(GrubDownload("x86_64", "https://x/BOOTX64.EFI", 5), GrubDownload("bios-core", "https://x/bios/core.img", 6)))
         assertEquals(vault, Protocol.decodeTask(Protocol.encodeTask(vault)))
     }
 

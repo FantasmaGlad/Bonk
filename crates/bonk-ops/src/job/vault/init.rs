@@ -3,7 +3,7 @@ use std::path::Path;
 use bonk_core::BlockDevice;
 use bonk_core::format::table::TableKind;
 use bonk_core::format::{FormatError, Ids};
-use bonk_core::vault::{self, BootFile, VaultPlan};
+use bonk_core::vault::{self, VaultBoot, VaultPlan};
 use bonk_hal::{Elevation, FilterOptions};
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -21,7 +21,7 @@ use super::*;
 
 pub struct VaultInitJob {
     pub target: Target,
-    pub boot: Vec<BootFile>,
+    pub boot: VaultBoot,
     pub grub: Option<GrubInfo>,
     pub table: TableKind,
     pub options: FilterOptions,
@@ -46,6 +46,8 @@ pub struct VaultInitDone {
     pub efi_label: &'static str,
     /// Absent: the boot partition was left empty.
     pub grub: Option<GrubInfo>,
+    /// GRUB for BIOS machines in the MBR and the sectors before the first partition.
+    pub bios: bool,
     /// Mount points unmounted, or that would be.
     pub unmounted: Vec<String>,
     /// Table and both volumes read back after writing.
@@ -65,7 +67,7 @@ pub(super) fn write_vault(
     device: &mut dyn BlockDevice,
     table: TableKind,
     ids: &Ids,
-    boot: &[BootFile],
+    boot: &VaultBoot,
     cancelled: &dyn Fn() -> bool,
 ) -> Result<VaultPlan, JobError> {
     // On the real drive: the plan before opening counted the sectors the system reported.
@@ -101,6 +103,7 @@ pub(super) fn init_done(
         vault_label: vault::VAULT_LABEL,
         efi_label: vault::EFI_LABEL,
         grub: job.grub.clone(),
+        bios: job.boot.bios_on(block_size).is_some(),
         unmounted,
         verified: !job.dry_run,
     }

@@ -13,6 +13,22 @@ pub struct BootFile {
     pub data: Vec<u8>,
 }
 
+/// What a machine starts the vault from: the files of the boot partition, and GRUB for BIOS when the catalog
+/// offers it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct VaultBoot {
+    pub files: Vec<BootFile>,
+    pub bios: Option<BiosGrub>,
+}
+
+impl VaultBoot {
+    /// GRUB for BIOS counts 512-byte sectors: a drive with larger ones starts by UEFI only.
+    #[must_use]
+    pub fn bios_on(&self, block: u32) -> Option<&BiosGrub> {
+        self.bios.as_ref().filter(|_| block as usize == SECTOR)
+    }
+}
+
 /// Removable-media name of an architecture's EFI image: firmware loads the one of its own processor.
 #[must_use]
 pub fn efi_file_name(arch: &str) -> Option<&'static str> {
@@ -91,38 +107,42 @@ pub(super) fn fat32_volume(plan: &VaultPlan, ids: &Ids) -> fat32::Volume<'static
     }
 }
 
-/// Writes the boot partition alone: the data partition and its ISO images are not touched.
+/// Writes the boot partition and GRUB for BIOS: the data partition and its ISO images are not touched.
 ///
 /// # Errors
-/// Write failure, or boot files too large for the partition.
+/// Write failure, boot files too large for the partition, or a GRUB for BIOS that does not fit before it.
 pub fn write_boot(
     dev: &mut dyn BlockDevice,
     plan: &VaultPlan,
     ids: &Ids,
-    boot: &[BootFile],
+    boot: &VaultBoot,
 ) -> Result<(), FormatError> {
     let volume = fat32_volume(plan, ids);
-    let layout = boot_layout(dev.block_size(), &volume, boot)?;
+    let layout = boot_layout(dev.block_size(), &volume, &boot.files)?;
     layout.write_structures(dev)?;
-    for (index, file) in boot.iter().enumerate() {
+    for (index, file) in boot.files.iter().enumerate() {
         layout.write_file(dev, index, &mut file.data.as_slice(), &mut |_| true)?;
     }
-    layout.finish(dev, &volume)
+    layout.finish(dev, &volume)?;
+    match boot.bios_on(dev.block_size()) {
+        Some(grub) => write_bios(dev, plan, grub),
+        None => Ok(()),
+    }
 }
 
-/// The boot partition reads back with exactly these files: each at the place Bonk would write it, with the same
-/// bytes. Its volume id is not compared, as each preparation draws a new one.
+/// The boot partition reads back with exactly these files, each at the place Bonk would write it, and GRUB for
+/// BIOS as Bonk would link it. The volume id is not compared, as each preparation draws a new one.
 ///
 /// # Errors
-/// Read failure.
+/// Read failure, or a GRUB for BIOS that does not fit before the first partition.
 pub fn boot_matches(
     dev: &dyn BlockDevice,
     plan: &VaultPlan,
-    boot: &[BootFile],
+    boot: &VaultBoot,
 ) -> Result<bool, FormatError> {
     let volume = fat32_volume(plan, &Ids::from_seed(b"compare"));
-    let layout = boot_layout(dev.block_size(), &volume, boot)?;
-    for (index, file) in boot.iter().enumerate() {
+    let layout = boot_layout(dev.block_size(), &volume, &boot.files)?;
+    for (index, file) in boot.files.iter().enumerate() {
         let expected = crate::write::hex(&Sha256::digest(&file.data));
         match layout.verify_file(dev, index, &expected, &mut |_| true) {
             Ok(()) => {}
@@ -130,10 +150,13 @@ pub fn boot_matches(
             Err(other) => return Err(other),
         }
     }
-    Ok(true)
+    match boot.bios_on(dev.block_size()) {
+        Some(grub) => bios_matches(dev, plan, grub),
+        None => Ok(true),
+    }
 }
 
-/// The boot partition alone read back as written.
+/// The boot partition and GRUB for BIOS read back as written.
 ///
 /// # Errors
 /// Read failure or a difference.
@@ -141,14 +164,19 @@ pub fn verify_boot(
     dev: &dyn BlockDevice,
     plan: &VaultPlan,
     ids: &Ids,
-    boot: &[BootFile],
+    boot: &VaultBoot,
 ) -> Result<(), FormatError> {
     let volume = fat32_volume(plan, ids);
-    let layout = boot_layout(dev.block_size(), &volume, boot)?;
+    let layout = boot_layout(dev.block_size(), &volume, &boot.files)?;
     layout.verify_structures(dev, &volume)?;
-    for (index, file) in boot.iter().enumerate() {
+    for (index, file) in boot.files.iter().enumerate() {
         let expected = crate::write::hex(&Sha256::digest(&file.data));
         layout.verify_file(dev, index, &expected, &mut |_| true)?;
     }
-    Ok(())
+    match boot.bios_on(dev.block_size()) {
+        Some(grub) if !bios_matches(dev, plan, grub)? => Err(FormatError::Mismatch(
+            "GRUB for BIOS read back differently".to_owned(),
+        )),
+        _ => Ok(()),
+    }
 }

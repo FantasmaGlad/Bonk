@@ -106,7 +106,7 @@ pub fn write_volumes(
     dev: &mut dyn BlockDevice,
     plan: &VaultPlan,
     ids: &Ids,
-    boot: &[BootFile],
+    boot: &VaultBoot,
 ) -> Result<(), FormatError> {
     exfat::write(dev, &exfat_volume(plan, ids))?;
     write_boot(dev, plan, ids, boot)
@@ -116,7 +116,7 @@ pub fn verify(
     dev: &dyn BlockDevice,
     plan: &VaultPlan,
     ids: &Ids,
-    boot: &[BootFile],
+    boot: &VaultBoot,
 ) -> Result<(), FormatError> {
     if detect(dev)? != Some(*plan) {
         return Err(FormatError::Mismatch(

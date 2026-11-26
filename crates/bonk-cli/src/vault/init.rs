@@ -1,5 +1,6 @@
 use std::io::{self, Write};
 
+use bonk_core::vault::VaultBoot;
 use bonk_ops::job::{self, Deps, TraceIo, VaultInitDone, VaultInitJob};
 
 use super::{InitArgs, size};
@@ -16,7 +17,7 @@ pub(super) fn run_init(
 ) -> u8 {
     // A plan, or a refusal for want of confirmation, writes nothing: neither needs the network nor GRUB.
     let (boot, grub) = if args.dry_run || !(args.yes || args.force) {
-        (Vec::new(), None)
+        (VaultBoot::default(), None)
     } else {
         match grub(&args.grub, access) {
             Ok((boot, info)) => (boot, Some(info)),
@@ -71,6 +72,12 @@ pub(super) fn init_lines(done: &VaultInitDone, out: &mut dyn Write) -> io::Resul
         for (arch, sha256) in &grub.efi {
             writeln!(out, "    {arch}: sha256 {sha256}")?;
         }
+        let bios = if done.bios {
+            "BIOS: GRUB in the MBR"
+        } else {
+            "BIOS: no, this vault starts by UEFI only"
+        };
+        writeln!(out, "    {bios}")?;
     }
     if !done.unmounted.is_empty() {
         writeln!(out, "  Unmount: {}", done.unmounted.join(", "))?;

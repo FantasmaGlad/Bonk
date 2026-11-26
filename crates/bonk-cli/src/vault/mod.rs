@@ -72,8 +72,9 @@ pub(crate) struct InitArgs {
 /// Where GRUB comes from, for `init` and `update`.
 #[derive(Debug, Args, Default)]
 pub(crate) struct GrubSource {
-    /// Folder holding the GRUB images (BOOTX64.EFI, BOOTAA64.EFI), for a machine without network: each
-    /// checked against the hash of the last catalog seen
+    /// Folder holding the GRUB images (BOOTX64.EFI, BOOTAA64.EFI, bios/boot.img, bios/core.img), for a machine
+    /// without network: each checked against the hash of the last catalog seen; without bios/core.img, the
+    /// vault starts by UEFI only
     #[arg(long, value_name = "DIR")]
     pub(crate) grub_dir: Option<PathBuf>,
 

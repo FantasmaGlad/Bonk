@@ -17,13 +17,25 @@ fn ids() -> Ids {
     Ids::from_seed(b"vault")
 }
 
-fn boot() -> Vec<BootFile> {
-    let files = boot_files(
-        &[("x86_64", b"MZ grub x86_64".repeat(1000))],
-        &default_families(),
-    );
-    assert!(files.is_ok(), "{files:?}");
-    files.unwrap_or_default()
+fn bios_grub() -> BiosGrub {
+    let mut boot = vec![0xEB; 512];
+    boot[510..].copy_from_slice(&[0x55, 0xAA]);
+    let mut core = vec![0xC0; 3 * 512];
+    core[400..512].fill(0);
+    BiosGrub { boot, core }
+}
+
+fn boot_with(efi: &[u8]) -> Result<VaultBoot, FormatError> {
+    Ok(VaultBoot {
+        files: boot_files(&[("x86_64", efi.to_vec())], &default_families())?,
+        bios: Some(bios_grub()),
+    })
+}
+
+fn boot() -> VaultBoot {
+    let boot = boot_with(&b"MZ grub x86_64".repeat(1000));
+    assert!(boot.is_ok(), "{boot:?}");
+    boot.unwrap_or_default()
 }
 
 fn init(dev: &mut MemoryDevice, table: TableKind) -> Result<VaultPlan, FormatError> {
@@ -91,11 +103,13 @@ fn mettre_a_jour_le_demarrage_garde_les_iso() -> Result<(), FormatError> {
         &mut |_| true,
     )?;
     assert!(boot_matches(&dev, &plan, &boot())?);
-    let newer = boot_files(
-        &[("x86_64", b"MZ grub x86_64, version suivante".repeat(2000))],
-        &default_families(),
-    )?;
+    let newer = boot_with(&b"MZ grub x86_64, version suivante".repeat(2000))?;
     assert!(!boot_matches(&dev, &plan, &newer)?);
+    let without_bios = VaultBoot {
+        bios: None,
+        ..boot()
+    };
+    assert!(boot_matches(&dev, &plan, &without_bios)?);
 
     let ids = Ids::from_seed(b"mise a jour");
     write_boot(&mut dev, &plan, &ids, &newer)?;
@@ -274,7 +288,8 @@ fn types_et_noms_des_partitions() -> Result<(), Box<dyn std::error::Error>> {
     let mbr = inspect(&dev)?.mbr.ok_or("pas de MBR")?;
     let kinds: Vec<u8> = mbr.entries.iter().map(|e| e.kind).collect();
     assert_eq!(kinds, [0x07, 0xEF]);
-    assert!(mbr.entries.iter().all(|e| !e.bootable));
+    let active: Vec<bool> = mbr.entries.iter().map(|e| e.bootable).collect();
+    assert_eq!(active, [true, false]);
     Ok(())
 }
 
@@ -377,7 +392,12 @@ fn un_octet_de_grub_change_fait_echouer_la_relecture() -> Result<(), Box<dyn std
     let mut dev = MemoryDevice::new(256 * MIB, 512)?;
     let plan = init(&mut dev, TableKind::Mbr)?;
     let mut other = boot();
-    other[0].data[10] ^= 1;
+    other.files[0].data[10] ^= 1;
+    assert!(verify(&dev, &plan, &ids(), &other).is_err());
+    let mut other = boot();
+    if let Some(grub) = &mut other.bios {
+        grub.core[600] ^= 1;
+    }
     assert!(verify(&dev, &plan, &ids(), &other).is_err());
     verify(&dev, &plan, &ids(), &boot())?;
     Ok(())
@@ -472,10 +492,11 @@ fn le_coffre_garde_les_familles_de_son_menu() -> Result<(), Box<dyn std::error::
         let mut dev = MemoryDevice::new(256 * MIB, 512)?;
         let plan = plan(dev.size(), dev.block_size(), TableKind::Gpt)?;
         write_table(&mut dev, &plan, &ids())?;
-        let mut boot = boot_files(&[("x86_64", b"MZ grub".repeat(100))], &families)?;
+        let mut files = boot_files(&[("x86_64", b"MZ grub".repeat(100))], &families)?;
         if !written {
-            boot.retain(|file| file.path != FAMILIES_PATH);
+            files.retain(|file| file.path != FAMILIES_PATH);
         }
+        let boot = VaultBoot { files, bios: None };
         write_volumes(&mut dev, &plan, &ids(), &boot)?;
         assert_eq!(ids_of(&vault_families(&dev, &plan)), expected, "{written}");
     }
