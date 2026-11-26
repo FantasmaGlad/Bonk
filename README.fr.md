@@ -28,7 +28,7 @@
 
 ## Télécharger
 
-Bonk avec sa fenêtre et la commande `bonk` ; sur Android, l'application.
+Bonk avec sa fenêtre et la commande `bonk` ; sur Android, l'application. Sous macOS, l'application ne met pas `bonk` dans le Terminal : Homebrew ou le script ci-dessous.
 
 | Plateforme | Téléchargement | État |
 | :--- | :--- | :--- |
@@ -38,8 +38,8 @@ Bonk avec sa fenêtre et la commande `bonk` ; sur Android, l'application.
 | <img src="docs/icons/arch.svg" width="20" height="20" valign="middle" alt="arch">&nbsp;**Arch&nbsp;Linux** | [x86_64 .pkg.tar.zst](https://packages.bonk-os.app/download/bonk-x86_64.pkg.tar.zst) | Écrit les clés USB |
 | <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="linux">&nbsp;**Tout&nbsp;Linux** | [x86_64](https://packages.bonk-os.app/download/bonk-linux-x86_64.tar.gz), [ARM64](https://packages.bonk-os.app/download/bonk-linux-aarch64.tar.gz), [x86](https://packages.bonk-os.app/download/bonk-linux-i686.tar.gz) | Écrit les clés USB ; x86 non essayé |
 | <img src="docs/icons/windows.svg" width="20" height="20" valign="middle" alt="windows">&nbsp;**Windows&nbsp;10+** | [x86_64](https://packages.bonk-os.app/download/bonk-windows-x86_64-setup.exe), [ARM64](https://packages.bonk-os.app/download/bonk-windows-aarch64-setup.exe), [x86](https://packages.bonk-os.app/download/bonk-windows-i686-setup.exe) | Écrit les clés USB ; ARM64 et x86 non essayés |
-| <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [Universal .dmg](https://packages.bonk-os.app/download/bonk-macos-universal.dmg) | CI seulement, jamais lancée sur un Mac |
-| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Android&nbsp;8+** | [ARM64 .apk](https://packages.bonk-os.app/download/bonk-android-arm64.apk), [x86_64 .apk](https://packages.bonk-os.app/download/bonk-android-x86_64.apk) | Bêta, un téléphone essayé |
+| <img src="docs/icons/apple.svg" width="20" height="20" valign="middle" alt="apple">&nbsp;**macOS&nbsp;12+** | [Universal .dmg](https://packages.bonk-os.app/download/bonk-macos-universal.dmg) | Lancée sur un Mac ; écriture pas encore essayée |
+| <img src="docs/icons/android.svg" width="20" height="20" valign="middle" alt="android">&nbsp;**Android&nbsp;8+** | [ARM64 .apk](https://packages.bonk-os.app/download/bonk-android-arm64.apk), [x86_64 .apk](https://packages.bonk-os.app/download/bonk-android-x86_64.apk) | Essayée sur cinq téléphones |
 
 ## Ligne de commande seule
 
