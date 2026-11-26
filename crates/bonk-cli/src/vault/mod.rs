@@ -29,8 +29,8 @@ use update::*;
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum VaultAction {
-    /// Prepare a disk to carry several ISO images: exFAT data partition and EFI boot partition. Erases
-    /// everything
+    /// Prepare a disk to carry several ISO images: exFAT data partition and EFI boot partition, started in
+    /// BIOS and UEFI with Secure Boot off. Erases everything
     Init(InitArgs),
     /// ISO images on a vault (read-only)
     List(ListArgs),

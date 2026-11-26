@@ -48,6 +48,7 @@ impl App {
             ),
             VaultState::NotVault { .. } => column![
                 text(words.not_vault).size(13),
+                text(words.secure_boot).size(13).color(theme::muted()),
                 offline_note(&words, self.offline),
                 row![
                     action_button(
