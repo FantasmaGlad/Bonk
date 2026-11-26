@@ -28,7 +28,7 @@
 
 ## Télécharger
 
-Bonk avec sa fenêtre et la commande `bonk` ; sur Android, l'application.
+Bonk avec sa fenêtre et la commande `bonk` ; sur Android, l'application. Sous macOS, autoriser Bonk à accéder aux volumes amovibles quand le système le demande.
 
 | Plateforme | Téléchargement | État |
 | :--- | :--- | :--- |
