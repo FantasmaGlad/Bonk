@@ -418,11 +418,12 @@ fn un_plan_pour_un_autre_disque_n_ecrit_rien() -> Result<(), Box<dyn std::error:
 #[test]
 fn les_familles_par_defaut_sont_valides_et_uniques() {
     let families = default_families();
-    assert_eq!(families.len(), 5);
+    assert_eq!(families.len(), 6);
     for family in &families {
         assert_eq!(family_errors(family), Vec::<String>::new());
     }
     let mut ids: Vec<&str> = families.iter().map(|family| family.id.as_str()).collect();
+    ids.sort_unstable();
     ids.dedup();
     assert_eq!(ids.len(), families.len());
 }

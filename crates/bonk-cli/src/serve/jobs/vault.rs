@@ -19,6 +19,7 @@ pub(in crate::serve) fn vault_grub(
         grub_dir: p.grub_dir.clone(),
         catalog_url: p.catalog_url.clone(),
         cache_dir: p.cache_dir.clone(),
+        families: None,
     };
     crate::vault::grub(&source, &cfg.catalog).map_err(|e| failure(e.code, e.message))
 }
