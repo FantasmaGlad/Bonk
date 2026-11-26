@@ -132,8 +132,9 @@ pub(crate) struct AddArgs {
     #[arg(long, value_name = "URL", requires = "image")]
     catalog_url: Option<String>,
 
-    /// Download directory; by default the user's cache directory
-    #[arg(long, value_name = "DIR", requires = "image")]
+    /// Download directory, where the saved catalog gives the vault families; by default the user's cache
+    /// directory
+    #[arg(long, value_name = "DIR")]
     cache_dir: Option<PathBuf>,
 
     /// Confirm: without --yes, Bonk does nothing
@@ -204,7 +205,7 @@ pub(crate) fn run(
     match action {
         VaultAction::Init(args) => run_init(args, access, deps, out, err),
         VaultAction::List(args) => run_list(args, view, deps, out, err),
-        VaultAction::Add(args) => run_add(args, deps, quiet, out, err),
+        VaultAction::Add(args) => run_add(args, access, deps, quiet, out, err),
         VaultAction::Remove(args) => run_remove(args, deps, out, err),
         VaultAction::Update(args) => run_update(args, access, deps, out, err),
     }

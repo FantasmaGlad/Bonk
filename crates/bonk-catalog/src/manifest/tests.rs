@@ -523,3 +523,36 @@ fn la_preuve_de_demarrage_se_lit_et_une_forme_inconnue_est_ignoree()
     );
     Ok(())
 }
+
+#[test]
+fn la_copie_enregistree_se_lit_sans_reseau_et_reste_verifiee()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (key, public) = pair(1)?;
+    let dossier = Dossier::new("enregistree");
+    assert!(matches!(
+        saved(&dossier.0, NOW, &[public]),
+        Err(CatalogError::Unavailable(_))
+    ));
+    let bytes = manifest(5, NOW + 1, &debian());
+    let signature = key.sign(&bytes).as_ref().to_vec();
+    let lu = load(
+        "https://c/",
+        &dossier.0,
+        NOW,
+        &[public],
+        &serveur(bytes.clone(), signature),
+    )?;
+    assert_eq!(saved(&dossier.0, NOW, &[public])?, lu.catalog);
+    assert!(matches!(
+        saved(&dossier.0, NOW + 1, &[public]),
+        Err(CatalogError::Expired { .. })
+    ));
+    let mut f = bytes;
+    f[20] ^= 1;
+    std::fs::write(dossier.0.join(MANIFEST), f)?;
+    assert_eq!(
+        saved(&dossier.0, NOW, &[public]),
+        Err(CatalogError::BadSignature)
+    );
+    Ok(())
+}

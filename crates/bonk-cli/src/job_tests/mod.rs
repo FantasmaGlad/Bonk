@@ -22,6 +22,7 @@ mod download;
 mod format;
 mod internal;
 pub(crate) mod vault;
+mod vault_families;
 mod verify;
 mod write;
 

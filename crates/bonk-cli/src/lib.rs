@@ -264,7 +264,7 @@ where
         },
         Some(Command::Disk { action }) => match action {
             DiskAction::List(args) => run_list(&args, &view, out, err, enumerate),
-            DiskAction::Info(args) => run_info(&args, &view, out, err, enumerate),
+            DiskAction::Info(args) => run_info(&args, &view, &env.catalog, out, err, enumerate),
             DiskAction::Write(args) => transfer::run_write(&args, deps, quiet, out, err),
             DiskAction::Verify(args) => transfer::run_verify(&args, &view, deps, quiet, out, err),
             DiskAction::RepairGpt(args) => transfer::run_repair(&args, deps, out, err),
@@ -278,7 +278,7 @@ where
         }
         Some(Command::Capabilities(args)) => format::run_capabilities(&args, deps, out, err),
         Some(Command::List(args)) => run_list(&args, &view, out, err, enumerate),
-        Some(Command::Info(args)) => run_info(&args, &view, out, err, enumerate),
+        Some(Command::Info(args)) => run_info(&args, &view, &env.catalog, out, err, enumerate),
         Some(Command::Config { action }) => run_config(&action, env, out, err),
         Some(Command::Catalog { action }) => catalog::run(&action, deps, quiet, out, err),
         Some(Command::Cache { action }) => cache::run(&action, out, err),

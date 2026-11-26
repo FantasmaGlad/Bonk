@@ -8,12 +8,13 @@ use bonk_ops::errors::Code;
 use bonk_ops::job::{self, Deps, JobError, TraceIo, VaultAddJob};
 
 use super::AddArgs;
-use crate::catalog::{Destination, download};
+use crate::catalog::{self, Destination, download};
 use crate::transfer::{finish, progress_mode, sink, target_line};
 use crate::vault::arch_name;
 
 pub(super) fn run_add(
     args: &AddArgs,
+    access: &catalog::Access,
     deps: &Deps<'_>,
     quiet: bool,
     out: &mut dyn Write,
@@ -34,7 +35,7 @@ pub(super) fn run_add(
                 trace_io: args.common.trace_io.map(TraceIo::from),
                 yes: args.yes,
                 elevation: args.common.elevate.into(),
-                families: bonk_core::vault::default_families(),
+                families: catalog::saved_families(access, args.cache_dir.as_deref()),
             };
             job::vault_add(&job, deps, &mut progress)
         })

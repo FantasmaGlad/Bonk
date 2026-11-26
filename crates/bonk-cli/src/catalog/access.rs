@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use bonk_catalog::manifest::{self, Catalog, Image, ImageSource, Loaded, TRUSTED_KEYS};
+use bonk_core::vault::{VaultFamily, default_families, families_from};
 use bonk_ops::job::{JobError, WriteMode};
 
 use crate::errors::Code;
@@ -65,6 +66,24 @@ pub(crate) fn load_from(
         log::warn!(target: "bonk::catalog", "catalog not reachable: using the saved copy");
     }
     Ok((loaded, dir, base))
+}
+
+// No network: a command on a local file stays offline. No copy, or one refused, gives the families this
+// Bonk knows.
+pub(crate) fn saved_families(access: &Access, cache_dir: Option<&Path>) -> Vec<VaultFamily> {
+    let Some(dir) = crate::cache::directory(cache_dir) else {
+        return default_families();
+    };
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_secs());
+    match manifest::saved(&dir.join("catalog"), now, &access.keys) {
+        Ok(catalog) => families_from(&catalog.vault_families),
+        Err(error) => {
+            log::info!(target: "bonk::catalog", error = error.to_string().as_str(); "vault families of this Bonk");
+            default_families()
+        }
+    }
 }
 
 pub(crate) fn load(
