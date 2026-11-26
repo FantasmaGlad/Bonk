@@ -256,6 +256,15 @@ jobs:
             motif: 'manjaro-xfce-26\.1\.0-260812-linux71\.iso'
             taille: 8589934592
             options: --memoire 4096 --delai 900
+          # OpenMandriva's initramfs has no exFAT driver: the vault's udev rule maps the ISO for dmsquash-live.
+          - nom: OpenMandriva
+            copie: bonk
+            familles: crates/bonk-core/src/vault/families.json
+            base: https://mirror.openmandriva.org/release_current/6.0
+            sommes: sha256sums
+            motif: 'openmandriva-6\.0-lxqt\.x86_64\.iso'
+            taille: 4294967296
+            options: --ligne 4 --memoire 4096 --delai 900
           # Anaconda finds its medium by the ISO label: the vault's udev rule maps the ISO from its offset.
           - nom: AlmaLinux
             copie: bonk
