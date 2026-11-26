@@ -52,12 +52,15 @@ pub fn inspect_image(
     let (_, source) = file.decoded()?;
     let (image, head) = analyze_source(file, Path::new(&source.path), source.size_bytes)?;
     let compressed = source.format != Format::Raw;
-    let windows = if route::looks_for_windows(&image, WriteMode::Auto, compressed) {
-        extract::detect(file)?
+    let (windows, unextractable) = if route::looks_for_windows(&image, WriteMode::Auto, compressed)
+    {
+        windows_of(file)?
     } else {
-        None
+        (None, None)
     };
     let (route, refusal, extraction) = planned_route(&image, compressed, windows);
+    let refusal = unextractable.or_else(|| refusal.as_ref().map(Refusal::to_string));
+    let route = route.filter(|_| refusal.is_none());
     let (hybrid_possible, efi_loaders) = if compressed {
         (
             hybrid_mbr(head.as_slice()).is_ok(),
@@ -78,11 +81,23 @@ pub fn inspect_image(
         image,
         route,
         hybrid_possible: hybrid_possible && route != Some(Way::Raw),
-        refusal: refusal.as_ref().map(Refusal::to_string),
+        refusal,
         extraction,
         efi_loaders,
         vault,
     })
+}
+
+// A Windows installation Bonk cannot lay out on FAT32 is refused by `bonk write`: the report says why instead of
+// failing. An unreadable image stays an error.
+fn windows_of(file: &ImageFile) -> Result<(Option<WindowsImage>, Option<String>), JobError> {
+    match extract::detect(file) {
+        Ok(windows) => Ok((windows, None)),
+        Err(error) if error.code == Code::SourceFormatUnsupported => {
+            Ok((None, Some(error.message)))
+        }
+        Err(error) => Err(error),
+    }
 }
 
 fn planned_route(

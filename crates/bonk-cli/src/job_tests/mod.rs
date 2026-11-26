@@ -20,6 +20,7 @@ mod compressed;
 mod devices;
 mod download;
 mod format;
+mod inspect;
 mod internal;
 pub(crate) mod vault;
 mod vault_families;
