@@ -108,3 +108,7 @@ Portable `.exe`, `.zip` and `.tar.gz` files: [latest release](https://github.com
 ### Checksums and provenance
 
 Checksums: [`SHA256SUMS`](https://packages.bonk-os.app/download/SHA256SUMS). Provenance: `gh attestation verify <file> --repo FantasmaGlad/Bonk`.
+
+## Vault
+
+Several ISO images on one drive: `bonk vault init`, then `bonk vault add`. The vault starts in BIOS and UEFI with Secure Boot turned off; on a Windows PC encrypted with BitLocker, suspend BitLocker before changing Secure Boot.

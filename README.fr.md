@@ -108,3 +108,7 @@ Fichiers portables `.exe`, `.zip` et `.tar.gz` : [dernière version](https://git
 ### Empreintes et provenance
 
 Empreintes : [`SHA256SUMS`](https://packages.bonk-os.app/download/SHA256SUMS). Provenance : `gh attestation verify <fichier> --repo FantasmaGlad/Bonk`.
+
+## Coffre
+
+Plusieurs images ISO sur une clé : `bonk vault init`, puis `bonk vault add`. Le coffre démarre en BIOS et en UEFI, Secure Boot désactivé ; sur un PC Windows chiffré par BitLocker, suspendre BitLocker avant de changer Secure Boot.
