@@ -23,6 +23,7 @@ mod update;
 use add::run_add;
 pub(crate) use grub::grub;
 use init::*;
+pub(crate) use list::arch_name;
 use list::*;
 use remove::run_remove;
 use update::*;

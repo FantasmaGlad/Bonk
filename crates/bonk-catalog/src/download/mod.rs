@@ -9,11 +9,13 @@ use ureq::Agent;
 
 mod http;
 mod partial;
+mod remote;
 mod stream;
 
 use http::*;
 pub use http::{fetch_bytes, fetch_limited, fetch_text, is_url, set_proxy};
 use partial::*;
+pub use remote::RemoteFile;
 use stream::*;
 
 const ATTEMPTS_WITHOUT_PROGRESS: u32 = 5;

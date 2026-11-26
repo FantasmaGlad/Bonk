@@ -27,6 +27,13 @@ pub(super) fn header_text(
     headers.get(name)?.to_str().ok().map(str::to_owned)
 }
 
+// A weak ETag does not guarantee the same bytes: `If-Range` does not accept it.
+pub(super) fn range_validator(headers: &ureq::http::HeaderMap) -> Option<String> {
+    header_text(headers, header::ETAG)
+        .filter(|tag| !tag.starts_with("W/"))
+        .or_else(|| header_text(headers, header::LAST_MODIFIED))
+}
+
 pub(super) fn connect(
     agent: Agent,
     url: String,
@@ -59,15 +66,11 @@ pub(super) fn read_response(
     }
     let response = request.call().map_err(|e| format!("{url}: {e}"))?;
     let headers = response.headers();
-    // A weak ETag does not guarantee the same bytes: `If-Range` does not accept it.
-    let validator = header_text(headers, header::ETAG)
-        .filter(|tag| !tag.starts_with("W/"))
-        .or_else(|| header_text(headers, header::LAST_MODIFIED));
     let head = Head {
         status: response.status().as_u16(),
         content_length: header_text(headers, header::CONTENT_LENGTH).and_then(|n| n.parse().ok()),
         content_range: header_text(headers, header::CONTENT_RANGE),
-        validator,
+        validator: range_validator(headers),
     };
     if sender.send(Event::Head(head)).is_err() {
         return Ok(());

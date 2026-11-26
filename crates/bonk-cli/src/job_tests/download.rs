@@ -219,3 +219,35 @@ fn une_adresse_de_partage_se_garde_sous_le_nom_donne() {
     }
     assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 1);
 }
+
+#[test]
+fn bonk_info_lit_une_iso_distante_par_morceaux_et_dit_sa_famille_du_coffre() {
+    let iso = bonk_core::iso9660::testing::image(
+        "d-live 13",
+        &[("live/vmlinuz", 1), ("live/initrd.img", 1)],
+    );
+    let (url, _) = serve_ranges(iso);
+    let scenario = Scenario::new();
+    let (code, out, err) = scenario.run(&["info", &url]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    assert!(out.contains(&format!("Source: {url}")), "{out}");
+    assert!(out.contains("Vault: Debian live, for x86_64 PCs"), "{out}");
+    let (_, json, _) = scenario.run(&["info", &url, "--json"]);
+    let report: serde_json::Value = serde_json::from_str(&json).expect("JSON");
+    assert_eq!(report["vault"]["family"], "debian_live");
+    assert_eq!(report["vault"]["arch"], "x86_64");
+    assert!(scenario.log().is_empty(), "aucun disque touché");
+}
+
+#[test]
+fn bonk_info_refuse_un_serveur_qui_renverrait_toute_l_image() {
+    let (url, hits) = serve_file(vec![0; 1 << 20]);
+    let (code, out, err) = Scenario::new().run(&["info", &url]);
+    assert_ne!(code, 0);
+    assert!(out.is_empty(), "{out}");
+    assert!(
+        err.contains("[E3008]") && err.contains("partial requests"),
+        "{err}"
+    );
+    assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 1);
+}

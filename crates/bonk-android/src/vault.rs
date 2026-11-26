@@ -34,6 +34,10 @@ pub(crate) struct Download {
 const BIOS_BOOT: &str = "bios-boot";
 const BIOS_CORE: &str = "bios-core";
 
+pub(crate) fn families() -> Vec<core_vault::VaultFamily> {
+    core_vault::families_from(&lock(&VAULT_FAMILIES))
+}
+
 pub(crate) fn grub_downloads() -> Vec<Download> {
     downloads(lock(&GRUB).as_ref())
 }
@@ -103,7 +107,7 @@ fn boot(entry: Option<&Grub>, folder: &Path) -> Result<(VaultBoot, GrubInfo), Jo
             "the catalog offers no GRUB image this version of Bonk can write",
         ));
     }
-    let families = core_vault::families_from(&lock(&VAULT_FAMILIES));
+    let families = families();
     let files = core_vault::boot_files(&images, &families).map_err(refused)?;
     let bios = match &entry.bios {
         Some(offered) => Some(BiosGrub {
@@ -249,7 +253,7 @@ fn add_job(target: Target, request: &Request<'_>) -> VaultAddJob {
         trace_io: None,
         yes: true,
         elevation: Elevation::Never,
-        families: core_vault::families_from(&lock(&VAULT_FAMILIES)),
+        families: families(),
     }
 }
 

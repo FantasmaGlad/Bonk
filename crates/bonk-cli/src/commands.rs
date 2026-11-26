@@ -221,9 +221,8 @@ where
     F: Fn() -> Result<Vec<Disk>, EnumerateError>,
 {
     log::debug!(target: "bonk::cli", target_disk = args.target(); "command info");
-    let image = std::path::Path::new(args.target());
-    if image.is_file() {
-        return transfer::run_image_info(image, args.json(), out, err);
+    if std::path::Path::new(args.target()).is_file() || bonk_catalog::is_url(args.target()) {
+        return transfer::run_image_info(args.target(), args.json(), out, err);
     }
     let disks = match disks_or_exit(err, enumerate) {
         Ok(disks) => disks,

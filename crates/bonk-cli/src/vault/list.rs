@@ -48,7 +48,7 @@ pub(super) fn run_list(
     )
 }
 
-pub(super) fn arch_name(arch: core_vault::IsoArch) -> &'static str {
+pub(crate) fn arch_name(arch: core_vault::IsoArch) -> &'static str {
     match arch {
         core_vault::IsoArch::X86_64 => "for x86_64 PCs",
         core_vault::IsoArch::Aarch64 => "for ARM64 machines",

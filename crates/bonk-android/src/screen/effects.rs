@@ -62,9 +62,10 @@ fn in_rust(model: &mut Model, effect: Effect) {
         // Orbot listens on the phone's loopback, as Tor does on a computer.
         Effect::DetectTor => Message::TorDetected(bonk_catalog::tor::detect()),
         Effect::InspectImage(image) => {
-            let report = bonk_ops::job::inspect(std::path::Path::new(&image))
-                .ok()
-                .and_then(|inspection| serde_json::to_value(inspection).ok());
+            let report =
+                bonk_ops::job::inspect(std::path::Path::new(&image), &crate::vault::families())
+                    .ok()
+                    .and_then(|inspection| serde_json::to_value(inspection).ok());
             Message::Inspected(image, report)
         }
         _ => return,

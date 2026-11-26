@@ -362,6 +362,14 @@ fn with_internal() -> Scenario {
 const CONFIRMATION_REQUIRED: &str = "E2005";
 
 fn serve_file(body: Vec<u8>) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+    serve(body, false)
+}
+
+fn serve_ranges(body: Vec<u8>) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+    serve(body, true)
+}
+
+fn serve(body: Vec<u8>, ranges: bool) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
     use std::io::{BufRead, BufReader, Write};
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -372,18 +380,40 @@ fn serve_file(body: Vec<u8>) -> (String, std::sync::Arc<std::sync::atomic::Atomi
             seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             let mut reader = BufReader::new(stream.try_clone().unwrap());
             let mut line = String::new();
+            let mut range = None;
             while reader.read_line(&mut line).unwrap_or(0) > 0 && line != "\r\n" {
+                range = range.or_else(|| requested_range(&line));
                 line.clear();
             }
-            let _ = write!(
-                stream,
-                "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
-                body.len()
-            );
-            let _ = stream.write_all(&body);
+            match range.filter(|_| ranges) {
+                Some((start, end)) => {
+                    let last = end.min(body.len() - 1);
+                    let _ = write!(
+                        stream,
+                        "HTTP/1.1 206 P\r\ncontent-range: bytes {start}-{last}/{}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+                        body.len(),
+                        last + 1 - start
+                    );
+                    let _ = stream.write_all(&body[start..=last]);
+                }
+                None => {
+                    let _ = write!(
+                        stream,
+                        "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    let _ = stream.write_all(&body);
+                }
+            }
         }
     });
     (format!("http://127.0.0.1:{port}/image.img"), hits)
+}
+
+fn requested_range(line: &str) -> Option<(usize, usize)> {
+    let lower = line.trim_end().to_ascii_lowercase();
+    let (start, end) = lower.strip_prefix("range: bytes=")?.split_once('-')?;
+    Some((start.parse().ok()?, end.parse().ok()?))
 }
 
 fn sha256_of(bytes: &[u8]) -> String {

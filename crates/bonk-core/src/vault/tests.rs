@@ -514,3 +514,38 @@ fn une_famille_servie_illisible_ou_refusee_est_laissee_de_cote() {
     assert_eq!(kept, ["debian_bis"]);
     assert_eq!(families_from(&served[..2]), default_families());
 }
+
+#[test]
+fn une_image_lue_par_positions_dit_sa_famille_ou_rien() -> std::io::Result<()> {
+    use crate::iso9660::testing::image;
+    use crate::read_at::ReadAt;
+    struct Broken;
+    impl ReadAt for Broken {
+        fn read_exact_at(&self, _: u64, _: &mut [u8]) -> std::io::Result<()> {
+            Err(std::io::Error::other("network"))
+        }
+    }
+    let families = default_families();
+    let live = image("X", &[("live/vmlinuz", 1), ("live/initrd.img", 1)]);
+    assert_eq!(
+        vault_match(&live[..], live.len() as u64, &families)?,
+        Some(VaultMatch {
+            family: "debian_live".to_owned(),
+            name: "Debian live".to_owned(),
+            arch: IsoArch::X86_64,
+        })
+    );
+    let other = image("X", &[("boot/kernel", 1)]);
+    assert_eq!(
+        vault_match(&other[..], other.len() as u64, &families)?,
+        None
+    );
+    for not_iso in [vec![0u8; 64 << 10], vec![0u8; 100]] {
+        assert_eq!(
+            vault_match(&not_iso[..], not_iso.len() as u64, &families)?,
+            None
+        );
+    }
+    assert!(vault_match(&Broken, 1 << 20, &families).is_err());
+    Ok(())
+}
