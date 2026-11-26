@@ -1,4 +1,3 @@
-
 # Built targets only: a target added to the workflows is added here.
 [graph]
 targets = [
@@ -21,9 +20,9 @@ targets = [
 # Each exception has its reason and removal criterion; review at each Iced upgrade.
 # osv-scanner.toml repeats these exceptions for Scorecard, which also scans wasm32-only crates.
 ignore = [
-    { id = "RUSTSEC-2026-0253", reason = "lru unsound dans LruCache::pop si le Drop d'une clé panique ; cryoglyph 0.1.0 (Iced 0.14) exige lru 0.16, corrigé en 0.18.2, et n'appelle que pop_lru avec une clé Copy, donc sans Drop. Retrait : une version de cryoglyph qui tire lru 0.18.2 ou plus" },
-    { id = "RUSTSEC-2024-0436", reason = "paste non maintenu ; dépendance de metal, via wgpu-hal (Iced 0.14). Retrait : une version d'Iced ou de wgpu qui ne tire plus paste" },
-    { id = "RUSTSEC-2026-0192", reason = "ttf-parser non maintenu ; dépendance de la pile de texte d'Iced 0.14. Retrait : une version d'Iced ou de cosmic-text qui ne tire plus ttf-parser" },
+    { id = "RUSTSEC-2026-0253", reason = "lru unsound in LruCache::pop when a key's Drop panics; cryoglyph 0.1.0 (Iced 0.14) requires lru 0.16 (fixed in 0.18.2) and only calls pop_lru with a Copy key, so no Drop. Remove when cryoglyph pulls lru 0.18.2 or later" },
+    { id = "RUSTSEC-2024-0436", reason = "paste unmaintained; pulled by metal through wgpu-hal (Iced 0.14). Remove when Iced or wgpu no longer pulls paste" },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained; pulled by Iced 0.14's text stack. Remove when Iced or cosmic-text no longer pulls ttf-parser" },
 ]
 # Scorecard also sees "unsound" advisories of transitive dependencies.
 unsound = "all"
