@@ -213,6 +213,7 @@ where
 pub(crate) fn run_info<O: Write, E: Write, F>(
     args: &info::InfoArgs,
     view: &ViewDefaults,
+    access: &crate::catalog::Access,
     out: &mut O,
     err: &mut E,
     enumerate: F,
@@ -222,7 +223,8 @@ where
 {
     log::debug!(target: "bonk::cli", target_disk = args.target(); "command info");
     if std::path::Path::new(args.target()).is_file() || bonk_catalog::is_url(args.target()) {
-        return transfer::run_image_info(args.target(), args.json(), out, err);
+        let families = crate::catalog::saved_families(access, None);
+        return transfer::run_image_info(args.target(), args.json(), &families, out, err);
     }
     let disks = match disks_or_exit(err, enumerate) {
         Ok(disks) => disks,

@@ -64,13 +64,36 @@ pub fn load(
             })
         }
         Err(detail) => {
-            let copy = fs::read(dir.join(MANIFEST))
-                .and_then(|manifest| Ok((manifest, fs::read(dir.join(SIGNATURE))?)));
-            let (manifest, signature) = copy.map_err(|_| CatalogError::Unavailable(detail))?;
+            let catalog = saved_with(dir, &trust).map_err(|error| match error {
+                CatalogError::Unavailable(_) => CatalogError::Unavailable(detail),
+                refused => refused,
+            })?;
             Ok(Loaded {
-                catalog: verify(&manifest, &signature, &trust)?,
+                catalog,
                 saved_copy: true,
             })
         }
     }
+}
+
+/// The copy the last [`load`] kept, checked as a received one, without the network.
+///
+/// # Errors
+/// No copy, or a copy refused by [`verify`].
+pub fn saved(dir: &Path, now_unix: u64, keys: &[[u8; 32]]) -> Result<Catalog, CatalogError> {
+    saved_with(
+        dir,
+        &Trust {
+            keys,
+            now_unix,
+            seen_sequence: seen_sequence(dir),
+        },
+    )
+}
+
+fn saved_with(dir: &Path, trust: &Trust<'_>) -> Result<Catalog, CatalogError> {
+    let (manifest, signature) = fs::read(dir.join(MANIFEST))
+        .and_then(|manifest| Ok((manifest, fs::read(dir.join(SIGNATURE))?)))
+        .map_err(|e| CatalogError::Unavailable(format!("{}: {e}", dir.display())))?;
+    verify(&manifest, &signature, trust)
 }

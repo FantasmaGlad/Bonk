@@ -5,7 +5,7 @@ use ring::signature::{Ed25519KeyPair, KeyPair};
 
 use super::*;
 
-const VAULT_DISK: u64 = 256 << 20;
+pub(super) const VAULT_DISK: u64 = 256 << 20;
 pub(crate) const BASE: &str = "https://catalogue.test/";
 pub(crate) const GRUB: &[u8] = b"MZ grub de test";
 const BIOS_BOOT_PATH: &str = "grub/2.14/bios/boot.img";
@@ -35,7 +35,7 @@ fn asset(path: &str, bytes: &[u8]) -> String {
     )
 }
 
-fn served_catalog_with(
+pub(super) fn served_catalog_with(
     images: &[(&str, &[u8])],
     bios: Option<(&[u8], &[u8])>,
     extra: &str,
@@ -91,13 +91,13 @@ fn served_catalog_with(
     }
 }
 
-fn vault_scenario(grub: Option<&[u8]>, cache: &str) -> (Scenario, TempSource) {
+pub(super) fn vault_scenario(grub: Option<&[u8]>, cache: &str) -> (Scenario, TempSource) {
     let mut scenario = Scenario::sized(VAULT_DISK);
     scenario.catalog = served_catalog(grub);
     (scenario, TempSource::dir(cache))
 }
 
-fn init_args<'a>(cache: &'a str, extra: &[&'a str]) -> Vec<&'a str> {
+pub(super) fn init_args<'a>(cache: &'a str, extra: &[&'a str]) -> Vec<&'a str> {
     let mut args = vec![
         "vault",
         "init",
@@ -296,7 +296,7 @@ fn la_fenetre_refuse_fixture() {
     assert!(conflict(&["bonk", "list"]).is_none());
 }
 
-fn iso_file(name: &str, files: &[(&str, u32)]) -> std::path::PathBuf {
+pub(super) fn iso_file(name: &str, files: &[(&str, u32)]) -> std::path::PathBuf {
     let path = std::env::temp_dir().join(format!("bonk-job-{}-{name}", std::process::id()));
     let image = bonk_core::iso9660::testing::image("ARCH_202611", files);
     std::fs::write(&path, image).expect("ISO de test");
@@ -402,65 +402,6 @@ fn une_image_du_catalogue_ne_se_telecharge_pas_sans_confirmation() {
         "almalinux-10-boot-aarch64",
     ]);
     assert_eq!(code, EXIT_USAGE, "{err}");
-}
-
-#[test]
-fn une_iso_que_le_menu_ne_demarre_pas_est_refusee_avant_le_disque() {
-    let (scenario, _cache) = vault_scenario(Some(GRUB), "cache-refus");
-    let inconnue = iso_file("inconnue.iso", &[("boot/vmlinuz", 1)]);
-    let extension = iso_file(
-        "debian-live.img",
-        &[("live/vmlinuz", 1), ("live/initrd.img", 1)],
-    );
-    let pas_iso = std::env::temp_dir().join(format!("bonk-job-{}-zero.iso", std::process::id()));
-    std::fs::write(&pas_iso, vec![0u8; 64 * 2048]).expect("fichier de test");
-    for path in [&inconnue, &extension, &pas_iso] {
-        let arg = path.display().to_string();
-        let (code, _, err) = scenario.run(&["vault", "add", "usb-a", &arg, "--yes"]);
-        assert_eq!(code, EXIT_USAGE, "{err}");
-        assert!(err.contains("E7004"), "{err}");
-    }
-    assert!(scenario.log().is_empty(), "{:?}", scenario.log());
-    for path in [&inconnue, &extension, &pas_iso] {
-        let _ = std::fs::remove_file(path);
-    }
-}
-
-#[test]
-fn le_menu_du_coffre_suit_les_familles_du_catalogue() {
-    let mut families = bonk_core::vault::default_families();
-    families.retain(|family| family.id != "arch");
-    let served = format!(
-        r#","vault_families":{}"#,
-        serde_json::to_string(&families).expect("JSON")
-    );
-    let mut scenario = Scenario::sized(VAULT_DISK);
-    scenario.catalog = served_catalog_with(&[("x86_64", GRUB)], None, &served);
-    let cache = TempSource::dir("cache-familles");
-    let cache = cache.arg();
-    let (code, _, err) = scenario.run(&init_args(&cache, &[]));
-    assert_eq!(code, 0, "{err}");
-    let disk = scenario.written(VAULT_DISK as usize);
-    let menu = bonk_core::vault::menu(&families);
-    assert!(
-        disk.windows(menu.len()).any(|w| w == menu.as_bytes()),
-        "menu des familles servies"
-    );
-    let arch = iso_file(
-        "arch-sans-famille.iso",
-        &[
-            ("arch/boot/x86_64/vmlinuz-linux", 1),
-            ("arch/boot/x86_64/initramfs-linux.img", 1),
-        ],
-    );
-    let arg = arch.display().to_string();
-    let (code, _, err) = scenario.run(&["vault", "add", "usb-a", &arg, "--yes"]);
-    assert_eq!(code, EXIT_USAGE, "{err}");
-    assert!(
-        err.contains("does not start Arch Linux yet") && err.contains("E7004"),
-        "{err}"
-    );
-    let _ = std::fs::remove_file(&arch);
 }
 
 #[test]

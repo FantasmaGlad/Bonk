@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use bonk_catalog::RemoteFile;
 use bonk_core::read_at::ReadAt;
+use bonk_core::vault::VaultFamily;
 use bonk_ops::job::{self, ImageFile, ImageInspection, JobError};
 
 use super::output::{image_line, print_json};
@@ -34,11 +35,11 @@ fn image_file(target: &str) -> Result<ImageFile, JobError> {
 pub(crate) fn run_image_info(
     target: &str,
     json: bool,
+    families: &[VaultFamily],
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> u8 {
-    let families = bonk_core::vault::default_families();
-    let inspected = image_file(target).and_then(|file| job::inspect_image(&file, &families));
+    let inspected = image_file(target).and_then(|file| job::inspect_image(&file, families));
     let inspection = match inspected {
         Ok(inspection) => inspection,
         Err(error) => return report(err, error.code, error.message),

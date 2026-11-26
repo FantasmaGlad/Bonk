@@ -12,7 +12,7 @@ pub(crate) use cache::hash_matches;
 pub(crate) use cache::hex;
 pub use cache::{FetchSized, asset_matches, asset_path, icon_path};
 pub(crate) use load::replace;
-pub use load::{Loaded, MANIFEST, SIGNATURE, load};
+pub use load::{Loaded, MANIFEST, SIGNATURE, load, saved};
 pub use types::*;
 pub use verify::verify;
 

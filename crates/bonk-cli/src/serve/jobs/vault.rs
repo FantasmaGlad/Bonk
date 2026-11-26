@@ -45,7 +45,7 @@ pub(in crate::serve) fn prepare_vault(
             trace_io,
             yes: p.yes,
             elevation,
-            families: bonk_core::vault::default_families(),
+            families: crate::catalog::saved_families(&cfg.catalog, p.cache_dir.as_deref()),
         }),
         VaultKind::Remove => Task::VaultRemove(VaultRemoveJob {
             target,
