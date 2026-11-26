@@ -48,4 +48,9 @@ fn hors_ligne_le_coffre_ne_propose_que_ce_qui_reste_sur_l_appareil() {
     assert_eq!(actions(&model), ["close"]);
     model.offline = false;
     assert_eq!(actions(&model), ["prepare", "close"]);
+    let lines = vault_state(&model)["lines"].to_string();
+    assert!(
+        lines.contains("Secure Boot") && lines.contains("BitLocker"),
+        "{lines}"
+    );
 }

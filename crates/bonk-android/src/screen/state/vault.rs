@@ -32,12 +32,16 @@ pub(in crate::screen) fn vault_state(model: &Model) -> Value {
             phase.map(|phase| (phase, *done, *total, *rate)),
         ),
         VaultState::NotVault { .. } if model.offline => (
-            vec![words.not_vault.to_owned(), words.offline.to_owned()],
+            vec![
+                words.not_vault.to_owned(),
+                words.secure_boot.to_owned(),
+                words.offline.to_owned(),
+            ],
             None,
             vec![close],
         ),
         VaultState::NotVault { .. } => (
-            vec![words.not_vault.to_owned()],
+            vec![words.not_vault.to_owned(), words.secure_boot.to_owned()],
             None,
             vec![vault_button(words.prepare, "prepare", true), close],
         ),

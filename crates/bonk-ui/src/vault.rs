@@ -31,6 +31,7 @@ impl VaultAction {
 pub struct VaultWords {
     pub title: &'static str,
     pub not_vault: &'static str,
+    pub secure_boot: &'static str,
     pub prepare: &'static str,
     pub erase: &'static str,
     pub empty: &'static str,
@@ -51,6 +52,10 @@ impl VaultWords {
             not_vault: lang.pick(
                 "This disk is not a vault. Preparing it erases everything on it, then any ISO copied to it shows in a boot menu.",
                 "Ce disque n'est pas un coffre. Le préparer efface tout son contenu ; ensuite, chaque ISO copiée dessus apparaît dans un menu de démarrage.",
+            ),
+            secure_boot: lang.pick(
+                "The vault starts with Secure Boot turned off in the PC settings. On Windows encrypted with BitLocker, suspend BitLocker before changing Secure Boot.",
+                "Le coffre démarre Secure Boot désactivé dans le réglage du PC. Sous Windows chiffré par BitLocker, suspendre BitLocker avant de changer Secure Boot.",
             ),
             prepare: lang.pick("Prepare as a vault...", "Préparer en coffre..."),
             erase: lang.pick("Erase and prepare", "Effacer et préparer"),

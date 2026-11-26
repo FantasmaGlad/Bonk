@@ -227,6 +227,10 @@ fn sans_confirmation_ou_en_plan_rien_n_est_ecrit() {
     let (code, out, err) = scenario.run(&["vault", "init", "usb-a", "--dry-run", "--table", "gpt"]);
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("Plan") && out.contains("Table: gpt"), "{out}");
+    assert!(
+        out.contains("Secure Boot off") && out.contains("BitLocker"),
+        "{out}"
+    );
     assert!(scenario.log().is_empty(), "{:?}", scenario.log());
     assert!(scenario.written(1024).iter().all(|b| *b == 0));
 }

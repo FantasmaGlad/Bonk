@@ -85,5 +85,9 @@ pub(super) fn init_lines(done: &VaultInitDone, out: &mut dyn Write) -> io::Resul
     if done.verified {
         writeln!(out, "  Read-back: matches")?;
     }
+    writeln!(
+        out,
+        "  Start: turn Secure Boot off in the PC settings; on Windows with BitLocker, suspend it first"
+    )?;
     Ok(())
 }

@@ -296,6 +296,11 @@ fn le_coffre_s_affiche_sous_son_disque() {
     };
     assert!(contient(&app, "Effacer et préparer") || contient(&app, "Erase and prepare"));
     app.vault = VaultState::NotVault {
+        disk_id: "usb-cle".to_owned(),
+    };
+    let avis = |lang| bonk_ui::vault::VaultWords::new(lang).secure_boot;
+    assert!(contient(&app, avis(Lang::Fr)) || contient(&app, avis(Lang::En)));
+    app.vault = VaultState::NotVault {
         disk_id: "ailleurs".to_owned(),
     };
     assert!(!contient(&app, "Préparer en coffre") && !contient(&app, "Prepare as a vault"));
