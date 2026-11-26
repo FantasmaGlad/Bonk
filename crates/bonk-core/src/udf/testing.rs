@@ -69,6 +69,25 @@ fn extent_entry(img: &mut [u8], entry: usize, data: usize, bytes: &[u8], directo
     tag(&mut img[s..s + BLOCK], TAG_FILE_ENTRY);
 }
 
+// Extents of at most 1 GiB, all on the file's first data block, until the declared size is covered.
+fn declare(img: &mut [u8], entry: usize, stored: u64, declared: u64) {
+    const MAX_EXTENT: u64 = (1 << 30) - BLOCK as u64;
+    let s = block(entry);
+    let mut covered = stored;
+    let mut descriptors = 1;
+    while covered < declared {
+        let len = MAX_EXTENT.min(declared - covered);
+        let at = s + 176 + descriptors * 8;
+        img[at..at + 4].copy_from_slice(&(len as u32).to_le_bytes());
+        img[at + 4..at + 8].copy_from_slice(&((entry + 1) as u32).to_le_bytes());
+        covered += len;
+        descriptors += 1;
+    }
+    img[s + 56..s + 64].copy_from_slice(&declared.to_le_bytes());
+    img[s + 172..s + 176].copy_from_slice(&((descriptors * 8) as u32).to_le_bytes());
+    tag(&mut img[s..s + BLOCK], TAG_FILE_ENTRY);
+}
+
 type Dirs = std::collections::BTreeMap<String, Vec<(String, Option<usize>)>>;
 
 fn tree(files: &[(&str, &[u8])]) -> Dirs {
@@ -90,7 +109,19 @@ fn tree(files: &[(&str, &[u8])]) -> Dirs {
 
 #[must_use]
 pub fn build(files: &[(&str, &[u8])]) -> Vec<u8> {
-    let dirs = tree(files);
+    let sized: Vec<(&str, &[u8], u64)> = files
+        .iter()
+        .map(|(path, data)| (*path, *data, data.len() as u64))
+        .collect();
+    build_declared(&sized)
+}
+
+/// Like [`build`], each file declaring the given size while only its bytes are stored: a file too large for
+/// FAT32 without gigabytes in the test.
+#[must_use]
+pub fn build_declared(files: &[(&str, &[u8], u64)]) -> Vec<u8> {
+    let paths: Vec<(&str, &[u8])> = files.iter().map(|(path, data, _)| (*path, *data)).collect();
+    let dirs = tree(&paths);
     let mut next = 1;
     let mut dir_blocks = std::collections::BTreeMap::new();
     for (path, list) in &dirs {
@@ -98,7 +129,7 @@ pub fn build(files: &[(&str, &[u8])]) -> Vec<u8> {
         next += 1 + ((list.len() + 1) * 64 * 8).div_ceil(BLOCK);
     }
     let mut file_blocks = Vec::new();
-    for (_, data) in files {
+    for (_, data, _) in files {
         file_blocks.push(next);
         next += 1 + data.len().div_ceil(BLOCK).max(1);
     }
@@ -127,8 +158,11 @@ pub fn build(files: &[(&str, &[u8])]) -> Vec<u8> {
         }
         extent_entry(&mut img, entry, entry + 1, &records.concat(), true);
     }
-    for ((_, data), first) in files.iter().zip(&file_blocks) {
+    for ((_, data, declared), first) in files.iter().zip(&file_blocks) {
         extent_entry(&mut img, *first, first + 1, data, false);
+        if *declared > data.len() as u64 {
+            declare(&mut img, *first, data.len() as u64, *declared);
+        }
     }
     img
 }
