@@ -62,3 +62,54 @@ jobs:
         run: python3 .github/scripts/manifestes.py SHA256SUMS "$TAG" manifestes
       - name: Joindre à la release
         run: gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber manifestes/*
+
+  gitlab:
+    name: release GitLab signée
+    if: github.event_name != 'pull_request'
+    needs: manifestes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Récupérer et contrôler la release
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir release
+          cd release
+          sha256sum --check --strict SHA256SUMS
+          while read -r _ f; do
+            gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" > /dev/null
+          done < SHA256SUMS
+          find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\n' | grep -vxF -f <(awk '{print $2}' SHA256SUMS) \
+            | sort | xargs sha256sum -- > SHA256SUMS-distribution
+          cat SHA256SUMS-distribution
+      # A throwaway keyring: the private key lives only for this step.
+      - name: Signer les empreintes
+        id: signer
+        env:
+          CLE: ${{ secrets.BONK_RELEASE_GPG_KEY }}
+        run: |
+          GNUPGHOME=$(mktemp -d)
+          export GNUPGHOME
+          gpg --batch --quiet --import <<< "$CLE"
+          empreinte=$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr/ {print $10; exit}')
+          for f in SHA256SUMS SHA256SUMS-distribution; do
+            gpg --batch --yes --local-user "$empreinte" --digest-algo SHA512 --armor --detach-sign "release/$f"
+            gpg --batch --verify "release/$f.asc" "release/$f"
+          done
+          gpg --batch --armor --export "$empreinte" > release/bonk-release-key.asc
+          rm -rf "$GNUPGHOME"
+          echo "empreinte=$empreinte" >> "$GITHUB_OUTPUT"
+      - name: Publier sur GitLab
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          EMPREINTE: ${{ steps.signer.outputs.empreinte }}
+        run: |
+          NOTES=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body)
+          export NOTES
+          python3 .github/scripts/release-gitlab.py "$TAG" release
