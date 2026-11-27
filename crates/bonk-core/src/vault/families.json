@@ -168,5 +168,19 @@
   "kernel": "boot/{cpu}/loader/linux",
   "initrd": "boot/{cpu}/loader/initrd",
   "options": "iso-scan/filename={path} root=live:CDLABEL={label} rd.live.image"
+ },
+ {
+  "id": "livemedia",
+  "name": "Fedora-based live",
+  "detect": [
+   [
+    "boot/vmlinuz",
+    "boot/initramfs.img",
+    "LiveOS/squashfs.img"
+   ]
+  ],
+  "kernel": "boot/vmlinuz",
+  "initrd": "boot/initramfs.img",
+  "options": "iso-scan/filename={path} root=live:CDLABEL={label} rd.live.image"
  }
 ]
