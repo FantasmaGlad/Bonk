@@ -88,7 +88,8 @@ jobs:
           find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\n' | grep -vxF -f <(awk '{print $2}' SHA256SUMS) \
             | sort | xargs sha256sum -- > SHA256SUMS-distribution
           cat SHA256SUMS-distribution
-      # A throwaway keyring: the private key lives only for this step.
+      # A throwaway keyring: the private key lives only for this step. The published public key is the
+      # versioned one, certified by the maintainer's key; the secret only signs.
       - name: Signer les empreintes
         id: signer
         env:
@@ -102,7 +103,9 @@ jobs:
             gpg --batch --yes --local-user "$empreinte" --digest-algo SHA512 --armor --detach-sign "release/$f"
             gpg --batch --verify "release/$f.asc" "release/$f"
           done
-          gpg --batch --armor --export "$empreinte" > release/bonk-release-key.asc
+          publiee=$(gpg --batch --with-colons --show-keys docs/security/bonk-release-key.asc | awk -F: '/^fpr/ {print $10; exit}')
+          test "$publiee" = "$empreinte"
+          cp docs/security/bonk-release-key.asc release/bonk-release-key.asc
           rm -rf "$GNUPGHOME"
           echo "empreinte=$empreinte" >> "$GITHUB_OUTPUT"
       - name: Publier sur GitLab
