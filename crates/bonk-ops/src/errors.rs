@@ -401,7 +401,7 @@ pub const CATALOG: &[Entry] = &[
         title: "This ISO cannot start from the vault",
         causes: &[
             "not an ISO 9660 image",
-            "not a family the vault starts: Debian live, Ubuntu, Arch Linux, Fedora live",
+            "not a family the vault starts (`bonk info <iso>` names the family of an ISO)",
             "a name not ending in .iso: the vault menu would not list it",
         ],
         remedy: "Write the image on its own drive with `bonk write`.",

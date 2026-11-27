@@ -195,3 +195,21 @@ fn un_fichier_de_familles_refuse_ou_illisible_n_ecrit_rien() {
         assert!(scenario.log().is_empty(), "{name}: aucun disque touché");
     }
 }
+
+#[test]
+fn l_aide_et_les_erreurs_du_coffre_ne_figent_aucune_famille() {
+    use clap::CommandFactory;
+    let mut cli = crate::Cli::command();
+    let help = cli
+        .find_subcommand_mut("vault")
+        .and_then(|vault| vault.find_subcommand_mut("add"))
+        .map(|add| add.render_long_help().to_string())
+        .expect("aide de vault add");
+    let (_, explained, _) = Scenario::new().run(&["explain", "E7004"]);
+    for text in [help, explained] {
+        assert!(text.contains("bonk info"), "{text}");
+        for family in bonk_core::vault::default_families() {
+            assert!(!text.contains(&family.name), "{}: {text}", family.name);
+        }
+    }
+}

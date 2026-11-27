@@ -124,8 +124,8 @@ pub(crate) struct AddArgs {
     #[command(flatten)]
     common: CommonArgs,
 
-    /// ISO image to copy: Debian live, Ubuntu, Arch Linux, Fedora live or an Anaconda installer (AlmaLinux,
-    /// Rocky Linux); spaces in its name become _
+    /// ISO image to copy, of a family the vault menu starts (`bonk info <iso>` names it); spaces in its name
+    /// become _
     #[arg(required_unless_present = "image", conflicts_with = "image")]
     iso: Option<PathBuf>,
 
