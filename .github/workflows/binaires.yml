@@ -108,51 +108,6 @@ jobs:
           max=$(objdump -T "target/$TARGET/release/bonk" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -n 1)
           echo "glibc maximale exigée : $max"
           test "$(printf '%s\n2.17\n' "$max" | sort -V | tail -n 1)" = "2.17"
-      # Without the secrets these two steps do nothing; never exercised, for lack of certificates.
-      - name: Signer (Authenticode, Windows)
-        if: runner.os == 'Windows'
-        env:
-          WIN_CERT_PFX_BASE64: ${{ secrets.WIN_CERT_PFX_BASE64 }}
-          WIN_CERT_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
-        shell: pwsh
-        run: |
-          if (-not $env:WIN_CERT_PFX_BASE64) { Write-Output "::notice::Authenticode : certificat absent, binaire non signé"; exit 0 }
-          $pfx = Join-Path $env:RUNNER_TEMP 'cert.pfx'
-          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WIN_CERT_PFX_BASE64))
-          $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1).FullName
-          $exe = "target\$env:TARGET\release\bonk.exe"
-          & $signtool sign /f $pfx /p $env:WIN_CERT_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $exe
-          & $signtool verify /pa $exe
-          Remove-Item $pfx
-      - name: Signer et notariser (Developer ID, macOS)
-        if: runner.os == 'macOS'
-        env:
-          MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
-          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
-          MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
-          MAC_NOTARY_KEY_BASE64: ${{ secrets.MAC_NOTARY_KEY_BASE64 }}
-          MAC_NOTARY_KEY_ID: ${{ secrets.MAC_NOTARY_KEY_ID }}
-          MAC_NOTARY_ISSUER: ${{ secrets.MAC_NOTARY_ISSUER }}
-        run: |
-          if [ -z "$MAC_CERT_P12_BASE64" ]; then echo "::notice::Developer ID : certificat absent, binaire non signé"; exit 0; fi
-          bin="target/$TARGET/release/bonk"
-          trousseau="$RUNNER_TEMP/bonk.keychain-db"
-          mot_de_passe=$(uuidgen)
-          security create-keychain -p "$mot_de_passe" "$trousseau"
-          security set-keychain-settings -lut 21600 "$trousseau"
-          security unlock-keychain -p "$mot_de_passe" "$trousseau"
-          echo "$MAC_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security import "$RUNNER_TEMP/cert.p12" -k "$trousseau" -P "$MAC_CERT_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$mot_de_passe" "$trousseau"
-          security list-keychains -d user -s "$trousseau"
-          codesign --force --options runtime --timestamp --sign "$MAC_SIGN_IDENTITY" --keychain "$trousseau" "$bin"
-          codesign --verify --strict --verbose=2 "$bin"
-          # A bare executable cannot be stapled: Gatekeeper checks the notarization online.
-          echo "$MAC_NOTARY_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
-          ditto -c -k --keepParent "$bin" "$RUNNER_TEMP/bonk-notarisation.zip"
-          xcrun notarytool submit "$RUNNER_TEMP/bonk-notarisation.zip" --key "$RUNNER_TEMP/notary.p8" --key-id "$MAC_NOTARY_KEY_ID" --issuer "$MAC_NOTARY_ISSUER" --wait
-          security delete-keychain "$trousseau"
-          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/notary.p8"
       # The published file carries its name and version: without resources Windows shows nothing.
       - name: Vérifier les informations de l'exécutable
         if: runner.os == 'Windows'
