@@ -275,6 +275,23 @@ jobs:
             motif: 'Mageia-10-Live-Xfce-x86_64\.iso'
             taille: 6442450944
             options: --ligne 4 --memoire 4096 --delai 900
+          # Agama, openSUSE's installer, is a Kiwi live image like Fedora's: told apart by its label.
+          - nom: openSUSE Agama
+            copie: bonk
+            familles: crates/bonk-core/src/vault/families.json
+            base: https://download.opensuse.org/distribution/leap/16.0/offline
+            sommes: Leap-16.0-online-installer-x86_64.install.iso.sha512
+            motif: 'Leap-16\.0-online-installer-x86_64\.install\.iso'
+            options: --memoire 4096 --delai 900
+          # Fedora derivatives built by livemedia-creator (Ultramarine, Nobara) take Fedora live's options.
+          - nom: Ultramarine
+            copie: bonk
+            familles: crates/bonk-core/src/vault/families.json
+            base: https://images.fyralabs.com/isos/ultramarine/44
+            sommes: ultramarine-xfce-44-live-anaconda-x86_64.iso.sha256sum
+            motif: 'ultramarine-xfce-44-live-anaconda-x86_64\.iso'
+            taille: 6442450944
+            options: --memoire 4096 --delai 900
           # Anaconda finds its medium by the ISO label: the vault's udev rule maps the ISO from its offset.
           - nom: AlmaLinux
             copie: bonk

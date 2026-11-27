@@ -19,9 +19,10 @@ if [ -n "${FAMILLES:-}" ]; then familles=(--families "$FAMILLES"); fi
 "$bonk" vault init --simulate "$cle" --size "${VAULT_SIZE:-$((3 << 30))}" --yes --progress none --cache-dir "$travail/cache" "${familles[@]}"
 
 curl --fail --silent --show-error --location --connect-timeout 30 --retry 5 --retry-all-errors --continue-at - --output "$travail/$nom" "$source"
-# GNU lines (`sum  name`) or BSD lines (`SHA256 (name) = sum`, Fedora).
+# GNU lines (`sum  name`, the name possibly in a folder) or BSD lines (`SHA256 (name) = sum`, Fedora).
 attendu=$(curl --fail --silent --show-error --location --connect-timeout 30 --retry 5 --retry-all-errors "$sommes" | awk -v n="$nom" '
-  $2 == n || $2 == "*" n {print $1}
+  { f = $2; sub(/^\*/, "", f); sub(/.*\//, "", f) }
+  f == n {print $1}
   $1 == "SHA256" && $2 == "(" n ")" {print $4}')
 test -n "$attendu"
 # SHA-256 or SHA-512 by its length: some publishers (Mageia) give only the latter.

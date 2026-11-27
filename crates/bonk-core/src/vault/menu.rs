@@ -17,35 +17,28 @@ pub fn menu(families: &[VaultFamily]) -> String {
 
 fn detect(families: &[VaultFamily]) -> String {
     let mut out = String::from(
-        "# Sets `family` (empty when not supported) and `iso_cpu` for the ISO mounted as (probe).\nfunction detect {\n  unset family\n",
+        "# Sets `family` (empty when not supported) and `iso_cpu` for the ISO mounted as (probe).\nfunction detect {\n  unset family\n  unset isolabel\n  probe --set=isolabel --label (probe)\n",
     );
-    let mut keyword = "if";
+    // Tried in order until one fits: families sharing a layout differ by their label.
     for family in families {
         for set in &family.detect {
             let tests: Vec<String> = set
                 .iter()
                 .map(|file| format!("-f (probe)/{file}"))
                 .collect();
-            let _ = write!(
-                out,
-                "  {keyword} [ {} ]; then\n    set family={}\n",
-                tests.join(" -a "),
-                family.id
-            );
-            keyword = "elif";
-        }
-    }
-    if keyword == "elif" {
-        out.push_str("  fi\n");
-    }
-    out.push_str("  unset isolabel\n  probe --set=isolabel --label (probe)\n");
-    for family in families {
-        if let Some(prefix) = &family.label_prefix {
-            let _ = write!(
-                out,
-                "  if [ \"$family\" = {id} ]; then\n    if regexp '^{prefix}' \"$isolabel\"; then set family={id}; else unset family; fi\n  fi\n",
-                id = family.id
-            );
+            let test = format!("[ -z \"$family\" -a {} ]", tests.join(" -a "));
+            let _ = match &family.label_prefix {
+                Some(prefix) => write!(
+                    out,
+                    "  if {test}; then\n    if regexp '^{prefix}' \"$isolabel\"; then set family={id}; fi\n  fi\n",
+                    id = family.id
+                ),
+                None => write!(
+                    out,
+                    "  if {test}; then\n    set family={}\n  fi\n",
+                    family.id
+                ),
+            };
         }
     }
     for (index, (file, arch)) in ARCH_RULES.iter().enumerate() {
