@@ -118,21 +118,5 @@
   "kernel": "boot/vmlinuz-x86_64",
   "initrd": "boot/initramfs-x86_64.img",
   "options": "misobasedir=manjaro misolabel={label} img_label={vault} img_loop={path}"
- },
- {
-  "id": "openmandriva",
-  "name": "OpenMandriva",
-  "detect": [
-   [
-    "boot/vmlinuz0",
-    "boot/liveinitrd.img",
-    "LiveOS/squashfs.img"
-   ]
-  ],
-  "kernel": "boot/vmlinuz0",
-  "initrd": "boot/liveinitrd.img",
-  "options": "root=live:CDLABEL={label} rd.live.image bonk.offset={offset}",
-  "location": true,
-  "initrd_extra": "newc:etc/udev/rules.d/99-bonk-vault-iso.rules:{bonk}/udev/99-bonk-vault-iso.rules"
  }
 ]
