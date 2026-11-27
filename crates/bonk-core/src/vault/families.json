@@ -182,5 +182,19 @@
   "kernel": "boot/vmlinuz",
   "initrd": "boot/initramfs.img",
   "options": "iso-scan/filename={path} root=live:CDLABEL={label} rd.live.image"
+ },
+ {
+  "id": "antix",
+  "name": "antiX and MX Linux",
+  "detect": [
+   [
+    "antiX/vmlinuz",
+    "antiX/initrd.gz",
+    "antiX/linuxfs"
+   ]
+  ],
+  "kernel": "antiX/vmlinuz",
+  "initrd": "antiX/initrd.gz",
+  "options": "blab={vault} fromiso={path}"
  }
 ]
