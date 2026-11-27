@@ -266,6 +266,15 @@ jobs:
             motif: 'openmandriva-6\.0-lxqt\.x86_64\.iso'
             taille: 4294967296
             options: --ligne 4 --memoire 4096 --delai 900 --noyau systemd.wants=serial-getty@ttyS0.service
+          # Mageia's mgalive waits for the volume of its label: the vault's udev rule maps the ISO, as for OpenMandriva.
+          - nom: Mageia
+            copie: bonk
+            familles: crates/bonk-core/src/vault/families.json
+            base: https://ftp.fau.de/mageia/iso/10/Mageia-10-Live-Xfce-x86_64
+            sommes: Mageia-10-Live-Xfce-x86_64.iso.sha512
+            motif: 'Mageia-10-Live-Xfce-x86_64\.iso'
+            taille: 6442450944
+            options: --ligne 4 --memoire 4096 --delai 900
           # Anaconda finds its medium by the ISO label: the vault's udev rule maps the ISO from its offset.
           - nom: AlmaLinux
             copie: bonk

@@ -134,5 +134,21 @@
   "options": "root=live:LABEL={label} rd.live.image bonk.offset={offset}",
   "location": true,
   "initrd_extra": "newc:etc/udev/rules.d/99-bonk-vault-iso.rules:{bonk}/udev/99-bonk-vault-iso.rules"
+ },
+ {
+  "id": "mageia",
+  "name": "Mageia Live",
+  "detect": [
+   [
+    "boot/vmlinuz",
+    "boot/initrd.img",
+    "loopbacks/distrib.sqfs"
+   ]
+  ],
+  "kernel": "boot/vmlinuz",
+  "initrd": "boot/initrd.img",
+  "options": "root=mgalive:LABEL={label} bonk.offset={offset}",
+  "location": true,
+  "initrd_extra": "newc:etc/udev/rules.d/99-bonk-vault-iso.rules:{bonk}/udev/99-bonk-vault-iso.rules"
  }
 ]
