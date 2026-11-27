@@ -138,9 +138,14 @@ fn familles_reconnues_comme_par_le_menu() -> std::io::Result<()> {
                 assert!(menu.contains(&format!("(probe)/{file}")), "{file}");
             }
             let present: Vec<(&str, u32)> = set.iter().map(|f| (f.as_str(), 1)).collect();
+            let label = format!(
+                "{}Test",
+                expected.label_prefix.as_deref().unwrap_or("Live-")
+            );
             assert_eq!(
-                family("Fedora-WS-Live-44", &present)?,
-                Some(expected.id.clone())
+                family(&label, &present)?,
+                Some(expected.id.clone()),
+                "{label}"
             );
             assert_eq!(family("X", &present[..1])?, None, "{}", expected.id);
         }
@@ -425,7 +430,7 @@ fn un_plan_pour_un_autre_disque_n_ecrit_rien() -> Result<(), Box<dyn std::error:
 #[test]
 fn les_familles_par_defaut_sont_valides_et_uniques() {
     let families = default_families();
-    assert_eq!(families.len(), 10);
+    assert_eq!(families.len(), 11);
     for family in &families {
         assert_eq!(family_errors(family), Vec::<String>::new());
     }
@@ -478,7 +483,7 @@ fn une_famille_servie_en_donnees_entre_au_menu_sans_code() -> Result<(), Box<dyn
     families.push(opensuse);
     let menu = menu(&families);
     assert!(menu.contains(
-        "if regexp '^openSUSE' \"$isolabel\"; then set family=opensuse_live; else unset family; fi"
+        "if [ -z \"$family\" -a -f (probe)/boot/x86_64/loader/linux -a -f (probe)/boot/x86_64/loader/initrd ]; then\n    if regexp '^openSUSE' \"$isolabel\"; then set family=opensuse_live; fi\n  fi"
     ));
     assert!(menu.contains("menuentry \"openSUSE live: $path\""));
     assert!(menu.contains(
@@ -555,5 +560,36 @@ fn une_image_lue_par_positions_dit_sa_famille_ou_rien() -> std::io::Result<()> {
         );
     }
     assert!(vault_match(&Broken, 1 << 20, &families).is_err());
+    Ok(())
+}
+
+#[test]
+fn une_etiquette_qui_ne_convient_pas_laisse_essayer_la_famille_suivante() -> std::io::Result<()> {
+    use crate::iso9660::{Iso, testing::image};
+    use std::io::Cursor;
+    let mut families = default_families();
+    let mut installer = families
+        .iter()
+        .find(|family| family.id == "fedora_live")
+        .cloned()
+        .ok_or_else(|| std::io::Error::other("fedora_live"))?;
+    installer.id = "kiwi_installer".to_owned();
+    installer.label_prefix = Some("Kiwi-".to_owned());
+    families.push(installer);
+    let kiwi = [
+        ("boot/x86_64/loader/linux", 1),
+        ("boot/x86_64/loader/initrd", 1),
+    ];
+    let family = |label: &str| {
+        iso_kind(&mut Iso::open(Cursor::new(image(label, &kiwi)))?, &families)
+            .map(|kind| kind.map(|kind| kind.family.id))
+    };
+    assert_eq!(family("Fedora-WS-Live-44")?, Some("fedora_live".to_owned()));
+    assert_eq!(family("Kiwi-Test")?, Some("kiwi_installer".to_owned()));
+    assert_eq!(
+        family("Install-Leap-16.0-x86_64")?,
+        Some("agama".to_owned())
+    );
+    assert_eq!(family("openSUSE-Live")?, None);
     Ok(())
 }

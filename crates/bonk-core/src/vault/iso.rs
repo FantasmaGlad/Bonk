@@ -74,16 +74,14 @@ pub fn iso_kind<R: std::io::Read + std::io::Seek>(
     iso: &mut Iso<R>,
     families: &[VaultFamily],
 ) -> std::io::Result<Option<IsoKind>> {
+    // Families sharing a layout (Kiwi) differ by their label: one that does not fit lets the next one try.
     for family in families {
-        if !has_any_set(iso, &family.detect)? {
-            continue;
-        }
-        if family
+        let label_fits = family
             .label_prefix
             .as_deref()
-            .is_some_and(|prefix| !iso.label().starts_with(prefix))
-        {
-            return Ok(None);
+            .is_none_or(|prefix| iso.label().starts_with(prefix));
+        if !label_fits || !has_any_set(iso, &family.detect)? {
+            continue;
         }
         return Ok(Some(IsoKind {
             family: family.clone(),
