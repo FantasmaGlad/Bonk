@@ -126,8 +126,8 @@ Several ISO images on one drive: `bonk vault init`, then `bonk vault add`. The v
 
 | Repository | Content |
 | :--- | :--- |
-| <img src="crates/bonk/assets/icons/32x32/bonk.png" width="20" height="20" valign="middle" alt="BonkWeb">&nbsp;**[BonkWeb](https://github.com/FantasmaGlad/BonkWeb)** | website |
-| <img src="crates/bonk/assets/icons/32x32/bonk.png" width="20" height="20" valign="middle" alt="bonk-catalog">&nbsp;**[bonk-catalog](https://github.com/FantasmaGlad/bonk-catalog)** | image catalog |
-| <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="bonk-packages">&nbsp;**[bonk-packages](https://github.com/FantasmaGlad/bonk-packages)** | package repositories |
-| <img src="docs/icons/homebrew.svg" width="20" height="20" valign="middle" alt="homebrew-bonk">&nbsp;**[homebrew-bonk](https://github.com/FantasmaGlad/homebrew-bonk)** | Homebrew tap |
-| <img src="crates/bonk/assets/icons/32x32/bonk.png" width="20" height="20" valign="middle" alt="bonk-security">&nbsp;**[bonk-security](https://github.com/FantasmaGlad/bonk-security)** | security site |
+| <img src="crates/bonk/assets/icons/32x32/bonk.png" width="20" height="20" valign="middle" alt="BonkWeb">&nbsp;**[BonkWeb](https://github.com/FantasmaGlad/BonkWeb)** | website, [bonk-os.app](https://bonk-os.app) |
+| <img src="crates/bonk/assets/icons/32x32/bonk.png" width="20" height="20" valign="middle" alt="bonk-catalog">&nbsp;**[bonk-catalog](https://github.com/FantasmaGlad/bonk-catalog)** | image catalog, [catalog.bonk-os.app](https://catalog.bonk-os.app) |
+| <img src="docs/icons/linux.svg" width="20" height="20" valign="middle" alt="bonk-packages">&nbsp;**[bonk-packages](https://github.com/FantasmaGlad/bonk-packages)** | package repositories, [packages.bonk-os.app](https://packages.bonk-os.app) |
+| <img src="docs/icons/homebrew.svg" width="20" height="20" valign="middle" alt="homebrew-bonk">&nbsp;**[homebrew-bonk](https://github.com/FantasmaGlad/homebrew-bonk)** | Homebrew tap, [bonk-os.app/install](https://bonk-os.app/install/) |
+| <img src="crates/bonk/assets/icons/32x32/bonk.png" width="20" height="20" valign="middle" alt="bonk-security">&nbsp;**[bonk-security](https://github.com/FantasmaGlad/bonk-security)** | security site, [security.bonk-os.app](https://security.bonk-os.app) |
