@@ -1,4 +1,5 @@
 # The ISO lies whole in the BonkVault partition, which the initramfs may not read (no exFAT before EL10): it is
 # mapped read-only from the offset `bonk vault add` recorded, and shows up with its own label, as its DVD would.
-# IMPORT{cmdline} stops the rule when the menu passed no offset.
-ACTION=="add", SUBSYSTEM=="block", ENV{ID_FS_LABEL}=="BonkVault", IMPORT{cmdline}="bonk.offset", RUN+="/usr/sbin/losetup -f -r -o $env{bonk.offset} $devnode"
+# IMPORT{cmdline} stops the rule when the menu passed no offset. A loop device the kernel created at boot was
+# probed empty and gets no event when bound: the trigger makes udev read the ISO's label.
+ACTION=="add", SUBSYSTEM=="block", ENV{ID_FS_LABEL}=="BonkVault", IMPORT{cmdline}="bonk.offset", RUN+="/usr/sbin/losetup -f -r -o $env{bonk.offset} $devnode", RUN+="/usr/bin/udevadm trigger --action=change --subsystem-match=block --sysname-match=loop*"

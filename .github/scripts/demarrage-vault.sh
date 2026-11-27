@@ -24,7 +24,13 @@ attendu=$(curl --fail --silent --show-error --location --connect-timeout 30 --re
   $2 == n || $2 == "*" n {print $1}
   $1 == "SHA256" && $2 == "(" n ")" {print $4}')
 test -n "$attendu"
-echo "$attendu  $travail/$nom" | sha256sum --check --quiet
+# SHA-256 or SHA-512 by its length: some publishers (Mageia) give only the latter.
+case ${#attendu} in
+  64) somme=sha256sum ;;
+  128) somme=sha512sum ;;
+  *) echo "ERREUR : empreinte de ${#attendu} caractères" >&2; exit 1 ;;
+esac
+echo "$attendu  $travail/$nom" | "$somme" --check --quiet
 
 # COPIE=bonk: added by `bonk vault add`; otherwise as a user would put it there, by the system's exFAT driver.
 if [ "${COPIE:-}" = bonk ]; then
