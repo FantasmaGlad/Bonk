@@ -171,8 +171,11 @@ pub const CATALOG: &[Entry] = &[
         id: "E3002",
         exit: EXIT_SOURCE,
         title: "Image format not supported",
-        causes: &["compressed format recognized but not supported (bzip2, zip...)"],
-        remedy: "Decompress the image with a system tool, or provide it as .img, .iso, .gz, .xz or .zst.",
+        causes: &[
+            "compressed format recognized but not supported (bzip2, zip...)",
+            "Windows install.esd with solid resources over 4 GiB",
+        ],
+        remedy: "Decompress the image with a system tool, or provide it as .img, .iso, .gz, .xz or .zst. For a Windows install.esd over 4 GiB: Microsoft's ISO of the same Windows.",
     },
     Entry {
         code: Code::SourceTooLarge,

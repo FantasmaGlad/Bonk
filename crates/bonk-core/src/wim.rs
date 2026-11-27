@@ -31,7 +31,7 @@ impl fmt::Display for WimError {
             Self::NotWim => f.write_str("not a WIM file"),
             Self::Malformed(what) => write!(f, "WIM unreadable: {what}"),
             Self::Solid => f.write_str(
-                "WIM with solid resources (install.esd): cannot be split without recompression",
+                "WIM with solid resources (install.esd) over 4 GiB: FAT32 cannot hold it and it cannot be split without recompressing it; use Microsoft's ISO of this Windows, or an image whose install.esd is under 4 GiB",
             ),
             Self::ResourceTooLarge(len) => {
                 write!(f, "a resource of {len} bytes fits in no part")
