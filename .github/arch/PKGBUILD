@@ -19,7 +19,8 @@ package() {
   for page in "$startdir"/man/*.1.gz; do
     install -Dm644 "$page" "$pkgdir/usr/share/man/man1/${page##*/}"
   done
-  for dossier in "$startdir"/icons/*; do
-    install -Dm644 "$dossier/bonk.png" "$pkgdir/usr/share/icons/hicolor/${dossier##*/}/apps/bonk.png"
+  for icone in "$startdir"/icons/*/bonk.*; do
+    dossier=${icone%/*}
+    install -Dm644 "$icone" "$pkgdir/usr/share/icons/hicolor/${dossier##*/}/apps/${icone##*/}"
   done
 }

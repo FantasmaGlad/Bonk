@@ -86,6 +86,7 @@ jobs:
           # A bonk:// link clicked on the website must reach the window.
           dpkg-deb -c dist/*.deb | grep usr/share/applications/bonk-link.desktop > /dev/null
           dpkg-deb -c dist/*.deb | grep usr/share/icons/hicolor/256x256/apps/bonk.png > /dev/null
+          dpkg-deb -c dist/*.deb | grep usr/share/icons/hicolor/scalable/apps/bonk.svg > /dev/null
           dpkg-deb -c dist/*.deb | grep usr/share/man/man1/bonk-write.1.gz > /dev/null
           cd dist
           sha256sum -- *.deb *.rpm > "paquets-$TARGET.sha256"
@@ -218,6 +219,7 @@ jobs:
             test -f /usr/share/applications/bonk.desktop
             test -f /usr/share/applications/bonk-link.desktop
             test -f /usr/share/icons/hicolor/256x256/apps/bonk.png
+            test -f /usr/share/icons/hicolor/scalable/apps/bonk.svg
             # The image never extracts man pages (NoExtract): the package list says what it carries.
             pacman -Ql bonk | grep -q /usr/share/man/man1/bonk-write.1.gz
           '

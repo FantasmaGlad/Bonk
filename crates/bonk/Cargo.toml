@@ -57,6 +57,7 @@ assets = [
     ["assets/icons/128x128/bonk.png", "usr/share/icons/hicolor/128x128/apps/", "644"],
     ["assets/icons/256x256/bonk.png", "usr/share/icons/hicolor/256x256/apps/", "644"],
     ["assets/icons/512x512/bonk.png", "usr/share/icons/hicolor/512x512/apps/", "644"],
+    ["assets/icons/scalable/bonk.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
     # Written by the packaging workflow, absent from the repository.
     ["assets/man/*.1.gz", "usr/share/man/man1/", "644"],
 ]
@@ -75,6 +76,7 @@ assets = [
     { source = "assets/icons/128x128/bonk.png", dest = "/usr/share/icons/hicolor/128x128/apps/bonk.png", mode = "644" },
     { source = "assets/icons/256x256/bonk.png", dest = "/usr/share/icons/hicolor/256x256/apps/bonk.png", mode = "644" },
     { source = "assets/icons/512x512/bonk.png", dest = "/usr/share/icons/hicolor/512x512/apps/bonk.png", mode = "644" },
+    { source = "assets/icons/scalable/bonk.svg", dest = "/usr/share/icons/hicolor/scalable/apps/bonk.svg", mode = "644" },
     { source = "assets/man/*.1.gz", dest = "/usr/share/man/man1/", mode = "644", doc = true },
 ]
 
