@@ -82,9 +82,9 @@ jobs:
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir release
           cd release
           sha256sum --check --strict SHA256SUMS
-          for f in $(awk '{print $2}' SHA256SUMS); do
+          while read -r _ f; do
             gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" > /dev/null
-          done
+          done < SHA256SUMS
           find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\n' | grep -vxF -f <(awk '{print $2}' SHA256SUMS) \
             | sort | xargs sha256sum -- > SHA256SUMS-distribution
           cat SHA256SUMS-distribution
