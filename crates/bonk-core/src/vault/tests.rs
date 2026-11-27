@@ -370,6 +370,13 @@ fn les_fichiers_de_demarrage_portent_les_noms_uefi_et_le_menu() -> Result<(), Fo
     );
     assert!(VAULT_ISO_RULE.contains(&format!("ENV{{ID_FS_LABEL}}==\"{VAULT_LABEL}\"")));
     assert!(VAULT_ISO_RULE.contains("IMPORT{cmdline}=\"bonk.offset\""));
+    let bound = VAULT_ISO_RULE.find("losetup");
+    let probed = VAULT_ISO_RULE
+        .find("udevadm trigger --action=change --subsystem-match=block --sysname-match=loop*");
+    assert!(
+        matches!((bound, probed), (Some(b), Some(p)) if b < p),
+        "{VAULT_ISO_RULE}"
+    );
     let menu = menu(&default_families());
     assert!(menu.contains("bonk.offset=$bonk_offset"));
     for (path, _) in INITRD_SCRIPTS {
@@ -418,7 +425,7 @@ fn un_plan_pour_un_autre_disque_n_ecrit_rien() -> Result<(), Box<dyn std::error:
 #[test]
 fn les_familles_par_defaut_sont_valides_et_uniques() {
     let families = default_families();
-    assert_eq!(families.len(), 8);
+    assert_eq!(families.len(), 9);
     for family in &families {
         assert_eq!(family_errors(family), Vec::<String>::new());
     }

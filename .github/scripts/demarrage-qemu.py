@@ -16,7 +16,10 @@ GRUB_MENU_SECONDS = 8
 KEY_GAP_SECONDS = 0.15
 # The serial port is ttyS0 on a PC, ttyAMA0 on the `virt` ARM machine.
 SERIAL_CONSOLE = {"x86_64": "ttyS0", "aarch64": "ttyAMA0"}
-KEY_NAMES = {" ": "spc", ".": "dot", "=": "equal", "-": "minus", "_": "shift-minus", "/": "slash", ":": "shift-semicolon"}
+KEY_NAMES = {
+    " ": "spc", ".": "dot", "=": "equal", "-": "minus", "_": "shift-minus", "/": "slash", ":": "shift-semicolon",
+    "@": "shift-2",
+}
 
 
 def keys_of(text):
