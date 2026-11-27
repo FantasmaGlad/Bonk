@@ -71,6 +71,22 @@ pub(crate) fn download_error(failure: &DownloadError) -> JobError {
     error(code, failure)
 }
 
+// A rolling distribution deletes yesterday's snapshot as it publishes today's: the signed catalog only names
+// the new file at its next publication.
+pub(crate) fn catalog_download_error(failure: &DownloadError) -> JobError {
+    match failure {
+        DownloadError::Refused {
+            status: 404 | 410, ..
+        } => error(
+            Code::DownloadFailed,
+            format!(
+                "{failure}: the publisher replaced or removed this file; the catalog takes its new address at its next publication, try again later"
+            ),
+        ),
+        _ => download_error(failure),
+    }
+}
+
 fn sha256_from_file(location: &str, name: &str) -> Result<String, JobError> {
     let text = if bonk_catalog::is_url(location) {
         bonk_catalog::fetch_text(location).map_err(|failure| download_error(&failure))?
@@ -173,7 +189,7 @@ fn cached_download(
     if already_kept {
         log::info!(target: "bonk::catalog", path = dest.display().to_string().as_str(); "image already downloaded");
     } else {
-        fetch_to(url, &dest, deps, progress)?;
+        fetch_to(url, &dest, deps, progress).map_err(|f| download_error(&f))?;
     }
     Ok(dest)
 }
@@ -188,7 +204,7 @@ pub(crate) fn kept_or_fetched(
     let name = source_name(Path::new(named.url), Some(named))?;
     let (dest, already_kept) = cache_entry(cache_dir, sha256, &name)?;
     if !already_kept {
-        fetch_to(named.url, &dest, deps, progress)?;
+        fetch_to(named.url, &dest, deps, progress).map_err(|f| catalog_download_error(&f))?;
     }
     Ok((dest, already_kept))
 }
@@ -214,7 +230,7 @@ fn fetch_to(
     dest: &Path,
     deps: &Deps<'_>,
     progress: &mut dyn FnMut(&Progress) -> Control,
-) -> Result<(), JobError> {
+) -> Result<(), DownloadError> {
     let started = Instant::now();
     let mut first_done = None;
     let stopped = std::cell::Cell::new(false);
@@ -244,7 +260,5 @@ fn fetch_to(
         pause: &pause,
         silence_limit: SILENCE_LIMIT,
     };
-    bonk_catalog::download(url, dest, &mut hooks)
-        .map(drop)
-        .map_err(|failure| download_error(&failure))
+    bonk_catalog::download(url, dest, &mut hooks).map(drop)
 }

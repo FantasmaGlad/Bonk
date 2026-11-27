@@ -251,3 +251,51 @@ fn bonk_info_refuse_un_serveur_qui_renverrait_toute_l_image() {
     );
     assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 1);
 }
+
+#[test]
+fn une_image_du_catalogue_absente_chez_l_editeur_dit_que_le_catalogue_la_reprendra() {
+    use crate::errors::Code;
+    use bonk_catalog::DownloadError;
+    let url = "https://h/x.iso".to_owned();
+    let cases = [
+        (
+            DownloadError::Refused {
+                url: url.clone(),
+                status: 404,
+            },
+            true,
+        ),
+        (
+            DownloadError::Refused {
+                url: url.clone(),
+                status: 410,
+            },
+            true,
+        ),
+        (
+            DownloadError::Refused {
+                url: url.clone(),
+                status: 503,
+            },
+            false,
+        ),
+        (DownloadError::Network(format!("{url}: reset")), false),
+    ];
+    for (failure, replaced) in cases {
+        let error = crate::fetch::catalog_download_error(&failure);
+        assert_eq!(error.code, Code::DownloadFailed, "{failure}");
+        assert!(
+            error.message.starts_with(&failure.to_string()),
+            "{}",
+            error.message
+        );
+        assert_eq!(
+            error.message.contains("next publication"),
+            replaced,
+            "{}",
+            error.message
+        );
+    }
+    let error = crate::fetch::catalog_download_error(&DownloadError::Cancelled);
+    assert_eq!(error.code, Code::Cancelled);
+}

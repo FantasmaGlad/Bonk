@@ -27,7 +27,8 @@ fn bonk_info_d_une_iso_windows_a_install_esd_solide_dit_le_refus_sans_echouer() 
     let (code, out, err) = scenario.run(&["info", &source.arg()]);
     assert_eq!((code, err.as_str()), (0, ""), "{out}");
     assert!(
-        out.contains("Route: refused, WIM with solid resources"),
+        out.contains("Route: refused, WIM with solid resources")
+            && out.contains("Microsoft's ISO of this Windows"),
         "{out}"
     );
     let (_, json, _) = scenario.run(&["info", &source.arg(), "--json"]);
@@ -35,6 +36,9 @@ fn bonk_info_d_une_iso_windows_a_install_esd_solide_dit_le_refus_sans_echouer() 
     assert_eq!(report["route"], serde_json::Value::Null);
     let (code, _, err) = scenario.run(&["write", "usb-a", &source.arg(), "--yes"]);
     assert_eq!(code, EXIT_SOURCE, "{err}");
-    assert!(err.contains("[E3002]"), "{err}");
+    assert!(
+        err.contains("[E3002]") && err.contains("under 4 GiB"),
+        "{err}"
+    );
     assert!(scenario.log().is_empty(), "aucun disque touché");
 }
