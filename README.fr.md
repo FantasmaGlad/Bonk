@@ -16,6 +16,10 @@
 </p>
 
 <p align="center">
+  <img src="docs/icons/gitlab.svg" width="16" height="16" valign="middle" alt="GitLab">&nbsp;Copie de secours : <a href="https://gitlab.com/FantasmaGlad/Bonk">GitLab</a>, <a href="https://gitlab.com/FantasmaGlad/Bonk/-/releases">releases</a>
+</p>
+
+<p align="center">
   <a href="https://github.com/FantasmaGlad/Bonk/actions/workflows/ci.yml"><img src="https://github.com/FantasmaGlad/Bonk/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="https://github.com/FantasmaGlad/Bonk/releases/latest"><img src="https://img.shields.io/github/v/release/FantasmaGlad/Bonk?label=Version&color=brightgreen" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/Licence-MIT-blue.svg" alt="Licence: MIT"></a>
