@@ -86,6 +86,15 @@ pub(super) fn message_of(input: &Value, model: &Model) -> Option<Message> {
     })
 }
 
+/// A catalog image the server refused, explained as the command line explains it.
+fn refusal(input: &Value) -> Option<String> {
+    let failure = bonk_catalog::DownloadError::Refused {
+        url: input["url"].as_str()?.to_owned(),
+        status: u16::try_from(input["status"].as_u64()?).ok()?,
+    };
+    Some(failure.of_catalog_image())
+}
+
 fn starts_vault_work(input: &Value) -> bool {
     matches!(
         input["action"].as_str(),
@@ -127,7 +136,7 @@ fn app_event(input: &Value) -> Option<Event> {
         },
         _ => Event::Finished(Outcome::Failed {
             code: input["code"].as_str().map(str::to_owned),
-            message: input["message"].as_str()?.to_owned(),
+            message: refusal(input).unwrap_or(input["message"].as_str()?.to_owned()),
         }),
     })
 }

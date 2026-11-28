@@ -71,19 +71,10 @@ pub(crate) fn download_error(failure: &DownloadError) -> JobError {
     error(code, failure)
 }
 
-// A rolling distribution deletes yesterday's snapshot as it publishes today's: the signed catalog only names
-// the new file at its next publication.
 pub(crate) fn catalog_download_error(failure: &DownloadError) -> JobError {
-    match failure {
-        DownloadError::Refused {
-            status: 404 | 410, ..
-        } => error(
-            Code::DownloadFailed,
-            format!(
-                "{failure}: the publisher replaced or removed this file; the catalog takes its new address at its next publication, try again later"
-            ),
-        ),
-        _ => download_error(failure),
+    JobError {
+        message: failure.of_catalog_image(),
+        ..download_error(failure)
     }
 }
 

@@ -106,6 +106,30 @@ fn la_progression_et_l_echec_vont_au_telechargement_en_cours() {
 }
 
 #[test]
+fn une_image_que_l_editeur_a_retiree_est_expliquee_comme_en_ligne_de_commande() {
+    let mut model = on_debian_page();
+    let _ = start(&mut model);
+    let cas = [(404, true), (410, true), (503, false)];
+    for (status, remplacee) in cas {
+        let failed = json!({
+            "type": "failed", "message": format!("HTTP {status}"), "code": "E3008",
+            "url": "https://d/debian-live.iso", "status": status,
+        });
+        let message = match message_of(&failed, &model) {
+            Some(Message::Browse(BrowseMessage::DownloadEvent(Event::Finished(
+                Outcome::Failed { message, .. },
+            )))) => message,
+            _ => String::new(),
+        };
+        assert!(
+            message.starts_with("https://d/debian-live.iso: the server answers"),
+            "{message}"
+        );
+        assert_eq!(message.contains("next publication"), remplacee, "{message}");
+    }
+}
+
+#[test]
 fn l_image_enregistree_dit_ou_elle_se_trouve() {
     let mut model = on_debian_page();
     let _ = start(&mut model);

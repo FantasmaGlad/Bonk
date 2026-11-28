@@ -175,12 +175,17 @@ pub extern "system" fn Java_app_bonkos_bonk_Native_loadCatalog<'caller>(
     _class: JClass<'caller>,
     dir: JString<'caller>,
     json: JByteArray<'caller>,
+    json_failure: JString<'caller>,
     signature: JByteArray<'caller>,
+    signature_failure: JString<'caller>,
 ) -> JString<'caller> {
     env.with_env(|env| -> Result<_, Error> {
         let dir = text_of(env, &dir)?;
-        let json = env.convert_byte_array(&json)?;
-        let signature = env.convert_byte_array(&signature)?;
+        let json = catalog::received(env.convert_byte_array(&json)?, text_of(env, &json_failure)?);
+        let signature = catalog::received(
+            env.convert_byte_array(&signature)?,
+            text_of(env, &signature_failure)?,
+        );
         let result = catalog::load(&dir, json, signature).map(|()| serde_json::json!({"ok": true}));
         answer(env, result)
     })

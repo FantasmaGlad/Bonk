@@ -54,6 +54,22 @@ impl fmt::Display for DownloadError {
 
 impl std::error::Error for DownloadError {}
 
+impl DownloadError {
+    /// A rolling distribution deletes yesterday's snapshot as it publishes today's: the signed catalog only
+    /// names the new file at its next publication.
+    #[must_use]
+    pub fn of_catalog_image(&self) -> String {
+        match self {
+            Self::Refused {
+                status: 404 | 410, ..
+            } => format!(
+                "{self}: the publisher replaced or removed this file; the catalog takes its new address at its next publication, try again later"
+            ),
+            _ => self.to_string(),
+        }
+    }
+}
+
 impl From<io::Error> for DownloadError {
     fn from(err: io::Error) -> Self {
         Self::Io(err)

@@ -18,22 +18,30 @@ pub(crate) fn addresses() -> Value {
     })
 }
 
-/// Checks the signature of the catalog Kotlin downloaded (system HTTPS) and hands it to the screen. Without
-/// network, `manifest::load` falls back to the last verified copy.
-pub(crate) fn load(dir: &str, json: Vec<u8>, signature: Vec<u8>) -> Result<(), String> {
+/// A file Kotlin downloaded, or why it could not: an empty `failure` with an empty body is still a failure.
+pub(crate) fn received(bytes: Vec<u8>, failure: String) -> Result<Vec<u8>, String> {
+    match (failure.is_empty(), bytes.is_empty()) {
+        (false, _) => Err(failure),
+        (true, true) => Err("empty answer".to_owned()),
+        (true, false) => Ok(bytes),
+    }
+}
+
+/// Checks the signature of the catalog Kotlin downloaded (system HTTPS) and hands it to the screen. A file not
+/// received makes `manifest::load` fall back to the last verified copy.
+pub(crate) fn load(
+    dir: &str,
+    json: Result<Vec<u8>, String>,
+    signature: Result<Vec<u8>, String>,
+) -> Result<(), String> {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_secs());
     let fetch = move |address: &str| -> Result<Vec<u8>, String> {
-        let bytes = if address.ends_with(".sig") {
-            &signature
+        if address.ends_with(".sig") {
+            signature.clone()
         } else {
-            &json
-        };
-        if bytes.is_empty() {
-            Err("no network".to_owned())
-        } else {
-            Ok(bytes.clone())
+            json.clone()
         }
     };
     let loaded = manifest::load(
@@ -125,6 +133,36 @@ mod tests {
     use super::*;
 
     const LOGO_SHA256: &str = "8f8cbb7dcf46e0bc7d53265749a6c17d116093a6ba95e442764060c76fd4a86c";
+
+    #[test]
+    fn un_fichier_non_recu_garde_sa_cause() {
+        let cas = [
+            (b"x".to_vec(), "", Ok(b"x".to_vec())),
+            (
+                Vec::new(),
+                "HTTP 404: catalog.json",
+                Err("HTTP 404: catalog.json".to_owned()),
+            ),
+            (Vec::new(), "", Err("empty answer".to_owned())),
+        ];
+        for (octets, cause, attendu) in cas {
+            assert_eq!(received(octets, cause.to_owned()), attendu, "{cause}");
+        }
+    }
+
+    #[test]
+    fn sans_copie_verifiee_l_erreur_donne_la_cause_et_non_le_reseau() {
+        let dir = std::env::temp_dir().join(format!("bonk-android-cause-{}", std::process::id()));
+        let erreur = load(
+            &dir.to_string_lossy(),
+            Err("HTTP 404: catalog.json".to_owned()),
+            Err("HTTP 404: catalog.json.sig".to_owned()),
+        )
+        .err()
+        .unwrap_or_default();
+        assert!(erreur.contains("HTTP 404: catalog.json"), "{erreur}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     /// The only test that touches the shared model and family list.
     #[test]
