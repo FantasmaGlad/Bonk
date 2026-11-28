@@ -419,7 +419,7 @@ jobs:
             echo "Binaires construits par la CI, attestés (provenance Sigstore)."
             echo
             echo "Vérifier une archive : gh attestation verify <archive> --repo $GITHUB_REPOSITORY"
-            echo "Empreintes : SHA256SUMS. SBOM : bonk.cdx.json."
+            echo "Empreintes : SHA256SUMS, signé par la clé de release (SHA256SUMS.asc, bonk-release-key.asc). SBOM : bonk.cdx.json."
           } > notes.md
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "$TAG" --notes-file notes.md \
             dist/*.tar.gz dist/*.zip dist/*.exe dist/*.dmg dist/*.deb dist/*.rpm dist/*.pkg.tar.zst dist/*.apk dist/bonk.cdx.json dist/SHA256SUMS

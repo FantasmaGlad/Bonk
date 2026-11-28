@@ -69,6 +69,8 @@ jobs:
     needs: manifestes
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    permissions:
+      contents: write
     env:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ github.event.release.tag_name || inputs.tag }}
@@ -85,7 +87,7 @@ jobs:
           while read -r _ f; do
             gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" > /dev/null
           done < SHA256SUMS
-          find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\n' | grep -vxF -f <(awk '{print $2}' SHA256SUMS) \
+          find . -maxdepth 1 -type f ! -name SHA256SUMS ! -name '*.asc' -printf '%f\n' | grep -vxF -f <(awk '{print $2}' SHA256SUMS) \
             | sort | xargs sha256sum -- > SHA256SUMS-distribution
           cat SHA256SUMS-distribution
       # A throwaway keyring: the private key lives only for this step. The published public key is the
@@ -108,6 +110,9 @@ jobs:
           cp docs/security/bonk-release-key.asc release/bonk-release-key.asc
           rm -rf "$GNUPGHOME"
           echo "empreinte=$empreinte" >> "$GITHUB_OUTPUT"
+      # The install scripts check SHA256SUMS against this signature, on GitHub as on GitLab.
+      - name: Joindre la signature à la release GitHub
+        run: gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber release/SHA256SUMS.asc release/bonk-release-key.asc
       - name: Publier sur GitLab
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
