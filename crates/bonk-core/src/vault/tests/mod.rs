@@ -422,3 +422,22 @@ fn une_etiquette_qui_ne_convient_pas_laisse_essayer_la_famille_suivante() -> std
     assert_eq!(family("openSUSE-Live")?, None);
     Ok(())
 }
+
+#[test]
+fn les_textes_ecrits_sur_le_coffre_n_ont_que_des_fins_de_ligne_lf() {
+    let files = boot().files;
+    let textes = files
+        .iter()
+        .filter(|file| !file.path.starts_with("EFI/BOOT/BOOT"))
+        .map(|file| {
+            (
+                file.path.as_str(),
+                String::from_utf8_lossy(&file.data).into_owned(),
+            )
+        });
+    for (chemin, texte) in
+        textes.chain(INITRD_SCRIPTS.map(|(chemin, texte)| (chemin, texte.to_owned())))
+    {
+        assert!(!texte.contains('\r'), "{chemin} contient un retour chariot");
+    }
+}
