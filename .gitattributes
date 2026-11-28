@@ -1,4 +1,4 @@
-* text=auto
+* text=auto eol=lf
 android/gradlew text eol=lf
 android/build-native.sh text eol=lf
 android/gradlew.bat text eol=crlf
