@@ -15,6 +15,10 @@ fn une_relecture_fausse_fait_echouer_la_verification() {
     ]);
     assert_eq!(code, EXIT_VERIFY_FAILED);
     assert!(err.trim_end().ends_with("[E4002]"), "{err}");
+    assert!(
+        err.contains("first wrong byte at offset 0 (MiB 0)"),
+        "{err}"
+    );
     let (code, _, _) = scenario.run(&[
         "write",
         "usb-a",
@@ -122,6 +126,27 @@ fn verify_d_une_image_gpt_reussit_apres_la_reparation_du_gpt() {
     let (code, _, err) = scenario.run(&["verify", "usb-a", &source.arg(), "--progress", "none"]);
     assert_eq!(code, EXIT_VERIFY_FAILED);
     assert!(err.trim_end().ends_with("[E4002]"), "{err}");
+    assert!(
+        err.contains("first wrong byte at offset 4096 (MiB 0)"),
+        "{err}"
+    );
+}
+
+#[test]
+fn une_relecture_fausse_puis_juste_dit_que_le_support_est_instable() {
+    let source = TempSource::new("instable", 1 << 20);
+    let mut scenario = Scenario::new();
+    scenario.faults.first_read = true;
+    let (code, _, err) = scenario.run(&[
+        "write",
+        "usb-a",
+        &source.arg(),
+        "--yes",
+        "--progress",
+        "none",
+    ]);
+    assert_eq!(code, EXIT_VERIFY_FAILED);
+    assert!(err.contains("returns unstable data"), "{err}");
 }
 
 /// Without dropping the cache before the read-back, the check reads the kernel, not the drive (2,193 MB/s

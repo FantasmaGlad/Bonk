@@ -115,6 +115,43 @@ pub fn verify_ignoring(
     }
 }
 
+/// Offset of the first byte read back that differs from the image, `None` when they all match.
+///
+/// # Errors
+/// The image or the drive cannot be read, or the image ends before `len`.
+pub fn first_difference(
+    src: &mut dyn Read,
+    dev: &mut dyn BlockDevice,
+    len: u64,
+    chunk: usize,
+    ignore: &[Range<u64>],
+    progress: &mut dyn FnMut(&Progress) -> Control,
+) -> Result<Option<u64>, VerifyError> {
+    let block = u64::from(dev.block_size());
+    let step = chunk_for(chunk, dev.block_size());
+    let (mut image, mut drive) = (vec![0u8; step], vec![0u8; step]);
+    let started = Instant::now();
+    let mut done = 0u64;
+    while done < len {
+        let n = usize::try_from((len - done).min(step as u64)).unwrap_or(step);
+        if read_full(src, &mut image[..n]).map_err(VerifyError::Source)? < n {
+            return Err(VerifyError::Source(io::ErrorKind::UnexpectedEof.into()));
+        }
+        let padded = usize::try_from((n as u64).div_ceil(block) * block).unwrap_or(n);
+        dev.read_at(done, &mut drive[..padded])?;
+        zero_ignored(&mut image[..n], done, ignore);
+        zero_ignored(&mut drive[..n], done, ignore);
+        if let Some(i) = image[..n].iter().zip(&drive[..n]).position(|(a, b)| a != b) {
+            return Ok(Some(done + i as u64));
+        }
+        done += n as u64;
+        if progress(&progress_at(Phase::Verify, done, Some(len), started)) == Control::Cancel {
+            return Err(VerifyError::Cancelled);
+        }
+    }
+    Ok(None)
+}
+
 pub fn hash_source_ignoring(
     src: &mut dyn Read,
     size_hint: Option<u64>,
