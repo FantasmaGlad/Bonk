@@ -87,7 +87,7 @@ data class Download(val done: Long, val total: Long?, val rate: Double) : ToRust
 data class Downloaded(val path: String, val bytes: Long) : ToRust
 
 @Serializable @SerialName("failed")
-data class Failed(val message: String, val code: String? = null) : ToRust
+data class Failed(val message: String, val code: String? = null, val url: String? = null, val status: Int? = null) : ToRust
 
 @Serializable @SerialName("catalog_failed")
 data class CatalogFailed(val message: String) : ToRust

@@ -53,6 +53,11 @@ class ImageDownload(private val context: Context, private val send: (ToRust) -> 
         Bridge.cancelled = false
         try {
             val connection = open(request.url, request.proxy?.let(::socks) ?: Proxy.NO_PROXY, compressed = false)
+            val status = connection.responseCode
+            if (status !in 200..299) {
+                send(Failed("HTTP $status", "E3008", request.url, status))
+                return
+            }
             val total = connection.contentLengthLong
             val target = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) Shared(request.name) else Private(request.name)
             if (total > 0 && target.free() <= total) {
