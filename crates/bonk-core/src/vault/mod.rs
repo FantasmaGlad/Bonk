@@ -1,6 +1,7 @@
 mod bios;
 mod boot;
 mod family;
+mod grub;
 mod images;
 mod iso;
 mod menu;
@@ -11,6 +12,7 @@ mod tests;
 pub use bios::*;
 pub use boot::*;
 pub use family::*;
+pub use grub::GrubInfo;
 pub use images::*;
 pub use iso::*;
 pub use menu::menu;

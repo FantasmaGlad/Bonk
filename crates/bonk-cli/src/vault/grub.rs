@@ -1,10 +1,9 @@
-use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
-use bonk_catalog::manifest;
-use bonk_core::vault::{self as core_vault, BiosGrub, VaultBoot, VaultFamily};
-use bonk_ops::job::{GrubInfo, JobError};
+use bonk_catalog::manifest::{self, GrubFile};
+use bonk_core::vault::{self as core_vault, GrubInfo, VaultBoot};
+use bonk_ops::job::JobError;
 
 use super::GrubSource;
 use crate::catalog;
@@ -12,7 +11,13 @@ use crate::catalog;
 const BIOS_BOOT: &str = "bios/boot.img";
 const BIOS_CORE: &str = "bios/core.img";
 
-type Read<'a> = dyn Fn(&str, &manifest::Asset) -> Result<Vec<u8>, JobError> + 'a;
+fn file_name(file: GrubFile<'_>) -> &'static str {
+    match file {
+        GrubFile::Efi(arch) => core_vault::efi_file_name(arch).unwrap_or_default(),
+        GrubFile::BiosBoot => BIOS_BOOT,
+        GrubFile::BiosCore => BIOS_CORE,
+    }
+}
 
 pub(crate) fn grub(
     args: &GrubSource,
@@ -27,13 +32,16 @@ pub(crate) fn grub(
         .catalog
         .grub
         .ok_or_else(|| catalog::refused("the catalog does not offer GRUB yet: try again later"))?;
-    let read = |name: &str, asset: &manifest::Asset| match &args.grub_dir {
+    let fetch = |name: &str, asset: &manifest::Asset| match &args.grub_dir {
         Some(folder) => local_grub(&folder.join(name), asset, &entry.version),
         None => {
             let path = manifest::asset_path(&base, &dir, "grub", asset, &*access.fetch_file)
                 .map_err(|e| catalog::refused(format!("GRUB {} {name}: {e}", entry.version)))?;
             fs::read(&path).map_err(|e| catalog::refused(format!("{}: {e}", path.display())))
         }
+    };
+    let read = |file: GrubFile<'_>, asset: &manifest::Asset| {
+        fetch(file_name(file), asset).map_err(|e| e.message)
     };
     // A folder copied before the catalog offered GRUB for BIOS gives a vault that starts by UEFI only.
     let copied_without_bios = args
@@ -45,50 +53,9 @@ pub(crate) fn grub(
         Some(file) => catalog::families_file(file)?,
         None => core_vault::families_from(&loaded.catalog.vault_families),
     };
-    vault_boot(&entry, bios, &families, &read)
-}
-
-fn vault_boot(
-    entry: &manifest::Grub,
-    bios: Option<&manifest::GrubBios>,
-    families: &[VaultFamily],
-    read: &Read<'_>,
-) -> Result<(VaultBoot, GrubInfo), JobError> {
-    let mut images = Vec::new();
-    let mut efi = BTreeMap::new();
-    // A processor this Bonk has no removable-media name for is left to a later version.
-    for (arch, asset) in &entry.efi {
-        let Some(name) = core_vault::efi_file_name(arch) else {
-            continue;
-        };
-        efi.insert(arch.clone(), asset.sha256.clone());
-        images.push((arch.as_str(), read(name, asset)?));
-    }
-    if images.is_empty() {
-        return Err(catalog::refused(
-            "the catalog offers no GRUB image this version of Bonk can write",
-        ));
-    }
-    let files =
-        core_vault::boot_files(&images, families).map_err(|e| catalog::refused(e.to_string()))?;
-    let bios_grub = match bios {
-        Some(offered) => Some(BiosGrub {
-            boot: read(BIOS_BOOT, &offered.boot)?,
-            core: read(BIOS_CORE, &offered.core)?,
-        }),
-        None => None,
-    };
-    let info = GrubInfo {
-        version: entry.version.clone(),
-        build: entry.build.clone(),
-        efi,
-        bios: bios.map(manifest::GrubBios::hashes).unwrap_or_default(),
-    };
-    let boot = VaultBoot {
-        files,
-        bios: bios_grub,
-    };
-    Ok((boot, info))
+    entry
+        .vault_boot(bios, &families, &read)
+        .map_err(catalog::refused)
 }
 
 pub(super) fn local_grub(

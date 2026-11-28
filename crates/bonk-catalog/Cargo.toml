@@ -12,6 +12,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+bonk-core.workspace = true
 log.workspace = true
 ureq.workspace = true
 rustls.workspace = true
