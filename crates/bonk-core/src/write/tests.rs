@@ -345,3 +345,49 @@ fn les_plages_ignorees_sont_exclues_des_deux_cotes_et_le_reste_est_compare()
     ));
     Ok(())
 }
+
+#[test]
+fn le_premier_octet_faux_est_trouve_hors_des_plages_ignorees()
+-> Result<(), Box<dyn std::error::Error>> {
+    let image = data(4096);
+    let ignore = [10..20u64, 4090..4096];
+    let cas: [(&[usize], Option<u64>); 4] = [
+        (&[], None),
+        (&[12], None),
+        (&[12, 3000, 3500], Some(3000)),
+        (&[1023, 1024], Some(1023)),
+    ];
+    for (fautes, attendu) in cas {
+        let mut lu = image.clone();
+        for &i in fautes {
+            lu[i] ^= 0xFF;
+        }
+        let mut dev = MemoryDevice::from_bytes(lu, 512)?;
+        let trouve = first_difference(
+            &mut Cursor::new(image.clone()),
+            &mut dev,
+            4096,
+            1024,
+            &ignore,
+            &mut silent(),
+        )?;
+        assert_eq!(trouve, attendu, "{fautes:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn une_image_plus_courte_que_la_longueur_comparee_est_une_erreur()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut dev = MemoryDevice::from_bytes(data(4096), 512)?;
+    let erreur = first_difference(
+        &mut Cursor::new(data(1000)),
+        &mut dev,
+        4096,
+        1024,
+        &[],
+        &mut silent(),
+    );
+    assert!(matches!(erreur, Err(VerifyError::Source(_))));
+    Ok(())
+}

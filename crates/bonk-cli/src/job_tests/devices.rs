@@ -80,6 +80,7 @@ impl BlockDevice for Logged {
 #[derive(Clone, Copy, Default)]
 pub(super) struct Faults {
     pub(super) reads: bool,
+    pub(super) first_read: bool,
     pub(super) flush: bool,
     pub(super) unplugged_after: Option<u64>,
     pub(super) lost_after: Option<u64>,
@@ -89,6 +90,7 @@ pub(super) struct Faulty {
     pub(super) inner: Shared,
     pub(super) faults: Faults,
     pub(super) written: u64,
+    pub(super) first_read_done: Cell<bool>,
 }
 
 impl BlockDevice for Faulty {
@@ -100,7 +102,8 @@ impl BlockDevice for Faulty {
     }
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<(), BlockError> {
         self.inner.read_at(offset, buf)?;
-        if self.faults.reads && offset == 0 {
+        let first = self.faults.first_read && offset == 0 && !self.first_read_done.replace(true);
+        if (self.faults.reads || first) && offset == 0 {
             buf[0] ^= 0xFF;
         }
         Ok(())

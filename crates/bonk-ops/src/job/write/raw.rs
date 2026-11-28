@@ -7,10 +7,11 @@ use bonk_core::repair::{RepairReport, needs_repair, repair_gpt, repairs};
 use bonk_core::write::{self as engine, Control, DEFAULT_CHUNK, Phase, Progress};
 
 use crate::errors::Code;
+use crate::job::source::ImageFile;
 use crate::job::target::{Chosen, OpenRequest, open_target, reread_table};
 use crate::job::translate::{guarded, map_verify_error, map_write_error};
 use crate::job::types::{Deps, JobError, SCHEMA_VERSION, Target, WriteDone, WriteOutcome, fail};
-use crate::job::verify::{drop_cache_before_verify, warn_if_cache_kept};
+use crate::job::verify::{drop_cache_before_verify, locate_mismatch, warn_if_cache_kept};
 
 use super::*;
 
@@ -74,16 +75,13 @@ pub(in crate::job) fn write_raw(
     .map_err(|e| map_write_error(e, source_info.format))?;
     log::info!(target: "bonk::write", bytes = write.bytes, millis = write.elapsed_ms; "write finished");
     check_complete(&image, write.bytes, job.mode)?;
-    let verify = if job.verify {
-        Some(verify_written(
-            &mut *device,
-            &write,
-            source_info.format,
-            &mut report_progress,
-        )?)
-    } else {
-        None
-    };
+    let verify = verify_written(
+        &mut *device,
+        &write,
+        job,
+        source_info.format,
+        &mut report_progress,
+    )?;
     if let Some(mbr) = &hybrid_mbr {
         write_hybrid_mbr(&mut *device, mbr)?;
     }
@@ -138,14 +136,21 @@ fn write_hybrid_mbr(device: &mut dyn BlockDevice, mbr: &[u8]) -> Result<(), JobE
 pub(in crate::job) fn verify_written(
     device: &mut dyn BlockDevice,
     write: &engine::WriteReport,
+    job: &WriteJob,
     format: Format,
     progress: &mut dyn FnMut(&Progress) -> Control,
-) -> Result<engine::VerifyReport, JobError> {
+) -> Result<Option<engine::VerifyReport>, JobError> {
+    if !job.verify {
+        return Ok(None);
+    }
     let report = engine::verify(device, write.bytes, &write.sha256, DEFAULT_CHUNK, progress)
-        .map_err(|e| map_verify_error(e, format))?;
+        .map_err(|e| match ImageFile::open(&job.source) {
+            Ok(image) => locate_mismatch(e, &image, device, write.bytes, &[], format, progress),
+            Err(_) => map_verify_error(e, format),
+        })?;
     log::info!(target: "bonk::write", bytes = report.bytes; "verification passed");
     warn_if_cache_kept(&report);
-    Ok(report)
+    Ok(Some(report))
 }
 
 /// The drive is larger than the image: the backup GPT is no longer at the end.

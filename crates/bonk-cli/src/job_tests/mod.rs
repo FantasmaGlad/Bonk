@@ -291,6 +291,7 @@ impl Scenario {
                         inner: device.clone(),
                         faults,
                         written: 0,
+                        first_read_done: Cell::new(false),
                     });
                     open_devices.set(open_devices.get() + 1);
                     Ok(Box::new(Logged {

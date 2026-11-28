@@ -1,6 +1,8 @@
+use std::ops::Range;
 use std::path::PathBuf;
 
-use bonk_core::write::{self as engine, Control, DEFAULT_CHUNK, Progress};
+use bonk_core::codec::Format;
+use bonk_core::write::{self as engine, Control, DEFAULT_CHUNK, Progress, VerifyError};
 use bonk_core::{BlockDevice, analysis, repair};
 use bonk_hal::{Elevation, FilterOptions};
 
@@ -62,7 +64,17 @@ pub fn verify(
         &ignore,
         &mut report_progress,
     )
-    .map_err(|e| map_verify_error(e, source_info.format))?;
+    .map_err(|e| {
+        locate_mismatch(
+            e,
+            &file,
+            &mut *device,
+            len,
+            &ignore,
+            source_info.format,
+            &mut report_progress,
+        )
+    })?;
     warn_if_cache_kept(&verify);
     Ok(VerifyDone {
         schema_version: SCHEMA_VERSION,
@@ -79,6 +91,56 @@ pub fn verify(
             })
             .collect(),
     })
+}
+
+/// A second read-back beside the image says where the drive differs, or that it now matches: a drive or
+/// reader that returns different data on two reads.
+pub(super) fn locate_mismatch(
+    err: VerifyError,
+    image: &ImageFile,
+    device: &mut dyn BlockDevice,
+    len: u64,
+    ignore: &[Range<u64>],
+    format: Format,
+    progress: &mut dyn FnMut(&Progress) -> Control,
+) -> JobError {
+    if !matches!(err, VerifyError::Mismatch { .. }) {
+        return map_verify_error(err, format);
+    }
+    drop_cache_before_verify(device);
+    let located = image
+        .decoded()
+        .map_err(|e| e.message)
+        .and_then(|(mut source, _)| {
+            engine::first_difference(
+                &mut source.reader,
+                device,
+                len,
+                DEFAULT_CHUNK,
+                ignore,
+                progress,
+            )
+            .map_err(|e| e.to_string())
+        });
+    match located {
+        Ok(Some(offset)) => fail(
+            Code::VerifyMismatch,
+            format!(
+                "{err}; first wrong byte at offset {offset} (MiB {})",
+                offset >> 20
+            ),
+        ),
+        Ok(None) => fail(
+            Code::VerifyMismatch,
+            format!(
+                "{err}; a second read-back matched the image: the drive or its reader returns unstable data"
+            ),
+        ),
+        Err(e) => {
+            log::warn!(target: "bonk::write", error = e.as_str(); "wrong bytes not located");
+            map_verify_error(err, format)
+        }
+    }
 }
 
 /// A failure does not stop the operation, it is only logged: the read-back may then read the system cache

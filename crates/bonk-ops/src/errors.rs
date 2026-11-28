@@ -261,8 +261,11 @@ pub const CATALOG: &[Entry] = &[
         id: "E4002",
         exit: EXIT_VERIFY_FAILED,
         title: "Verification after writing failed",
-        causes: &["the bytes read back do not match the image: faulty drive or partial write"],
-        remedy: "Write the image again; if the error persists, replace the drive.",
+        causes: &[
+            "the bytes read back do not match the image: faulty drive or partial write",
+            "a card reader, hub or USB link that misplaces or alters data, sometimes only once",
+        ],
+        remedy: "Write the image again; if the error returns, use another card reader or USB port, then another drive.",
     },
     Entry {
         code: Code::Cancelled,
