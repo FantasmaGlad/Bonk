@@ -9,8 +9,17 @@ fn bonk() -> Command {
 }
 
 #[test]
-fn sans_commande_elle_dit_qu_elle_n_a_pas_de_fenetre() -> Result<(), Box<dyn std::error::Error>> {
+fn sans_commande_elle_affiche_l_aide() -> Result<(), Box<dyn std::error::Error>> {
     let sortie = bonk().env("DISPLAY", ":0").output()?;
+    common::assert_code(&sortie, 0);
+    assert!(String::from_utf8(sortie.stdout)?.contains("Usage: bonk"));
+    assert!(sortie.stderr.is_empty());
+    Ok(())
+}
+
+#[test]
+fn la_fenetre_demandee_dit_qu_elle_n_existe_pas() -> Result<(), Box<dyn std::error::Error>> {
+    let sortie = bonk().env("DISPLAY", ":0").arg("gui").output()?;
     common::assert_code(&sortie, 1);
     let erreur = String::from_utf8_lossy(&sortie.stderr);
     assert!(erreur.contains("without a window"), "{erreur}");

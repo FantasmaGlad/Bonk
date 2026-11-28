@@ -31,7 +31,7 @@ fn help_reussit_et_commence_par_la_description_de_l_outil() -> Resultat {
     Ok(())
 }
 
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(all(feature = "gui", unix, not(target_os = "macos")))]
 #[test]
 fn sans_argument_et_sans_affichage_renvoie_vers_la_ligne_de_commande() -> Resultat {
     let sortie = bonk()

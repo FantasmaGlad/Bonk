@@ -259,13 +259,13 @@ where
     } = prepared;
     let enumerate = deps.enumerate;
     match command {
-        None if env.windowless => {
-            let _ = writeln!(out, "{}", Cli::command().render_help());
-            0
-        }
         None | Some(Command::Gui(_)) if no_gui => {
             let _ = writeln!(err, "{}", Cli::command().render_help());
             report(err, Code::InvalidArgument, "--no-gui requires a command")
+        }
+        None if env.windowless => {
+            let _ = writeln!(out, "{}", Cli::command().render_help());
+            0
         }
         None => run_gui(
             env.privileged,
