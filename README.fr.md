@@ -22,6 +22,7 @@
 <p align="center">
   <a href="https://github.com/FantasmaGlad/Bonk/actions/workflows/ci.yml"><img src="https://github.com/FantasmaGlad/Bonk/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="https://github.com/FantasmaGlad/Bonk/releases/latest"><img src="https://img.shields.io/github/v/release/FantasmaGlad/Bonk?label=Version&color=brightgreen" alt="Version"></a>
+  <a href="https://github.com/FantasmaGlad/Bonk/releases"><img src="https://img.shields.io/github/downloads/FantasmaGlad/Bonk/total?label=T%C3%A9l%C3%A9chargements&color=brightgreen" alt="Téléchargements"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/Licence-MIT-blue.svg" alt="Licence: MIT"></a>
   <img src="https://img.shields.io/badge/CLI-GUI-lightgrey" alt="CLI et interface graphique">
   <img src="https://img.shields.io/badge/Rust-1.89%2B-orange?logo=rust&logoColor=white" alt="Rust 1.89+">
