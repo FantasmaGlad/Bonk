@@ -52,17 +52,25 @@ use crate::logging::{LogFormat, Settings};
 
 /// Returns the process exit code (stable, 0 to 6: `bonk_ops::errors`). `gui` opens the window and returns
 /// when it closes.
-pub fn run<I, T, G>(args: I, gui: G) -> ExitCode
+pub fn run<I, T, G>(args: I, gui: Option<G>) -> ExitCode
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
     G: FnOnce(WindowRequest) -> Result<(), String>,
 {
+    let windowless = gui.is_none();
+    let gui = move |request| match gui {
+        Some(open) => open(request),
+        None => Err("this version is command line only, without a window".to_owned()),
+    };
     // Unlocked streams: `execute` opens the window, while other threads log to stderr. A lock held for the
     // whole run would block them forever, the window's disk enumeration included.
     ExitCode::from(execute(
         args,
-        &Env::from_process(),
+        &Env {
+            windowless,
+            ..Env::from_process()
+        },
         &mut io::stdout(),
         &mut io::stderr(),
         logging::install,
@@ -79,6 +87,8 @@ struct Env {
     io: job::Io,
     catalog: catalog::Access,
     privileged: bool,
+    /// Built without the window: with no command, the help is the expected answer.
+    windowless: bool,
 }
 
 impl Env {
@@ -93,6 +103,7 @@ impl Env {
             io: job::Io::default(),
             catalog: catalog::Access::default(),
             privileged: bonk_hal::platform::current().is_privileged(),
+            windowless: false,
         }
     }
 }
@@ -248,6 +259,10 @@ where
     } = prepared;
     let enumerate = deps.enumerate;
     match command {
+        None if env.windowless => {
+            let _ = writeln!(out, "{}", Cli::command().render_help());
+            0
+        }
         None | Some(Command::Gui(_)) if no_gui => {
             let _ = writeln!(err, "{}", Cli::command().render_help());
             report(err, Code::InvalidArgument, "--no-gui requires a command")

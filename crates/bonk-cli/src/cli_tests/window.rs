@@ -10,13 +10,16 @@ fn un_autre_fil_peut_journaliser_pendant_que_la_fenetre_est_ouverte() {
     }
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        let code = run(["bonk", "-v", "gui"], |_| {
-            std::thread::spawn(|| {
-                log::warn!(target: "bonk::gui", "journal depuis un autre fil");
-            })
-            .join()
-            .map_err(|_| "le fil a paniqué".to_owned())
-        });
+        let code = run(
+            ["bonk", "-v", "gui"],
+            Some(|_| {
+                std::thread::spawn(|| {
+                    log::warn!(target: "bonk::gui", "journal depuis un autre fil");
+                })
+                .join()
+                .map_err(|_| "le fil a paniqué".to_owned())
+            }),
+        );
         let _ = tx.send(code == ExitCode::SUCCESS);
     });
     assert_eq!(
@@ -160,4 +163,37 @@ fn un_lien_qui_n_est_pas_une_image_du_catalogue_n_ouvre_rien() {
     assert_eq!((code, recue), (EXIT_USAGE, None));
     let (code, recue, _) = fenetre_demandee(&["gui", "--image", "a", "--link", "bonk://install/a"]);
     assert_eq!((code, recue), (EXIT_USAGE, None));
+}
+
+#[test]
+fn sans_fenetre_et_sans_commande_l_aide_s_affiche() {
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let env = Env {
+        windowless: true,
+        ..Env::default()
+    };
+    let code = execute(
+        ["bonk"],
+        &env,
+        &mut out,
+        &mut err,
+        |_| Ok(()),
+        || Ok(vec![]),
+        |_| Err("this version is command line only, without a window".to_owned()),
+    );
+    let out = String::from_utf8_lossy(&out);
+    assert_eq!(code, 0);
+    assert!(out.contains("Usage: bonk"), "{out}");
+    assert!(err.is_empty());
+    let code = execute(
+        ["bonk", "gui"],
+        &env,
+        &mut Vec::new(),
+        &mut err,
+        |_| Ok(()),
+        || Ok(vec![]),
+        |_| Err("this version is command line only, without a window".to_owned()),
+    );
+    assert_eq!(code, EXIT_RUNTIME_ERROR);
+    assert!(String::from_utf8_lossy(&err).contains("[E5003]"));
 }

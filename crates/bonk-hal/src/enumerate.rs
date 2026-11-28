@@ -9,9 +9,19 @@ use crate::disk::Disk;
 
 #[derive(Debug)]
 pub enum EnumerateError {
-    Io { what: String, source: io::Error },
-    Malformed { what: String, detail: String },
-    Unsupported { os: &'static str },
+    Io {
+        what: String,
+        source: io::Error,
+    },
+    Malformed {
+        what: String,
+        detail: String,
+    },
+    Unsupported {
+        os: &'static str,
+    },
+    /// Android without root: the only way to a drive is the one termux-usb hands over.
+    ThroughTermuxUsb,
 }
 
 impl fmt::Display for EnumerateError {
@@ -20,6 +30,10 @@ impl fmt::Display for EnumerateError {
             Self::Io { what, source } => write!(f, "could not read {what}: {source}"),
             Self::Malformed { what, detail } => write!(f, "unexpected {what}: {detail}"),
             Self::Unsupported { os } => write!(f, "disk enumeration is not available yet on {os}"),
+            Self::ThroughTermuxUsb => f.write_str(
+                "on Android, a drive is reached through termux-usb (Termux:API): `termux-usb -l` lists the \
+                 drives, then `termux-usb -r -E -e 'bonk list' /dev/bus/usb/001/002` with the path it gives",
+            ),
         }
     }
 }
