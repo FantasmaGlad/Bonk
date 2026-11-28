@@ -112,14 +112,9 @@ impl<R: Read + Seek> Iso<R> {
         Ok(found)
     }
 
-    /// Size in bytes of the file at `path` (`/` separated, from the root); `None` when absent or a directory.
-    ///
-    /// # Errors
-    /// Unreadable or malformed directories.
-    pub fn file_size(&mut self, path: &str) -> io::Result<Option<u64>> {
+    fn record_at(&mut self, path: &str) -> io::Result<Option<Record>> {
         let mut current = self.root;
-        let parts: Vec<&str> = path.split('/').filter(|part| !part.is_empty()).collect();
-        for (index, part) in parts.iter().enumerate() {
+        for part in path.split('/').filter(|part| !part.is_empty()) {
             if !current.directory {
                 return Ok(None);
             }
@@ -131,11 +126,49 @@ impl<R: Read + Seek> Iso<R> {
                 return Ok(None);
             };
             current = next;
-            if index + 1 == parts.len() {
-                return Ok((!current.directory).then_some(u64::from(current.size)));
-            }
         }
-        Ok(None)
+        Ok(Some(current))
+    }
+
+    /// Size in bytes of the file at `path` (`/` separated, from the root); `None` when absent or a directory.
+    ///
+    /// # Errors
+    /// Unreadable or malformed directories.
+    pub fn file_size(&mut self, path: &str) -> io::Result<Option<u64>> {
+        Ok(self
+            .record_at(path)?
+            .filter(|record| !record.directory)
+            .map(|record| u64::from(record.size)))
+    }
+
+    /// Paths of the files matching `pattern`, whose last part may hold one `*`, as GRUB expands it.
+    ///
+    /// # Errors
+    /// Unreadable or malformed directories.
+    pub fn matching(&mut self, pattern: &str) -> io::Result<Vec<String>> {
+        let (folder, name) = pattern.rsplit_once('/').unwrap_or(("", pattern));
+        let Some(directory) = self.record_at(folder)?.filter(|record| record.directory) else {
+            return Ok(Vec::new());
+        };
+        Ok(self
+            .children(directory)?
+            .into_iter()
+            .filter(|(child, record)| !record.directory && name_matches(name, child))
+            .map(|(child, _)| match folder {
+                "" => child,
+                _ => format!("{folder}/{child}"),
+            })
+            .collect())
+    }
+}
+
+fn name_matches(pattern: &str, name: &str) -> bool {
+    let (pattern, name) = (pattern.to_ascii_lowercase(), name.to_ascii_lowercase());
+    match pattern.split_once('*') {
+        Some((start, end)) => {
+            name.len() >= start.len() + end.len() && name.starts_with(start) && name.ends_with(end)
+        }
+        None => pattern == name,
     }
 }
 

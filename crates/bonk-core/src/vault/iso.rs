@@ -107,11 +107,23 @@ fn has_any_set<R: std::io::Read + std::io::Seek>(
     for set in sets {
         let mut all = true;
         for file in set {
-            all &= iso.file_size(file)?.is_some();
+            all &= present(iso, file)?;
         }
         if all {
             return Ok(true);
         }
     }
     Ok(false)
+}
+
+// GRUB expands a pattern into every match: the kernel line holds one path only when one file fits.
+fn present<R: std::io::Read + std::io::Seek>(
+    iso: &mut Iso<R>,
+    file: &str,
+) -> std::io::Result<bool> {
+    if file.contains('*') {
+        Ok(iso.matching(file)?.len() == 1)
+    } else {
+        Ok(iso.file_size(file)?.is_some())
+    }
 }

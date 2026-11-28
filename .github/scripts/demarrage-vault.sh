@@ -25,8 +25,9 @@ attendu=$(curl --fail --silent --show-error --location --connect-timeout 30 --re
   f == n {print $1}
   $1 == "SHA256" && $2 == "(" n ")" {print $4}')
 test -n "$attendu"
-# SHA-256 or SHA-512 by its length: some publishers (Mageia) give only the latter.
+# By its length: some publishers give only SHA-512 (Mageia) or MD5 (Q4OS).
 case ${#attendu} in
+  32) somme=md5sum ;;
   64) somme=sha256sum ;;
   128) somme=sha512sum ;;
   *) echo "ERREUR : empreinte de ${#attendu} caractères" >&2; exit 1 ;;
