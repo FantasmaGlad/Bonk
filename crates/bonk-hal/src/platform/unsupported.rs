@@ -20,6 +20,9 @@ fn no_raw_access() -> BlockError {
 }
 
 fn unsupported() -> EnumerateError {
+    if cfg!(target_os = "android") {
+        return EnumerateError::ThroughTermuxUsb;
+    }
     EnumerateError::Unsupported {
         os: std::env::consts::OS,
     }

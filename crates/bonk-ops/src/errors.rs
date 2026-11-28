@@ -84,7 +84,8 @@ pub const CATALOG: &[Entry] = &[
         exit: EXIT_RUNTIME_ERROR,
         title: "Disk detection is not available on this system",
         causes: &["enumeration does not exist on this system in this version"],
-        remedy: "Use a Linux, Windows or macOS host, or replay a capture with `--fixture`.",
+        remedy: "Use a Linux, Windows or macOS host, or replay a capture with `--fixture`; on Android, run Bonk \
+                 through termux-usb.",
     },
     Entry {
         code: Code::DiskNotFound,
@@ -451,7 +452,9 @@ impl Code {
 
     pub fn of_enumeration(error: &EnumerateError) -> Self {
         match error {
-            EnumerateError::Unsupported { .. } => Self::EnumerationUnsupported,
+            EnumerateError::Unsupported { .. } | EnumerateError::ThroughTermuxUsb => {
+                Self::EnumerationUnsupported
+            }
             _ => Self::EnumerationFailed,
         }
     }

@@ -18,6 +18,7 @@ fn lancer_config(
         io: job::Io::default(),
         catalog: crate::catalog::Access::default(),
         privileged: bonk_hal::platform::current().is_privileged(),
+        windowless: false,
     };
     let code = execute(
         std::iter::once("bonk").chain(args.iter().copied()),

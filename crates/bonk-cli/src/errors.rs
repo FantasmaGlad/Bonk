@@ -241,6 +241,9 @@ mod tests {
             Code::of_enumeration(&EnumerateError::Unsupported { os: "x" }),
             Code::EnumerationUnsupported
         );
+        let android = EnumerateError::ThroughTermuxUsb;
+        assert_eq!(Code::of_enumeration(&android), Code::EnumerationUnsupported);
+        assert!(android.to_string().contains("termux-usb -l"), "{android}");
         let malformed = EnumerateError::Malformed {
             what: "a".into(),
             detail: "b".into(),

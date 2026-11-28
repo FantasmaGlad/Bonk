@@ -1,28 +1,27 @@
 use std::process::ExitCode;
 
+#[cfg(feature = "gui")]
+fn window(request: bonk_cli::WindowRequest) -> Result<(), String> {
+    let view = request.view;
+    bonk_gui::run(
+        bonk_gui::ViewOptions {
+            show_internal: view.show_internal,
+            allow_virtual: view.allow_virtual,
+            show_all: view.show_all,
+            offline: view.offline,
+            incognito: view.incognito,
+            notify: view.notify,
+        },
+        view.lang,
+        bonk_gui::ThemeChoice::from_config(Some(view.theme)),
+        request.image,
+    )
+}
+
 fn main() -> ExitCode {
-    bonk_cli::run(std::env::args_os(), |request| {
-        #[cfg(feature = "gui")]
-        {
-            let view = request.view;
-            bonk_gui::run(
-                bonk_gui::ViewOptions {
-                    show_internal: view.show_internal,
-                    allow_virtual: view.allow_virtual,
-                    show_all: view.show_all,
-                    offline: view.offline,
-                    incognito: view.incognito,
-                    notify: view.notify,
-                },
-                view.lang,
-                bonk_gui::ThemeChoice::from_config(Some(view.theme)),
-                request.image,
-            )
-        }
-        #[cfg(not(feature = "gui"))]
-        {
-            let _ = request;
-            Err("this version is command line only, without a window".to_owned())
-        }
-    })
+    #[cfg(feature = "gui")]
+    let window = Some(window);
+    #[cfg(not(feature = "gui"))]
+    let window: Option<fn(bonk_cli::WindowRequest) -> Result<(), String>> = None;
+    bonk_cli::run(std::env::args_os(), window)
 }
