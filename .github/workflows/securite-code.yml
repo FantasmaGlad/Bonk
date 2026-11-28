@@ -7,12 +7,13 @@ on:
   schedule:
     - cron: "29 4 * * 2"
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: securite-code-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -40,7 +41,7 @@ jobs:
 
   scorecard:
     name: Scorecard
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
