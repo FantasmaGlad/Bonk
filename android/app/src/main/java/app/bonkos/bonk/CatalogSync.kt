@@ -13,14 +13,16 @@ private const val TAG = "Bonk"
 private const val ICON_WORKERS = 8
 private const val ICONS_TIMEOUT_S = 120L
 
-/**
- * The catalog keeps its last verified copy when the network fails: nothing here may prevent it. With a `proxy`
- * that does not answer the result is empty, never a direct connection.
- */
-private fun fetchOrEmpty(address: String, proxy: String?): ByteArray =
+/** With a `proxy` that does not answer the result is empty, never a direct connection. */
+private fun fetchOrEmpty(address: String, proxy: String?): ByteArray = fetched(address, proxy).first
+
+/** The body, or why it is missing: Rust then falls back to the last verified copy and keeps the reason. */
+private fun fetched(address: String, proxy: String?): Pair<ByteArray, String> =
     runCatching {
-        open(address, proxy?.let(::socks) ?: Proxy.NO_PROXY).inputStream.use { it.readBytes() }
-    }.getOrDefault(ByteArray(0))
+        open(address, proxy?.let(::socks) ?: Proxy.NO_PROXY).run {
+            if (responseCode in 200..299) inputStream.use { it.readBytes() } to "" else ByteArray(0) to "HTTP $responseCode: $address"
+        }
+    }.getOrElse { ByteArray(0) to "$address: ${it.message ?: it}" }
 
 internal class CatalogSync(private val context: Context, private val send: (ToRust) -> Unit) {
     fun catalog(proxy: String?) {
@@ -29,9 +31,9 @@ internal class CatalogSync(private val context: Context, private val send: (ToRu
             val answer =
                 runCatching {
                     Protocol.catalogAddresses(Native.catalogAddresses()).let { at ->
-                        Protocol.outcome(
-                            Native.loadCatalog(directory, fetchOrEmpty(at.catalog, proxy), fetchOrEmpty(at.signature, proxy)),
-                        )
+                        val (catalog, catalogFailure) = fetched(at.catalog, proxy)
+                        val (signature, signatureFailure) = fetched(at.signature, proxy)
+                        Protocol.outcome(Native.loadCatalog(directory, catalog, catalogFailure, signature, signatureFailure))
                     }
                 }.getOrElse { Outcome(error = it.message ?: it.toString()) }
             send(answer.error?.let(::CatalogFailed) ?: Refresh)

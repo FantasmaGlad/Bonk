@@ -24,8 +24,14 @@ object Native {
     /** Where the catalog and its signature are published, as `{"catalog", "signature"}`. */
     external fun catalogAddresses(): String
 
-    /** Checks the signature; without bytes, falls back to the last verified copy. */
-    external fun loadCatalog(directory: String, catalog: ByteArray, signature: ByteArray): String
+    /** Checks the signature; a non-empty failure falls back to the last verified copy, reported with it. */
+    external fun loadCatalog(
+        directory: String,
+        catalog: ByteArray,
+        catalogFailure: String,
+        signature: ByteArray,
+        signatureFailure: String,
+    ): String
 
     /** The logos of the loaded catalog still missing from `directory`, as `[{"url", "sha256"}]`. */
     external fun missingIcons(directory: String): String

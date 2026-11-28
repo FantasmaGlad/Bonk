@@ -64,6 +64,7 @@ pub fn load(
             })
         }
         Err(detail) => {
+            log::warn!(target: "bonk::catalog", error = detail.as_str(); "catalog not received");
             let catalog = saved_with(dir, &trust).map_err(|error| match error {
                 CatalogError::Unavailable(_) => CatalogError::Unavailable(detail),
                 refused => refused,
