@@ -116,7 +116,7 @@ Portable `.exe`, `.zip` and `.tar.gz` files: [latest release](https://github.com
 
 ### Checksums and provenance
 
-Checksums: [`SHA256SUMS`](https://packages.bonk-os.app/download/SHA256SUMS). Provenance: `gh attestation verify <file> --repo FantasmaGlad/Bonk`.
+Checksums: [`SHA256SUMS`](https://packages.bonk-os.app/download/SHA256SUMS), signed by the Bonk release key: [`SHA256SUMS.asc`](https://packages.bonk-os.app/download/SHA256SUMS.asc), [`bonk-release-key.asc`](https://packages.bonk-os.app/download/bonk-release-key.asc), fingerprint `9F67 B758 03CE 7526 0FB0  D895 2F20 472E 7865 EDF1`. Provenance: `gh attestation verify <file> --repo FantasmaGlad/Bonk`.
 
 ## Vault
 
