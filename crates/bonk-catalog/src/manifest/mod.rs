@@ -1,6 +1,7 @@
 use std::fmt;
 
 mod cache;
+mod grub;
 mod load;
 #[cfg(test)]
 mod tests;
@@ -11,6 +12,7 @@ pub(crate) use cache::hash_matches;
 #[cfg(test)]
 pub(crate) use cache::hex;
 pub use cache::{FetchSized, asset_matches, asset_path, icon_path};
+pub use grub::{GrubFile, GrubRead};
 pub(crate) use load::replace;
 pub use load::{Loaded, MANIFEST, SIGNATURE, load, saved};
 pub use types::*;

@@ -3,7 +3,7 @@ use std::path::Path;
 use bonk_core::BlockDevice;
 use bonk_core::format::table::TableKind;
 use bonk_core::format::{FormatError, Ids};
-use bonk_core::vault::{self, VaultBoot, VaultPlan};
+use bonk_core::vault::{self, GrubInfo, VaultBoot, VaultPlan};
 use bonk_hal::{Elevation, FilterOptions};
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -16,8 +16,6 @@ use crate::job::translate::support_lost;
 use crate::job::types::{Deps, JobError, SCHEMA_VERSION, Target, TargetInfo, TraceIo, fail};
 use crate::job::verify::drop_cache_before_verify;
 use crate::job::write::confirm_internal;
-
-use super::*;
 
 pub struct VaultInitJob {
     pub target: Target,

@@ -411,6 +411,7 @@ dependencies = [
 name = "bonk-catalog"
 version = "0.1.6"
 dependencies = [
+ "bonk-core",
  "flate2",
  "log",
  "ring",

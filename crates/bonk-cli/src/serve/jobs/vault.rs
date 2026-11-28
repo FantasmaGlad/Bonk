@@ -2,7 +2,7 @@ use bonk_core::format::table::TableKind;
 use bonk_hal::Elevation;
 
 use bonk_ops::job::{
-    self, Target, TraceIo, VaultAddJob, VaultInitJob, VaultListJob, VaultRemoveJob, VaultUpdateJob,
+    Target, TraceIo, VaultAddJob, VaultInitJob, VaultListJob, VaultRemoveJob, VaultUpdateJob,
 };
 
 use crate::serve::Config;
@@ -14,7 +14,7 @@ use super::*;
 pub(in crate::serve) fn vault_grub(
     p: &TransferParams,
     cfg: &Config,
-) -> Result<(bonk_core::vault::VaultBoot, job::GrubInfo), Failure> {
+) -> Result<(bonk_core::vault::VaultBoot, bonk_core::vault::GrubInfo), Failure> {
     let source = crate::vault::GrubSource {
         grub_dir: p.grub_dir.clone(),
         catalog_url: p.catalog_url.clone(),
