@@ -116,7 +116,7 @@ Fichiers portables `.exe`, `.zip` et `.tar.gz` : [dernière version](https://git
 
 ### Empreintes et provenance
 
-Empreintes : [`SHA256SUMS`](https://packages.bonk-os.app/download/SHA256SUMS). Provenance : `gh attestation verify <fichier> --repo FantasmaGlad/Bonk`.
+Empreintes : [`SHA256SUMS`](https://packages.bonk-os.app/download/SHA256SUMS), signé par la clé de release de Bonk : [`SHA256SUMS.asc`](https://packages.bonk-os.app/download/SHA256SUMS.asc), [`bonk-release-key.asc`](https://packages.bonk-os.app/download/bonk-release-key.asc), empreinte `9F67 B758 03CE 7526 0FB0  D895 2F20 472E 7865 EDF1`. Provenance : `gh attestation verify <fichier> --repo FantasmaGlad/Bonk`.
 
 ## Coffre
 
