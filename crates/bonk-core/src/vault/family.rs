@@ -154,19 +154,23 @@ fn without_placeholders(text: &str) -> String {
         })
 }
 
+// One `*` in the file name, for a kernel named after its version: GRUB expands it, nothing else does.
 fn is_path(path: &str, cpu: bool) -> bool {
     let plain = if cpu {
         path.replace("{cpu}", "x")
     } else {
         path.to_owned()
     };
+    let folder = plain.rsplit_once('/').map_or("", |(folder, _)| folder);
     !plain.is_empty()
+        && plain.matches('*').count() <= 1
+        && !folder.contains('*')
         && plain.split('/').all(|part| {
             !part.is_empty()
                 && part != ".."
                 && part
                     .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+                    .all(|b| b.is_ascii_alphanumeric() || b"._-*".contains(&b))
         })
 }
 

@@ -13,6 +13,19 @@
   "options": "boot=live components findiso={path}"
  },
  {
+  "id": "debian_live_derivative",
+  "name": "Debian live derivative",
+  "detect": [
+   [
+    "live/vmlinuz-*",
+    "live/initrd.img-*"
+   ]
+  ],
+  "kernel": "live/vmlinuz-*",
+  "initrd": "live/initrd.img-*",
+  "options": "boot=live components findiso={path}"
+ },
+ {
   "id": "ubuntu",
   "name": "Ubuntu",
   "detect": [

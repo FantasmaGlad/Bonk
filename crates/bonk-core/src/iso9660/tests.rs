@@ -26,6 +26,34 @@ fn fichiers_trouves_par_leur_nom_rock_ridge() -> io::Result<()> {
 }
 
 #[test]
+fn un_motif_trouve_les_fichiers_de_son_dossier() -> io::Result<()> {
+    let image = testing::image(
+        "Q4OS 6 Andromeda",
+        &[
+            ("live/vmlinuz-6.12.118+deb13-amd64", 1),
+            ("live/initrd.img-6.12.118+deb13-amd64", 1),
+            ("live/filesystem.squashfs", 1),
+        ],
+    );
+    let mut iso = Iso::open(Cursor::new(image))?;
+    let cas = [
+        ("live/vmlinuz-*", vec!["live/vmlinuz-6.12.118+deb13-amd64"]),
+        (
+            "LIVE/INITRD.IMG-*",
+            vec!["LIVE/initrd.img-6.12.118+deb13-amd64"],
+        ),
+        ("live/*.squashfs", vec!["live/filesystem.squashfs"]),
+        ("live/vmlinuz", vec![]),
+        ("absent/vmlinuz-*", vec![]),
+        ("live/vmlinuz-6.12.118+deb13-amd64/*", vec![]),
+    ];
+    for (motif, attendu) in cas {
+        assert_eq!(iso.matching(motif)?, attendu, "{motif}");
+    }
+    Ok(())
+}
+
+#[test]
 fn une_image_qui_n_est_pas_iso_est_refusee() {
     assert!(Iso::open(Cursor::new(vec![0u8; 40 * 2048])).is_err());
     assert!(Iso::open(Cursor::new(vec![0u8; 100])).is_err());
