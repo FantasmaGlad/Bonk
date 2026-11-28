@@ -32,7 +32,10 @@ class Release:
         ext = "zip" if nom.startswith("windows") else "tar.gz"
         return f"{paquet}-{self.version}-{nom}.{ext}"
 
-    def url(self, nom: str, paquet: str = "bonk") -> str:
+    # A channel downloads through packages.bonk-os.app/dl/<channel>/, which redirects to GitHub and counts it.
+    def url(self, nom: str, paquet: str = "bonk", canal: str | None = None) -> str:
+        if canal:
+            return f"https://packages.bonk-os.app/dl/{canal}/{self.tag}/{self.archive(nom, paquet)}"
         return f"https://github.com/{DEPOT}/releases/download/{self.tag}/{self.archive(nom, paquet)}"
 
     def sha(self, nom: str, paquet: str = "bonk") -> str:
@@ -44,7 +47,7 @@ class Release:
 
 def scoop(r: Release) -> str:
     def entree(nom: str) -> dict:
-        return {"url": r.url(nom), "hash": r.sha(nom), "extract_dir": f"bonk-{r.version}-{nom}"}
+        return {"url": r.url(nom, canal="scoop"), "hash": r.sha(nom), "extract_dir": f"bonk-{r.version}-{nom}"}
 
     manifeste = {
         "version": r.version,
@@ -70,7 +73,7 @@ def homebrew(r: Release, paquet: str = "bonk") -> str:
     cli = paquet == "bonk-cli"
 
     def bloc(nom: str) -> str:
-        return f'      url "{r.url(nom, paquet)}"\n      sha256 "{r.sha(nom, paquet)}"\n'
+        return f'      url "{r.url(nom, paquet, "homebrew")}"\n      sha256 "{r.sha(nom, paquet)}"\n'
 
     return f'''class {"BonkCli" if cli else "Bonk"} < Formula
   desc "{HOMEBREW_CLI_DESCRIPTION if cli else HOMEBREW_DESCRIPTION}"
