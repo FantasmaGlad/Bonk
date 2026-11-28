@@ -2,7 +2,6 @@ name: securite-workflows
 
 on:
   pull_request:
-    paths: [".github/**"]
   workflow_dispatch:
 
 permissions:
@@ -13,8 +12,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  perimetre:
+    name: workflows modifiés
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      workflows: ${{ steps.choix.outputs.workflows }}
+    steps:
+      - name: Choisir
+        id: choix
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "$EVENT" != pull_request ] || gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename' | grep -q '^\.github/'; then
+            echo "workflows=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "workflows=false" >> "$GITHUB_OUTPUT"
+          fi
+
   actionlint:
     name: actionlint
+    needs: perimetre
+    if: needs.perimetre.outputs.workflows == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -29,6 +54,8 @@ jobs:
 
   zizmor:
     name: zizmor
+    needs: perimetre
+    if: needs.perimetre.outputs.workflows == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

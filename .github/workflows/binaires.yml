@@ -29,8 +29,27 @@ env:
   RUST_BACKTRACE: "1"
 
 jobs:
+  analyse:
+    name: analyse
+    if: github.ref_type == 'tag'
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      pull-requests: read
+
+  codeql:
+    name: codeql
+    if: github.ref_type == 'tag'
+    uses: ./.github/workflows/securite-code.yml
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
+
   construire:
     name: ${{ matrix.nom }}
+    needs: [analyse, codeql]
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     permissions:
@@ -317,6 +336,8 @@ jobs:
 
   sbom:
     name: sbom
+    needs: [analyse, codeql]
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
     uses: ./.github/workflows/sbom.yml
     permissions:
       contents: read
@@ -326,6 +347,8 @@ jobs:
 
   android:
     name: android
+    needs: [analyse, codeql]
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -392,7 +415,7 @@ jobs:
   publication:
     name: release (brouillon)
     if: github.ref_type == 'tag'
-    needs: [construire, compatibilite, paquets, sbom, android]
+    needs: [analyse, codeql, construire, compatibilite, paquets, sbom, android]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:

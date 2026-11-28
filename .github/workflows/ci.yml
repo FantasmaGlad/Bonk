@@ -3,25 +3,17 @@ name: ci
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - ".cargo/config.toml"
-      - ".github/workflows/ci.yml"
-      - ".github/paquets-linux.txt"
-      - ".github/scripts/essai-disque-virtuel.*"
   # Merged PRs were checked one by one; the weekly run checks them together, on every system.
   schedule:
     - cron: "37 4 * * 1"
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -34,7 +26,8 @@ env:
 jobs:
   qualite:
     name: qualité (Linux)
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: perimetre
+    if: needs.perimetre.outputs.rust == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -98,7 +91,8 @@ jobs:
 
   msrv:
     name: version minimale de Rust (Linux)
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: perimetre
+    if: needs.perimetre.outputs.rust == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -128,6 +122,7 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
+      rust: ${{ steps.choix.outputs.rust }}
       systemes: ${{ steps.choix.outputs.systemes }}
     steps:
       - name: Choisir
@@ -141,11 +136,15 @@ jobs:
         run: |
           tous='["ubuntu-24.04-arm","windows-latest","windows-11-arm","macos-latest","macos-15-intel"]'
           if [ "$EVENT" != pull_request ]; then
+            echo "rust=true" >> "$GITHUB_OUTPUT"
             echo "systemes=$tous" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          fichiers=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename')
+          rust='^(crates/|Cargo\.(toml|lock)$|rust-toolchain\.toml$|\.cargo/config\.toml$|\.github/workflows/ci\.yml$|\.github/paquets-linux\.txt$|\.github/scripts/essai-disque-virtuel\.)'
+          if grep -qE "$rust" <<< "$fichiers"; then echo "rust=true"; else echo "rust=false"; fi >> "$GITHUB_OUTPUT"
           motif='^(crates/bonk-hal/|crates/bonk-ops/|crates/bonk/|Cargo\.lock$|rust-toolchain\.toml$|\.cargo/config\.toml$|\.github/scripts/essai-disque-virtuel\.|\.github/workflows/ci\.yml$)'
-          if gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename' | grep -E "$motif" > /dev/null; then
+          if grep -qE "$motif" <<< "$fichiers"; then
             echo 'systemes=["windows-latest","macos-latest"]' >> "$GITHUB_OUTPUT"
           else
             echo 'systemes=[]' >> "$GITHUB_OUTPUT"
