@@ -53,7 +53,16 @@ fn chaque_crate_ne_depend_que_de_ce_que_permet_sa_couche() {
             "bonk-hal",
             &["bonk-ops", "bonk-cli", "bonk-gui", "clap", "iced"][..],
         ),
-        ("bonk-ops", &["bonk-cli", "bonk-gui", "clap", "iced"][..]),
+        (
+            "bonk-catalog",
+            &[
+                "bonk-hal", "bonk-ops", "bonk-cli", "bonk-gui", "bonk-ui", "clap", "iced",
+            ][..],
+        ),
+        (
+            "bonk-ops",
+            &["bonk-catalog", "bonk-cli", "bonk-gui", "clap", "iced"][..],
+        ),
         ("bonk-cli", &["bonk-gui", "iced"][..]),
         (
             "bonk-ui",

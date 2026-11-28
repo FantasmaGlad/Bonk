@@ -2,14 +2,14 @@ use std::path::Path;
 use std::rc::Rc;
 use std::sync::Mutex;
 
-use bonk_catalog::manifest::{self, Grub, GrubBios};
+use bonk_catalog::manifest::{self, Grub, GrubFile};
 use bonk_core::format::table::TableKind;
-use bonk_core::vault::{self as core_vault, BiosGrub, VaultBoot};
+use bonk_core::vault::{self as core_vault, GrubInfo, VaultBoot};
 use bonk_core::{BlockDevice, BlockError, partition};
 use bonk_hal::{Disk, Elevation, FilterOptions};
 use bonk_ops::errors::Code;
 use bonk_ops::job::{
-    self, Deps, GrubInfo, JobError, Target, VaultAddJob, VaultInitJob, VaultListJob, VaultUpdateJob,
+    self, Deps, JobError, Target, VaultAddJob, VaultInitJob, VaultListJob, VaultUpdateJob,
 };
 use bonk_ui::event::{Event, Outcome};
 
@@ -56,24 +56,26 @@ fn downloads(offered: Option<&(String, Grub)>) -> Vec<Download> {
         .collect()
 }
 
-/// Each GRUB image this Bonk writes, by its file name in the download folder.
-fn files(entry: &Grub) -> Vec<(&str, &manifest::Asset)> {
-    let bios = entry
-        .bios
-        .iter()
-        .flat_map(|bios| [(BIOS_BOOT, &bios.boot), (BIOS_CORE, &bios.core)]);
-    efi_files(entry)
-        .map(|(arch, asset)| (arch.as_str(), asset))
-        .chain(bios)
-        .collect()
+fn file_name(file: GrubFile<'_>) -> &str {
+    match file {
+        GrubFile::Efi(arch) => arch,
+        GrubFile::BiosBoot => BIOS_BOOT,
+        GrubFile::BiosCore => BIOS_CORE,
+    }
 }
 
-/// A processor this Bonk has no removable-media name for is left to a later version.
-fn efi_files(entry: &Grub) -> impl Iterator<Item = (&String, &manifest::Asset)> {
+fn files(entry: &Grub) -> Vec<(&str, &manifest::Asset)> {
+    let bios = entry.bios.iter().flat_map(|bios| {
+        [
+            (file_name(GrubFile::BiosBoot), &bios.boot),
+            (file_name(GrubFile::BiosCore), &bios.core),
+        ]
+    });
     entry
-        .efi
-        .iter()
-        .filter(|(arch, _)| core_vault::efi_file_name(arch).is_some())
+        .writable_efi()
+        .map(|(arch, asset)| (file_name(GrubFile::Efi(arch)), asset))
+        .chain(bios)
+        .collect()
 }
 
 fn refused(message: impl std::fmt::Display) -> JobError {
@@ -87,51 +89,22 @@ fn refused(message: impl std::fmt::Display) -> JobError {
 fn boot(entry: Option<&Grub>, folder: &Path) -> Result<(VaultBoot, GrubInfo), JobError> {
     let entry =
         entry.ok_or_else(|| refused("the catalog does not offer GRUB yet: try again later"))?;
-    let read = |name: &str, asset: &manifest::Asset| -> Result<Vec<u8>, JobError> {
+    let read = |file: GrubFile<'_>, asset: &manifest::Asset| {
+        let name = file_name(file);
         let data = std::fs::read(folder.join(name))
-            .map_err(|e| refused(format!("GRUB {} {name}: {e}", entry.version)))?;
-        if !manifest::asset_matches(asset, &data) {
-            return Err(refused(format!(
+            .map_err(|e| format!("GRUB {} {name}: {e}", entry.version))?;
+        if manifest::asset_matches(asset, &data) {
+            Ok(data)
+        } else {
+            Err(format!(
                 "GRUB {} {name} does not match its signed hash",
                 entry.version
-            )));
+            ))
         }
-        Ok(data)
     };
-    let mut images = Vec::new();
-    for (arch, asset) in efi_files(entry) {
-        images.push((arch.as_str(), read(arch, asset)?));
-    }
-    if images.is_empty() {
-        return Err(refused(
-            "the catalog offers no GRUB image this version of Bonk can write",
-        ));
-    }
-    let families = families();
-    let files = core_vault::boot_files(&images, &families).map_err(refused)?;
-    let bios = match &entry.bios {
-        Some(offered) => Some(BiosGrub {
-            boot: read(BIOS_BOOT, &offered.boot)?,
-            core: read(BIOS_CORE, &offered.core)?,
-        }),
-        None => None,
-    };
-    Ok((VaultBoot { files, bios }, grub_info(entry)))
-}
-
-fn grub_info(entry: &Grub) -> GrubInfo {
-    GrubInfo {
-        version: entry.version.clone(),
-        build: entry.build.clone(),
-        efi: efi_files(entry)
-            .map(|(arch, asset)| (arch.clone(), asset.sha256.clone()))
-            .collect(),
-        bios: entry
-            .bios
-            .as_ref()
-            .map(GrubBios::hashes)
-            .unwrap_or_default(),
-    }
+    entry
+        .vault_boot(entry.bios.as_ref(), &families(), &read)
+        .map_err(refused)
 }
 
 /// Android says nothing of a new table: the chosen disk's partitions are read on the drive itself, as the
@@ -278,7 +251,7 @@ mod tests {
     use std::collections::BTreeMap;
     use std::time::{Duration, Instant};
 
-    use bonk_catalog::manifest::Asset;
+    use bonk_catalog::manifest::{Asset, GrubBios};
     use bonk_core::MemoryDevice;
     use bonk_hal::{Bus, DiskKind};
     use bonk_ui::event::VaultDone;

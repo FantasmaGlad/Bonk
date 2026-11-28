@@ -1,5 +1,5 @@
 use bonk_core::format::Ids;
-use bonk_core::vault::{self, VaultBoot};
+use bonk_core::vault::{self, GrubInfo, VaultBoot};
 use bonk_hal::{Access, Elevation, FilterOptions};
 use schemars::JsonSchema;
 use serde::Serialize;

@@ -1,10 +1,6 @@
-use std::collections::BTreeMap;
-
 use bonk_core::BlockDevice;
 use bonk_core::vault::{self, VaultPlan};
 use bonk_hal::{Access, Elevation, FilterOptions};
-use schemars::JsonSchema;
-use serde::Serialize;
 
 use super::target::{OpenRequest, choose, open_target};
 use super::types::{Deps, JobError, Target, TargetInfo, TraceIo, fail};
@@ -21,17 +17,6 @@ pub use edit::*;
 pub use init::*;
 pub use list::*;
 pub use update::*;
-
-/// The GRUB written to the boot partition, as the signed catalog names it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
-pub struct GrubInfo {
-    pub version: String,
-    pub build: String,
-    /// SHA-256 of each EFI image written, by processor (`x86_64`, `aarch64`).
-    pub efi: BTreeMap<String, String>,
-    /// SHA-256 of `boot.img` and `core.img`, GRUB for BIOS machines; empty when the catalog offers none.
-    pub bios: BTreeMap<String, String>,
-}
 
 fn open_vault(
     target: &Target,
